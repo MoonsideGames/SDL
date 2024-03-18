@@ -55,7 +55,8 @@ static inline int32_t Texture_GetBlockSize(
 		case SDL_GPU_TEXTUREFORMAT_R32G32B32A32_SFLOAT:
 			return 1;
 		default:
-			SDL_GpuLogError(
+			SDL_LogError(
+                SDL_LOG_CATEGORY_APPLICATION,
 				"Unrecognized TextureFormat!"
 			);
 			return 0;
@@ -100,7 +101,8 @@ static inline uint32_t Texture_GetFormatSize(
 		case SDL_GPU_TEXTUREFORMAT_R32G32B32A32_SFLOAT:
 			return 16;
 		default:
-			SDL_GpuLogError(
+            SDL_LogError(
+                SDL_LOG_CATEGORY_APPLICATION,
 				"Unrecognized TextureFormat!"
 			);
 			return 0;
@@ -124,7 +126,8 @@ static inline uint32_t PrimitiveVerts(
 		case SDL_GPU_PRIMITIVETYPE_POINTLIST:
 			return primitiveCount;
 		default:
-			SDL_GpuLogError(
+            SDL_LogError(
+                SDL_LOG_CATEGORY_APPLICATION,
 				"Unrecognized primitive type!"
 			);
 			return 0;
@@ -183,6 +186,7 @@ static inline int32_t BytesPerImage(
 #define MAX_BUFFER_BINDINGS			16
 
 #define MAX_COLOR_TARGET_BINDINGS	4
+#define MAX_PRESENT_COUNT           16
 
 /* Internal Shader Module Create Info */
 
@@ -237,7 +241,7 @@ struct SDL_GpuDevice
 		SDL_GpuTextureCreateInfo *textureCreateInfo
 	);
 
-	SDL_GpuGpuBuffer* (*CreateGpuBuffer)(
+	SDL_GpuBuffer* (*CreateGpuBuffer)(
 		SDL_GpuRenderer *driverData,
 		SDL_GpuBufferUsageFlags usageFlags,
 		uint32_t sizeInBytes
@@ -253,7 +257,7 @@ struct SDL_GpuDevice
 
 	void (*SetGpuBufferName)(
 		SDL_GpuRenderer *driverData,
-		SDL_GpuGpuBuffer *buffer,
+		SDL_GpuBuffer *buffer,
 		const char *text
 	);
 
@@ -277,7 +281,7 @@ struct SDL_GpuDevice
 
 	void (*QueueDestroyGpuBuffer)(
 		SDL_GpuRenderer *driverData,
-		SDL_GpuGpuBuffer *gpuBuffer
+		SDL_GpuBuffer *gpuBuffer
 	);
 
 	void (*QueueDestroyTransferBuffer)(
@@ -388,7 +392,7 @@ struct SDL_GpuDevice
 	void (*DrawPrimitivesIndirect)(
 		SDL_GpuRenderer *driverData,
 		SDL_GpuCommandBuffer *commandBuffer,
-		SDL_GpuGpuBuffer *gpuBuffer,
+		SDL_GpuBuffer *gpuBuffer,
 		uint32_t offsetInBytes,
 		uint32_t drawCount,
 		uint32_t stride
@@ -481,7 +485,7 @@ struct SDL_GpuDevice
 		SDL_GpuRenderer *driverData,
 		SDL_GpuCommandBuffer *commandBuffer,
 		SDL_GpuTransferBuffer *transferBuffer,
-		SDL_GpuGpuBuffer *gpuBuffer,
+		SDL_GpuBuffer *gpuBuffer,
 		SDL_GpuBufferCopy *copyParams,
 		SDL_GpuBufferWriteOptions writeOption
 	);
@@ -497,8 +501,8 @@ struct SDL_GpuDevice
 	void (*CopyBufferToBuffer)(
 		SDL_GpuRenderer *driverData,
 		SDL_GpuCommandBuffer *commandBuffer,
-		SDL_GpuGpuBuffer *source,
-		SDL_GpuGpuBuffer *destination,
+		SDL_GpuBuffer *source,
+		SDL_GpuBuffer *destination,
 		SDL_GpuBufferCopy *copyParams,
 		SDL_GpuBufferWriteOptions writeOption
 	);
@@ -591,7 +595,7 @@ struct SDL_GpuDevice
 
 	void (*DownloadFromBuffer)(
 		SDL_GpuRenderer *driverData,
-		SDL_GpuGpuBuffer *gpuBuffer,
+		SDL_GpuBuffer *gpuBuffer,
 		SDL_GpuTransferBuffer *transferBuffer,
 		SDL_GpuBufferCopy *copyParams,
 		SDL_GpuTransferOptions transferOption

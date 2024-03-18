@@ -75,7 +75,7 @@ SDL_GpuBackend SDL_GpuSelectBackend(
 		}
 	}
 
-	SDL_GpuLogError("No supported SDL_Gpu backend found!");
+	SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "No supported SDL_Gpu backend found!");
 	return SDL_GPU_BACKEND_INVALID;
 }
 
@@ -84,7 +84,7 @@ SDL_GpuDevice* SDL_GpuCreateDevice(
 ) {
 	if (selectedBackend == SDL_GPU_BACKEND_INVALID)
 	{
-		SDL_GpuLogError("Invalid backend selection. Did you call SDL_GpuSelectBackend?");
+		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Invalid backend selection. Did you call SDL_GpuSelectBackend?");
 		return NULL;
 	}
 
@@ -148,7 +148,7 @@ SDL_GpuShaderModule* SDL_GpuCreateShaderModule(
 	bytes = (uint8_t*) shaderModuleCreateInfo->byteCode;
 	if (bytes[0] != 'R' || bytes[1] != 'F' || bytes[2] != 'S' || bytes[3] != 'H')
 	{
-		SDL_GpuLogError("Cannot parse malformed SDL_Gpu shader blob: Incorrect magic number");
+		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Cannot parse malformed SDL_Gpu shader blob: Incorrect magic number");
 		return NULL;
 	}
 
@@ -157,7 +157,8 @@ SDL_GpuShaderModule* SDL_GpuCreateShaderModule(
 	if (	driverSpecificCreateInfo.type < 0 ||
 		driverSpecificCreateInfo.type > SDL_GPU_DRIVER_SHADERTYPE_COMPUTE	)
 	{
-		SDL_GpuLogError(
+		SDL_LogError(
+            SDL_LOG_CATEGORY_APPLICATION, 
 			"Cannot parse malformed SDL_Gpu shader blob: Unknown shader type (%d)",
 			driverSpecificCreateInfo.type
 		);
@@ -186,7 +187,8 @@ SDL_GpuShaderModule* SDL_GpuCreateShaderModule(
 	/* verify the shader blob supports the selected backend */
 	if (driverSpecificCreateInfo.byteCode == NULL)
 	{
-		SDL_GpuLogError(
+		SDL_LogError(
+            SDL_LOG_CATEGORY_APPLICATION, 
 			"Cannot create shader module that does not contain shader code for the selected backend! "
 			"Recompile your shader and enable this backend."
 		);
@@ -210,7 +212,7 @@ SDL_GpuTexture* SDL_GpuCreateTexture(
 	);
 }
 
-SDL_GpuGpuBuffer* SDL_GpuCreateGpuBuffer(
+SDL_GpuBuffer* SDL_GpuCreateGpuBuffer(
 	SDL_GpuDevice *device,
 	SDL_GpuBufferUsageFlags usageFlags,
 	uint32_t sizeInBytes
@@ -240,7 +242,7 @@ SDL_GpuTransferBuffer* SDL_GpuCreateTransferBuffer(
 
 void SDL_GpuSetGpuBufferName(
 	SDL_GpuDevice *device,
-	SDL_GpuGpuBuffer *buffer,
+	SDL_GpuBuffer *buffer,
 	const char *text
 ) {
 	NULL_RETURN(device);
@@ -294,7 +296,7 @@ void SDL_GpuQueueDestroySampler(
 
 void SDL_GpuQueueDestroyGpuBuffer(
 	SDL_GpuDevice *device,
-	SDL_GpuGpuBuffer *gpuBuffer
+	SDL_GpuBuffer *gpuBuffer
 ) {
 	NULL_RETURN(device);
 	device->QueueDestroyGpuBuffer(
@@ -530,7 +532,7 @@ void SDL_GpuDrawPrimitives(
 void SDL_GpuDrawPrimitivesIndirect(
 	SDL_GpuDevice *device,
 	SDL_GpuCommandBuffer *commandBuffer,
-	SDL_GpuGpuBuffer *gpuBuffer,
+	SDL_GpuBuffer *gpuBuffer,
 	uint32_t offsetInBytes,
 	uint32_t drawCount,
 	uint32_t stride
@@ -722,7 +724,7 @@ void SDL_GpuUploadToBuffer(
 	SDL_GpuDevice *device,
 	SDL_GpuCommandBuffer *commandBuffer,
 	SDL_GpuTransferBuffer *transferBuffer,
-	SDL_GpuGpuBuffer *gpuBuffer,
+	SDL_GpuBuffer *gpuBuffer,
 	SDL_GpuBufferCopy *copyParams,
 	SDL_GpuBufferWriteOptions writeOption
 ) {
@@ -757,8 +759,8 @@ void SDL_GpuCopyTextureToTexture(
 void SDL_GpuCopyBufferToBuffer(
 	SDL_GpuDevice *device,
 	SDL_GpuCommandBuffer *commandBuffer,
-	SDL_GpuGpuBuffer *source,
-	SDL_GpuGpuBuffer *destination,
+	SDL_GpuBuffer *source,
+	SDL_GpuBuffer *destination,
 	SDL_GpuBufferCopy *copyParams,
 	SDL_GpuBufferWriteOptions writeOption
 ) {
@@ -961,7 +963,7 @@ void SDL_GpuDownloadFromTexture(
 
 void SDL_GpuDownloadFromBuffer(
 	SDL_GpuDevice *device,
-	SDL_GpuGpuBuffer *gpuBuffer,
+	SDL_GpuBuffer *gpuBuffer,
 	SDL_GpuTransferBuffer *transferBuffer,
 	SDL_GpuBufferCopy *copyParams,
 	SDL_GpuTransferOptions transferOption
