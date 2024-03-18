@@ -259,6 +259,7 @@
 #cmakedefine SDL_SENSOR_DISABLED @SDL_SENSOR_DISABLED@
 #cmakedefine SDL_RENDER_DISABLED @SDL_RENDER_DISABLED@
 #cmakedefine SDL_THREADS_DISABLED @SDL_THREADS_DISABLED@
+#cmakedefine SDL_GPU_DISABLED @SDL_GPU_DISABLED@
 #cmakedefine SDL_VIDEO_DISABLED @SDL_VIDEO_DISABLED@
 #cmakedefine SDL_POWER_DISABLED @SDL_POWER_DISABLED@
 #cmakedefine SDL_CAMERA_DISABLED @SDL_CAMERA_DISABLED@
@@ -436,6 +437,10 @@
 
 /* Enable Metal support */
 #cmakedefine SDL_VIDEO_METAL @SDL_VIDEO_METAL@
+
+/* GPU backend support */
+#cmakedefine SDL_GPU_D3D11 @SDL_GPU_D3D11@
+#cmakedefine SDL_GPU_VULKAN @SDL_GPU_VULKAN@
 
 /* Enable system power support */
 #cmakedefine SDL_POWER_ANDROID @SDL_POWER_ANDROID@

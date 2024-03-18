@@ -248,6 +248,7 @@ endmacro()
 
 define_sdl_subsystem(Audio)
 define_sdl_subsystem(Video)
+define_sdl_subsystem(Gpu)
 define_sdl_subsystem(Render DEPS SDL_VIDEO)
 define_sdl_subsystem(Camera DEPS SDL_VIDEO)
 define_sdl_subsystem(Joystick)
@@ -343,6 +344,8 @@ dep_option(SDL_VIVANTE             "Use Vivante EGL video driver" ON "${UNIX_SYS
 dep_option(SDL_VULKAN              "Enable Vulkan support" ON "SDL_VIDEO;ANDROID OR APPLE OR LINUX OR WINDOWS" OFF)
 dep_option(SDL_RENDER_VULKAN       "Enable the Vulkan render driver" ON "SDL_RENDER;SDL_VULKAN;ANDROID OR APPLE OR LINUX OR WINDOWS" OFF)
 dep_option(SDL_METAL               "Enable Metal support" ON "APPLE" OFF)
+dep_option(SDL_GPU_VULKAN          "Enable Vulkan GPU support" ON "SDL_VULKAN;ANDROID OR APPLE OR LINUX OR WINDOWS" OFF)
+dep_option(SDL_GPU_D3D11           "Enable D3D11 GPU support" ON "WINDOWS" OFF)
 dep_option(SDL_KMSDRM              "Use KMS DRM video driver" ${UNIX_SYS} "SDL_VIDEO" OFF)
 dep_option(SDL_KMSDRM_SHARED       "Dynamically load KMS DRM support" ON "SDL_KMSDRM" OFF)
 set_option(SDL_OFFSCREEN           "Use offscreen video driver" ON)
@@ -483,6 +486,7 @@ sdl_glob_sources(
   "${SDL3_SOURCE_DIR}/src/events/*.c"
   "${SDL3_SOURCE_DIR}/src/file/*.c"
   "${SDL3_SOURCE_DIR}/src/filesystem/*.c"
+  "#{SDL3_SOURCE_DIR}/src/gpu/*.c"
   "${SDL3_SOURCE_DIR}/src/joystick/*.c"
   "${SDL3_SOURCE_DIR}/src/haptic/*.c"
   "${SDL3_SOURCE_DIR}/src/hidapi/*.c"
