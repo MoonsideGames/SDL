@@ -268,6 +268,15 @@
 #error SDL_RENDER enabled without any backend drivers.
 #endif
 
+/* FIXME: there's probably a better way to do this */
+#if defined(SDL_PLATFORM_WINDOWS) || defined(SDL_PLATFORM_LINUX) || defined(SDL_PLATFORM_ANDROID) || defined(SDL_PLATFORM_APPLE)
+#define SDL_GPU_ENABLE_VULKAN
+#endif
+
+#if defined(SDL_PLATFORM_WINDOWS)
+#define SDL_GPU_ENABLE_D3D11
+#endif
+
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_intrin.h>
 

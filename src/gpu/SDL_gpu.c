@@ -26,28 +26,21 @@
 
 /* Drivers */
 
-#ifdef SDL_GPU_VULKAN
+#ifdef SDL_GPU_ENABLE_VULKAN
 	#define SDL_GPU_VULKAN_DRIVER &VulkanDriver
 #else
 	#define SDL_GPU_VULKAN_DRIVER NULL
 #endif
 
-#ifdef SDL_GPU_D3D11
+#ifdef SDL_GPU_ENABLE_D3D11
 	#define SDL_GPU_D3D11_DRIVER &D3D11Driver
 #else
 	#define SDL_GPU_D3D11_DRIVER NULL
 #endif
 
-#ifdef SDL_GPU_PS5
-	#define SDL_GPU_PS5_DRIVER &PS5Driver
-#else
-	#define SDL_GPU_PS5_DRIVER NULL
-#endif
-
 static const SDL_GpuDriver *backends[] = {
 	SDL_GPU_VULKAN_DRIVER,
 	SDL_GPU_D3D11_DRIVER,
-	SDL_GPU_PS5_DRIVER,
 	NULL
 };
 
@@ -158,7 +151,7 @@ SDL_GpuShaderModule* SDL_GpuCreateShaderModule(
 		driverSpecificCreateInfo.type > SDL_GPU_DRIVER_SHADERTYPE_COMPUTE	)
 	{
 		SDL_LogError(
-            SDL_LOG_CATEGORY_APPLICATION, 
+            SDL_LOG_CATEGORY_APPLICATION,
 			"Cannot parse malformed SDL_Gpu shader blob: Unknown shader type (%d)",
 			driverSpecificCreateInfo.type
 		);
@@ -188,7 +181,7 @@ SDL_GpuShaderModule* SDL_GpuCreateShaderModule(
 	if (driverSpecificCreateInfo.byteCode == NULL)
 	{
 		SDL_LogError(
-            SDL_LOG_CATEGORY_APPLICATION, 
+            SDL_LOG_CATEGORY_APPLICATION,
 			"Cannot create shader module that does not contain shader code for the selected backend! "
 			"Recompile your shader and enable this backend."
 		);

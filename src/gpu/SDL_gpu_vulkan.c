@@ -21,7 +21,7 @@
 
 #include "SDL_internal.h"
 
-#ifdef SDL_GPU_VULKAN
+#ifdef SDL_GPU_ENABLE_VULKAN
 
 /* Needed for VK_KHR_portability_subset */
 #define VK_ENABLE_BETA_EXTENSIONS
@@ -12216,4 +12216,4 @@ SDL_GpuDriver VulkanDriver = {
     VULKAN_CreateDevice
 };
 
-#endif //SDL_GPU_DRIVER_VULKAN
+#endif //SDL_GPU_ENABLE_VULKAN

@@ -20,6 +20,9 @@
 */
 #include "SDL_internal.h"
 
+#ifndef SDL_GPU_DRIVER_H
+#define SDL_GPU_DRIVER_H
+
 /* Internal Helper Utilities */
 
 static inline int32_t Texture_GetBlockSize(
@@ -682,3 +685,5 @@ typedef struct SDL_GpuDriver
 extern SDL_GpuDriver VulkanDriver;
 extern SDL_GpuDriver D3D11Driver;
 extern SDL_GpuDriver PS5Driver;
+
+#endif /* SDL_GPU_DRIVER_H */
