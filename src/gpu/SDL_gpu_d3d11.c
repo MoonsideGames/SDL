@@ -21,7 +21,7 @@
 
 #include "SDL_internal.h"
 
-#if SDL_GPU_D3D11
+#ifdef SDL_GPU_D3D11
 
 #define D3D11_NO_HELPERS
 #define CINTERFACE
@@ -1565,7 +1565,8 @@ static SDL_GpuShaderModule* D3D11_CreateShaderModule(
 	);
 	if (FAILED(res))
 	{
-		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, 
+		SDL_LogError(
+            SDL_LOG_CATEGORY_APPLICATION,
 			"D3DCompile Error (%s): %p",
 			profileNames[shaderType],
 			ID3D10Blob_GetBufferPointer(errorBlob)
@@ -4192,7 +4193,8 @@ static uint8_t D3D11_INTERNAL_CreateSwapchain(
 	);
 	if (FAILED(res))
 	{
-		SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, 
+		SDL_LogWarn(
+            SDL_LOG_CATEGORY_APPLICATION,
 			"Could not get swapchain parent! Error Code: %08X",
 			res
 		);
@@ -4207,7 +4209,8 @@ static uint8_t D3D11_INTERNAL_CreateSwapchain(
 		);
 		if (FAILED(res))
 		{
-			SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, 
+			SDL_LogWarn(
+                SDL_LOG_CATEGORY_APPLICATION,
 				"MakeWindowAssociation failed! Error Code: %08X",
 				res
 			);

@@ -21,7 +21,7 @@
 
 #include "SDL_internal.h"
 
-#if SDL_GPU_VULKAN
+#ifdef SDL_GPU_VULKAN
 
 /* Needed for VK_KHR_portability_subset */
 #define VK_ENABLE_BETA_EXTENSIONS
@@ -4581,7 +4581,8 @@ static uint8_t VULKAN_INTERNAL_QuerySwapChainSupport(
         );
         if (result != VK_SUCCESS)
         {
-            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, 
+            SDL_LogError(
+                SDL_LOG_CATEGORY_APPLICATION,
                 "vkGetPhysicalDeviceSurfaceFormatsKHR: %s",
                 VkErrorMessages(result)
             );
@@ -4610,7 +4611,8 @@ static uint8_t VULKAN_INTERNAL_QuerySwapChainSupport(
         );
         if (result != VK_SUCCESS)
         {
-            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, 
+            SDL_LogError(
+                SDL_LOG_CATEGORY_APPLICATION,
                 "vkGetPhysicalDeviceSurfacePresentModesKHR: %s",
                 VkErrorMessages(result)
             );
@@ -4682,7 +4684,8 @@ static uint8_t VULKAN_INTERNAL_ChooseSwapPresentMode(
     }
     else
     {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, 
+        SDL_LogError(
+            SDL_LOG_CATEGORY_APPLICATION,
             "Unrecognized PresentInterval: %d",
             desiredPresentInterval
         );
@@ -4720,7 +4723,8 @@ static uint8_t VULKAN_INTERNAL_CreateSwapchain(
         &swapchainData->surface
     )) {
         SDL_free(swapchainData);
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, 
+        SDL_LogError(
+            SDL_LOG_CATEGORY_APPLICATION,
             "SDL_Vulkan_CreateSurface failed: %s",
             SDL_GetError()
         );
@@ -11055,7 +11059,8 @@ static uint8_t VULKAN_INTERNAL_CreateInstance(
         &instanceExtensionCount,
         NULL
     )) {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, 
+        SDL_LogError(
+            SDL_LOG_CATEGORY_APPLICATION,
             "SDL_Vulkan_GetInstanceExtensions(): getExtensionCount: %s",
             SDL_GetError()
         );
@@ -11077,7 +11082,8 @@ static uint8_t VULKAN_INTERNAL_CreateInstance(
         &instanceExtensionCount,
         instanceExtensionNames
     )) {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, 
+        SDL_LogError(
+            SDL_LOG_CATEGORY_APPLICATION,
             "SDL_Vulkan_GetInstanceExtensions(): %s",
             SDL_GetError()
         );
@@ -11095,7 +11101,8 @@ static uint8_t VULKAN_INTERNAL_CreateInstance(
         instanceExtensionCount,
         &renderer->supportsDebugUtils
     )) {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, 
+        SDL_LogError(
+            SDL_LOG_CATEGORY_APPLICATION,
             "Required Vulkan instance extensions not supported"
         );
 
@@ -11111,7 +11118,8 @@ static uint8_t VULKAN_INTERNAL_CreateInstance(
     }
     else
     {
-        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, 
+        SDL_LogWarn(
+            SDL_LOG_CATEGORY_APPLICATION,
             "%s is not supported!",
             VK_EXT_DEBUG_UTILS_EXTENSION_NAME
         );
@@ -11147,7 +11155,8 @@ static uint8_t VULKAN_INTERNAL_CreateInstance(
     vulkanResult = vkCreateInstance(&createInfo, NULL, &renderer->instance);
     if (vulkanResult != VK_SUCCESS)
     {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, 
+        SDL_LogError(
+            SDL_LOG_CATEGORY_APPLICATION,
             "vkCreateInstance failed: %s",
             VkErrorMessages(vulkanResult)
         );
@@ -11366,7 +11375,8 @@ static uint8_t VULKAN_INTERNAL_DeterminePhysicalDevice(
 
     if (vulkanResult != VK_SUCCESS)
     {
-        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, 
+        SDL_LogWarn(
+            SDL_LOG_CATEGORY_APPLICATION,
             "vkEnumeratePhysicalDevices failed: %s",
             VkErrorMessages(vulkanResult)
         );
@@ -11575,7 +11585,8 @@ static void VULKAN_INTERNAL_LoadEntryPoints(void)
     #pragma GCC diagnostic pop
         if (vkGetInstanceProcAddr == NULL)
         {
-            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, 
+            SDL_LogWarn(
+                SDL_LOG_CATEGORY_APPLICATION,
                 "SDL_Vulkan_GetVkGetInstanceProcAddr(): %s",
                 SDL_GetError()
             );
@@ -11628,7 +11639,8 @@ static uint8_t VULKAN_INTERNAL_PrepareVulkan(
     )) {
         SDL_DestroyWindow(dummyWindowHandle);
         SDL_free(renderer);
-        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, 
+        SDL_LogWarn(
+            SDL_LOG_CATEGORY_APPLICATION,
             "SDL_Vulkan_CreateSurface failed: %s",
             SDL_GetError()
         );
