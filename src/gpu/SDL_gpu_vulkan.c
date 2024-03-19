@@ -11579,10 +11579,14 @@ static void VULKAN_INTERNAL_LoadEntryPoints(void)
         return;
     }
 
+    #ifdef HAVE_GCC_DIAGNOSTIC_PRAGMA
     #pragma GCC diagnostic push
     #pragma GCC diagnostic ignored "-Wpedantic"
+    #endif
         vkGetInstanceProcAddr = (PFN_vkGetInstanceProcAddr) SDL_Vulkan_GetVkGetInstanceProcAddr();
+    #ifdef HAVE_GCC_DIAGNOSTIC_PRAGMA
     #pragma GCC diagnostic pop
+    #endif
         if (vkGetInstanceProcAddr == NULL)
         {
             SDL_LogWarn(
