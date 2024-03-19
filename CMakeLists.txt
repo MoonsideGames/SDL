@@ -248,7 +248,6 @@ endmacro()
 
 define_sdl_subsystem(Audio)
 define_sdl_subsystem(Video)
-define_sdl_subsystem(Gpu)
 define_sdl_subsystem(Render DEPS SDL_VIDEO)
 define_sdl_subsystem(Camera DEPS SDL_VIDEO)
 define_sdl_subsystem(Joystick)
@@ -486,7 +485,7 @@ sdl_glob_sources(
   "${SDL3_SOURCE_DIR}/src/events/*.c"
   "${SDL3_SOURCE_DIR}/src/file/*.c"
   "${SDL3_SOURCE_DIR}/src/filesystem/*.c"
-  "#{SDL3_SOURCE_DIR}/src/gpu/*.c"
+  "${SDL3_SOURCE_DIR}/src/gpu/*.c"
   "${SDL3_SOURCE_DIR}/src/joystick/*.c"
   "${SDL3_SOURCE_DIR}/src/haptic/*.c"
   "${SDL3_SOURCE_DIR}/src/hidapi/*.c"
