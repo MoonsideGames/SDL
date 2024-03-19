@@ -670,7 +670,7 @@ typedef struct SDL_GpuComputeTextureBinding
  *
  * flags: A pointer to a bitflag value that will be filled in with required SDL_WindowFlags masks.
  */
-SDL_GpuBackend SDL_GpuSelectBackend(
+extern DECLSPEC SDL_GpuBackend SDLCALL SDL_GpuSelectBackend(
 	SDL_GpuBackend *preferredBackends,
 	uint32_t preferredBackendCount,
 	uint32_t *flags
@@ -683,35 +683,35 @@ SDL_GpuBackend SDL_GpuSelectBackend(
  *
  * debugMode: Enable debug mode properties.
  */
-SDL_GpuDevice* SDL_GpuCreateDevice(
+extern DECLSPEC SDL_GpuDevice *SDLCALL SDL_GpuCreateDevice(
 	uint8_t debugMode
 );
 
 /* Destroys a rendering context previously returned by SDL_GpuCreateDevice. */
-void SDL_GpuDestroyDevice(SDL_GpuDevice *device);
+extern DECLSPEC void SDLCALL SDL_GpuDestroyDevice(SDL_GpuDevice *device);
 
 /* State Creation */
 
 /* Returns an allocated ComputePipeline* object. */
-SDL_GpuComputePipeline* SDL_GpuCreateComputePipeline(
+extern DECLSPEC SDL_GpuComputePipeline *SDLCALL SDL_GpuCreateComputePipeline(
 	SDL_GpuDevice *device,
 	SDL_GpuComputeShaderInfo *computeShaderInfo
 );
 
 /* Returns an allocated GraphicsPipeline* object. */
-SDL_GpuGraphicsPipeline* SDL_GpuCreateGraphicsPipeline(
+extern DECLSPEC SDL_GpuGraphicsPipeline *SDLCALL SDL_GpuCreateGraphicsPipeline(
 	SDL_GpuDevice *device,
 	SDL_GpuGraphicsPipelineCreateInfo *pipelineCreateInfo
 );
 
 /* Returns an allocated Sampler* object. */
-SDL_GpuSampler* SDL_GpuCreateSampler(
+extern DECLSPEC SDL_GpuSampler *SDLCALL SDL_GpuCreateSampler(
 	SDL_GpuDevice *device,
 	SDL_GpuSamplerStateCreateInfo *samplerStateCreateInfo
 );
 
 /* Returns an allocated ShaderModule* object. */
-SDL_GpuShaderModule* SDL_GpuCreateShaderModule(
+extern DECLSPEC SDL_GpuShaderModule *SDLCALL SDL_GpuCreateShaderModule(
 	SDL_GpuDevice *device,
 	SDL_GpuShaderModuleCreateInfo *shaderModuleCreateInfo
 );
@@ -719,7 +719,7 @@ SDL_GpuShaderModule* SDL_GpuCreateShaderModule(
 /* Returns an allocated SDL_GpuTexture* object. Note that the contents of
  * the texture are undefined until SetData is called.
  */
-SDL_GpuTexture* SDL_GpuCreateTexture(
+extern DECLSPEC SDL_GpuTexture *SDLCALL SDL_GpuCreateTexture(
 	SDL_GpuDevice *device,
 	SDL_GpuTextureCreateInfo *textureCreateInfo
 );
@@ -729,7 +729,7 @@ SDL_GpuTexture* SDL_GpuCreateTexture(
  * usageFlags:	Specifies how the buffer will be used.
  * sizeInBytes:	The length of the buffer.
  */
-SDL_GpuBuffer* SDL_GpuCreateGpuBuffer(
+extern DECLSPEC SDL_GpuBuffer *SDLCALL SDL_GpuCreateGpuBuffer(
 	SDL_GpuDevice *device,
 	SDL_GpuBufferUsageFlags usageFlags,
 	uint32_t sizeInBytes
@@ -743,7 +743,7 @@ SDL_GpuBuffer* SDL_GpuCreateGpuBuffer(
  *   so this helps the implementation take an efficient path.
  * sizeInBytes: The length of the buffer.
  */
-SDL_GpuTransferBuffer* SDL_GpuCreateTransferBuffer(
+extern DECLSPEC SDL_GpuTransferBuffer *SDLCALL SDL_GpuCreateTransferBuffer(
 	SDL_GpuDevice *device,
 	SDL_GpuTransferUsage usage,
 	uint32_t sizeInBytes
@@ -757,7 +757,7 @@ SDL_GpuTransferBuffer* SDL_GpuCreateTransferBuffer(
  * buffer: The buffer to attach the name to.
  * text: The UTF-8 string constant to mark as the name of the buffer.
  */
-void SDL_GpuSetGpuBufferName(
+extern DECLSPEC void SDLCALL SDL_GpuSetGpuBufferName(
 	SDL_GpuDevice *device,
 	SDL_GpuBuffer *buffer,
 	const char *text
@@ -769,7 +769,7 @@ void SDL_GpuSetGpuBufferName(
  * texture: The texture to attach the name to.
  * text: The UTF-8 string constant to mark as the name of the texture.
  */
-void SDL_GpuSetTextureName(
+extern DECLSPEC void SDLCALL SDL_GpuSetTextureName(
 	SDL_GpuDevice *device,
 	SDL_GpuTexture *texture,
 	const char *text
@@ -784,7 +784,7 @@ void SDL_GpuSetTextureName(
  *
  * texture: The SDL_GpuTexture to be destroyed.
  */
-void SDL_GpuQueueDestroyTexture(
+extern DECLSPEC void SDLCALL SDL_GpuQueueDestroyTexture(
 	SDL_GpuDevice *device,
 	SDL_GpuTexture *texture
 );
@@ -796,7 +796,7 @@ void SDL_GpuQueueDestroyTexture(
  *
  * texture: The SDL_GpuSampler to be destroyed.
  */
-void SDL_GpuQueueDestroySampler(
+extern DECLSPEC void SDLCALL SDL_GpuQueueDestroySampler(
 	SDL_GpuDevice *device,
 	SDL_GpuSampler *sampler
 );
@@ -806,7 +806,7 @@ void SDL_GpuQueueDestroySampler(
  *
  * buffer: The SDL_GpuBuffer to be destroyed.
  */
-void SDL_GpuQueueDestroyGpuBuffer(
+extern DECLSPEC void SDLCALL SDL_GpuQueueDestroyGpuBuffer(
 	SDL_GpuDevice *device,
 	SDL_GpuBuffer *gpuBuffer
 );
@@ -816,7 +816,7 @@ void SDL_GpuQueueDestroyGpuBuffer(
  *
  * buffer: The SDL_GpuTransferBuffer to be destroyed.
  */
-void SDL_GpuQueueDestroyTransferBuffer(
+extern DECLSPEC void SDLCALL SDL_GpuQueueDestroyTransferBuffer(
 	SDL_GpuDevice *device,
 	SDL_GpuTransferBuffer *transferBuffer
 );
@@ -826,7 +826,7 @@ void SDL_GpuQueueDestroyTransferBuffer(
  *
  * shaderModule: The SDL_GpuShaderModule to be destroyed.
  */
-void SDL_GpuQueueDestroyShaderModule(
+extern DECLSPEC void SDLCALL SDL_GpuQueueDestroyShaderModule(
 	SDL_GpuDevice *device,
 	SDL_GpuShaderModule *shaderModule
 );
@@ -836,7 +836,7 @@ void SDL_GpuQueueDestroyShaderModule(
  *
  * computePipeline: The SDL_GpuComputePipeline to be destroyed.
  */
-void SDL_GpuQueueDestroyComputePipeline(
+extern DECLSPEC void SDLCALL SDL_GpuQueueDestroyComputePipeline(
 	SDL_GpuDevice *device,
 	SDL_GpuComputePipeline *computePipeline
 );
@@ -846,7 +846,7 @@ void SDL_GpuQueueDestroyComputePipeline(
  *
  * graphicsPipeline: The SDL_GpuGraphicsPipeline to be destroyed.
  */
-void SDL_GpuQueueDestroyGraphicsPipeline(
+extern DECLSPEC void SDLCALL SDL_GpuQueueDestroyGraphicsPipeline(
 	SDL_GpuDevice *device,
 	SDL_GpuGraphicsPipeline *graphicsPipeline
 );
@@ -862,7 +862,7 @@ void SDL_GpuQueueDestroyGraphicsPipeline(
  * colorAttachmentCount: The amount of structs in the above array.
  * depthStencilAttachmentInfo: The depth/stencil render target and clear value. May be NULL.
  */
-void SDL_GpuBeginRenderPass(
+extern DECLSPEC void SDLCALL SDL_GpuBeginRenderPass(
 	SDL_GpuDevice *device,
 	SDL_GpuCommandBuffer *commandBuffer,
 	SDL_GpuColorAttachmentInfo *colorAttachmentInfos,
@@ -871,21 +871,21 @@ void SDL_GpuBeginRenderPass(
 );
 
 /* Binds a graphics pipeline to the graphics bind point. */
-void SDL_GpuBindGraphicsPipeline(
+extern DECLSPEC void SDLCALL SDL_GpuBindGraphicsPipeline(
 	SDL_GpuDevice *device,
 	SDL_GpuCommandBuffer *commandBuffer,
 	SDL_GpuGraphicsPipeline *graphicsPipeline
 );
 
 /* Sets the current viewport state. */
-void SDL_GpuSetViewport(
+extern DECLSPEC void SDLCALL SDL_GpuSetViewport(
 	SDL_GpuDevice *device,
 	SDL_GpuCommandBuffer *commandBuffer,
 	SDL_GpuViewport *viewport
 );
 
 /* Sets the current scissor state. */
-void SDL_GpuSetScissor(
+extern DECLSPEC void SDLCALL SDL_GpuSetScissor(
 	SDL_GpuDevice *device,
 	SDL_GpuCommandBuffer *commandBuffer,
 	SDL_GpuRect *scissor
@@ -894,7 +894,7 @@ void SDL_GpuSetScissor(
 /* Binds vertex buffers for use with subsequent draw calls.
  * Note that this may only be called after binding a graphics pipeline.
  */
-void SDL_GpuBindVertexBuffers(
+extern DECLSPEC void SDLCALL SDL_GpuBindVertexBuffers(
 	SDL_GpuDevice *device,
 	SDL_GpuCommandBuffer *commandBuffer,
 	uint32_t firstBinding,
@@ -903,7 +903,7 @@ void SDL_GpuBindVertexBuffers(
 );
 
 /* Binds an index buffer for use with subsequent draw calls. */
-void SDL_GpuBindIndexBuffer(
+extern DECLSPEC void SDLCALL SDL_GpuBindIndexBuffer(
 	SDL_GpuDevice *device,
 	SDL_GpuCommandBuffer *commandBuffer,
 	SDL_GpuBufferBinding *pBinding,
@@ -918,7 +918,7 @@ void SDL_GpuBindIndexBuffer(
  *
  * pBindings:  A pointer to an array of TextureSamplerBindings.
  */
-void SDL_GpuBindVertexSamplers(
+extern DECLSPEC void SDLCALL SDL_GpuBindVertexSamplers(
 	SDL_GpuDevice *device,
 	SDL_GpuCommandBuffer *commandBuffer,
 	SDL_GpuTextureSamplerBinding *pBindings
@@ -932,7 +932,7 @@ void SDL_GpuBindVertexSamplers(
  *
  * pBindings:  A pointer to an array of TextureSamplerBindings.
  */
-void SDL_GpuBindFragmentSamplers(
+extern DECLSPEC void SDLCALL SDL_GpuBindFragmentSamplers(
 	SDL_GpuDevice *device,
 	SDL_GpuCommandBuffer *commandBuffer,
 	SDL_GpuTextureSamplerBinding *pBindings
@@ -948,7 +948,7 @@ void SDL_GpuBindFragmentSamplers(
  * data: 				The client data to write into the buffer.
  * dataLengthInBytes: 	The length of the data to write.
  */
-void SDL_GpuPushVertexShaderUniforms(
+extern DECLSPEC void SDLCALL SDL_GpuPushVertexShaderUniforms(
 	SDL_GpuDevice *device,
 	SDL_GpuCommandBuffer * commandBuffer,
 	void *data,
@@ -965,7 +965,7 @@ void SDL_GpuPushVertexShaderUniforms(
  * data: 				The client data to write into the buffer.
  * dataLengthInBytes: 	The length of the data to write.
  */
-void SDL_GpuPushFragmentShaderUniforms(
+extern DECLSPEC void SDLCALL SDL_GpuPushFragmentShaderUniforms(
 	SDL_GpuDevice *device,
 	SDL_GpuCommandBuffer *commandBuffer,
 	void *data,
@@ -981,7 +981,7 @@ void SDL_GpuPushFragmentShaderUniforms(
  * primitiveCount:      The number of primitives to draw.
  * instanceCount:       The number of instances that will be drawn.
  */
-void SDL_GpuDrawInstancedPrimitives(
+extern DECLSPEC void SDLCALL SDL_GpuDrawInstancedPrimitives(
 	SDL_GpuDevice *device,
 	SDL_GpuCommandBuffer *commandBuffer,
 	uint32_t baseVertex,
@@ -995,7 +995,7 @@ void SDL_GpuDrawInstancedPrimitives(
  * vertexStart:			The starting offset to read from the vertex buffer.
  * primitiveCount:		The number of primitives to draw.
  */
-void SDL_GpuDrawPrimitives(
+extern DECLSPEC void SDLCALL SDL_GpuDrawPrimitives(
 	SDL_GpuDevice *device,
 	SDL_GpuCommandBuffer *commandBuffer,
 	uint32_t vertexStart,
@@ -1010,7 +1010,7 @@ void SDL_GpuDrawPrimitives(
  * drawCount:           The number of draw parameter sets that should be read from the draw buffer.
  * stride:              The byte stride between sets of draw parameters.
  */
-void SDL_GpuDrawPrimitivesIndirect(
+extern DECLSPEC void SDLCALL SDL_GpuDrawPrimitivesIndirect(
 	SDL_GpuDevice *device,
 	SDL_GpuCommandBuffer *commandBuffer,
 	SDL_GpuBuffer *gpuBuffer,
@@ -1020,7 +1020,7 @@ void SDL_GpuDrawPrimitivesIndirect(
 );
 
 /* Ends the current render pass. */
-void SDL_GpuEndRenderPass(
+extern DECLSPEC void SDLCALL SDL_GpuEndRenderPass(
 	SDL_GpuDevice *device,
 	SDL_GpuCommandBuffer *commandBuffer
 );
@@ -1028,13 +1028,13 @@ void SDL_GpuEndRenderPass(
 /* Compute Pass */
 
 /* Begins a compute pass. */
-void SDL_GpuBeginComputePass(
+extern DECLSPEC void SDLCALL SDL_GpuBeginComputePass(
 	SDL_GpuDevice *device,
 	SDL_GpuCommandBuffer *commandBuffer
 );
 
 /* Binds a compute pipeline to the compute bind point. */
-void SDL_GpuBindComputePipeline(
+extern DECLSPEC void SDLCALL SDL_GpuBindComputePipeline(
 	SDL_GpuDevice *device,
 	SDL_GpuCommandBuffer *commandBuffer,
 	SDL_GpuComputePipeline *computePipeline
@@ -1047,7 +1047,7 @@ void SDL_GpuBindComputePipeline(
  *   Length must be equal to the number of buffers
  *   specified by the compute pipeline.
  */
-void SDL_GpuBindComputeBuffers(
+extern DECLSPEC void SDLCALL SDL_GpuBindComputeBuffers(
 	SDL_GpuDevice *device,
 	SDL_GpuCommandBuffer *commandBuffer,
 	SDL_GpuComputeBufferBinding *pBindings
@@ -1060,7 +1060,7 @@ void SDL_GpuBindComputeBuffers(
  *   Length must be equal to the number of textures
  *   specified by the compute pipeline.
  */
-void SDL_GpuBindComputeTextures(
+extern DECLSPEC void SDLCALL SDL_GpuBindComputeTextures(
 	SDL_GpuDevice *device,
 	SDL_GpuCommandBuffer *commandBuffer,
 	SDL_GpuComputeTextureBinding *pBindings
@@ -1076,7 +1076,7 @@ void SDL_GpuBindComputeTextures(
  * data:				The client data to write into the buffer.
  * dataLengthInBytes:	The length of the data to write.
  */
-void SDL_GpuPushComputeShaderUniforms(
+extern DECLSPEC void SDLCALL SDL_GpuPushComputeShaderUniforms(
 	SDL_GpuDevice *device,
 	SDL_GpuCommandBuffer * commandBuffer,
 	void *data,
@@ -1089,7 +1089,7 @@ void SDL_GpuPushComputeShaderUniforms(
  * groupCountY:			Number of local workgroups to dispatch in the Y dimension.
  * groupCountZ:			Number of local workgroups to dispatch in the Z dimension.
  */
-void SDL_GpuDispatchCompute(
+extern DECLSPEC void SDLCALL SDL_GpuDispatchCompute(
 	SDL_GpuDevice *device,
 	SDL_GpuCommandBuffer *commandBuffer,
 	uint32_t groupCountX,
@@ -1098,7 +1098,7 @@ void SDL_GpuDispatchCompute(
 );
 
 /* Ends the current compute pass. */
-void SDL_GpuEndComputePass(
+extern DECLSPEC void SDLCALL SDL_GpuEndComputePass(
 	SDL_GpuDevice *device,
 	SDL_GpuCommandBuffer *commandBuffer
 );
@@ -1120,7 +1120,7 @@ void SDL_GpuEndComputePass(
  *    Overwrites the data regardless of whether a command has been issued.
  *    Use this option with great care, as it can cause data races to occur!
  */
-void SDL_GpuSetTransferData(
+extern DECLSPEC void SDLCALL SDL_GpuSetTransferData(
 	SDL_GpuDevice *device,
 	void* data,
 	SDL_GpuTransferBuffer *transferBuffer,
@@ -1129,7 +1129,7 @@ void SDL_GpuSetTransferData(
 );
 
 /* Immediately copies data from a TransferBuffer into a pointer. */
-void SDL_GpuGetTransferData(
+extern DECLSPEC void SDLCALL SDL_GpuGetTransferData(
 	SDL_GpuDevice *device,
 	SDL_GpuTransferBuffer *transferBuffer,
 	void* data,
@@ -1139,7 +1139,7 @@ void SDL_GpuGetTransferData(
 /* Copy Pass */
 
 /* Begins a copy pass. */
-void SDL_GpuBeginCopyPass(
+extern DECLSPEC void SDLCALL SDL_GpuBeginCopyPass(
 	SDL_GpuDevice *device,
 	SDL_GpuCommandBuffer *commandBuffer
 );
@@ -1167,7 +1167,7 @@ void SDL_GpuBeginCopyPass(
  *    This is usually the slowest option.
  */
 
-void SDL_GpuUploadToTexture(
+extern DECLSPEC void SDLCALL SDL_GpuUploadToTexture(
 	SDL_GpuDevice *device,
 	SDL_GpuCommandBuffer *commandBuffer,
 	SDL_GpuTransferBuffer *transferBuffer,
@@ -1177,7 +1177,7 @@ void SDL_GpuUploadToTexture(
 );
 
 /* Uploads data from a TransferBuffer to a GpuBuffer. */
-void SDL_GpuUploadToBuffer(
+extern DECLSPEC void SDLCALL SDL_GpuUploadToBuffer(
 	SDL_GpuDevice *device,
 	SDL_GpuCommandBuffer *commandBuffer,
 	SDL_GpuTransferBuffer *transferBuffer,
@@ -1209,7 +1209,7 @@ void SDL_GpuUploadToBuffer(
  */
 
 /* Performs a texture-to-texture copy. */
-void SDL_GpuCopyTextureToTexture(
+extern DECLSPEC void SDLCALL SDL_GpuCopyTextureToTexture(
 	SDL_GpuDevice *device,
 	SDL_GpuCommandBuffer *commandBuffer,
 	SDL_GpuTextureRegion *source,
@@ -1218,7 +1218,7 @@ void SDL_GpuCopyTextureToTexture(
 );
 
 /* Copies data from a buffer to a buffer. */
-void SDL_GpuCopyBufferToBuffer(
+extern DECLSPEC void SDLCALL SDL_GpuCopyBufferToBuffer(
 	SDL_GpuDevice *device,
 	SDL_GpuCommandBuffer *commandBuffer,
 	SDL_GpuBuffer *source,
@@ -1228,13 +1228,13 @@ void SDL_GpuCopyBufferToBuffer(
 );
 
 /* Generate mipmaps for the given texture. */
-void SDL_GpuGenerateMipmaps(
+extern DECLSPEC void SDLCALL SDL_GpuGenerateMipmaps(
 	SDL_GpuDevice *device,
 	SDL_GpuCommandBuffer *commandBuffer,
 	SDL_GpuTexture *texture
 );
 
-void SDL_GpuEndCopyPass(
+extern DECLSPEC void SDLCALL SDL_GpuEndCopyPass(
 	SDL_GpuDevice *device,
 	SDL_GpuCommandBuffer *commandBuffer
 );
@@ -1249,7 +1249,7 @@ void SDL_GpuEndCopyPass(
  *
  * Returns 0 on swapchain creation failure.
  */
-uint8_t SDL_GpuClaimWindow(
+extern DECLSPEC uint8_t SDLCALL SDL_GpuClaimWindow(
 	SDL_GpuDevice *device,
 	void *windowHandle,
 	SDL_GpuPresentMode presentMode
@@ -1260,20 +1260,20 @@ uint8_t SDL_GpuClaimWindow(
  * prevent memory bloat, but windows are automatically unclaimed
  * by DestroyDevice.
  */
-void SDL_GpuUnclaimWindow(
+extern DECLSPEC void SDLCALL SDL_GpuUnclaimWindow(
 	SDL_GpuDevice *device,
 	void *windowHandle
 );
 
 /* Changes the present mode of the swapchain for the given window. */
-void SDL_GpuSetSwapchainPresentMode(
+extern DECLSPEC void SDLCALL SDL_GpuSetSwapchainPresentMode(
 	SDL_GpuDevice *device,
 	void *windowHandle,
 	SDL_GpuPresentMode presentMode
 );
 
 /* Returns the format of the swapchain for the given window. */
-SDL_GpuTextureFormat SDL_GpuGetSwapchainFormat(
+extern DECLSPEC SDL_GpuTextureFormat SDLCALL SDL_GpuGetSwapchainFormat(
 	SDL_GpuDevice *device,
 	void *windowHandle
 );
@@ -1287,7 +1287,7 @@ SDL_GpuTextureFormat SDL_GpuGetSwapchainFormat(
  * 	it was acquired on. Using it on any other thread is an error.
  *
  */
-SDL_GpuCommandBuffer* SDL_GpuAcquireCommandBuffer(
+extern DECLSPEC SDL_GpuCommandBuffer *SDLCALL SDL_GpuAcquireCommandBuffer(
 	SDL_GpuDevice *device
 );
 
@@ -1303,7 +1303,7 @@ SDL_GpuCommandBuffer* SDL_GpuAcquireCommandBuffer(
  * pWidth: A pointer to a uint32 that will be filled with the texture width.
  * pHeight: A pointer to a uint32 that will be filled with the texture height.
  */
-SDL_GpuTexture* SDL_GpuAcquireSwapchainTexture(
+extern DECLSPEC SDL_GpuTexture *SDLCALL SDL_GpuAcquireSwapchainTexture(
 	SDL_GpuDevice *device,
 	SDL_GpuCommandBuffer *commandBuffer,
 	void *windowHandle,
@@ -1312,7 +1312,7 @@ SDL_GpuTexture* SDL_GpuAcquireSwapchainTexture(
 );
 
 /* Submits all of the enqueued commands. */
-void SDL_GpuSubmit(
+extern DECLSPEC void SDLCALL SDL_GpuSubmit(
 	SDL_GpuDevice* device,
 	SDL_GpuCommandBuffer *commandBuffer
 );
@@ -1321,13 +1321,13 @@ void SDL_GpuSubmit(
  * You can use the fence to check if or wait until the command buffer has finished processing.
  * You are responsible for releasing this fence when you are done using it.
  */
-SDL_GpuFence* SDL_GpuSubmitAndAcquireFence(
+extern DECLSPEC SDL_GpuFence *SDLCALL SDL_GpuSubmitAndAcquireFence(
 	SDL_GpuDevice* device,
 	SDL_GpuCommandBuffer *commandBuffer
 );
 
 /* Waits for the device to become idle. */
-void SDL_GpuWait(
+extern DECLSPEC void SDLCALL SDL_GpuWait(
 	SDL_GpuDevice *device
 );
 
@@ -1337,7 +1337,7 @@ void SDL_GpuWait(
  * fenceCount: The number of fences being submitted.
  * pFences: An array of fences to be waited on.
  */
-void SDL_GpuWaitForFences(
+extern DECLSPEC void SDLCALL SDL_GpuWaitForFences(
 	SDL_GpuDevice *device,
 	uint8_t waitAll,
 	uint32_t fenceCount,
@@ -1345,7 +1345,7 @@ void SDL_GpuWaitForFences(
 );
 
 /* Check the status of a fence. 1 means the fence is signaled. */
-int SDL_GpuQueryFence(
+extern DECLSPEC int SDLCALL SDL_GpuQueryFence(
 	SDL_GpuDevice *device,
 	SDL_GpuFence *fence
 );
@@ -1353,7 +1353,7 @@ int SDL_GpuQueryFence(
 /* Allows the fence to be reused by future command buffer submissions.
  * If you do not release fences after acquiring them, you will cause unbounded resource growth.
  */
-void SDL_GpuReleaseFence(
+extern DECLSPEC void SDLCALL SDL_GpuReleaseFence(
 	SDL_GpuDevice *device,
 	SDL_GpuFence *fence
 );
@@ -1384,7 +1384,7 @@ void SDL_GpuReleaseFence(
  */
 
 /* Downloads data from a texture to a TransferBuffer. */
-void SDL_GpuDownloadFromTexture(
+extern DECLSPEC void SDLCALL SDL_GpuDownloadFromTexture(
 	SDL_GpuDevice *device,
 	SDL_GpuTextureRegion *textureRegion,
 	SDL_GpuTransferBuffer *transferBuffer,
@@ -1393,7 +1393,7 @@ void SDL_GpuDownloadFromTexture(
 );
 
 /* Downloads data from a GpuBuffer object. */
-void SDL_GpuDownloadFromBuffer(
+extern DECLSPEC void SDLCALL SDL_GpuDownloadFromBuffer(
 	SDL_GpuDevice *device,
 	SDL_GpuBuffer *gpuBuffer,
 	SDL_GpuTransferBuffer *transferBuffer,

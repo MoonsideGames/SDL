@@ -434,6 +434,10 @@
 /* Enable Vulkan support */
 #cmakedefine SDL_VIDEO_VULKAN @SDL_VIDEO_VULKAN@
 
+/* Enable GPU support */
+#cmakedefine01 SDL_GPU_D3D11
+#cmakedefine01 SDL_GPU_VULKAN
+
 /* Enable Metal support */
 #cmakedefine SDL_VIDEO_METAL @SDL_VIDEO_METAL@
 

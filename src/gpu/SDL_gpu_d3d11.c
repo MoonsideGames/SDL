@@ -21,7 +21,7 @@
 
 #include "SDL_internal.h"
 
-#ifdef SDL_GPU_ENABLE_D3D11
+#if SDL_GPU_D3D11
 
 #define D3D11_NO_HELPERS
 #define CINTERFACE
@@ -4473,19 +4473,19 @@ static void D3D11_INTERNAL_CleanCommandBuffer(
 
 	for (uint32_t i = 0; i < commandBuffer->usedGpuBufferCount; i += 1)
 	{
-		SDL_AtomicDecRef(&commandBuffer->usedGpuBuffers[i]->referenceCount);
+		(void)SDL_AtomicDecRef(&commandBuffer->usedGpuBuffers[i]->referenceCount);
 	}
 	commandBuffer->usedGpuBufferCount = 0;
 
 	for (uint32_t i = 0; i < commandBuffer->usedTransferBufferCount; i += 1)
 	{
-		SDL_AtomicDecRef(&commandBuffer->usedTransferBuffers[i]->referenceCount);
+		(void)SDL_AtomicDecRef(&commandBuffer->usedTransferBuffers[i]->referenceCount);
 	}
 	commandBuffer->usedTransferBufferCount = 0;
 
 	for (uint32_t i = 0; i < commandBuffer->usedTextureSubresourceCount; i += 1)
 	{
-		SDL_AtomicDecRef(&commandBuffer->usedTextureSubresources[i]->referenceCount);
+		(void)SDL_AtomicDecRef(&commandBuffer->usedTextureSubresources[i]->referenceCount);
 	}
 	commandBuffer->usedTextureSubresourceCount = 0;
 
@@ -5199,4 +5199,4 @@ SDL_GpuDriver D3D11Driver = {
 	D3D11_CreateDevice
 };
 
-#endif //SDL_GPU_DRIVER_D3D11
+#endif /*SDL_GPU_D3D11*/

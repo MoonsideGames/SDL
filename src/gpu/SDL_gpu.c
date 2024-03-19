@@ -26,13 +26,13 @@
 
 /* Drivers */
 
-#ifdef SDL_GPU_ENABLE_VULKAN
+#if SDL_GPU_VULKAN
 	#define SDL_GPU_VULKAN_DRIVER &VulkanDriver
 #else
 	#define SDL_GPU_VULKAN_DRIVER NULL
 #endif
 
-#ifdef SDL_GPU_ENABLE_D3D11
+#if SDL_GPU_D3D11
 	#define SDL_GPU_D3D11_DRIVER &D3D11Driver
 #else
 	#define SDL_GPU_D3D11_DRIVER NULL

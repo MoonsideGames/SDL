@@ -21,7 +21,8 @@
 
 #include "SDL_internal.h"
 
-#ifdef SDL_GPU_ENABLE_VULKAN
+#if SDL_GPU_VULKAN
+#include <SDL3/SDL_vulkan.h>
 
 /* Needed for VK_KHR_portability_subset */
 #define VK_ENABLE_BETA_EXTENSIONS
@@ -3531,8 +3532,8 @@ static void VULKAN_INTERNAL_DestroyGraphicsPipeline(
         NULL
     );
 
-    SDL_AtomicDecRef(&graphicsPipeline->vertexShaderModule->referenceCount);
-    SDL_AtomicDecRef(&graphicsPipeline->fragmentShaderModule->referenceCount);
+    (void)SDL_AtomicDecRef(&graphicsPipeline->vertexShaderModule->referenceCount);
+    (void)SDL_AtomicDecRef(&graphicsPipeline->fragmentShaderModule->referenceCount);
 
     SDL_free(graphicsPipeline);
 }
@@ -3547,7 +3548,7 @@ static void VULKAN_INTERNAL_DestroyComputePipeline(
         NULL
     );
 
-    SDL_AtomicDecRef(&computePipeline->computeShaderModule->referenceCount);
+    (void)SDL_AtomicDecRef(&computePipeline->computeShaderModule->referenceCount);
 
     SDL_free(computePipeline);
 }
@@ -4720,6 +4721,7 @@ static uint8_t VULKAN_INTERNAL_CreateSwapchain(
     if (!SDL_Vulkan_CreateSurface(
         (SDL_Window*) windowData->windowHandle,
         renderer->instance,
+        NULL, /* FIXME: VAllocationCallbacks */
         &swapchainData->surface
     )) {
         SDL_free(swapchainData);
@@ -8828,6 +8830,9 @@ static void VULKAN_GetTransferData(
         bufferPointer,
         copyParams->size
     );
+#if 1
+    (void) renderer; /* FIXME: unused */
+#endif
 }
 
 static void VULKAN_BeginCopyPass(
@@ -8839,6 +8844,9 @@ static void VULKAN_BeginCopyPass(
 
     vulkanCommandBuffer->copiedGpuBufferCount = 0;
     vulkanCommandBuffer->copiedTextureSliceCount = 0;
+#if 1
+    (void) renderer; /* FIXME: unused */
+#endif
 }
 
 static void VULKAN_UploadToTexture(
@@ -10055,7 +10063,7 @@ static void VULKAN_INTERNAL_CleanCommandBuffer(
 
     for (i = 0; i < commandBuffer->usedBufferCount; i += 1)
     {
-        SDL_AtomicDecRef(&commandBuffer->usedBuffers[i]->referenceCount);
+        (void)SDL_AtomicDecRef(&commandBuffer->usedBuffers[i]->referenceCount);
         if (commandBuffer->isDefrag)
         {
             commandBuffer->usedBuffers[i]->defragInProgress = 0;
@@ -10065,7 +10073,7 @@ static void VULKAN_INTERNAL_CleanCommandBuffer(
 
     for (i = 0; i < commandBuffer->usedTextureSliceCount; i += 1)
     {
-        SDL_AtomicDecRef(&commandBuffer->usedTextureSlices[i]->referenceCount);
+        (void)SDL_AtomicDecRef(&commandBuffer->usedTextureSlices[i]->referenceCount);
         if (commandBuffer->isDefrag)
         {
             commandBuffer->usedTextureSlices[i]->defragInProgress = 0;
@@ -10075,25 +10083,25 @@ static void VULKAN_INTERNAL_CleanCommandBuffer(
 
     for (i = 0; i < commandBuffer->usedSamplerCount; i += 1)
     {
-        SDL_AtomicDecRef(&commandBuffer->usedSamplers[i]->referenceCount);
+        (void)SDL_AtomicDecRef(&commandBuffer->usedSamplers[i]->referenceCount);
     }
     commandBuffer->usedSamplerCount = 0;
 
     for (i = 0; i < commandBuffer->usedGraphicsPipelineCount; i += 1)
     {
-        SDL_AtomicDecRef(&commandBuffer->usedGraphicsPipelines[i]->referenceCount);
+        (void)SDL_AtomicDecRef(&commandBuffer->usedGraphicsPipelines[i]->referenceCount);
     }
     commandBuffer->usedGraphicsPipelineCount = 0;
 
     for (i = 0; i < commandBuffer->usedComputePipelineCount; i += 1)
     {
-        SDL_AtomicDecRef(&commandBuffer->usedComputePipelines[i]->referenceCount);
+        (void)SDL_AtomicDecRef(&commandBuffer->usedComputePipelines[i]->referenceCount);
     }
     commandBuffer->usedComputePipelineCount = 0;
 
     for (i = 0; i < commandBuffer->usedFramebufferCount; i += 1)
     {
-        SDL_AtomicDecRef(&commandBuffer->usedFramebuffers[i]->referenceCount);
+        (void)SDL_AtomicDecRef(&commandBuffer->usedFramebuffers[i]->referenceCount);
     }
     commandBuffer->usedFramebufferCount = 0;
 
@@ -11041,6 +11049,7 @@ static uint8_t VULKAN_INTERNAL_CreateInstance(
 ) {
     VkResult vulkanResult;
     VkApplicationInfo appInfo;
+    const char *const *originalInstanceExtensionNames;
     const char **instanceExtensionNames;
     uint32_t instanceExtensionCount;
     VkInstanceCreateInfo createInfo;
@@ -11054,11 +11063,9 @@ static uint8_t VULKAN_INTERNAL_CreateInstance(
     appInfo.engineVersion = SDL_COMPILEDVERSION;
     appInfo.apiVersion = VK_MAKE_VERSION(1, 0, 0);
 
-    if (!SDL_Vulkan_GetInstanceExtensions(
-        (SDL_Window*) deviceWindowHandle,
-        &instanceExtensionCount,
-        NULL
-    )) {
+
+    originalInstanceExtensionNames = SDL_Vulkan_GetInstanceExtensions(&instanceExtensionCount);
+    if (!originalInstanceExtensionNames) {
         SDL_LogError(
             SDL_LOG_CATEGORY_APPLICATION,
             "SDL_Vulkan_GetInstanceExtensions(): getExtensionCount: %s",
@@ -11076,21 +11083,7 @@ static uint8_t VULKAN_INTERNAL_CreateInstance(
         const char*,
         instanceExtensionCount + 2
     );
-
-    if (!SDL_Vulkan_GetInstanceExtensions(
-        (SDL_Window*) deviceWindowHandle,
-        &instanceExtensionCount,
-        instanceExtensionNames
-    )) {
-        SDL_LogError(
-            SDL_LOG_CATEGORY_APPLICATION,
-            "SDL_Vulkan_GetInstanceExtensions(): %s",
-            SDL_GetError()
-        );
-
-        SDL_stack_free((char*) instanceExtensionNames);
-        return 0;
-    }
+    SDL_memcpy(instanceExtensionNames, originalInstanceExtensionNames, instanceExtensionCount * sizeof(const char*));
 
     /* Core since 1.1 */
     instanceExtensionNames[instanceExtensionCount++] =
@@ -11637,8 +11630,9 @@ static uint8_t VULKAN_INTERNAL_PrepareVulkan(
     }
 
     if (!SDL_Vulkan_CreateSurface(
-        (SDL_Window*) dummyWindowHandle,
+        dummyWindowHandle,
         renderer->instance,
+        NULL, /* FIXME: VAllocationCallbacks */
         &surface
     )) {
         SDL_DestroyWindow(dummyWindowHandle);
@@ -12220,4 +12214,4 @@ SDL_GpuDriver VulkanDriver = {
     VULKAN_CreateDevice
 };
 
-#endif //SDL_GPU_ENABLE_VULKAN
+#endif //SDL_GPU_VULKAN
