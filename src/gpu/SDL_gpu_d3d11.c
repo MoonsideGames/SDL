@@ -4901,7 +4901,7 @@ static void D3D11_INTERNAL_TryInitializeDXGIDebug(D3D11Renderer *renderer)
 		return;
 	}
 
-	DXGIGetDebugInterfaceFunc = SDL_LoadFunction(
+	DXGIGetDebugInterfaceFunc = (PFN_DXGI_GET_DEBUG_INTERFACE) SDL_LoadFunction(
 		renderer->dxgidebug_dll,
 		DXGI_GET_DEBUG_INTERFACE_FUNC
 	);
