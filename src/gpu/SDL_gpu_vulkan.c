@@ -6617,23 +6617,6 @@ static SDL_GpuGraphicsPipeline* VULKAN_CreateGraphicsPipeline(
         }
     }
 
-    if (divisorDescriptionCount > 0)
-    {
-        divisorDescriptions = SDL_stack_alloc(VkVertexInputBindingDivisorDescriptionEXT, divisorDescriptionCount);
-        divisorDescriptionCount = 0;
-
-        for (i = 0; i < pipelineCreateInfo->vertexInputState.vertexBindingCount; i += 1)
-        {
-            if (pipelineCreateInfo->vertexInputState.vertexBindings[i].inputRate == SDL_GPU_VERTEXINPUTRATE_INSTANCE)
-            {
-                divisorDescriptions[divisorDescriptionCount].binding = pipelineCreateInfo->vertexInputState.vertexBindings[i].binding;
-                divisorDescriptions[divisorDescriptionCount].divisor = pipelineCreateInfo->vertexInputState.vertexBindings[i].stepRate;
-
-                divisorDescriptionCount += 1;
-            }
-        }
-    }
-
     for (i = 0; i < pipelineCreateInfo->vertexInputState.vertexAttributeCount; i += 1)
     {
         vertexInputAttributeDescriptions[i].binding = pipelineCreateInfo->vertexInputState.vertexAttributes[i].binding;
@@ -6654,6 +6637,20 @@ static SDL_GpuGraphicsPipeline* VULKAN_CreateGraphicsPipeline(
 
     if (divisorDescriptionCount > 0)
     {
+        divisorDescriptions = SDL_stack_alloc(VkVertexInputBindingDivisorDescriptionEXT, divisorDescriptionCount);
+        divisorDescriptionCount = 0;
+
+        for (i = 0; i < pipelineCreateInfo->vertexInputState.vertexBindingCount; i += 1)
+        {
+            if (pipelineCreateInfo->vertexInputState.vertexBindings[i].inputRate == SDL_GPU_VERTEXINPUTRATE_INSTANCE)
+            {
+                divisorDescriptions[divisorDescriptionCount].binding = pipelineCreateInfo->vertexInputState.vertexBindings[i].binding;
+                divisorDescriptions[divisorDescriptionCount].divisor = pipelineCreateInfo->vertexInputState.vertexBindings[i].stepRate;
+
+                divisorDescriptionCount += 1;
+            }
+        }
+
         divisorStateCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_DIVISOR_STATE_CREATE_INFO_EXT;
         divisorStateCreateInfo.pNext = NULL;
         divisorStateCreateInfo.vertexBindingDivisorCount = divisorDescriptionCount;
