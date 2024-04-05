@@ -724,6 +724,11 @@ typedef struct D3D11Sampler
 	ID3D11SamplerState *handle;
 } D3D11Sampler;
 
+typedef struct D3D11OcclusionQuery
+{
+	ID3D11Query *handle;
+} D3D11OcclusionQuery;
+
 typedef struct D3D11Renderer
 {
 	ID3D11Device1 *device;
@@ -3607,6 +3612,15 @@ static void D3D11_QueueDestroyGraphicsPipeline(
 	SDL_free(d3d11GraphicsPipeline);
 }
 
+static void D3D11_QueueDestroyOcclusionQuery(
+    SDL_GpuRenderer *renderer,
+    SDL_GpuOcclusionQuery *query
+) {
+    D3D11OcclusionQuery *d3dQuery = (D3D11OcclusionQuery*) query;
+    ID3D11Query_Release(d3dQuery->handle);
+    SDL_free(query);
+}
+
 /* Graphics State */
 
 static void D3D11_INTERNAL_AllocateCommandBuffers(
@@ -5220,7 +5234,7 @@ static void D3D11_WaitForFences(
 	}
 }
 
-static int D3D11_QueryFence(
+static SDL_bool D3D11_QueryFence(
 	SDL_GpuRenderer *driverData,
 	SDL_GpuFence *fence
 ) {
@@ -5252,6 +5266,83 @@ static void D3D11_ReleaseFence(
 		(D3D11Renderer*) driverData,
 		(D3D11Fence*) fence
 	);
+}
+
+/* Queries */
+
+static SDL_GpuOcclusionQuery* D3D11_CreateOcclusionQuery(
+    SDL_GpuRenderer *driverData
+) {
+    D3D11Renderer *renderer = (D3D11Renderer*) driverData;
+	D3D11OcclusionQuery *query = (D3D11OcclusionQuery*) SDL_malloc(sizeof(D3D11OcclusionQuery));
+	D3D11_QUERY_DESC desc;
+	HRESULT res;
+
+    desc.Query = D3D11_QUERY_OCCLUSION;
+    desc.MiscFlags = 0;
+
+    res = ID3D11Device_CreateQuery(
+        renderer->device,
+        &desc,
+        &query->handle
+    );
+    ERROR_CHECK_RETURN("Query creation failed", NULL)
+
+    return (SDL_GpuOcclusionQuery*) query;
+}
+
+static void D3D11_OcclusionQueryBegin(
+    SDL_GpuRenderer *driverData,
+    SDL_GpuCommandBuffer *commandBuffer,
+    SDL_GpuOcclusionQuery *query
+) {
+    (void)driverData; /* used by other backends */
+    D3D11CommandBuffer *d3d11CommandBuffer = (D3D11CommandBuffer*) commandBuffer;
+	D3D11OcclusionQuery *d3dQuery = (D3D11OcclusionQuery*) query;
+
+    ID3D11DeviceContext1_Begin(
+        d3d11CommandBuffer->context,
+        (ID3D11Asynchronous*) d3dQuery->handle
+    );
+}
+
+static void D3D11_OcclusionQueryEnd(
+    SDL_GpuRenderer *driverData,
+    SDL_GpuCommandBuffer *commandBuffer,
+    SDL_GpuOcclusionQuery *query
+) {
+    (void)driverData; /* used by other backends */
+    D3D11CommandBuffer *d3d11CommandBuffer = (D3D11CommandBuffer*) commandBuffer;
+	D3D11OcclusionQuery *d3dQuery = (D3D11OcclusionQuery*) query;
+
+    ID3D11DeviceContext1_End(
+        d3d11CommandBuffer->context,
+        (ID3D11Asynchronous*) d3dQuery->handle
+    );
+}
+
+static SDL_bool D3D11_OcclusionQueryPixelCount(
+    SDL_GpuRenderer *driverData,
+    SDL_GpuOcclusionQuery *query,
+    Uint32 *pixelCount
+) {
+    D3D11Renderer *renderer = (D3D11Renderer*) driverData;
+	D3D11OcclusionQuery *d3dQuery = (D3D11OcclusionQuery*) query;
+    uint64_t result;
+    HRESULT res;
+
+    SDL_LockMutex(renderer->contextLock);
+    res = ID3D11DeviceContext_GetData(
+        renderer->immediateContext,
+        (ID3D11Asynchronous*) d3dQuery->handle,
+        &result,
+        sizeof(result),
+        0
+    );
+    SDL_UnlockMutex(renderer->contextLock);
+
+    *pixelCount = (Uint32) result;
+    return res == S_OK;
 }
 
 /* Device Creation */

@@ -195,6 +195,10 @@ struct SDL_GpuDevice
 		Uint32 sizeInBytes
 	);
 
+    SDL_GpuOcclusionQuery* (*CreateOcclusionQuery)(
+        SDL_GpuRenderer *driverData
+    );
+
 	/* Debug Naming */
 
 	void (*SetGpuBufferName)(
@@ -245,6 +249,11 @@ struct SDL_GpuDevice
 		SDL_GpuRenderer *driverData,
 		SDL_GpuGraphicsPipeline *graphicsPipeline
 	);
+
+    void (*QueueDestroyOcclusionQuery)(
+        SDL_GpuRenderer *driverData,
+        SDL_GpuOcclusionQuery *query
+    );
 
 	/* Render Pass */
 
@@ -526,7 +535,7 @@ struct SDL_GpuDevice
 		SDL_GpuFence **pFences
 	);
 
-	int (*QueryFence)(
+	SDL_bool (*QueryFence)(
 		SDL_GpuRenderer *driverData,
 		SDL_GpuFence *fence
 	);
@@ -536,6 +545,7 @@ struct SDL_GpuDevice
 		SDL_GpuFence *fence
 	);
 
+    /* Resource Download */
 	void (*DownloadFromTexture)(
 		SDL_GpuRenderer *driverData,
 		SDL_GpuTextureRegion *textureSlice,
@@ -551,6 +561,26 @@ struct SDL_GpuDevice
 		SDL_GpuBufferCopy *copyParams,
 		SDL_bool cycle
 	);
+
+    /* Queries */
+
+    void (*OcclusionQueryBegin)(
+        SDL_GpuRenderer *driverData,
+        SDL_GpuCommandBuffer *commandBuffer,
+        SDL_GpuOcclusionQuery *query
+    );
+
+    void (*OcclusionQueryEnd)(
+        SDL_GpuRenderer *driverData,
+        SDL_GpuCommandBuffer *commandBuffer,
+        SDL_GpuOcclusionQuery *query
+    );
+
+    SDL_bool (*OcclusionQueryPixelCount)(
+        SDL_GpuRenderer *driverData,
+        SDL_GpuOcclusionQuery *query,
+        Uint32 *pixelCount
+    );
 
 	/* Opaque pointer for the Driver */
 	SDL_GpuRenderer *driverData;
@@ -570,6 +600,7 @@ struct SDL_GpuDevice
 	ASSIGN_DRIVER_FUNC(CreateTexture, name) \
 	ASSIGN_DRIVER_FUNC(CreateGpuBuffer, name) \
 	ASSIGN_DRIVER_FUNC(CreateTransferBuffer, name) \
+    ASSIGN_DRIVER_FUNC(CreateOcclusionQuery, name) \
 	ASSIGN_DRIVER_FUNC(SetGpuBufferName, name) \
 	ASSIGN_DRIVER_FUNC(SetTextureName, name) \
 	ASSIGN_DRIVER_FUNC(QueueDestroyTexture, name) \
@@ -579,6 +610,7 @@ struct SDL_GpuDevice
 	ASSIGN_DRIVER_FUNC(QueueDestroyShaderModule, name) \
 	ASSIGN_DRIVER_FUNC(QueueDestroyComputePipeline, name) \
 	ASSIGN_DRIVER_FUNC(QueueDestroyGraphicsPipeline, name) \
+    ASSIGN_DRIVER_FUNC(QueueDestroyOcclusionQuery, name) \
 	ASSIGN_DRIVER_FUNC(BeginRenderPass, name) \
 	ASSIGN_DRIVER_FUNC(BindGraphicsPipeline, name) \
 	ASSIGN_DRIVER_FUNC(SetViewport, name) \
@@ -623,7 +655,10 @@ struct SDL_GpuDevice
 	ASSIGN_DRIVER_FUNC(Wait, name) \
 	ASSIGN_DRIVER_FUNC(WaitForFences, name) \
 	ASSIGN_DRIVER_FUNC(QueryFence, name) \
-	ASSIGN_DRIVER_FUNC(ReleaseFence, name)
+	ASSIGN_DRIVER_FUNC(ReleaseFence, name) \
+    ASSIGN_DRIVER_FUNC(OcclusionQueryBegin, name) \
+    ASSIGN_DRIVER_FUNC(OcclusionQueryEnd, name) \
+    ASSIGN_DRIVER_FUNC(OcclusionQueryPixelCount, name)
 
 typedef struct SDL_GpuDriver
 {

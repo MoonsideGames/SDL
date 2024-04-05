@@ -46,6 +46,7 @@ typedef struct SDL_GpuComputePipeline SDL_GpuComputePipeline;
 typedef struct SDL_GpuGraphicsPipeline SDL_GpuGraphicsPipeline;
 typedef struct SDL_GpuCommandBuffer SDL_GpuCommandBuffer;
 typedef struct SDL_GpuFence SDL_GpuFence;
+typedef struct SDL_GpuOcclusionQuery SDL_GpuOcclusionQuery;
 
 typedef enum SDL_GpuPresentMode
 {
@@ -888,6 +889,23 @@ extern DECLSPEC SDL_GpuTransferBuffer *SDLCALL SDL_GpuCreateTransferBuffer(
 	Uint32 sizeInBytes
 );
 
+/**
+ * Creates an occlusion query object.
+ *
+ * This function is included for compatibility with old render systems.
+ * If you are not supporting an old application, do NOT use this.
+ *
+ * \param device a GPU context
+ * \returns an occlusion query object
+ *
+ * \since This function is available since SDL 3.x.x
+ *
+ * \sa SDL_GpuQueueDestroyQuery
+ */
+extern DECLSPEC SDL_GpuOcclusionQuery *SDLCALL SDL_GpuCreateOcclusionQuery(
+    SDL_GpuDevice *device
+);
+
 /* Debug Naming */
 
 /**
@@ -1011,6 +1029,19 @@ extern DECLSPEC void SDLCALL SDL_GpuQueueDestroyComputePipeline(
 extern DECLSPEC void SDLCALL SDL_GpuQueueDestroyGraphicsPipeline(
 	SDL_GpuDevice *device,
 	SDL_GpuGraphicsPipeline *graphicsPipeline
+);
+
+/**
+ * Specifies that the given occlusion query should be destroyed once it is no longer referenced.
+ *
+ * \param device a GPU context
+ * \param query an occlusion query object to be destroyed
+ *
+ * \since This function is available since SDL 3.x.x
+ */
+extern DECLSPEC void SDLCALL SDL_GpuQueueDestroyOcclusionQuery(
+    SDL_GpuDevice *device,
+    SDL_GpuOcclusionQuery *query
 );
 
 /* Graphics State */
@@ -1801,13 +1832,13 @@ extern DECLSPEC void SDLCALL SDL_GpuWaitForFences(
  *
  * \param device a GPU context
  * \param fence a fence
- * \returns 1 if the fence is signaled, 0 if it is not
+ * \returns SDL_TRUE if the fence is signaled, SDL_FALSE if it is not
  *
  * \since This function is available since SDL 3.x.x
  *
  * \sa SDL_GpuSubmitAndAcquireFence
  */
-extern DECLSPEC int SDLCALL SDL_GpuQueryFence(
+extern DECLSPEC SDL_bool SDLCALL SDL_GpuQueryFence(
 	SDL_GpuDevice *device,
 	SDL_GpuFence *fence
 );
@@ -1892,6 +1923,66 @@ extern DECLSPEC void SDLCALL SDL_GpuDownloadFromBuffer(
  */
 extern DECLSPEC Uint32 SDLCALL SDL_GpuTextureFormatTexelBlockSize(
     SDL_GpuTextureFormat textureFormat
+);
+
+/* Queries */
+
+/**
+ * Begins an occlusion query.
+ *
+ * This function is included for compatibility with old render systems.
+ * If you are not supporting an old application, do NOT use this.
+ *
+ * \param device a GPU context
+ * \param commandBuffer a command buffer
+ * \param query an occlusion query object
+ *
+ * \since This function is available since SDL 3.x.x
+ */
+extern DECLSPEC void SDLCALL SDL_GpuOcclusionQueryBegin(
+    SDL_GpuDevice *device,
+    SDL_GpuCommandBuffer *commandBuffer,
+    SDL_GpuOcclusionQuery *query
+);
+
+/**
+ * Ends an occlusion query.
+ * You must have called SDL_GpuOcclusionQueryBegin on the query beforehand.
+ *
+ * This function is included for compatibility with old render systems.
+ * If you are not supporting an old application, do NOT use this.
+ *
+ * \param device a GPU context
+ * \param commandBuffer a commandBuffer
+ * \param query an occlusion query object
+ *
+ * \since This function is available since SDL 3.x.x
+ *
+ * \sa SDL_GpuBeginQuery
+ */
+extern DECLSPEC void SDLCALL SDL_GpuOcclusionQueryEnd(
+    SDL_GpuDevice *device,
+    SDL_GpuCommandBuffer *commandBuffer,
+    SDL_GpuOcclusionQuery *query
+);
+
+/**
+ * Checks if an occlusion query is complete and fills in the pixel count of the query.
+ *
+ * This function is included for compatibility with old render systems.
+ * If you are not supporting an old application, do NOT use this.
+ *
+ * \param device a GPU context
+ * \param query an occlusion query object
+ * \param pixelCount a pointer to be filled with the pixel count
+ * \returns SDL_TRUE if the occlusion query is complete, SDL_FALSE otherwise
+ *
+ * \since This function is available since SDL 3.x.x
+ */
+extern DECLSPEC SDL_bool SDLCALL SDL_GpuOcclusionQueryPixelCount(
+    SDL_GpuDevice *device,
+    SDL_GpuOcclusionQuery *query,
+    Uint32 *pixelCount
 );
 
 #ifdef __cplusplus
