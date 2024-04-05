@@ -6484,8 +6484,11 @@ static SDL_GpuGraphicsPipeline* VULKAN_CreateGraphicsPipeline(
     VkPipelineShaderStageCreateInfo shaderStageCreateInfos[2];
 
     VkPipelineVertexInputStateCreateInfo vertexInputStateCreateInfo;
+    VkPipelineVertexInputDivisorStateCreateInfoEXT divisorStateCreateInfo;
     VkVertexInputBindingDescription *vertexInputBindingDescriptions = SDL_stack_alloc(VkVertexInputBindingDescription, pipelineCreateInfo->vertexInputState.vertexBindingCount);
     VkVertexInputAttributeDescription *vertexInputAttributeDescriptions = SDL_stack_alloc(VkVertexInputAttributeDescription, pipelineCreateInfo->vertexInputState.vertexAttributeCount);
+    VkVertexInputBindingDivisorDescriptionEXT *divisorDescriptions;
+    Uint32 divisorDescriptionCount = 0;
 
     VkPipelineInputAssemblyStateCreateInfo inputAssemblyStateCreateInfo;
 
@@ -6582,6 +6585,28 @@ static SDL_GpuGraphicsPipeline* VULKAN_CreateGraphicsPipeline(
             pipelineCreateInfo->vertexInputState.vertexBindings[i].inputRate
         ];
         vertexInputBindingDescriptions[i].stride = pipelineCreateInfo->vertexInputState.vertexBindings[i].stride;
+
+        if (pipelineCreateInfo->vertexInputState.vertexBindings[i].inputRate == SDL_GPU_VERTEXINPUTRATE_INSTANCE)
+        {
+            divisorDescriptionCount += 1;
+        }
+    }
+
+    if (divisorDescriptionCount > 0)
+    {
+        divisorDescriptions = SDL_stack_alloc(VkVertexInputBindingDivisorDescriptionEXT, divisorDescriptionCount);
+        divisorDescriptionCount = 0;
+
+        for (i = 0; i < pipelineCreateInfo->vertexInputState.vertexBindingCount; i += 1)
+        {
+            if (pipelineCreateInfo->vertexInputState.vertexBindings[i].inputRate == SDL_GPU_VERTEXINPUTRATE_INSTANCE)
+            {
+                divisorDescriptions[divisorDescriptionCount].binding = pipelineCreateInfo->vertexInputState.vertexBindings[i].binding;
+                divisorDescriptions[divisorDescriptionCount].divisor = pipelineCreateInfo->vertexInputState.vertexBindings[i].stepRate;
+
+                divisorDescriptionCount += 1;
+            }
+        }
     }
 
     for (i = 0; i < pipelineCreateInfo->vertexInputState.vertexAttributeCount; i += 1)
@@ -6601,6 +6626,16 @@ static SDL_GpuGraphicsPipeline* VULKAN_CreateGraphicsPipeline(
     vertexInputStateCreateInfo.pVertexBindingDescriptions = vertexInputBindingDescriptions;
     vertexInputStateCreateInfo.vertexAttributeDescriptionCount = pipelineCreateInfo->vertexInputState.vertexAttributeCount;
     vertexInputStateCreateInfo.pVertexAttributeDescriptions = vertexInputAttributeDescriptions;
+
+    if (divisorDescriptionCount > 0)
+    {
+        divisorStateCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_DIVISOR_STATE_CREATE_INFO_EXT;
+        divisorStateCreateInfo.pNext = NULL;
+        divisorStateCreateInfo.vertexBindingDivisorCount = divisorDescriptionCount;
+        divisorStateCreateInfo.pVertexBindingDivisors = divisorDescriptions;
+
+        vertexInputStateCreateInfo.pNext = &divisorStateCreateInfo;
+    }
 
     /* Topology */
 
@@ -6820,6 +6855,11 @@ static SDL_GpuGraphicsPipeline* VULKAN_CreateGraphicsPipeline(
     SDL_stack_free(vertexInputBindingDescriptions);
     SDL_stack_free(vertexInputAttributeDescriptions);
     SDL_stack_free(colorBlendAttachmentStates);
+
+    if (divisorDescriptionCount > 0)
+    {
+        SDL_stack_free(divisorDescriptions);
+    }
 
     renderer->vkDestroyRenderPass(
         renderer->logicalDevice,

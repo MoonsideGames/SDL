@@ -1399,8 +1399,10 @@ static ID3D11InputLayout* D3D11_INTERNAL_FetchInputLayout(
 		];
 		/* The spec requires this to be 0 for per-vertex data */
 		elementDescs[i].InstanceDataStepRate = (
-			elementDescs[i].InputSlotClass == D3D11_INPUT_PER_INSTANCE_DATA ? 1 : 0
-		);
+            inputState.vertexBindings[bindingIndex].stepRate > 0 ?
+                inputState.vertexBindings[bindingIndex].stepRate :
+                0
+        );
 
 		elementDescs[i].SemanticIndex = inputState.vertexAttributes[i].location;
 		elementDescs[i].SemanticName = "TEXCOORD";

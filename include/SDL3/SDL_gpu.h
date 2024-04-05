@@ -416,6 +416,7 @@ typedef struct SDL_GpuVertexBinding
 	Uint32 binding;
 	Uint32 stride;
 	SDL_GpuVertexInputRate inputRate;
+    Uint32 stepRate;
 } SDL_GpuVertexBinding;
 
 typedef struct SDL_GpuVertexAttribute
