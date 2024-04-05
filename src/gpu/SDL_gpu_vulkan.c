@@ -6512,7 +6512,7 @@ static SDL_GpuGraphicsPipeline* VULKAN_CreateGraphicsPipeline(
     VkPipelineVertexInputDivisorStateCreateInfoEXT divisorStateCreateInfo;
     VkVertexInputBindingDescription *vertexInputBindingDescriptions = SDL_stack_alloc(VkVertexInputBindingDescription, pipelineCreateInfo->vertexInputState.vertexBindingCount);
     VkVertexInputAttributeDescription *vertexInputAttributeDescriptions = SDL_stack_alloc(VkVertexInputAttributeDescription, pipelineCreateInfo->vertexInputState.vertexAttributeCount);
-    VkVertexInputBindingDivisorDescriptionEXT *divisorDescriptions;
+    VkVertexInputBindingDivisorDescriptionEXT *divisorDescriptions = SDL_stack_alloc(VkVertexInputBindingDivisorDescriptionEXT, pipelineCreateInfo->vertexInputState.vertexBindingCount);
     Uint32 divisorDescriptionCount = 0;
 
     VkPipelineInputAssemblyStateCreateInfo inputAssemblyStateCreateInfo;
@@ -6637,7 +6637,6 @@ static SDL_GpuGraphicsPipeline* VULKAN_CreateGraphicsPipeline(
 
     if (divisorDescriptionCount > 0)
     {
-        divisorDescriptions = SDL_stack_alloc(VkVertexInputBindingDivisorDescriptionEXT, divisorDescriptionCount);
         divisorDescriptionCount = 0;
 
         for (i = 0; i < pipelineCreateInfo->vertexInputState.vertexBindingCount; i += 1)
@@ -6877,11 +6876,7 @@ static SDL_GpuGraphicsPipeline* VULKAN_CreateGraphicsPipeline(
     SDL_stack_free(vertexInputBindingDescriptions);
     SDL_stack_free(vertexInputAttributeDescriptions);
     SDL_stack_free(colorBlendAttachmentStates);
-
-    if (divisorDescriptionCount > 0)
-    {
-        SDL_stack_free(divisorDescriptions);
-    }
+    SDL_stack_free(divisorDescriptions);
 
     renderer->vkDestroyRenderPass(
         renderer->logicalDevice,
