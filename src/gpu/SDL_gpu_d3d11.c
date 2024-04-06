@@ -5560,6 +5560,7 @@ static void D3D11_INTERNAL_InitBlitPipelines(
 
     binding.binding = 0;
     binding.inputRate = SDL_GPU_VERTEXINPUTRATE_VERTEX;
+    binding.stepRate = 0;
     binding.stride = 64;
 
     attribute.binding = 0;
