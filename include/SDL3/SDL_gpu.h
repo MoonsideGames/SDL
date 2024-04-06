@@ -588,7 +588,7 @@ typedef struct SDL_GpuColorAttachmentInfo
     */
 	SDL_GpuStoreOp storeOp;
 
-    /* if SDL_TRUE, cycles the texture if bound and not using LOAD */
+    /* if SDL_TRUE, cycles the texture if the texture slice is bound and loadOp is not LOAD */
 	SDL_bool cycle;
 } SDL_GpuColorAttachmentInfo;
 
@@ -650,7 +650,7 @@ typedef struct SDL_GpuDepthStencilAttachmentInfo
      */
 	SDL_GpuStoreOp stencilStoreOp;
 
-    /* if SDL_TRUE, cycles the texture if bound and not using LOAD */
+    /* if SDL_TRUE, cycles the texture if the texture slice is bound and any load ops are not LOAD */
 	SDL_bool cycle;
 } SDL_GpuDepthStencilAttachmentInfo;
 
@@ -671,12 +671,16 @@ typedef struct SDL_GpuTextureSamplerBinding
 typedef struct SDL_GpuComputeBufferBinding
 {
 	SDL_GpuBuffer *gpuBuffer;
+
+    /* if SDL_TRUE, cycles the buffer if it is bound. */
 	SDL_bool cycle;
 } SDL_GpuComputeBufferBinding;
 
 typedef struct SDL_GpuComputeTextureBinding
 {
 	SDL_GpuTextureSlice textureSlice;
+
+    /* if SDL_TRUE, cycles the texture if the texture slice is bound. */
 	SDL_bool cycle;
 } SDL_GpuComputeTextureBinding;
 
@@ -1044,6 +1048,44 @@ extern DECLSPEC void SDLCALL SDL_GpuQueueDestroyOcclusionQuery(
     SDL_GpuOcclusionQuery *query
 );
 
+/*
+ * A NOTE ON CYCLING
+ *
+ * When using a command buffer, operations do not occur immediately -
+ * they occur some time after the command buffer is submitted.
+ *
+ * When a resource is used in a pending or active command buffer, it is considered to be "bound".
+ * When a resource is no longer used in any pending or active command buffers, it is considered to be "unbound".
+ *
+ * If data resources are bound, it is unspecified when that data will be unbound
+ * unless you acquire a fence when submitting the command buffer and wait on it.
+ * However, this doesn't mean you need to track resource usage manually.
+ *
+ * All of the functions and structs that involve writing to a resource have a "cycle" bool.
+ * GpuTransferBuffer, GpuBuffer, and GpuTexture all effectively function as ring buffers on internal resources.
+ * When cycle is SDL_TRUE, if the resource is bound, the cycle rotates to the next unbound internal resource,
+ * or if none are available, a new one is created.
+ * This means you don't have to worry about complex state tracking and synchronization as long as cycling is correctly employed.
+ *
+ * For example: you can call SetTransferData and then UploadToTexture. The next time you call SetTransferData,
+ * if you set the cycle param to SDL_TRUE, you don't have to worry about overwriting any data that is not yet uploaded.
+ *
+ * Another example: If you are using a texture in a render pass every frame, this can cause a data dependency between frames.
+ * If you set cycle to SDL_TRUE in the ColorAttachmentInfo struct, you can prevent this data dependency.
+ *
+ * Note that all functions which write to a texture specifically write to a GpuTextureSlice,
+ * and these slices themselves are tracked for binding.
+ * The GpuTexture will only cycle if the specific GpuTextureSlice being written to is bound.
+ *
+ * Cycling will never undefine already bound data.
+ * When cycling, all data in the resource is considered to be undefined for subsequent commands until that data is written again.
+ * You must take care not to read undefined data.
+ *
+ * You must also take care not to overwrite a section of data that has been referenced in a command without cycling first.
+ * It is OK to overwrite unreferenced data in a bound resource without cycling,
+ * but overwriting a section of data that has already been referenced will produce unexpected results.
+ */
+
 /* Graphics State */
 
 /**
@@ -1349,7 +1391,7 @@ extern DECLSPEC void SDLCALL SDL_GpuBindComputePipeline(
  *
  * \param device a GPU context
  * \param commandBuffer a command buffer
- * \param pBindings an array of structs containing buffer and write-option pairs.
+ * \param pBindings an array of structs each containing a buffer and cycle option.
  *                  Must be at least as long as the number of buffer bindings specified in the pipeline.
  *
  * \since This function is available since SDL 3.x.x
@@ -1366,7 +1408,7 @@ extern DECLSPEC void SDLCALL SDL_GpuBindComputeBuffers(
  *
  * \param device a GPU context
  * \param commandBuffer a command buffer
- * \param pBindings an array of structs containing texture and write-option pairs.
+ * \param pBindings an array of structs each containing a texture and cycle option.
  *                  Must be at least as long as the number of texture bindings specified in the pipeline.
  *
  * \since This function is available since SDL 3.x.x
@@ -1440,7 +1482,7 @@ extern DECLSPEC void SDLCALL SDL_GpuEndComputePass(
  * \param data a pointer to data to copy into the transfer buffer
  * \param transferBuffer a transfer buffer
  * \param copyParams a struct containing parameters specifying copy offsets and size
- * \param cycle if SDL_TRUE, cycles the transfer buffer if data is bound, otherwise overwrites.
+ * \param cycle if SDL_TRUE, cycles the transfer buffer if it is bound, otherwise overwrites the data.
  *
  * \since This function is available since SDL 3.x.x
  */
@@ -1500,8 +1542,7 @@ extern DECLSPEC void SDLCALL SDL_GpuBeginCopyPass(
  * \param transferBuffer a transfer buffer
  * \param textureRegion a struct containing parameters specifying the texture region to upload data to
  * \param copyParams a struct containing parameters specifying buffer offset, stride, and height
- * \param cycle if SDL_TRUE, cycles the texture if data is bound,
- *              otherwise overwrites the data.
+ * \param cycle if SDL_TRUE, cycles the texture if the texture slice is bound, otherwise overwrites the data.
  *
  * \since This function is available since SDL 3.x.x
  */
@@ -1527,8 +1568,7 @@ extern DECLSPEC void SDLCALL SDL_GpuUploadToTexture(
  * \param transferBuffer a transfer buffer
  * \param gpuBuffer a buffer
  * \param copyParams a struct containing offsets and length
- * \param cycle if SDL_TRUE, cycles the buffer if data is bound,
- *              otherwise overwrites the data.
+ * \param cycle if SDL_TRUE, cycles the buffer if it is bound, otherwise overwrites the data.
  *
  * \since This function is available since SDL 3.x.x
  */
@@ -1551,8 +1591,7 @@ extern DECLSPEC void SDLCALL SDL_GpuUploadToBuffer(
  * \param commandBuffer a command buffer
  * \param source a source texture region
  * \param destination must be the same dimensions as the source region
- * \param cycle if SDL_TRUE, cycles the destination texture if data is bound.
- *              otherwise overwrites the data.
+ * \param cycle if SDL_TRUE, cycles the destination texture if the destination texture slice is bound, otherwise overwrites the data.
  *
  * \since This function is available since SDL 3.x.x
  */
@@ -1577,8 +1616,7 @@ extern DECLSPEC void SDLCALL SDL_GpuCopyTextureToTexture(
  * \param source the buffer to copy from
  * \param destination the buffer to copy to
  * \param copyParams a struct containing offset and length data
- * \param cycle if SDL_TRUE, cycles the destination buffer if the data is bound.
- *              otherwise overwrites the data.
+ * \param cycle if SDL_TRUE, cycles the destination buffer if it is bound, otherwise overwrites the data.
  *
  * \since This function is available since SDL 3.x.x
  */
@@ -1629,8 +1667,8 @@ extern DECLSPEC void SDLCALL SDL_GpuEndCopyPass(
  * \param source the texture region to copy from
  * \param destination the texture region to copy to
  * \param filterMode the filter mode that will be used when blitting
- * \param cycle if SDL_TRUE, cycles the destination texture if data is bound,
- *              otherwise overwrites the data.
+ * \param cycle if SDL_TRUE, cycles the destination texture if the destination texture slice is bound, otherwise overwrites the data.
+ *
  *
  * \since This function is available since SDL 3.x.x
  */
@@ -1872,7 +1910,7 @@ extern DECLSPEC void SDLCALL SDL_GpuReleaseFence(
  * \param textureRegion the texture region to download
  * \param transferBuffer the transfer buffer to download into
  * \param copyParams a struct containing parameters specifying buffer offset, stride, and height
- * \param cycle if SDL_TRUE, cycles the transfer buffer if data is bound, otherwise overwrites.
+ * \param cycle if SDL_TRUE, cycles the transfer buffer if it is bound, otherwise overwrites the data.
  *
  * \since This function is available since SDL 3.x.x
  */
@@ -1896,7 +1934,7 @@ extern DECLSPEC void SDLCALL SDL_GpuDownloadFromTexture(
  * \param gpuBuffer the buffer to download
  * \param transferBuffer the transfer buffer to download into
  * \param copyParams a struct containing offsets and length
- * \param cycle if SDL_TRUE, cycles the transfer buffer if data is bound, otherwise overwrites.
+ * \param cycle if SDL_TRUE, cycles the transfer buffer if it is bound, otherwise overwrites the data.
  *
  * \since This function is available since SDL 3.x.x
  */
