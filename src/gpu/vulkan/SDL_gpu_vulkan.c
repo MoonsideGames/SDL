@@ -27,11 +27,11 @@
 #define VK_ENABLE_BETA_EXTENSIONS
 
 #define VK_NO_PROTOTYPES
-#include "../video/khronos/vulkan/vulkan.h"
+#include "../../video/khronos/vulkan/vulkan.h"
 
 #include <SDL3/SDL_vulkan.h>
 
-#include "SDL_gpu_driver.h"
+#include "../SDL_gpu_driver.h"
 
 #define VULKAN_INTERNAL_clamp(val, min, max) SDL_max(min, SDL_min(val, max))
 

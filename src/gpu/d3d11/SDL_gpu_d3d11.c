@@ -32,9 +32,8 @@
 #include <dxgi.h>
 #include <dxgi1_6.h>
 #include <dxgidebug.h>
-#include <d3dcompiler.h>
 
-#include "SDL_gpu_driver.h"
+#include "../SDL_gpu_driver.h"
 
 /* MinGW doesn't implement this yet */
 #ifdef _WIN32
@@ -70,20 +69,13 @@ static const GUID D3D_IID_DXGI_DEBUG_ALL = { 0xe48ae283,0xda80,0x490b,{0x87,0xe6
 #define D3D11_DLL     "libdxvk_d3d11.dylib"
 #define DXGI_DLL      "libdxvk_dxgi.dylib"
 #define DXGIDEBUG_DLL "libdxvk_dxgidebug.dylib"
-
-#undef D3DCOMPILER_DLL
-#define D3DCOMPILER_DLL "libvkd3d-utils.1.dylib"
 #else
 #define D3D11_DLL     "libdxvk_d3d11.so"
 #define DXGI_DLL      "libdxvk_dxgi.so"
 #define DXGIDEBUG_DLL "libdxvk_dxgidebug.so"
-
-#undef D3DCOMPILER_DLL
-#define D3DCOMPILER_DLL "libvkd3d-utils.so.1"
 #endif
 
 #define D3D11_CREATE_DEVICE_FUNC "D3D11CreateDevice"
-#define D3DCOMPILE_FUNC "D3DCompile"
 #define CREATE_DXGI_FACTORY1_FUNC "CreateDXGIFactory1"
 #define DXGI_GET_DEBUG_INTERFACE_FUNC "DXGIGetDebugInterface"
 #define WINDOW_PROPERTY_DATA "SDL_GpuD3D11WindowPropertyData"
@@ -97,58 +89,19 @@ static const GUID D3D_IID_DXGI_DEBUG_ALL = { 0xe48ae283,0xda80,0x490b,{0x87,0xe6
 #define HRESULT_FMT "(0x%08X)"
 #endif
 
-/* Built-in shaders */
+/* Built-in shaders, compiled with compile_shaders.bat */
 
-const char* fullscreenVertexShaderCode =
-"struct VertextoPixel"
-"{"
-    "float4 pos              : SV_POSITION;"
-    "float2 tex              : TEXCOORD0;"
-"};"
+#define g_main D3D11_BlitFrom2D
+#include "D3D11_BlitFrom2D.h"
+#undef g_main
 
-"VertextoPixel main(uint vI : SV_VERTEXID)"
-"{"
-    "float2 inTex = float2((vI << 1) & 2, vI & 2);"
-    "VertextoPixel Out = (VertextoPixel)0;"
-    "Out.pos = float4(inTex * float2(2.0f, -2.0f) + float2(-1.0f, 1.0f), 0.0f, 1.0f);"
-    "Out.tex = inTex;"
-    "return Out;"
-"}";
+#define g_main D3D11_BlitFrom2DArray
+#include "D3D11_BlitFrom2DArray.h"
+#undef g_main
 
-const char* blitFrom2DPixelShaderCode =
-"struct VertextoPixel"
-"{"
-    "float4 pos              : SV_POSITION;"
-    "float2 tex              : TEXCOORD0;"
-"};"
-
-"Texture2D Source : register(t0);"
-"sampler SourceSampler : register(s0);"
-
-"float4 main(VertextoPixel input) : SV_Target0"
-"{"
-    "return Source.Sample(SourceSampler, input.tex);"
-"}";
-
-const char* blitFrom2DArrayPixelShaderCode =
-"struct VertextoPixel"
-"{"
-    "float4 pos              : SV_POSITION;"
-    "float2 tex              : TEXCOORD0;"
-"};"
-
-"Texture2DArray Source : register(t0);"
-"sampler SourceSampler : register(s0);"
-
-"cbuffer ConstantBuffer : register(b0)"
-"{"
-    "int Layer;"
-"}"
-
-"float4 main(VertextoPixel input) : SV_Target0"
-"{"
-    "return Source.Sample(SourceSampler, float3(input.tex, Layer));"
-"}";
+#define g_main D3D11_FullscreenVert
+#include "D3D11_FullscreenVert.h"
+#undef g_main
 
 /* Macros */
 
@@ -197,65 +150,6 @@ const char* blitFrom2DArrayPixelShaderCode =
 	commandBuffer->array[commandBuffer->count] = resource; \
 	commandBuffer->count += 1; \
 	SDL_AtomicIncRef(&resource->referenceCount);
-
-/* __stdcall declaration, largely taken from vkd3d_windows.h */
-
-#ifdef _WIN32
-#define D3DCOMPILER_API WINAPI
-#else
-# ifdef __stdcall
-#  undef __stdcall
-# endif
-# ifdef __x86_64__
-#  define __stdcall __attribute__((ms_abi))
-# else
-#  if (__GNUC__ > 4) || ((__GNUC__ == 4) && (__GNUC_MINOR__ >= 2)) || defined(__APPLE__)
-#   define __stdcall __attribute__((__stdcall__)) __attribute__((__force_align_arg_pointer__))
-#  else
-#   define __stdcall __attribute__((__stdcall__))
-#  endif
-# endif
-# define D3DCOMPILER_API __stdcall
-#endif
-
-/* vkd3d uses stdcall for its ID3D10Blob implementation */
-
-#ifndef _WIN32
-typedef struct VKD3DBlob VKD3DBlob;
-typedef struct VKD3DBlobVtbl
-{
-    HRESULT (__stdcall *QueryInterface)(
-        VKD3DBlob *This,
-        REFIID riid,
-        void **ppvObject);
-    ULONG (__stdcall *AddRef)(VKD3DBlob *This);
-    ULONG (__stdcall *Release)(VKD3DBlob *This);
-    void * (__stdcall *GetBufferPointer)(VKD3DBlob *This);
-    SIZE_T (__stdcall *GetBufferSize)(VKD3DBlob *This);
-} VKD3DBlobVtbl;
-struct VKD3DBlob
-{
-    const VKD3DBlobVtbl *lpVtbl;
-};
-#define ID3D10Blob VKD3DBlob
-#define ID3DBlob VKD3DBlob
-#endif
-
-/* D3DCompile signature */
-
-typedef HRESULT(D3DCOMPILER_API *PFN_D3DCOMPILE)(
-	LPCVOID pSrcData,
-	SIZE_T SrcDataSize,
-	LPCSTR pSourceName,
-	const D3D_SHADER_MACRO* pDefines,
-	ID3DInclude* pInclude,
-	LPCSTR pEntrypoint,
-	LPCSTR pTarget,
-	UINT Flags1,
-	UINT Flags2,
-	ID3DBlob **ppCode,
-	ID3DBlob **ppErrorMsgs
-);
 
 /* Forward Declarations */
 
@@ -565,7 +459,8 @@ typedef struct D3D11WindowData
 typedef struct D3D11ShaderModule
 {
 	ID3D11DeviceChild *shader; /* ID3D11VertexShader, ID3D11PixelShader, ID3D11ComputeShader */
-	ID3D10Blob *blob;
+    void* bytecode;
+    size_t bytecodeLength;
 } D3D11ShaderModule;
 
 typedef struct D3D11GraphicsPipeline
@@ -742,13 +637,10 @@ typedef struct D3D11Renderer
 	void *d3d11_dll;
 	void *dxgi_dll;
 	void *dxgidebug_dll;
-	void *d3dcompiler_dll;
 
 	Uint8 debugMode;
 	BOOL supportsTearing;
 	Uint8 supportsFlipDiscard;
-
-	PFN_D3DCOMPILE D3DCompileFunc;
 
     /* Blit */
     SDL_GpuShaderModule *fullscreenVertexShaderModule;
@@ -1002,7 +894,6 @@ static void D3D11_DestroyDevice(
 	{
 		SDL_UnloadObject(renderer->dxgidebug_dll);
 	}
-	SDL_UnloadObject(renderer->d3dcompiler_dll);
 
 	/* Free the primary structures */
 	SDL_free(renderer);
@@ -1528,8 +1419,8 @@ static SDL_GpuGraphicsPipeline* D3D11_CreateGraphicsPipeline(
 	pipeline->inputLayout = D3D11_INTERNAL_FetchInputLayout(
 		renderer,
 		pipelineCreateInfo->vertexInputState,
-		ID3D10Blob_GetBufferPointer(vertShaderModule->blob),
-		ID3D10Blob_GetBufferSize(vertShaderModule->blob)
+		vertShaderModule->bytecode,
+		vertShaderModule->bytecodeLength
 	);
 
 	if (pipelineCreateInfo->vertexInputState.vertexBindingCount > 0)
@@ -1718,52 +1609,22 @@ static SDL_GpuShaderModule* D3D11_CreateShaderModule(
 	D3D11ShaderModule* shaderModule;
 	SDL_GpuShaderType shaderType = shaderModuleCreateInfo->type;
 	const char *profileNames[] = { "vs_5_0", "ps_5_0", "cs_5_0" };
-	ID3D10Blob *blob, *errorBlob;
 	ID3D11DeviceChild *shader = NULL;
 	HRESULT res;
-
-	/* Compile HLSL to DXBC */
-	res = renderer->D3DCompileFunc(
-		shaderModuleCreateInfo->code,
-		shaderModuleCreateInfo->codeSize,
-		NULL,
-		NULL,
-		NULL,
-		"main", /* API FIXME: Intentionally ignoring entryPointName because it MUST be "main" anyway */
-		profileNames[shaderType],
-		0,
-		0,
-		&blob,
-		&errorBlob
-	);
-	if (FAILED(res))
-	{
-		SDL_LogError(
-            SDL_LOG_CATEGORY_APPLICATION,
-			"D3DCompile Error (%s): %p",
-			profileNames[shaderType],
-			ID3D10Blob_GetBufferPointer(errorBlob)
-		);
-
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "D3DCompile Error: %s\n", (char *) ID3D10Blob_GetBufferPointer(errorBlob));
-		ID3D10Blob_Release(errorBlob);
-		return NULL;
-	}
 
 	/* Actually create the shader */
 	if (shaderType == SDL_GPU_SHADERTYPE_VERTEX)
 	{
 		res = ID3D11Device_CreateVertexShader(
 			renderer->device,
-			ID3D10Blob_GetBufferPointer(blob),
-			ID3D10Blob_GetBufferSize(blob),
+			shaderModuleCreateInfo->code,
+			shaderModuleCreateInfo->codeSize,
 			NULL,
 			(ID3D11VertexShader**) &shader
 		);
 		if (FAILED(res))
 		{
-			D3D11_INTERNAL_LogError(renderer->device, "Could not compile vertex shader", res);
-			ID3D10Blob_Release(blob);
+			D3D11_INTERNAL_LogError(renderer->device, "Could not create vertex shader", res);
 			return NULL;
 		}
 	}
@@ -1771,15 +1632,14 @@ static SDL_GpuShaderModule* D3D11_CreateShaderModule(
 	{
 		res = ID3D11Device_CreatePixelShader(
 			renderer->device,
-			ID3D10Blob_GetBufferPointer(blob),
-			ID3D10Blob_GetBufferSize(blob),
+			shaderModuleCreateInfo->code,
+			shaderModuleCreateInfo->codeSize,
 			NULL,
 			(ID3D11PixelShader**) &shader
 		);
 		if (FAILED(res))
 		{
-			D3D11_INTERNAL_LogError(renderer->device, "Could not compile pixel shader", res);
-			ID3D10Blob_Release(blob);
+			D3D11_INTERNAL_LogError(renderer->device, "Could not create pixel shader", res);
 			return NULL;
 		}
 	}
@@ -1787,23 +1647,28 @@ static SDL_GpuShaderModule* D3D11_CreateShaderModule(
 	{
 		res = ID3D11Device_CreateComputeShader(
 			renderer->device,
-			ID3D10Blob_GetBufferPointer(blob),
-			ID3D10Blob_GetBufferSize(blob),
+            shaderModuleCreateInfo->code,
+            shaderModuleCreateInfo->codeSize,
 			NULL,
 			(ID3D11ComputeShader**) &shader
 		);
 		if (FAILED(res))
 		{
-			D3D11_INTERNAL_LogError(renderer->device, "Could not compile compute shader", res);
-			ID3D10Blob_Release(blob);
+			D3D11_INTERNAL_LogError(renderer->device, "Could not create compute shader", res);
 			return NULL;
 		}
 	}
 
 	/* Allocate and set up the shader module */
-	shaderModule = (D3D11ShaderModule*) SDL_malloc(sizeof(D3D11ShaderModule));
+	shaderModule = (D3D11ShaderModule*) SDL_calloc(1, sizeof(D3D11ShaderModule));
 	shaderModule->shader = shader;
-	shaderModule->blob = blob;
+    if (shaderType == SDL_GPU_SHADERTYPE_VERTEX)
+    {
+        /* Store the raw bytecode and its length for creating InputLayouts */
+        shaderModule->bytecode = SDL_malloc(shaderModuleCreateInfo->codeSize);
+        SDL_memcpy(shaderModule->bytecode, shaderModuleCreateInfo->code, shaderModuleCreateInfo->codeSize);
+        shaderModule->bytecodeLength = shaderModuleCreateInfo->codeSize;
+    }
 
 	return (SDL_GpuShaderModule*) shaderModule;
 }
@@ -3573,10 +3438,11 @@ static void D3D11_QueueDestroyShaderModule(
 	{
 		ID3D11DeviceChild_Release(d3dShaderModule->shader);
 	}
-	if (d3dShaderModule->blob)
-	{
-		ID3D10Blob_Release(d3dShaderModule->blob);
-	}
+
+    if (d3dShaderModule->bytecode)
+    {
+        SDL_free(d3dShaderModule->bytecode);
+    }
 
 	SDL_free(d3dShaderModule);
 }
@@ -4236,12 +4102,12 @@ static void D3D11_Blit(
         NULL
     );
 
-    viewport.x = destination->x;
-    viewport.y = destination->y;
-    viewport.w = destination->w;
-    viewport.h = destination->h;
-    viewport.minDepth = destination->z;
-    viewport.maxDepth = destination->z + destination->d;
+    viewport.x = (float) destination->x;
+    viewport.y = (float) destination->y;
+    viewport.w = (float) destination->w;
+    viewport.h = (float) destination->h;
+    viewport.minDepth = 0;
+    viewport.maxDepth = 1;
 
     D3D11_SetViewport(
         driverData,
@@ -5350,10 +5216,9 @@ static SDL_bool D3D11_OcclusionQueryPixelCount(
 static Uint8 D3D11_PrepareDriver(
 	Uint32 *flags
 ) {
-	void *d3d11_dll, *d3dcompiler_dll, *dxgi_dll;
+	void *d3d11_dll, *dxgi_dll;
 	PFN_D3D11_CREATE_DEVICE D3D11CreateDeviceFunc;
 	D3D_FEATURE_LEVEL levels[] = { D3D_FEATURE_LEVEL_11_1 };
-	PFN_D3DCOMPILE D3DCompileFunc;
 	PFN_CREATE_DXGI_FACTORY1 CreateDXGIFactoryFunc;
 	HRESULT res;
 
@@ -5397,26 +5262,6 @@ static Uint8 D3D11_PrepareDriver(
 	if (FAILED(res))
 	{
 		SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "D3D11: Could not create D3D11Device with feature level 11_0");
-		return 0;
-	}
-
-	/* Can we load D3DCompiler? */
-
-	d3dcompiler_dll = SDL_LoadObject(D3DCOMPILER_DLL);
-	if (d3dcompiler_dll == NULL)
-	{
-		SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "D3D11: Could not find " D3DCOMPILER_DLL);
-		return 0;
-	}
-
-	D3DCompileFunc = (PFN_D3DCOMPILE) SDL_LoadFunction(
-		d3dcompiler_dll,
-		D3DCOMPILE_FUNC
-	);
-	SDL_UnloadObject(d3dcompiler_dll); /* We're not going to call this function, so we can just unload now. */
-	if (D3DCompileFunc == NULL)
-	{
-		SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "D3D11: Could not find function " D3DCOMPILE_FUNC " in " D3DCOMPILER_DLL);
 		return 0;
 	}
 
@@ -5493,8 +5338,8 @@ static void D3D11_INTERNAL_InitBlitPipelines(
     SDL_GpuColorAttachmentDescription colorAttachmentDesc;
 
     /* Fullscreen vertex shader */
-    shaderModuleCreateInfo.code = (Uint8*) fullscreenVertexShaderCode;
-    shaderModuleCreateInfo.codeSize = SDL_strlen(fullscreenVertexShaderCode);
+    shaderModuleCreateInfo.code = (Uint8*) D3D11_FullscreenVert;
+    shaderModuleCreateInfo.codeSize = sizeof(D3D11_FullscreenVert);
     shaderModuleCreateInfo.type = SDL_GPU_SHADERTYPE_VERTEX;
 
     renderer->fullscreenVertexShaderModule = D3D11_CreateShaderModule(
@@ -5508,8 +5353,8 @@ static void D3D11_INTERNAL_InitBlitPipelines(
     }
 
     /* Blit from 2D pixel shader */
-    shaderModuleCreateInfo.code = (Uint8*) blitFrom2DPixelShaderCode;
-    shaderModuleCreateInfo.codeSize = SDL_strlen(blitFrom2DPixelShaderCode);
+    shaderModuleCreateInfo.code = (Uint8*) D3D11_BlitFrom2D;
+    shaderModuleCreateInfo.codeSize = sizeof(D3D11_BlitFrom2D);
     shaderModuleCreateInfo.type = SDL_GPU_SHADERTYPE_FRAGMENT;
 
     renderer->blitFrom2DPixelShaderModule = D3D11_CreateShaderModule(
@@ -5523,8 +5368,8 @@ static void D3D11_INTERNAL_InitBlitPipelines(
     }
 
     /* Blit from 2D array pixel shader */
-    shaderModuleCreateInfo.code = (Uint8*) blitFrom2DArrayPixelShaderCode;
-    shaderModuleCreateInfo.codeSize = SDL_strlen(blitFrom2DArrayPixelShaderCode);
+    shaderModuleCreateInfo.code = (Uint8 *) D3D11_BlitFrom2DArray;
+    shaderModuleCreateInfo.codeSize = sizeof(D3D11_BlitFrom2DArray);
     shaderModuleCreateInfo.type = SDL_GPU_SHADERTYPE_FRAGMENT;
 
     renderer->blitFrom2DArrayPixelShaderModule = D3D11_CreateShaderModule(
@@ -5537,7 +5382,7 @@ static void D3D11_INTERNAL_InitBlitPipelines(
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to compile blit from 2D array pixel shader!");
     }
 
-    /* Blit from 2D pipeline*/
+    /* Blit from 2D pipeline */
     SDL_memset(&colorAttachmentDesc, '\0', sizeof(SDL_GpuColorAttachmentDescription));
     colorAttachmentDesc.blendState.blendEnable = 0;
     colorAttachmentDesc.blendState.colorWriteMask =
@@ -5676,25 +5521,6 @@ static SDL_GpuDevice* D3D11_CreateDevice(
 
 	/* Allocate and zero out the renderer */
 	renderer = (D3D11Renderer*) SDL_calloc(1, sizeof(D3D11Renderer));
-
-	/* Load the D3DCompiler library */
-	renderer->d3dcompiler_dll = SDL_LoadObject(D3DCOMPILER_DLL);
-	if (renderer->d3dcompiler_dll == NULL)
-	{
-		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Could not find " D3DCOMPILER_DLL);
-		return NULL;
-	}
-
-	/* Load the D3DCompile function pointer */
-	renderer->D3DCompileFunc = (PFN_D3DCOMPILE) SDL_LoadFunction(
-		renderer->d3dcompiler_dll,
-		D3DCOMPILE_FUNC
-	);
-	if (renderer->D3DCompileFunc == NULL)
-	{
-		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Could not load function: " D3DCOMPILE_FUNC);
-		return NULL;
-	}
 
 	/* Load the DXGI library */
 	renderer->dxgi_dll = SDL_LoadObject(DXGI_DLL);

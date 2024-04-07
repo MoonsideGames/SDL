@@ -491,6 +491,7 @@ sdl_glob_sources(
   "${SDL3_SOURCE_DIR}/src/file/*.c"
   "${SDL3_SOURCE_DIR}/src/filesystem/*.c"
   "${SDL3_SOURCE_DIR}/src/gpu/*.c"
+  "${SDL3_SOURCE_DIR}/src/gpu/*/*.c"
   "${SDL3_SOURCE_DIR}/src/joystick/*.c"
   "${SDL3_SOURCE_DIR}/src/haptic/*.c"
   "${SDL3_SOURCE_DIR}/src/hidapi/*.c"
@@ -2358,7 +2359,7 @@ elseif(APPLE)
         endif()
         if (SDL_GPU)
           set(SDL_GPU_METAL 1)
-          sdl_glob_sources("${SDL3_SOURCE_DIR}/src/gpu/*.m")
+          sdl_glob_sources("${SDL3_SOURCE_DIR}/src/gpu/metal/*.m")
         endif()
       endif()
     endif()
