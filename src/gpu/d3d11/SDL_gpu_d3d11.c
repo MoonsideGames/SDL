@@ -57,6 +57,7 @@ static const IID D3D_IID_IDXGIDebug = { 0x119e7452,0xde9e,0x40fe,{0x88,0x06,0x88
 static const IID D3D_IID_IDXGIInfoQueue = { 0xd67441c7,0x672a,0x476f,{0x9e,0x82,0xcd,0x55,0xb4,0x49,0x49,0xce} };
 #endif
 
+static const GUID D3D_IID_D3DDebugObjectName = { 0x429b8c22, 0x9188, 0x4b0c, { 0x87, 0x42, 0xac, 0xb0, 0xbf, 0x85, 0xc2, 0x00 } };
 static const GUID D3D_IID_DXGI_DEBUG_ALL = { 0xe48ae283,0xda80,0x490b,{0x87,0xe6,0x43,0xe9,0xa9,0xcf,0xda,0x08} };
 
  /* Defines */
@@ -1471,8 +1472,6 @@ static SDL_GpuGraphicsPipeline* D3D11_CreateGraphicsPipeline(
 
 /* Debug Naming */
 
-static const GUID GUID_D3DDebugObjectName = { 0x429b8c22, 0x9188, 0x4b0c, { 0x87, 0x42, 0xac, 0xb0, 0xbf, 0x85, 0xc2, 0x00 } };
-
 static void D3D11_INTERNAL_SetGpuBufferName(
 	D3D11Renderer *renderer,
 	D3D11Buffer *buffer,
@@ -1482,7 +1481,7 @@ static void D3D11_INTERNAL_SetGpuBufferName(
 	{
 		ID3D11DeviceChild_SetPrivateData(
 			buffer->handle,
-			&GUID_D3DDebugObjectName,
+			&D3D_IID_D3DDebugObjectName,
 			(UINT) SDL_strlen(text),
 			text
 		);
@@ -1530,7 +1529,7 @@ static void D3D11_INTERNAL_SetTextureName(
 	{
 		ID3D11DeviceChild_SetPrivateData(
 			texture->handle,
-			&GUID_D3DDebugObjectName,
+			&D3D_IID_D3DDebugObjectName,
 			(UINT) SDL_strlen(text),
 			text
 		);
