@@ -26,7 +26,7 @@
 #include <Metal/Metal.h>
 #include <QuartzCore/CoreAnimation.h>
 
-#include "SDL_gpu_driver.h"
+#include "../SDL_gpu_driver.h"
 
  /* Defines */
 
@@ -1010,6 +1010,13 @@ static void METAL_QueueDestroyGraphicsPipeline(
     MetalGraphicsPipeline *metalGraphicsPipeline = (MetalGraphicsPipeline*) graphicsPipeline;
     metalGraphicsPipeline->handle = nil;
     SDL_free(metalGraphicsPipeline);
+}
+
+static void METAL_QueueDestroyOcclusionQuery(
+    SDL_GpuRenderer *renderer,
+    SDL_GpuOcclusionQuery *query
+) {
+    NOT_IMPLEMENTED
 }
 
 /* Uniforms */
@@ -2500,6 +2507,40 @@ static void METAL_ReleaseFence(
         (MetalRenderer*) driverData,
         (MetalFence*) fence
     );
+}
+
+/* Queries */
+
+static SDL_GpuOcclusionQuery* METAL_CreateOcclusionQuery(
+    SDL_GpuRenderer *driverData
+) {
+    NOT_IMPLEMENTED
+    return NULL;
+}
+
+static void METAL_OcclusionQueryBegin(
+    SDL_GpuRenderer *driverData,
+    SDL_GpuCommandBuffer *commandBuffer,
+    SDL_GpuOcclusionQuery *query
+) {
+    NOT_IMPLEMENTED
+}
+
+static void METAL_OcclusionQueryEnd(
+    SDL_GpuRenderer *driverData,
+    SDL_GpuCommandBuffer *commandBuffer,
+    SDL_GpuOcclusionQuery *query
+) {
+    NOT_IMPLEMENTED
+}
+
+static SDL_bool METAL_OcclusionQueryPixelCount(
+    SDL_GpuRenderer *driverData,
+    SDL_GpuOcclusionQuery *query,
+    Uint32 *pixelCount
+) {
+    NOT_IMPLEMENTED
+    return SDL_FALSE;
 }
 
 /* Device Creation */
