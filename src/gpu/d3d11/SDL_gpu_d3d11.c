@@ -1608,7 +1608,6 @@ static SDL_GpuShaderModule* D3D11_CreateShaderModule(
 	D3D11Renderer *renderer = (D3D11Renderer*) driverData;
 	D3D11ShaderModule* shaderModule;
 	SDL_GpuShaderType shaderType = shaderModuleCreateInfo->type;
-	const char *profileNames[] = { "vs_5_0", "ps_5_0", "cs_5_0" };
 	ID3D11DeviceChild *shader = NULL;
 	HRESULT res;
 
