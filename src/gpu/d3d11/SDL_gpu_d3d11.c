@@ -159,6 +159,7 @@ static void D3D11_UnclaimWindow(
 	SDL_GpuRenderer * driverData,
 	SDL_Window *windowHandle
 );
+static void D3D11_INTERNAL_DestroyBlitPipelines(SDL_GpuRenderer *driverData);
 
  /* Conversions */
 
@@ -842,6 +843,9 @@ static void D3D11_DestroyDevice(
 		D3D11_UnclaimWindow(device->driverData, renderer->claimedWindows[i]->windowHandle);
 	}
 	SDL_free(renderer->claimedWindows);
+
+	/* Release the blit resources */
+	D3D11_INTERNAL_DestroyBlitPipelines(device->driverData);
 
 	/* Release command buffer infrastructure */
 	for (Uint32 i = 0; i < renderer->availableCommandBufferCount; i += 1)
@@ -5517,6 +5521,22 @@ static void D3D11_INTERNAL_InitBlitPipelines(
     {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to create blit linear sampler!");
     }
+}
+
+static void D3D11_INTERNAL_DestroyBlitPipelines(
+	SDL_GpuRenderer *driverData
+) {
+	D3D11Renderer *renderer = (D3D11Renderer *)driverData;
+
+	D3D11_QueueDestroySampler(driverData, renderer->blitLinearSampler);
+	D3D11_QueueDestroySampler(driverData, renderer->blitNearestSampler);
+
+	D3D11_QueueDestroyGraphicsPipeline(driverData, renderer->blitFrom2DPipeline);
+	D3D11_QueueDestroyGraphicsPipeline(driverData, renderer->blitFrom2DArrayPipeline);
+
+	D3D11_QueueDestroyShaderModule(driverData, renderer->fullscreenVertexShaderModule);
+	D3D11_QueueDestroyShaderModule(driverData, renderer->blitFrom2DPixelShaderModule);
+	D3D11_QueueDestroyShaderModule(driverData, renderer->blitFrom2DArrayPixelShaderModule);
 }
 
 static SDL_GpuDevice* D3D11_CreateDevice(
