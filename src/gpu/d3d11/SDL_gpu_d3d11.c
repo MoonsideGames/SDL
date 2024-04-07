@@ -261,6 +261,23 @@ static D3D11_BLEND RefreshToD3D11_BlendFactor[] =
 	D3D11_BLEND_SRC_ALPHA_SAT,	/* SRC_ALPHA_SATURATE */
 };
 
+static D3D11_BLEND RefreshToD3D11_BlendFactorAlpha[] =
+{
+	D3D11_BLEND_ZERO,		/* ZERO */
+	D3D11_BLEND_ONE,		/* ONE */
+	D3D11_BLEND_SRC_ALPHA,		/* SRC_COLOR */
+	D3D11_BLEND_INV_SRC_ALPHA,	/* ONE_MINUS_SRC_COLOR */
+	D3D11_BLEND_DEST_ALPHA,		/* DST_COLOR */
+	D3D11_BLEND_INV_DEST_ALPHA,	/* ONE_MINUS_DST_COLOR */
+	D3D11_BLEND_SRC_ALPHA,		/* SRC_ALPHA */
+	D3D11_BLEND_INV_SRC_ALPHA,	/* ONE_MINUS_SRC_ALPHA */
+	D3D11_BLEND_DEST_ALPHA,		/* DST_ALPHA */
+	D3D11_BLEND_INV_DEST_ALPHA,	/* ONE_MINUS_DST_ALPHA */
+	D3D11_BLEND_BLEND_FACTOR,	/* CONSTANT_COLOR */
+	D3D11_BLEND_INV_BLEND_FACTOR,	/* ONE_MINUS_CONSTANT_COLOR */
+	D3D11_BLEND_SRC_ALPHA_SAT,	/* SRC_ALPHA_SATURATE */
+};
+
 static D3D11_BLEND_OP RefreshToD3D11_BlendOp[] =
 {
 	D3D11_BLEND_OP_ADD,		/* ADD */
@@ -1134,14 +1151,14 @@ static ID3D11BlendState* D3D11_INTERNAL_FetchBlendState(
 		blendDesc.RenderTarget[i].DestBlend = RefreshToD3D11_BlendFactor[
 			colorAttachments[i].blendState.dstColorBlendFactor
 		];
-		blendDesc.RenderTarget[i].DestBlendAlpha = RefreshToD3D11_BlendFactor[
+		blendDesc.RenderTarget[i].DestBlendAlpha = RefreshToD3D11_BlendFactorAlpha[
 			colorAttachments[i].blendState.dstAlphaBlendFactor
 		];
 		blendDesc.RenderTarget[i].RenderTargetWriteMask = colorAttachments[i].blendState.colorWriteMask;
 		blendDesc.RenderTarget[i].SrcBlend = RefreshToD3D11_BlendFactor[
 			colorAttachments[i].blendState.srcColorBlendFactor
 		];
-		blendDesc.RenderTarget[i].SrcBlendAlpha = RefreshToD3D11_BlendFactor[
+		blendDesc.RenderTarget[i].SrcBlendAlpha = RefreshToD3D11_BlendFactorAlpha[
 			colorAttachments[i].blendState.srcAlphaBlendFactor
 		];
 	}
