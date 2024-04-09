@@ -178,10 +178,10 @@ SDL_bool SDL_GpuIsTextureFormatSupported(
     );
 }
 
-Uint32 SDL_GpuGetBestSampleCount(
+SDL_GpuSampleCount SDL_GpuGetBestSampleCount(
     SDL_GpuDevice* device,
     SDL_GpuTextureFormat format,
-    Uint32 desiredSampleCount
+    SDL_GpuSampleCount desiredSampleCount
 ) {
     if (device == NULL) { return 0; }
     return device->GetBestSampleCount(
