@@ -137,6 +137,9 @@ Uint32 SDL_GpuTextureFormatTexelBlockSize(
 		case SDL_GPU_TEXTUREFORMAT_R16_UINT:
 			return 2;
 		case SDL_GPU_TEXTUREFORMAT_R8G8B8A8:
+        case SDL_GPU_TEXTUREFORMAT_B8G8R8A8:
+        case SDL_GPU_TEXTUREFORMAT_R8G8B8A8_SRGB:
+        case SDL_GPU_TEXTUREFORMAT_B8G8R8A8_SRGB:
 		case SDL_GPU_TEXTUREFORMAT_R32_SFLOAT:
 		case SDL_GPU_TEXTUREFORMAT_R16G16_SFLOAT:
 		case SDL_GPU_TEXTUREFORMAT_R8G8B8A8_SNORM:
@@ -844,16 +847,20 @@ void SDL_GpuBlit(
 
 /* Submission/Presentation */
 
-Uint8 SDL_GpuClaimWindow(
+SDL_bool SDL_GpuClaimWindow(
 	SDL_GpuDevice *device,
 	SDL_Window *windowHandle,
-	SDL_GpuPresentMode presentMode
+	SDL_GpuPresentMode presentMode,
+    SDL_GpuTextureFormat swapchainFormat,
+    SDL_GpuColorSpace colorSpace
 ) {
 	if (device == NULL) { return 0; }
 	return device->ClaimWindow(
 		device->driverData,
 		windowHandle,
-		presentMode
+		presentMode,
+        swapchainFormat,
+        colorSpace
 	);
 }
 

@@ -213,10 +213,19 @@ static VkFormat RefreshToVK_SurfaceFormat[] =
     VK_FORMAT_R16_UINT,					/* R16_UINT */
     VK_FORMAT_R16G16_UINT,				/* R16G16_UINT */
     VK_FORMAT_R16G16B16A16_UINT,		/* R16G16B16A16_UINT */
+    VK_FORMAT_R8G8B8A8_SRGB,            /* R8G8B8A8_SRGB */
+    VK_FORMAT_B8G8R8A8_SRGB,            /* B8G8R8A8_SRGB */
     VK_FORMAT_D16_UNORM,				/* D16_UNORM */
     VK_FORMAT_D32_SFLOAT,				/* D32_SFLOAT */
     VK_FORMAT_D16_UNORM_S8_UINT,		/* D16_UNORM_S8_UINT */
     VK_FORMAT_D32_SFLOAT_S8_UINT		/* D32_SFLOAT_S8_UINT */
+};
+
+static VkColorSpaceKHR SDLToVK_ColorSpace[] =
+{
+    VK_COLOR_SPACE_SRGB_NONLINEAR_KHR,
+    VK_COLOR_SPACE_EXTENDED_SRGB_LINEAR_EXT,
+    VK_COLOR_SPACE_HDR10_ST2084_EXT
 };
 
 static VkFormat RefreshToVK_VertexFormat[] =
@@ -910,6 +919,7 @@ typedef struct VulkanSwapchainData
     /* Swapchain for window surface */
     VkSwapchainKHR swapchain;
     VkFormat swapchainFormat;
+    VkColorSpaceKHR colorSpace;
     VkComponentMapping swapchainSwizzle;
     VkPresentModeKHR presentMode;
 
@@ -928,7 +938,9 @@ typedef struct VulkanSwapchainData
 typedef struct WindowData
 {
     SDL_Window *windowHandle;
-    VkPresentModeKHR preferredPresentMode;
+    SDL_GpuPresentMode preferredPresentMode;
+    SDL_GpuTextureFormat swapchainFormat;
+    SDL_GpuColorSpace colorSpace;
     VulkanSwapchainData *swapchainData;
 } WindowData;
 
@@ -1978,6 +1990,31 @@ static inline VkSampleCountFlagBits VULKAN_INTERNAL_GetMaxMultiSampleCount(
     }
 
     return SDL_min(multiSampleCount, maxSupported);
+}
+
+static inline SDL_bool RGBAToBGRASwapchainFormat(
+    VkFormat format,
+    VkFormat *outputFormat
+) {
+    switch (format)
+    {
+        case VK_FORMAT_R8G8B8A8_UNORM:
+            *outputFormat = VK_FORMAT_B8G8R8A8_UNORM;
+            return SDL_TRUE;
+
+        case VK_FORMAT_A2R10G10B10_UNORM_PACK32:
+            *outputFormat = VK_FORMAT_A2B10G10R10_UNORM_PACK32;
+            return SDL_TRUE;
+
+        case VK_FORMAT_R8G8B8A8_SRGB:
+            *outputFormat = VK_FORMAT_B8G8R8A8_SRGB;
+            return SDL_TRUE;
+
+        default:
+            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "No valid BGRA equivalent for this format exists!");
+            *outputFormat = VK_FORMAT_R8G8B8A8_UNORM;
+            return SDL_FALSE;
+    }
 }
 
 /* Memory Management */
@@ -4655,6 +4692,7 @@ static Uint8 VULKAN_INTERNAL_QuerySwapChainSupport(
 
 static Uint8 VULKAN_INTERNAL_ChooseSwapSurfaceFormat(
     VkFormat desiredFormat,
+    VkColorSpaceKHR desiredColorSpace,
     VkSurfaceFormatKHR *availableFormats,
     Uint32 availableFormatsLength,
     VkSurfaceFormatKHR *outputFormat
@@ -4663,7 +4701,7 @@ static Uint8 VULKAN_INTERNAL_ChooseSwapSurfaceFormat(
     for (i = 0; i < availableFormatsLength; i += 1)
     {
         if (	availableFormats[i].format == desiredFormat &&
-            availableFormats[i].colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR	)
+            availableFormats[i].colorSpace == desiredColorSpace	)
         {
             *outputFormat = availableFormats[i];
             return 1;
@@ -4801,7 +4839,8 @@ static Uint8 VULKAN_INTERNAL_CreateSwapchain(
         return 0;
     }
 
-    swapchainData->swapchainFormat = VK_FORMAT_R8G8B8A8_UNORM;
+    swapchainData->swapchainFormat = RefreshToVK_SurfaceFormat[windowData->swapchainFormat];
+    swapchainData->colorSpace = SDLToVK_ColorSpace[windowData->colorSpace];
     swapchainData->swapchainSwizzle.r = VK_COMPONENT_SWIZZLE_IDENTITY;
     swapchainData->swapchainSwizzle.g = VK_COMPONENT_SWIZZLE_IDENTITY;
     swapchainData->swapchainSwizzle.b = VK_COMPONENT_SWIZZLE_IDENTITY;
@@ -4809,11 +4848,36 @@ static Uint8 VULKAN_INTERNAL_CreateSwapchain(
 
     if (!VULKAN_INTERNAL_ChooseSwapSurfaceFormat(
         swapchainData->swapchainFormat,
+        swapchainData->colorSpace,
         swapchainSupportDetails.formats,
         swapchainSupportDetails.formatsLength,
         &swapchainData->surfaceFormat
     )) {
-        swapchainData->swapchainFormat = VK_FORMAT_B8G8R8A8_UNORM;
+        SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "Requested swapchain format unsupported, attempting fallback to BGRA with swizzle");
+
+        if (!RGBAToBGRASwapchainFormat(
+            swapchainData->swapchainFormat,
+            &swapchainData->swapchainFormat
+        ))
+        {
+            renderer->vkDestroySurfaceKHR(
+                renderer->instance,
+                swapchainData->surface,
+                NULL
+            );
+            if (swapchainSupportDetails.formatsLength > 0)
+            {
+                SDL_free(swapchainSupportDetails.formats);
+            }
+            if (swapchainSupportDetails.presentModesLength > 0)
+            {
+                SDL_free(swapchainSupportDetails.presentModes);
+            }
+            SDL_free(swapchainData);
+            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Device does not support requested swapchain format");
+            return 0;
+        }
+
         swapchainData->swapchainSwizzle.r = VK_COMPONENT_SWIZZLE_B;
         swapchainData->swapchainSwizzle.g = VK_COMPONENT_SWIZZLE_G;
         swapchainData->swapchainSwizzle.b = VK_COMPONENT_SWIZZLE_R;
@@ -4821,6 +4885,7 @@ static Uint8 VULKAN_INTERNAL_CreateSwapchain(
 
         if (!VULKAN_INTERNAL_ChooseSwapSurfaceFormat(
             swapchainData->swapchainFormat,
+            swapchainData->colorSpace,
             swapchainSupportDetails.formats,
             swapchainSupportDetails.formatsLength,
             &swapchainData->surfaceFormat
@@ -4839,13 +4904,13 @@ static Uint8 VULKAN_INTERNAL_CreateSwapchain(
                 SDL_free(swapchainSupportDetails.presentModes);
             }
             SDL_free(swapchainData);
-            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Device does not support swap chain format");
+            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Device does not support requested swapchain format");
             return 0;
         }
     }
 
     if (!VULKAN_INTERNAL_ChooseSwapPresentMode(
-        windowData->preferredPresentMode,
+        RefreshToVK_PresentMode[windowData->preferredPresentMode],
         swapchainSupportDetails.presentModes,
         swapchainSupportDetails.presentModesLength,
         &swapchainData->presentMode
@@ -4864,7 +4929,7 @@ static Uint8 VULKAN_INTERNAL_CreateSwapchain(
             SDL_free(swapchainSupportDetails.presentModes);
         }
         SDL_free(swapchainData);
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Device does not support swap chain present mode");
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Device does not support swapchain present mode");
         return 0;
     }
 
@@ -9698,10 +9763,12 @@ static WindowData* VULKAN_INTERNAL_FetchWindowData(
     return (WindowData*) SDL_GetProperty(properties, WINDOW_PROPERTY_DATA, NULL);
 }
 
-static Uint8 VULKAN_ClaimWindow(
+static SDL_bool VULKAN_ClaimWindow(
     SDL_GpuRenderer *driverData,
     SDL_Window *windowHandle,
-    SDL_GpuPresentMode presentMode
+    SDL_GpuPresentMode presentMode,
+    SDL_GpuTextureFormat swapchainFormat,
+    SDL_GpuColorSpace colorSpace
 ) {
     VulkanRenderer *renderer = (VulkanRenderer*) driverData;
     WindowData *windowData = VULKAN_INTERNAL_FetchWindowData(windowHandle);
@@ -9710,7 +9777,9 @@ static Uint8 VULKAN_ClaimWindow(
     {
         windowData = SDL_malloc(sizeof(WindowData));
         windowData->windowHandle = windowHandle;
-        windowData->preferredPresentMode = RefreshToVK_PresentMode[presentMode];
+        windowData->preferredPresentMode = presentMode;
+        windowData->swapchainFormat = swapchainFormat;
+        windowData->colorSpace = colorSpace;
 
         if (VULKAN_INTERNAL_CreateSwapchain(renderer, windowData))
         {

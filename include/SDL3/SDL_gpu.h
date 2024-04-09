@@ -119,6 +119,9 @@ typedef enum SDL_GpuTextureFormat
 	SDL_GPU_TEXTUREFORMAT_R16_UINT,
 	SDL_GPU_TEXTUREFORMAT_R16G16_UINT,
 	SDL_GPU_TEXTUREFORMAT_R16G16B16A16_UINT,
+    /* SRGB Color Formats */
+    SDL_GPU_TEXTUREFORMAT_R8G8B8A8_SRGB,
+    SDL_GPU_TEXTUREFORMAT_B8G8R8A8_SRGB,
 	/* Depth Formats */
 	SDL_GPU_TEXTUREFORMAT_D16_UNORM,
 	SDL_GPU_TEXTUREFORMAT_D32_SFLOAT,
@@ -135,6 +138,13 @@ typedef enum SDL_GpuTextureUsageFlagBits
 } SDL_GpuTextureUsageFlagBits;
 
 typedef Uint32 SDL_GpuTextureUsageFlags;
+
+typedef enum SDL_GpuColorSpace
+{
+    SDL_GPU_COLORSPACE_NONLINEAR_SRGB,
+    SDL_GPU_COLORSPACE_LINEAR_SRGB,
+    SDL_GPU_COLORSPACE_HDR10_ST2048
+} SDL_GpuColorSpace;
 
 typedef enum SDL_GpuSampleCount
 {
@@ -1687,21 +1697,28 @@ extern DECLSPEC void SDLCALL SDL_GpuBlit(
  * Claims a window, creating a swapchain structure for it.
  * This must be called before SDL_GpuAcquireSwapchainTexture is called using the window.
  *
+ * Note that for performance reasons an operating system may swizzle the format internally
+ * (for example, RGBA may be stored as BGRA) so be sure to render or blit to swapchain textures
+ * to avoid format swizzling issues.
+ *
  * \param device a GPU context
  * \param windowHandle an SDL_Window
  * \param presentMode the desired present mode for the swapchain
+ * \param swapchainFormat the desired swapchain format, MUST be an RGBA-ordered format
  *
- * \returns 1 on success, otherwise 0.
+ * \returns SDL_TRUE on success, otherwise SDL_FALSE.
  *
  * \since This function is available since SDL 3.x.x
  *
  * \sa SDL_GpuAcquireSwapchainTexture
  * \sa SDL_GpuUnclaimWindow
  */
-extern DECLSPEC Uint8 SDLCALL SDL_GpuClaimWindow(
+extern DECLSPEC SDL_bool SDLCALL SDL_GpuClaimWindow(
 	SDL_GpuDevice *device,
 	SDL_Window *windowHandle,
-	SDL_GpuPresentMode presentMode
+	SDL_GpuPresentMode presentMode,
+    SDL_GpuTextureFormat swapchainFormat,
+    SDL_GpuColorSpace colorSpace
 );
 
 /**

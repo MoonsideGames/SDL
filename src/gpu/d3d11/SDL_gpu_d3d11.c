@@ -50,6 +50,7 @@ static const IID D3D_IID_IDXGIFactory4 = { 0x1bc6ea02,0xef36,0x464f,{0xbf,0x0c,0
 static const IID D3D_IID_IDXGIFactory5 = { 0x7632e1f5,0xee65,0x4dca,{0x87,0xfd,0x84,0xcd,0x75,0xf8,0x83,0x8d} };
 static const IID D3D_IID_IDXGIFactory6 = { 0xc1b6694f,0xff09,0x44a9,{0xb0,0x3c,0x77,0x90,0x0a,0x0a,0x1d,0x17} };
 static const IID D3D_IID_IDXGIAdapter1 = { 0x29038f61,0x3839,0x4626,{0x91,0xfd,0x08,0x68,0x79,0x01,0x1a,0x05} };
+static const IID D3D_IID_IDXGISwapChain3 = { 0x94d99bdb,0xf1f8,0x4ab0,{0xb2,0x36,0x7d,0xa0,0x17,0x0e,0xda,0xb1} };
 static const IID D3D_IID_ID3D11Texture2D = { 0x6f15aaf2,0xd208,0x4e89,{0x9a,0xb4,0x48,0x95,0x35,0xd3,0x4f,0x9c} };
 static const IID D3D_IID_ID3D11Device1 = { 0xa04bfb29,0x08ef,0x43d6,{0xa4,0x9c,0xa9,0xbd,0xbd,0xcb,0xe6,0x86} };
 static const IID D3D_IID_IDXGIDebug = { 0x119e7452,0xde9e,0x40fe,{0x88,0x06,0x88,0xf9,0x0c,0x12,0xb4,0x41} };
@@ -193,10 +194,19 @@ static DXGI_FORMAT RefreshToD3D11_TextureFormat[] =
 	DXGI_FORMAT_R16_UINT,		/* R16_UINT */
 	DXGI_FORMAT_R16G16_UINT,	/* R16G16_UINT */
 	DXGI_FORMAT_R16G16B16A16_UINT,	/* R16G16B16A16_UINT */
+    DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, /* R8G8B8A8_SRGB*/
+    DXGI_FORMAT_B8G8R8A8_UNORM_SRGB, /* B8G8R8A8_SRGB */
 	DXGI_FORMAT_D16_UNORM,		/* D16_UNORM */
 	DXGI_FORMAT_D32_FLOAT,		/* D32_SFLOAT */
 	DXGI_FORMAT_D24_UNORM_S8_UINT,	/* D16_UNORM_S8_UINT */
 	DXGI_FORMAT_D32_FLOAT_S8X24_UINT/* D32_SFLOAT_S8_UINT */
+};
+
+static DXGI_COLOR_SPACE_TYPE SDLToD3D11_ColorSpace[] =
+{
+    DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709,
+    DXGI_COLOR_SPACE_RGB_FULL_G10_NONE_P709,
+    DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020
 };
 
 static DXGI_FORMAT RefreshToD3D11_VertexFormat[] =
@@ -473,6 +483,8 @@ typedef struct D3D11WindowData
     D3D11Texture texture;
     D3D11TextureContainer textureContainer;
 	SDL_GpuPresentMode presentMode;
+    SDL_GpuTextureFormat swapchainFormat;
+    SDL_GpuColorSpace colorSpace;
 } D3D11WindowData;
 
 typedef struct D3D11ShaderModule
@@ -4313,6 +4325,7 @@ static D3D11WindowData* D3D11_INTERNAL_FetchWindowData(
 static Uint8 D3D11_INTERNAL_InitializeSwapchainTexture(
 	D3D11Renderer *renderer,
 	IDXGISwapChain *swapchain,
+    DXGI_FORMAT swapchainFormat,
 	D3D11Texture *pTexture
 ) {
 	ID3D11Texture2D *swapchainTexture;
@@ -4338,7 +4351,7 @@ static Uint8 D3D11_INTERNAL_InitializeSwapchainTexture(
 	ERROR_CHECK_RETURN("Could not get buffer from swapchain!", 0);
 
 	/* Create the SRV for the swapchain */
-	srvDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+	srvDesc.Format = swapchainFormat;
 	srvDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
 	srvDesc.Texture2D.MipLevels = 1;
 	srvDesc.Texture2D.MostDetailedMip = 0;
@@ -4357,7 +4370,7 @@ static Uint8 D3D11_INTERNAL_InitializeSwapchainTexture(
 	}
 
 	/* Create the RTV for the swapchain */
-	rtvDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+	rtvDesc.Format = swapchainFormat;
 	rtvDesc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
 	rtvDesc.Texture2D.MipSlice = 0;
 
@@ -4375,7 +4388,7 @@ static Uint8 D3D11_INTERNAL_InitializeSwapchainTexture(
 		return 0;
 	}
 
-	uavDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+	uavDesc.Format = swapchainFormat;
 	uavDesc.ViewDimension = D3D11_UAV_DIMENSION_TEXTURE2D;
 	uavDesc.Texture2D.MipSlice = 0;
 
@@ -4427,13 +4440,16 @@ static Uint8 D3D11_INTERNAL_InitializeSwapchainTexture(
 static Uint8 D3D11_INTERNAL_CreateSwapchain(
 	D3D11Renderer *renderer,
 	D3D11WindowData *windowData,
-	SDL_GpuPresentMode presentMode
+	SDL_GpuPresentMode presentMode,
+    SDL_GpuTextureFormat swapchainFormat,
+    SDL_GpuColorSpace colorSpace
 ) {
 	HWND dxgiHandle;
 	int width, height;
 	DXGI_SWAP_CHAIN_DESC swapchainDesc;
 	IDXGIFactory1 *pParent;
 	IDXGISwapChain *swapchain;
+    IDXGISwapChain3 *swapchain3;
 	HRESULT res;
 
 	/* Get the DXGI handle */
@@ -4451,8 +4467,7 @@ static Uint8 D3D11_INTERNAL_CreateSwapchain(
 	swapchainDesc.BufferDesc.Height = 0;
 	swapchainDesc.BufferDesc.RefreshRate.Numerator = 0;
 	swapchainDesc.BufferDesc.RefreshRate.Denominator = 0;
-	/* TODO: support different swapchain formats? */
-	swapchainDesc.BufferDesc.Format = RefreshToD3D11_TextureFormat[SDL_GPU_TEXTUREFORMAT_R8G8B8A8];
+	swapchainDesc.BufferDesc.Format = RefreshToD3D11_TextureFormat[swapchainFormat];
 	swapchainDesc.BufferDesc.ScanlineOrdering = DXGI_MODE_SCANLINE_ORDER_UNSPECIFIED;
 	swapchainDesc.BufferDesc.Scaling = DXGI_MODE_SCALING_UNSPECIFIED;
 
@@ -4529,19 +4544,33 @@ static Uint8 D3D11_INTERNAL_CreateSwapchain(
 		/* We're done with the parent now */
 		IDXGIFactory1_Release(pParent);
 	}
-
-	/* Initialize the swapchain data */
+    /* Initialize the swapchain data */
 	windowData->swapchain = swapchain;
-	windowData->presentMode = presentMode;
+    windowData->presentMode = presentMode;
+    windowData->swapchainFormat = swapchainFormat;
+    windowData->colorSpace = colorSpace;
+
+    if (SUCCEEDED(IDXGISwapChain3_QueryInterface(
+        swapchain,
+        &D3D_IID_IDXGISwapChain3,
+        (void**) &swapchain3
+    ))) {
+        IDXGISwapChain3_SetColorSpace1(swapchain3, SDLToD3D11_ColorSpace[windowData->colorSpace]);
+    }
 
 	if (!D3D11_INTERNAL_InitializeSwapchainTexture(
 		renderer,
 		swapchain,
+        RefreshToD3D11_TextureFormat[swapchainFormat],
 		&windowData->texture
 	)) {
 		IDXGISwapChain_Release(swapchain);
 		return 0;
 	}
+
+    /* Initialize dummy container */
+    SDL_zerop(&windowData->textureContainer);
+    windowData->textureContainer.textures = SDL_malloc(sizeof(D3D11TextureContainer));
 
 	return 1;
 }
@@ -4573,14 +4602,17 @@ static Uint8 D3D11_INTERNAL_ResizeSwapchain(
 	return D3D11_INTERNAL_InitializeSwapchainTexture(
 		renderer,
 		windowData->swapchain,
+        RefreshToD3D11_TextureFormat[windowData->swapchainFormat],
 		&windowData->texture
 	);
 }
 
-static Uint8 D3D11_ClaimWindow(
+static SDL_bool D3D11_ClaimWindow(
 	SDL_GpuRenderer *driverData,
 	SDL_Window *windowHandle,
-	SDL_GpuPresentMode presentMode
+	SDL_GpuPresentMode presentMode,
+    SDL_GpuTextureFormat swapchainFormat,
+    SDL_GpuColorSpace colorSpace
 ) {
 	D3D11Renderer *renderer = (D3D11Renderer*) driverData;
 	D3D11WindowData *windowData = D3D11_INTERNAL_FetchWindowData(windowHandle);
@@ -4590,7 +4622,7 @@ static Uint8 D3D11_ClaimWindow(
 		windowData = (D3D11WindowData*) SDL_malloc(sizeof(D3D11WindowData));
 		windowData->windowHandle = windowHandle;
 
-		if (D3D11_INTERNAL_CreateSwapchain(renderer, windowData, presentMode))
+		if (D3D11_INTERNAL_CreateSwapchain(renderer, windowData, presentMode, swapchainFormat, colorSpace))
 		{
             SDL_SetProperty(SDL_GetWindowProperties(windowHandle), WINDOW_PROPERTY_DATA, windowData);
 
@@ -4643,6 +4675,7 @@ static void D3D11_UnclaimWindow(
 	ID3D11RenderTargetView_Release(windowData->texture.subresources[0].colorTargetView);
 	ID3D11UnorderedAccessView_Release(windowData->texture.subresources[0].uav);
 	SDL_free(windowData->texture.subresources);
+    SDL_free(windowData->textureContainer.textures);
 	IDXGISwapChain_Release(windowData->swapchain);
 
 	SDL_LockMutex(renderer->windowLock);
@@ -4660,6 +4693,12 @@ static void D3D11_UnclaimWindow(
 	SDL_free(windowData);
 
     SDL_ClearProperty(SDL_GetWindowProperties(windowHandle), WINDOW_PROPERTY_DATA);
+
+    /* DXGI will crash if we don't flush deferred swapchain destruction */
+    SDL_LockMutex(renderer->contextLock);
+    ID3D11DeviceContext_ClearState(renderer->immediateContext);
+    ID3D11DeviceContext_Flush(renderer->immediateContext);
+    SDL_UnlockMutex(renderer->contextLock);
 }
 
 static SDL_GpuTexture* D3D11_AcquireSwapchainTexture(
@@ -4714,9 +4753,9 @@ static SDL_GpuTexture* D3D11_AcquireSwapchainTexture(
 	*pHeight = windowData->texture.height;
 
     /* Set up the texture container */
-    SDL_zero(windowData->textureContainer);
     windowData->textureContainer.canBeCycled = 0;
     windowData->textureContainer.activeTexture = &windowData->texture;
+    windowData->textureContainer.textures[0] = &windowData->texture;
     windowData->textureContainer.textureCapacity = 1;
     windowData->textureContainer.textureCount = 1;
 

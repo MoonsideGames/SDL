@@ -49,6 +49,8 @@ static inline Sint32 Texture_GetBlockSize(
 		case SDL_GPU_TEXTUREFORMAT_R32_SFLOAT:
 		case SDL_GPU_TEXTUREFORMAT_R16G16_SFLOAT:
 		case SDL_GPU_TEXTUREFORMAT_R8G8B8A8_SNORM:
+        case SDL_GPU_TEXTUREFORMAT_R8G8B8A8_SRGB:
+        case SDL_GPU_TEXTUREFORMAT_B8G8R8A8_SRGB:
 		case SDL_GPU_TEXTUREFORMAT_A2R10G10B10:
 		case SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UINT:
 		case SDL_GPU_TEXTUREFORMAT_R16G16_UINT:
@@ -480,10 +482,12 @@ struct SDL_GpuDevice
 
 	/* Submission/Presentation */
 
-	Uint8 (*ClaimWindow)(
+	SDL_bool (*ClaimWindow)(
 		SDL_GpuRenderer *driverData,
 		SDL_Window *windowHandle,
-		SDL_GpuPresentMode presentMode
+		SDL_GpuPresentMode presentMode,
+        SDL_GpuTextureFormat swapchainFormat,
+        SDL_GpuColorSpace colorSpace
 	);
 
 	void (*UnclaimWindow)(
