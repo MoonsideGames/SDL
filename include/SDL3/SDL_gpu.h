@@ -1737,7 +1737,7 @@ extern DECLSPEC void SDLCALL SDL_GpuUnclaimWindow(
 );
 
 /**
- * Changes the present mode of the swapchain for the given window.
+ * Changes the swapchain parameters for the given claimed window.
  *
  * \param device a GPU context
  * \param windowHandle an SDL_Window that has been claimed
@@ -1745,10 +1745,12 @@ extern DECLSPEC void SDLCALL SDL_GpuUnclaimWindow(
  *
  * \since This function is available since SDL 3.x.x
  */
-extern DECLSPEC void SDLCALL SDL_GpuSetSwapchainPresentMode(
+extern DECLSPEC void SDLCALL SDL_GpuSetSwapchainParameters(
 	SDL_GpuDevice *device,
 	SDL_Window *windowHandle,
-	SDL_GpuPresentMode presentMode
+	SDL_GpuPresentMode presentMode,
+    SDL_GpuTextureFormat swapchainFormat,
+    SDL_GpuColorSpace colorSpace
 );
 
 /**

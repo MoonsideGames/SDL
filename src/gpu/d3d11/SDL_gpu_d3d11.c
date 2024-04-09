@@ -4657,6 +4657,28 @@ static SDL_bool D3D11_ClaimWindow(
 	}
 }
 
+static void D3D11_INTERNAL_DestroySwapchain(
+    D3D11Renderer *renderer,
+    D3D11WindowData *windowData
+) {
+    D3D11_Wait((SDL_GpuRenderer*) renderer);
+
+    ID3D11ShaderResourceView_Release(windowData->texture.shaderView);
+	ID3D11RenderTargetView_Release(windowData->texture.subresources[0].colorTargetView);
+	ID3D11UnorderedAccessView_Release(windowData->texture.subresources[0].uav);
+	SDL_free(windowData->texture.subresources);
+    SDL_free(windowData->textureContainer.textures);
+	IDXGISwapChain_Release(windowData->swapchain);
+
+    /* DXGI will crash if we don't flush deferred swapchain destruction */
+    SDL_LockMutex(renderer->contextLock);
+    ID3D11DeviceContext_ClearState(renderer->immediateContext);
+    ID3D11DeviceContext_Flush(renderer->immediateContext);
+    SDL_UnlockMutex(renderer->contextLock);
+
+    windowData->swapchain = NULL;
+}
+
 static void D3D11_UnclaimWindow(
 	SDL_GpuRenderer *driverData,
 	SDL_Window *windowHandle
@@ -4770,13 +4792,38 @@ static SDL_GpuTextureFormat D3D11_GetSwapchainFormat(
 	return SDL_GPU_TEXTUREFORMAT_R8G8B8A8;
 }
 
-static void D3D11_SetSwapchainPresentMode(
+static void D3D11_SetSwapchainParameters(
 	SDL_GpuRenderer *driverData,
 	SDL_Window *windowHandle,
-	SDL_GpuPresentMode presentMode
+	SDL_GpuPresentMode presentMode,
+    SDL_GpuTextureFormat swapchainFormat,
+    SDL_GpuColorSpace colorSpace
 ) {
+    D3D11Renderer *renderer = (D3D11Renderer*) driverData;
 	D3D11WindowData *windowData = D3D11_INTERNAL_FetchWindowData(windowHandle);
-	windowData->presentMode = presentMode;
+    HRESULT res;
+
+    if (
+        swapchainFormat != windowData->swapchainFormat ||
+        colorSpace != windowData->colorSpace ||
+        presentMode != windowData->presentMode
+    ) {
+        D3D11_Wait(driverData);
+
+        /* Recreate the swapchain */
+        D3D11_INTERNAL_DestroySwapchain(
+            renderer,
+            windowData
+        );
+
+        D3D11_INTERNAL_CreateSwapchain(
+            renderer,
+            windowData,
+            presentMode,
+            swapchainFormat,
+            colorSpace
+        );
+    }
 }
 
 /* Submission and Fences */

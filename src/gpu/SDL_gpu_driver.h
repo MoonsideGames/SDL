@@ -495,10 +495,12 @@ struct SDL_GpuDevice
 		SDL_Window *windowHandle
 	);
 
-	void (*SetSwapchainPresentMode)(
+	void (*SetSwapchainParameters)(
 		SDL_GpuRenderer *driverData,
 		SDL_Window *windowHandle,
-		SDL_GpuPresentMode presentMode
+        SDL_GpuPresentMode presentMode,
+        SDL_GpuTextureFormat swapchainFormat,
+        SDL_GpuColorSpace colorSpace
 	);
 
 	SDL_GpuTextureFormat (*GetSwapchainFormat)(
@@ -650,7 +652,7 @@ struct SDL_GpuDevice
     ASSIGN_DRIVER_FUNC(Blit, name) \
 	ASSIGN_DRIVER_FUNC(ClaimWindow, name) \
 	ASSIGN_DRIVER_FUNC(UnclaimWindow, name) \
-	ASSIGN_DRIVER_FUNC(SetSwapchainPresentMode, name) \
+	ASSIGN_DRIVER_FUNC(SetSwapchainParameters, name) \
 	ASSIGN_DRIVER_FUNC(GetSwapchainFormat, name) \
 	ASSIGN_DRIVER_FUNC(AcquireCommandBuffer, name) \
 	ASSIGN_DRIVER_FUNC(AcquireSwapchainTexture, name) \

@@ -1065,7 +1065,7 @@ SDL3_0.0.0 {
     SDL_GpuBlit;
     SDL_GpuClaimWindow;
     SDL_GpuUnclaimWindow;
-    SDL_GpuSetSwapchainPresentMode;
+    SDL_GpuSetSwapchainParameters;
     SDL_GpuGetSwapchainFormat;
     SDL_GpuAcquireCommandBuffer;
     SDL_GpuAcquireSwapchainTexture;

@@ -10033,10 +10033,12 @@ static SDL_GpuTextureFormat VULKAN_GetSwapchainFormat(
     }
 }
 
-static void VULKAN_SetSwapchainPresentMode(
+static void VULKAN_SetSwapchainParameters(
     SDL_GpuRenderer *driverData,
     SDL_Window *windowHandle,
-    SDL_GpuPresentMode presentMode
+	SDL_GpuPresentMode presentMode,
+    SDL_GpuTextureFormat swapchainFormat,
+    SDL_GpuColorSpace colorSpace
 ) {
     WindowData *windowData = VULKAN_INTERNAL_FetchWindowData(windowHandle);
 
@@ -10046,10 +10048,20 @@ static void VULKAN_SetSwapchainPresentMode(
         return;
     }
 
-    VULKAN_INTERNAL_RecreateSwapchain(
-        (VulkanRenderer *)driverData,
-        windowData
-    );
+    if (
+        windowData->preferredPresentMode != presentMode ||
+        windowData->swapchainFormat != swapchainFormat ||
+        windowData->colorSpace != colorSpace
+    ) {
+        windowData->preferredPresentMode = presentMode;
+        windowData->swapchainFormat = swapchainFormat;
+        windowData->colorSpace = colorSpace;
+
+        VULKAN_INTERNAL_RecreateSwapchain(
+            (VulkanRenderer *)driverData,
+            windowData
+        );
+    }
 }
 
 /* Submission structure */

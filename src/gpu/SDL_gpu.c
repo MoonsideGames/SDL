@@ -875,16 +875,20 @@ void SDL_GpuUnclaimWindow(
 	);
 }
 
-void SDL_GpuSetSwapchainPresentMode(
+void SDL_GpuSetSwapchainParameters(
 	SDL_GpuDevice *device,
 	SDL_Window *windowHandle,
-	SDL_GpuPresentMode presentMode
+	SDL_GpuPresentMode presentMode,
+    SDL_GpuTextureFormat swapchainFormat,
+    SDL_GpuColorSpace colorSpace
 ) {
 	NULL_RETURN(device);
-	device->SetSwapchainPresentMode(
+	device->SetSwapchainParameters(
 		device->driverData,
 		windowHandle,
-		presentMode
+		presentMode,
+        swapchainFormat,
+        colorSpace
 	);
 }
 

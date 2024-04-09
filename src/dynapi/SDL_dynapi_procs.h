@@ -1105,7 +1105,7 @@ SDL_DYNAPI_PROC(void,SDL_GpuEndCopyPass,(SDL_GpuDevice *a, SDL_GpuCommandBuffer 
 SDL_DYNAPI_PROC(void,SDL_GpuBlit,(SDL_GpuDevice *a, SDL_GpuCommandBuffer *b, SDL_GpuTextureRegion *c, SDL_GpuTextureRegion *d, SDL_GpuFilter e, SDL_bool f),(a,b,c,d,e,f),)
 SDL_DYNAPI_PROC(SDL_bool,SDL_GpuClaimWindow,(SDL_GpuDevice *a, SDL_Window *b, SDL_GpuPresentMode c, SDL_GpuTextureFormat d, SDL_GpuColorSpace e),(a,b,c,d,e),return)
 SDL_DYNAPI_PROC(void,SDL_GpuUnclaimWindow,(SDL_GpuDevice *a, SDL_Window *b),(a,b),)
-SDL_DYNAPI_PROC(void,SDL_GpuSetSwapchainPresentMode,(SDL_GpuDevice *a, SDL_Window *b, SDL_GpuPresentMode c),(a,b,c),)
+SDL_DYNAPI_PROC(void,SDL_GpuSetSwapchainParameters,(SDL_GpuDevice *a, SDL_Window *b, SDL_GpuPresentMode c, SDL_GpuTextureFormat d, SDL_GpuColorSpace e),(a,b,c,d,e),)
 SDL_DYNAPI_PROC(SDL_GpuTextureFormat,SDL_GpuGetSwapchainFormat,(SDL_GpuDevice *a, SDL_Window *b),(a,b),return)
 SDL_DYNAPI_PROC(SDL_GpuCommandBuffer*,SDL_GpuAcquireCommandBuffer,(SDL_GpuDevice *a),(a),return)
 SDL_DYNAPI_PROC(SDL_GpuTexture*,SDL_GpuAcquireSwapchainTexture,(SDL_GpuDevice *a, SDL_GpuCommandBuffer *b, SDL_Window *c, Uint32 *d, Uint32 *e),(a,b,c,d,e),return)
