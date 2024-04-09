@@ -975,6 +975,239 @@ static void D3D11_INTERNAL_TrackTextureSubresource(
 	);
 }
 
+/* Disposal */
+
+static void D3D11_INTERNAL_DestroyTextureContainer(
+    D3D11TextureContainer *container
+) {
+    for (Uint32 i = 0; i < container->textureCount; i += 1)
+	{
+		D3D11Texture *d3d11Texture = container->textures[i];
+
+		if (d3d11Texture->shaderView)
+		{
+			ID3D11ShaderResourceView_Release(d3d11Texture->shaderView);
+		}
+
+		for (Uint32 subresourceIndex = 0; subresourceIndex < d3d11Texture->subresourceCount; subresourceIndex += 1)
+		{
+			if (d3d11Texture->subresources[subresourceIndex].msaaHandle != NULL)
+			{
+				ID3D11Resource_Release(d3d11Texture->subresources[subresourceIndex].msaaHandle);
+			}
+
+			if (d3d11Texture->subresources[subresourceIndex].msaaTargetView != NULL)
+			{
+				ID3D11RenderTargetView_Release(d3d11Texture->subresources[subresourceIndex].msaaTargetView);
+			}
+
+			if (d3d11Texture->subresources[subresourceIndex].colorTargetView != NULL)
+			{
+				ID3D11RenderTargetView_Release(d3d11Texture->subresources[subresourceIndex].colorTargetView);
+			}
+
+			if (d3d11Texture->subresources[subresourceIndex].depthStencilTargetView != NULL)
+			{
+				ID3D11DepthStencilView_Release(d3d11Texture->subresources[subresourceIndex].depthStencilTargetView);
+			}
+
+			if (d3d11Texture->subresources[subresourceIndex].uav != NULL)
+			{
+				ID3D11UnorderedAccessView_Release(d3d11Texture->subresources[subresourceIndex].uav);
+			}
+		}
+		SDL_free(d3d11Texture->subresources);
+
+		ID3D11Resource_Release(d3d11Texture->handle);
+	}
+
+	SDL_free(container->textures);
+	SDL_free(container);
+}
+
+static void D3D11_QueueDestroyTexture(
+	SDL_GpuRenderer *driverData,
+	SDL_GpuTexture *texture
+) {
+    D3D11Renderer *renderer = (D3D11Renderer*) driverData;
+	D3D11TextureContainer *container = (D3D11TextureContainer*) texture;
+
+    SDL_LockMutex(renderer->contextLock);
+
+    EXPAND_ARRAY_IF_NEEDED(
+        renderer->textureContainersToDestroy,
+        D3D11TextureContainer*,
+        renderer->textureContainersToDestroyCount + 1,
+        renderer->textureContainersToDestroyCapacity,
+        renderer->textureContainersToDestroyCapacity + 1
+    );
+
+    renderer->textureContainersToDestroy[
+        renderer->textureContainersToDestroyCount
+    ] = container;
+    renderer->textureContainersToDestroyCount += 1;
+
+    SDL_UnlockMutex(renderer->contextLock);
+}
+
+static void D3D11_QueueDestroySampler(
+	SDL_GpuRenderer *driverData,
+	SDL_GpuSampler *sampler
+) {
+    (void) driverData; /* used by other backends */
+	D3D11Sampler *d3d11Sampler = (D3D11Sampler*) sampler;
+	ID3D11SamplerState_Release(d3d11Sampler->handle);
+	SDL_free(d3d11Sampler);
+}
+
+static void D3D11_INTERNAL_DestroyBufferContainer(
+    D3D11BufferContainer *container
+) {
+    for (Uint32 i = 0; i < container->bufferCount; i += 1)
+	{
+		D3D11Buffer *d3d11Buffer = container->buffers[i];
+
+		if (d3d11Buffer->uav)
+		{
+			ID3D11UnorderedAccessView_Release(d3d11Buffer->uav);
+		}
+
+		ID3D11Buffer_Release(d3d11Buffer->handle);
+
+		SDL_free(d3d11Buffer);
+	}
+
+	SDL_free(container->buffers);
+	SDL_free(container);
+}
+
+static void D3D11_QueueDestroyGpuBuffer(
+	SDL_GpuRenderer *driverData,
+	SDL_GpuBuffer *gpuBuffer
+) {
+    D3D11Renderer *renderer = (D3D11Renderer*) driverData;
+	D3D11BufferContainer *container = (D3D11BufferContainer*) gpuBuffer;
+
+    SDL_LockMutex(renderer->contextLock);
+
+    EXPAND_ARRAY_IF_NEEDED(
+        renderer->bufferContainersToDestroy,
+        D3D11BufferContainer*,
+        renderer->bufferContainersToDestroyCount + 1,
+        renderer->bufferContainersToDestroyCapacity,
+        renderer->bufferContainersToDestroyCapacity + 1
+    );
+
+    renderer->bufferContainersToDestroy[
+        renderer->bufferContainersToDestroyCount
+    ] = container;
+    renderer->bufferContainersToDestroyCount += 1;
+
+    SDL_UnlockMutex(renderer->contextLock);
+}
+
+static void D3D11_QueueDestroyTransferBuffer(
+	SDL_GpuRenderer *driverData,
+	SDL_GpuTransferBuffer *transferBuffer
+) {
+	D3D11Renderer *renderer = (D3D11Renderer*) driverData;
+
+	SDL_LockMutex(renderer->contextLock);
+
+	EXPAND_ARRAY_IF_NEEDED(
+		renderer->transferBufferContainersToDestroy,
+		D3D11TransferBufferContainer*,
+		renderer->transferBufferContainersToDestroyCount + 1,
+		renderer->transferBufferContainersToDestroyCapacity,
+		renderer->transferBufferContainersToDestroyCapacity + 1
+	);
+
+	renderer->transferBufferContainersToDestroy[
+		renderer->transferBufferContainersToDestroyCount
+	] = (D3D11TransferBufferContainer*) transferBuffer;
+	renderer->transferBufferContainersToDestroyCount += 1;
+
+	SDL_UnlockMutex(renderer->contextLock);
+}
+
+static void D3D11_INTERNAL_DestroyTransferBufferContainer(
+	D3D11TransferBufferContainer *transferBufferContainer
+) {
+	for (Uint32 i = 0; i < transferBufferContainer->bufferCount; i += 1)
+	{
+		if (transferBufferContainer->usage == SDL_GPU_TRANSFERUSAGE_BUFFER)
+		{
+			ID3D11Buffer_Release(transferBufferContainer->buffers[i]->bufferTransfer.stagingBuffer);
+		}
+		else /* TEXTURE */
+		{
+			SDL_free(transferBufferContainer->buffers[i]->textureTransfer.data);
+		}
+		SDL_free(transferBufferContainer->buffers[i]);
+	}
+	SDL_free(transferBufferContainer->buffers);
+}
+
+static void D3D11_QueueDestroyShaderModule(
+	SDL_GpuRenderer *driverData,
+	SDL_GpuShaderModule *shaderModule
+) {
+    (void) driverData; /* used by other backends */
+	D3D11ShaderModule *d3dShaderModule = (D3D11ShaderModule*) shaderModule;
+
+	if (d3dShaderModule->shader)
+	{
+		ID3D11DeviceChild_Release(d3dShaderModule->shader);
+	}
+
+    if (d3dShaderModule->bytecode)
+    {
+        SDL_free(d3dShaderModule->bytecode);
+    }
+
+	SDL_free(d3dShaderModule);
+}
+
+static void D3D11_QueueDestroyComputePipeline(
+	SDL_GpuRenderer *driverData,
+	SDL_GpuComputePipeline *computePipeline
+) {
+	D3D11ComputePipeline *d3d11ComputePipeline = (D3D11ComputePipeline*) computePipeline;
+	SDL_free(d3d11ComputePipeline);
+}
+
+static void D3D11_QueueDestroyGraphicsPipeline(
+	SDL_GpuRenderer *driverData,
+	SDL_GpuGraphicsPipeline *graphicsPipeline
+) {
+    (void) driverData; /* used by other backends */
+	D3D11GraphicsPipeline *d3d11GraphicsPipeline = (D3D11GraphicsPipeline*) graphicsPipeline;
+
+	ID3D11BlendState_Release(d3d11GraphicsPipeline->colorAttachmentBlendState);
+	ID3D11DepthStencilState_Release(d3d11GraphicsPipeline->depthStencilState);
+	ID3D11RasterizerState_Release(d3d11GraphicsPipeline->rasterizerState);
+
+	if (d3d11GraphicsPipeline->inputLayout)
+	{
+		ID3D11InputLayout_Release(d3d11GraphicsPipeline->inputLayout);
+	}
+	if (d3d11GraphicsPipeline->vertexStrides)
+	{
+		SDL_free(d3d11GraphicsPipeline->vertexStrides);
+	}
+
+	SDL_free(d3d11GraphicsPipeline);
+}
+
+static void D3D11_QueueDestroyOcclusionQuery(
+    SDL_GpuRenderer *renderer,
+    SDL_GpuOcclusionQuery *query
+) {
+    D3D11OcclusionQuery *d3dQuery = (D3D11OcclusionQuery*) query;
+    ID3D11Query_Release(d3dQuery->handle);
+    SDL_free(query);
+}
+
 /* Drawing */
 
 static void D3D11_SetGraphicsConstantBuffers(
@@ -2588,23 +2821,21 @@ static void D3D11_UploadToTexture(
 	Uint32 bufferImageHeight = copyParams->bufferImageHeight;
 	Sint32 w = textureRegion->w;
 	Sint32 h = textureRegion->h;
-    ID3D11Texture2D *stagingTexture;
-    D3D11_TEXTURE2D_DESC desc2D;
-	HRESULT res;
+    D3D11TextureContainer *stagingTexture;
+    SDL_GpuTextureCreateInfo stagingTextureCreateInfo;
+    HRESULT res;
 
-	D3D11TextureSubresource *textureSubresource = D3D11_INTERNAL_PrepareTextureSubresourceForWrite(
-		renderer,
-		d3d11TextureContainer,
-		textureRegion->textureSlice.layer,
-		textureRegion->textureSlice.mipLevel,
-		cycle
-	);
+    D3D11TextureSubresource *textureSubresource = D3D11_INTERNAL_PrepareTextureSubresourceForWrite(
+        renderer,
+        d3d11TextureContainer,
+        textureRegion->textureSlice.layer,
+        textureRegion->textureSlice.mipLevel,
+        cycle);
 
-	Sint32 blockSize = Texture_GetBlockSize(textureSubresource->parent->format);
-	if (blockSize > 1)
-	{
-		w = (w + blockSize - 1) & ~(blockSize - 1);
-		h = (h + blockSize - 1) & ~(blockSize - 1);
+    Sint32 blockSize = Texture_GetBlockSize(textureSubresource->parent->format);
+    if (blockSize > 1) {
+        w = (w + blockSize - 1) & ~(blockSize - 1);
+        h = (h + blockSize - 1) & ~(blockSize - 1);
 	}
 
 	if (bufferStride == 0 || bufferImageHeight == 0)
@@ -2634,30 +2865,25 @@ static void D3D11_UploadToTexture(
      * and upload to it in the immediate context before using a copy command.
      */
 
-    desc2D.Width = w;
-    desc2D.Height = h;
-    desc2D.ArraySize = 1;
-    desc2D.MipLevels = 1;
-    desc2D.Format = RefreshToD3D11_TextureFormat[textureSubresource->parent->format];
-    desc2D.SampleDesc.Count = 1;
-    desc2D.SampleDesc.Quality = 0;
-    desc2D.Usage = D3D11_USAGE_DEFAULT;
-    desc2D.BindFlags = 0;
-    desc2D.CPUAccessFlags = 0;
-    desc2D.MiscFlags = 0;
+    stagingTextureCreateInfo = ((D3D11TextureContainer *)textureRegion->textureSlice.texture)->createInfo;
+    stagingTextureCreateInfo.width = w;
+    stagingTextureCreateInfo.height = h;
+    stagingTextureCreateInfo.depth = textureRegion->d;
 
-    res = ID3D11Device_CreateTexture2D(
-        renderer->device,
-        &desc2D,
-        NULL,
-        (ID3D11Texture2D**) &stagingTexture
+    stagingTexture = (D3D11TextureContainer*) D3D11_CreateTexture(
+        driverData,
+        &stagingTextureCreateInfo
     );
-	ERROR_CHECK_RETURN("Staging texture creation failed",)
+
+    if (stagingTexture == NULL)
+    {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Staging texture creation failed");
+    }
 
     SDL_LockMutex(renderer->contextLock);
     ID3D11DeviceContext_UpdateSubresource(
         renderer->immediateContext,
-        (ID3D11Resource*) stagingTexture,
+        stagingTexture->activeTexture->handle,
         0,
         &dstBox,
         (Uint8*) d3d11TransferBuffer->textureTransfer.data + copyParams->bufferOffset,
@@ -2673,14 +2899,17 @@ static void D3D11_UploadToTexture(
         0,
         0,
         0,
-        (ID3D11Resource*) stagingTexture,
+        stagingTexture->activeTexture->handle,
         0,
         &srcBox,
         D3D11_COPY_NO_OVERWRITE
     );
 
 	/* Clean up the staging texture */
-    ID3D11Texture2D_Release(stagingTexture);
+    D3D11_QueueDestroyTexture(
+        driverData,
+        (SDL_GpuTexture *)stagingTexture
+    );
 
 	D3D11_INTERNAL_TrackTextureSubresource(d3d11CommandBuffer, textureSubresource);
 	D3D11_INTERNAL_TrackTransferBuffer(d3d11CommandBuffer, d3d11TransferBuffer);
@@ -3283,239 +3512,6 @@ static void D3D11_BindFragmentSamplers(
 		numFragmentSamplers,
 		d3d11Samplers
 	);
-}
-
-/* Disposal */
-
-static void D3D11_INTERNAL_DestroyTextureContainer(
-    D3D11TextureContainer *container
-) {
-    for (Uint32 i = 0; i < container->textureCount; i += 1)
-	{
-		D3D11Texture *d3d11Texture = container->textures[i];
-
-		if (d3d11Texture->shaderView)
-		{
-			ID3D11ShaderResourceView_Release(d3d11Texture->shaderView);
-		}
-
-		for (Uint32 subresourceIndex = 0; subresourceIndex < d3d11Texture->subresourceCount; subresourceIndex += 1)
-		{
-			if (d3d11Texture->subresources[subresourceIndex].msaaHandle != NULL)
-			{
-				ID3D11Resource_Release(d3d11Texture->subresources[subresourceIndex].msaaHandle);
-			}
-
-			if (d3d11Texture->subresources[subresourceIndex].msaaTargetView != NULL)
-			{
-				ID3D11RenderTargetView_Release(d3d11Texture->subresources[subresourceIndex].msaaTargetView);
-			}
-
-			if (d3d11Texture->subresources[subresourceIndex].colorTargetView != NULL)
-			{
-				ID3D11RenderTargetView_Release(d3d11Texture->subresources[subresourceIndex].colorTargetView);
-			}
-
-			if (d3d11Texture->subresources[subresourceIndex].depthStencilTargetView != NULL)
-			{
-				ID3D11DepthStencilView_Release(d3d11Texture->subresources[subresourceIndex].depthStencilTargetView);
-			}
-
-			if (d3d11Texture->subresources[subresourceIndex].uav != NULL)
-			{
-				ID3D11UnorderedAccessView_Release(d3d11Texture->subresources[subresourceIndex].uav);
-			}
-		}
-		SDL_free(d3d11Texture->subresources);
-
-		ID3D11Resource_Release(d3d11Texture->handle);
-	}
-
-	SDL_free(container->textures);
-	SDL_free(container);
-}
-
-static void D3D11_QueueDestroyTexture(
-	SDL_GpuRenderer *driverData,
-	SDL_GpuTexture *texture
-) {
-    D3D11Renderer *renderer = (D3D11Renderer*) driverData;
-	D3D11TextureContainer *container = (D3D11TextureContainer*) texture;
-
-    SDL_LockMutex(renderer->contextLock);
-
-    EXPAND_ARRAY_IF_NEEDED(
-        renderer->textureContainersToDestroy,
-        D3D11TextureContainer*,
-        renderer->textureContainersToDestroyCount + 1,
-        renderer->textureContainersToDestroyCapacity,
-        renderer->textureContainersToDestroyCapacity + 1
-    );
-
-    renderer->textureContainersToDestroy[
-        renderer->textureContainersToDestroyCount
-    ] = container;
-    renderer->textureContainersToDestroyCount += 1;
-
-    SDL_UnlockMutex(renderer->contextLock);
-}
-
-static void D3D11_QueueDestroySampler(
-	SDL_GpuRenderer *driverData,
-	SDL_GpuSampler *sampler
-) {
-    (void) driverData; /* used by other backends */
-	D3D11Sampler *d3d11Sampler = (D3D11Sampler*) sampler;
-	ID3D11SamplerState_Release(d3d11Sampler->handle);
-	SDL_free(d3d11Sampler);
-}
-
-static void D3D11_INTERNAL_DestroyBufferContainer(
-    D3D11BufferContainer *container
-) {
-    for (Uint32 i = 0; i < container->bufferCount; i += 1)
-	{
-		D3D11Buffer *d3d11Buffer = container->buffers[i];
-
-		if (d3d11Buffer->uav)
-		{
-			ID3D11UnorderedAccessView_Release(d3d11Buffer->uav);
-		}
-
-		ID3D11Buffer_Release(d3d11Buffer->handle);
-
-		SDL_free(d3d11Buffer);
-	}
-
-	SDL_free(container->buffers);
-	SDL_free(container);
-}
-
-static void D3D11_QueueDestroyGpuBuffer(
-	SDL_GpuRenderer *driverData,
-	SDL_GpuBuffer *gpuBuffer
-) {
-    D3D11Renderer *renderer = (D3D11Renderer*) driverData;
-	D3D11BufferContainer *container = (D3D11BufferContainer*) gpuBuffer;
-
-    SDL_LockMutex(renderer->contextLock);
-
-    EXPAND_ARRAY_IF_NEEDED(
-        renderer->bufferContainersToDestroy,
-        D3D11BufferContainer*,
-        renderer->bufferContainersToDestroyCount + 1,
-        renderer->bufferContainersToDestroyCapacity,
-        renderer->bufferContainersToDestroyCapacity + 1
-    );
-
-    renderer->bufferContainersToDestroy[
-        renderer->bufferContainersToDestroyCount
-    ] = container;
-    renderer->bufferContainersToDestroyCount += 1;
-
-    SDL_UnlockMutex(renderer->contextLock);
-}
-
-static void D3D11_QueueDestroyTransferBuffer(
-	SDL_GpuRenderer *driverData,
-	SDL_GpuTransferBuffer *transferBuffer
-) {
-	D3D11Renderer *renderer = (D3D11Renderer*) driverData;
-
-	SDL_LockMutex(renderer->contextLock);
-
-	EXPAND_ARRAY_IF_NEEDED(
-		renderer->transferBufferContainersToDestroy,
-		D3D11TransferBufferContainer*,
-		renderer->transferBufferContainersToDestroyCount + 1,
-		renderer->transferBufferContainersToDestroyCapacity,
-		renderer->transferBufferContainersToDestroyCapacity + 1
-	);
-
-	renderer->transferBufferContainersToDestroy[
-		renderer->transferBufferContainersToDestroyCount
-	] = (D3D11TransferBufferContainer*) transferBuffer;
-	renderer->transferBufferContainersToDestroyCount += 1;
-
-	SDL_UnlockMutex(renderer->contextLock);
-}
-
-static void D3D11_INTERNAL_DestroyTransferBufferContainer(
-	D3D11TransferBufferContainer *transferBufferContainer
-) {
-	for (Uint32 i = 0; i < transferBufferContainer->bufferCount; i += 1)
-	{
-		if (transferBufferContainer->usage == SDL_GPU_TRANSFERUSAGE_BUFFER)
-		{
-			ID3D11Buffer_Release(transferBufferContainer->buffers[i]->bufferTransfer.stagingBuffer);
-		}
-		else /* TEXTURE */
-		{
-			SDL_free(transferBufferContainer->buffers[i]->textureTransfer.data);
-		}
-		SDL_free(transferBufferContainer->buffers[i]);
-	}
-	SDL_free(transferBufferContainer->buffers);
-}
-
-static void D3D11_QueueDestroyShaderModule(
-	SDL_GpuRenderer *driverData,
-	SDL_GpuShaderModule *shaderModule
-) {
-    (void) driverData; /* used by other backends */
-	D3D11ShaderModule *d3dShaderModule = (D3D11ShaderModule*) shaderModule;
-
-	if (d3dShaderModule->shader)
-	{
-		ID3D11DeviceChild_Release(d3dShaderModule->shader);
-	}
-
-    if (d3dShaderModule->bytecode)
-    {
-        SDL_free(d3dShaderModule->bytecode);
-    }
-
-	SDL_free(d3dShaderModule);
-}
-
-static void D3D11_QueueDestroyComputePipeline(
-	SDL_GpuRenderer *driverData,
-	SDL_GpuComputePipeline *computePipeline
-) {
-	D3D11ComputePipeline *d3d11ComputePipeline = (D3D11ComputePipeline*) computePipeline;
-	SDL_free(d3d11ComputePipeline);
-}
-
-static void D3D11_QueueDestroyGraphicsPipeline(
-	SDL_GpuRenderer *driverData,
-	SDL_GpuGraphicsPipeline *graphicsPipeline
-) {
-    (void) driverData; /* used by other backends */
-	D3D11GraphicsPipeline *d3d11GraphicsPipeline = (D3D11GraphicsPipeline*) graphicsPipeline;
-
-	ID3D11BlendState_Release(d3d11GraphicsPipeline->colorAttachmentBlendState);
-	ID3D11DepthStencilState_Release(d3d11GraphicsPipeline->depthStencilState);
-	ID3D11RasterizerState_Release(d3d11GraphicsPipeline->rasterizerState);
-
-	if (d3d11GraphicsPipeline->inputLayout)
-	{
-		ID3D11InputLayout_Release(d3d11GraphicsPipeline->inputLayout);
-	}
-	if (d3d11GraphicsPipeline->vertexStrides)
-	{
-		SDL_free(d3d11GraphicsPipeline->vertexStrides);
-	}
-
-	SDL_free(d3d11GraphicsPipeline);
-}
-
-static void D3D11_QueueDestroyOcclusionQuery(
-    SDL_GpuRenderer *renderer,
-    SDL_GpuOcclusionQuery *query
-) {
-    D3D11OcclusionQuery *d3dQuery = (D3D11OcclusionQuery*) query;
-    ID3D11Query_Release(d3dQuery->handle);
-    SDL_free(query);
 }
 
 /* Graphics State */
