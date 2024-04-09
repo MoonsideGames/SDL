@@ -4556,6 +4556,7 @@ static Uint8 D3D11_INTERNAL_CreateSwapchain(
         (void**) &swapchain3
     ))) {
         IDXGISwapChain3_SetColorSpace1(swapchain3, SDLToD3D11_ColorSpace[windowData->colorSpace]);
+        IDXGISwapChain3_Release(swapchain3);
     }
 
 	if (!D3D11_INTERNAL_InitializeSwapchainTexture(
