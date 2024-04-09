@@ -2142,7 +2142,7 @@ static D3D11TextureSubresource* D3D11_INTERNAL_FetchTextureSubresource(
 	Uint32 layer,
 	Uint32 level
 ) {
-	Uint32 index = D3D11_INTERNAL_CalcSubresource(level, layer, texture->layerCount);
+	Uint32 index = D3D11_INTERNAL_CalcSubresource(level, layer, texture->levelCount);
 	return &texture->subresources[index];
 }
 
