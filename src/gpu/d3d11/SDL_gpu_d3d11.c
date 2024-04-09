@@ -197,9 +197,10 @@ static DXGI_FORMAT RefreshToD3D11_TextureFormat[] =
     DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, /* R8G8B8A8_SRGB*/
     DXGI_FORMAT_B8G8R8A8_UNORM_SRGB, /* B8G8R8A8_SRGB */
 	DXGI_FORMAT_D16_UNORM,		/* D16_UNORM */
+	DXGI_FORMAT_D24_UNORM_S8_UINT,	/* D24_UNORM */
 	DXGI_FORMAT_D32_FLOAT,		/* D32_SFLOAT */
-	DXGI_FORMAT_D24_UNORM_S8_UINT,	/* D16_UNORM_S8_UINT */
-	DXGI_FORMAT_D32_FLOAT_S8X24_UINT/* D32_SFLOAT_S8_UINT */
+	DXGI_FORMAT_D24_UNORM_S8_UINT,	/* D24_UNORM_S8_UINT */
+	DXGI_FORMAT_D32_FLOAT_S8X24_UINT,	/* D32_SFLOAT_S8_UINT */
 };
 
 static DXGI_COLOR_SPACE_TYPE SDLToD3D11_ColorSpace[] =
@@ -228,10 +229,10 @@ static DXGI_FORMAT RefreshToD3D11_VertexFormat[] =
 
 static Uint32 RefreshToD3D11_SampleCount[] =
 {
-	1,	/* SDL_GPU_SAMPLECOUNT_1 */
-	2,	/* SDL_GPU_SAMPLECOUNT_2 */
-	4,	/* SDL_GPU_SAMPLECOUNT_4 */
-	8	/* SDL_GPU_SAMPLECOUNT_8 */
+       1,      /* SDL_GPU_SAMPLECOUNT_1 */
+       2,      /* SDL_GPU_SAMPLECOUNT_2 */
+       4,      /* SDL_GPU_SAMPLECOUNT_4 */
+       8       /* SDL_GPU_SAMPLECOUNT_8 */
 };
 
 static DXGI_FORMAT RefreshToD3D11_IndexType[] =
@@ -819,7 +820,6 @@ static DXGI_FORMAT D3D11_INTERNAL_GetTypelessFormat(
 	case DXGI_FORMAT_D32_FLOAT_S8X24_UINT:
 		return DXGI_FORMAT_R32G8X24_TYPELESS;
 	default:
-		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Cannot get typeless DXGI format of format %d", typedFormat);
 		return 0;
 	}
 }
@@ -5368,6 +5368,110 @@ static SDL_bool D3D11_OcclusionQueryPixelCount(
 
     *pixelCount = (Uint32) result;
     return res == S_OK;
+}
+
+/* Feature Queries */
+
+static SDL_bool D3D11_IsTextureFormatSupported(
+    SDL_GpuRenderer *driverData,
+    SDL_GpuTextureFormat format,
+    SDL_GpuTextureType type,
+    SDL_GpuTextureUsageFlags usage
+) {
+    D3D11Renderer *renderer = (D3D11Renderer*) driverData;
+    DXGI_FORMAT dxgiFormat = RefreshToD3D11_TextureFormat[format];
+    DXGI_FORMAT typelessFormat = D3D11_INTERNAL_GetTypelessFormat(dxgiFormat);
+    UINT formatSupport, sampleableFormatSupport;
+    HRESULT res;
+
+    res = ID3D11Device_CheckFormatSupport(
+        renderer->device,
+        dxgiFormat,
+        &formatSupport
+    );
+    if (FAILED(res))
+    {
+        /* Format is apparently unknown */
+        return SDL_FALSE;
+    }
+
+    /* Depth textures are stored as typeless textures, but interpreted as color textures for sampling.
+     * In order to get supported usages for both interpretations, we have to do this.
+     */
+    if (typelessFormat != DXGI_FORMAT_UNKNOWN)
+    {
+        res = ID3D11Device_CheckFormatSupport(
+            renderer->device,
+            D3D11_INTERNAL_GetSampleableFormat(typelessFormat),
+            &sampleableFormatSupport
+        );
+        if (SUCCEEDED(res))
+        {
+            formatSupport |= sampleableFormatSupport;
+        }
+    }
+
+    /* Is the texture type supported? */
+    if (type == SDL_GPU_TEXTURETYPE_2D && !(formatSupport & D3D11_FORMAT_SUPPORT_TEXTURE2D))
+    {
+        return SDL_FALSE;
+    }
+    if (type == SDL_GPU_TEXTURETYPE_3D && !(formatSupport & D3D11_FORMAT_SUPPORT_TEXTURE3D))
+    {
+        return SDL_FALSE;
+    }
+    if (type == SDL_GPU_TEXTURETYPE_CUBE && !(formatSupport & D3D11_FORMAT_SUPPORT_TEXTURECUBE))
+    {
+        return SDL_FALSE;
+    }
+
+    /* Are the usage flags supported? */
+    if ((usage & SDL_GPU_TEXTUREUSAGE_SAMPLER_BIT) && !(formatSupport & D3D11_FORMAT_SUPPORT_SHADER_SAMPLE))
+    {
+        return SDL_FALSE;
+    }
+    if ((usage & SDL_GPU_TEXTUREUSAGE_COMPUTE_BIT) && !(formatSupport & D3D11_FORMAT_SUPPORT_SHADER_LOAD))
+    {
+        return SDL_FALSE;
+    }
+    if ((usage & SDL_GPU_TEXTUREUSAGE_COLOR_TARGET_BIT) && !(formatSupport & D3D11_FORMAT_SUPPORT_RENDER_TARGET))
+    {
+        return SDL_FALSE;
+    }
+    if ((usage & SDL_GPU_TEXTUREUSAGE_DEPTH_STENCIL_TARGET_BIT) && !(formatSupport & D3D11_FORMAT_SUPPORT_DEPTH_STENCIL))
+    {
+        return SDL_FALSE;
+    }
+
+    return SDL_TRUE;
+}
+
+static SDL_GpuSampleCount D3D11_GetBestSampleCount(
+    SDL_GpuRenderer *driverData,
+    SDL_GpuTextureFormat format,
+    SDL_GpuSampleCount desiredSampleCount
+) {
+    D3D11Renderer *renderer = (D3D11Renderer*) driverData;
+    SDL_GpuSampleCount maxSupported = SDL_GPU_SAMPLECOUNT_8;
+    Uint32 levels;
+    HRESULT res;
+
+    while (maxSupported > SDL_GPU_SAMPLECOUNT_1)
+    {
+        res = ID3D11Device_CheckMultisampleQualityLevels(
+            renderer->device,
+            RefreshToD3D11_TextureFormat[format],
+            RefreshToD3D11_SampleCount[desiredSampleCount],
+            &levels
+        );
+        if (SUCCEEDED(res) && levels > 0)
+        {
+            break;
+        }
+        maxSupported -= 1;
+    }
+
+    return (SDL_GpuSampleCount) SDL_min(maxSupported, desiredSampleCount);
 }
 
 /* Device Creation */

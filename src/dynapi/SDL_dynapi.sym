@@ -1083,6 +1083,10 @@ SDL3_0.0.0 {
     SDL_GpuOcclusionQueryBegin;
     SDL_GpuOcclusionQueryEnd;
     SDL_GpuOcclusionQueryPixelCount;
+    SDL_GpuIsTextureFormatSupported;
+    SDL_GpuGetBestSampleCount;
+    SDL_GpuIsTextureFormatSupported;
+    SDL_GpuGetBestSampleCount;
     # extra symbols go here (don't modify this line)
   local: *;
 };

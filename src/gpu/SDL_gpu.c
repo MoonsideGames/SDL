@@ -163,6 +163,34 @@ Uint32 SDL_GpuTextureFormatTexelBlockSize(
 	}
 }
 
+SDL_bool SDL_GpuIsTextureFormatSupported(
+    SDL_GpuDevice *device,
+    SDL_GpuTextureFormat format,
+    SDL_GpuTextureType type,
+    SDL_GpuTextureUsageFlags usage
+) {
+    if (device == NULL) { return SDL_FALSE; }
+    return device->IsTextureFormatSupported(
+        device->driverData,
+        format,
+        type,
+        usage
+    );
+}
+
+Uint32 SDL_GpuGetBestSampleCount(
+    SDL_GpuDevice* device,
+    SDL_GpuTextureFormat format,
+    Uint32 desiredSampleCount
+) {
+    if (device == NULL) { return 0; }
+    return device->GetBestSampleCount(
+        device->driverData,
+        format,
+        desiredSampleCount
+    );
+}
+
 /* State Creation */
 
 SDL_GpuComputePipeline* SDL_GpuCreateComputePipeline(

@@ -214,10 +214,11 @@ static VkFormat RefreshToVK_SurfaceFormat[] =
     VK_FORMAT_R16G16B16A16_UINT,		/* R16G16B16A16_UINT */
     VK_FORMAT_R8G8B8A8_SRGB,            /* R8G8B8A8_SRGB */
     VK_FORMAT_B8G8R8A8_SRGB,            /* B8G8R8A8_SRGB */
-    VK_FORMAT_D16_UNORM,				/* D16_UNORM */
-    VK_FORMAT_D32_SFLOAT,				/* D32_SFLOAT */
-    VK_FORMAT_D16_UNORM_S8_UINT,		/* D16_UNORM_S8_UINT */
-    VK_FORMAT_D32_SFLOAT_S8_UINT		/* D32_SFLOAT_S8_UINT */
+	VK_FORMAT_D16_UNORM,				/* D16_UNORM */
+	VK_FORMAT_X8_D24_UNORM_PACK32,		/* D24_UNORM */
+	VK_FORMAT_D32_SFLOAT,				/* D32_SFLOAT */
+	VK_FORMAT_D24_UNORM_S8_UINT,	    /* D24_UNORM_S8_UINT */
+	VK_FORMAT_D32_SFLOAT_S8_UINT,	    /* D32_SFLOAT_S8_UINT */
 };
 
 static VkColorSpaceKHR SDLToVK_ColorSpace[] =
@@ -1907,68 +1908,6 @@ static inline void LogVulkanResultAsError(
     }
 
 /* Utility */
-
-static inline VkFormat RefreshToVK_DepthFormat(
-    VulkanRenderer* renderer,
-    SDL_GpuTextureFormat format
-) {
-    switch (format)
-    {
-        case SDL_GPU_TEXTUREFORMAT_D16_UNORM:
-            return renderer->D16Format;
-        case SDL_GPU_TEXTUREFORMAT_D16_UNORM_S8_UINT:
-            return renderer->D16S8Format;
-        case SDL_GPU_TEXTUREFORMAT_D32_SFLOAT:
-            return VK_FORMAT_D32_SFLOAT;
-        case SDL_GPU_TEXTUREFORMAT_D32_SFLOAT_S8_UINT:
-            return VK_FORMAT_D32_SFLOAT_S8_UINT;
-        default:
-            return VK_FORMAT_UNDEFINED;
-    }
-}
-
-static inline Uint8 IsRefreshDepthFormat(SDL_GpuTextureFormat format)
-{
-    switch (format)
-    {
-        case SDL_GPU_TEXTUREFORMAT_D16_UNORM:
-        case SDL_GPU_TEXTUREFORMAT_D32_SFLOAT:
-        case SDL_GPU_TEXTUREFORMAT_D16_UNORM_S8_UINT:
-        case SDL_GPU_TEXTUREFORMAT_D32_SFLOAT_S8_UINT:
-            return 1;
-
-        default:
-            return 0;
-    }
-}
-
-static inline Uint8 IsDepthFormat(VkFormat format)
-{
-    switch(format)
-    {
-        case VK_FORMAT_D16_UNORM:
-        case VK_FORMAT_D32_SFLOAT:
-        case VK_FORMAT_D16_UNORM_S8_UINT:
-        case VK_FORMAT_D32_SFLOAT_S8_UINT:
-            return 1;
-
-        default:
-            return 0;
-    }
-}
-
-static inline Uint8 IsStencilFormat(VkFormat format)
-{
-    switch(format)
-    {
-        case VK_FORMAT_D16_UNORM_S8_UINT:
-        case VK_FORMAT_D32_SFLOAT_S8_UINT:
-            return 1;
-
-        default:
-            return 0;
-    }
-}
 
 static inline VkSampleCountFlagBits VULKAN_INTERNAL_GetMaxMultiSampleCount(
     VulkanRenderer *renderer,
@@ -6512,10 +6451,8 @@ static VkRenderPass VULKAN_INTERNAL_CreateTransientRenderPass(
     if (attachmentInfo.hasDepthStencilAttachment)
     {
         attachmentDescriptions[attachmentDescriptionCount].flags = 0;
-        attachmentDescriptions[attachmentDescriptionCount].format = RefreshToVK_DepthFormat(
-            renderer,
-            attachmentInfo.depthStencilFormat
-        );
+        attachmentDescriptions[attachmentDescriptionCount].format =
+            RefreshToVK_SurfaceFormat[attachmentInfo.depthStencilFormat];
         attachmentDescriptions[attachmentDescriptionCount].samples = sampleCount;
 
         attachmentDescriptions[attachmentDescriptionCount].loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
@@ -7251,28 +7188,21 @@ static SDL_GpuTexture* VULKAN_CreateTexture(
         VK_IMAGE_USAGE_TRANSFER_SRC_BIT
     );
     VkImageAspectFlags imageAspectFlags;
-    Uint8 isDepthFormat = IsRefreshDepthFormat(textureCreateInfo->format);
+    Uint8 isDepthFormat = IsDepthFormat(textureCreateInfo->format);
     VkFormat format;
     VulkanTextureContainer *container;
     VulkanTextureHandle *textureHandle;
     VkComponentMapping swizzle = IDENTITY_SWIZZLE;
 
-    if (isDepthFormat)
-    {
-        format = RefreshToVK_DepthFormat(renderer, textureCreateInfo->format);
-    }
-    else
-    {
-        format = RefreshToVK_SurfaceFormat[textureCreateInfo->format];
+    format = RefreshToVK_SurfaceFormat[textureCreateInfo->format];
 
-        /* FIXME: We probably need a swizzle table like FNA3D Vulkan does */
-        if (textureCreateInfo->format == SDL_GPU_TEXTUREFORMAT_A8)
-        {
-            swizzle.r = VK_COMPONENT_SWIZZLE_ZERO;
-            swizzle.g = VK_COMPONENT_SWIZZLE_ZERO;
-            swizzle.b = VK_COMPONENT_SWIZZLE_ZERO;
-            swizzle.a = VK_COMPONENT_SWIZZLE_R;
-        }
+    /* FIXME: We probably need a swizzle table like FNA3D Vulkan does */
+    if (textureCreateInfo->format == SDL_GPU_TEXTUREFORMAT_A8)
+    {
+        swizzle.r = VK_COMPONENT_SWIZZLE_ZERO;
+        swizzle.g = VK_COMPONENT_SWIZZLE_ZERO;
+        swizzle.b = VK_COMPONENT_SWIZZLE_ZERO;
+        swizzle.a = VK_COMPONENT_SWIZZLE_R;
     }
 
     if (textureCreateInfo->usageFlags & SDL_GPU_TEXTUREUSAGE_SAMPLER_BIT)
@@ -7299,7 +7229,7 @@ static SDL_GpuTexture* VULKAN_CreateTexture(
     {
         imageAspectFlags = VK_IMAGE_ASPECT_DEPTH_BIT;
 
-        if (IsStencilFormat(format))
+        if (IsStencilFormat(textureCreateInfo->format))
         {
             imageAspectFlags |= VK_IMAGE_ASPECT_STENCIL_BIT;
         }
@@ -11261,6 +11191,87 @@ static SDL_bool VULKAN_OcclusionQueryPixelCount(
 
     *pixelCount = queryResult;
     return vulkanResult == VK_SUCCESS;
+}
+
+/* Feature Queries */
+
+static SDL_bool VULKAN_IsTextureFormatSupported(
+    SDL_GpuRenderer *driverData,
+    SDL_GpuTextureFormat format,
+    SDL_GpuTextureType type,
+    SDL_GpuTextureUsageFlags usage
+) {
+    VulkanRenderer *renderer = (VulkanRenderer *)driverData;
+    VkFormat vulkanFormat = RefreshToVK_SurfaceFormat[format];
+    VkImageUsageFlags vulkanUsage = 0;
+    VkImageCreateFlags createFlags = 0;
+    VkImageFormatProperties properties;
+    VkResult vulkanResult;
+
+    if (usage & SDL_GPU_TEXTUREUSAGE_SAMPLER_BIT)
+    {
+        vulkanUsage |= VK_IMAGE_USAGE_SAMPLED_BIT;
+    }
+    if (usage & SDL_GPU_TEXTUREUSAGE_COLOR_TARGET_BIT)
+    {
+        vulkanUsage |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+    }
+    if (usage & SDL_GPU_TEXTUREUSAGE_DEPTH_STENCIL_TARGET_BIT)
+    {
+        vulkanUsage |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+    }
+    if (usage & SDL_GPU_TEXTUREUSAGE_COMPUTE_BIT)
+    {
+        vulkanUsage |= VK_IMAGE_USAGE_STORAGE_BIT;
+    }
+
+    if (type == SDL_GPU_TEXTURETYPE_CUBE)
+    {
+        createFlags = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
+    }
+
+    vulkanResult = renderer->vkGetPhysicalDeviceImageFormatProperties(
+        renderer->physicalDevice,
+        vulkanFormat,
+        (type == SDL_GPU_TEXTURETYPE_3D) ? VK_IMAGE_TYPE_3D : VK_IMAGE_TYPE_2D,
+        VK_IMAGE_TILING_OPTIMAL,
+        vulkanUsage,
+        createFlags,
+        &properties
+    );
+
+    return vulkanResult == VK_SUCCESS;
+}
+
+static SDL_GpuSampleCount VULKAN_GetBestSampleCount(
+    SDL_GpuRenderer *driverData,
+    SDL_GpuTextureFormat format,
+    SDL_GpuSampleCount desiredSampleCount
+) {
+    VulkanRenderer *renderer = (VulkanRenderer*) driverData;
+    Uint32 maxSupported;
+    VkSampleCountFlagBits bits = IsDepthFormat(format) ?
+        renderer->physicalDeviceProperties.properties.limits.framebufferDepthSampleCounts :
+        renderer->physicalDeviceProperties.properties.limits.framebufferColorSampleCounts;
+
+    if (bits & VK_SAMPLE_COUNT_8_BIT)
+    {
+        maxSupported = SDL_GPU_SAMPLECOUNT_8;
+    }
+    else if (bits & VK_SAMPLE_COUNT_4_BIT)
+    {
+        maxSupported = SDL_GPU_SAMPLECOUNT_4;
+    }
+    else if (bits & VK_SAMPLE_COUNT_2_BIT)
+    {
+        maxSupported = SDL_GPU_SAMPLECOUNT_2;
+    }
+    else
+    {
+        maxSupported = SDL_GPU_SAMPLECOUNT_1;
+    }
+
+    return (SDL_GpuSampleCount) SDL_min(maxSupported, desiredSampleCount);
 }
 
 /* Device instantiation */

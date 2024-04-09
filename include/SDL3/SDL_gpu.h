@@ -124,8 +124,9 @@ typedef enum SDL_GpuTextureFormat
     SDL_GPU_TEXTUREFORMAT_B8G8R8A8_SRGB,
 	/* Depth Formats */
 	SDL_GPU_TEXTUREFORMAT_D16_UNORM,
+	SDL_GPU_TEXTUREFORMAT_D24_UNORM,
 	SDL_GPU_TEXTUREFORMAT_D32_SFLOAT,
-	SDL_GPU_TEXTUREFORMAT_D16_UNORM_S8_UINT,
+	SDL_GPU_TEXTUREFORMAT_D24_UNORM_S8_UINT,
 	SDL_GPU_TEXTUREFORMAT_D32_SFLOAT_S8_UINT
 } SDL_GpuTextureFormat;
 
@@ -145,6 +146,13 @@ typedef enum SDL_GpuColorSpace
     SDL_GPU_COLORSPACE_LINEAR_SRGB,
     SDL_GPU_COLORSPACE_HDR10_ST2048
 } SDL_GpuColorSpace;
+
+typedef enum SDL_GpuTextureType
+{
+    SDL_GPU_TEXTURETYPE_2D,
+    SDL_GPU_TEXTURETYPE_3D,
+    SDL_GPU_TEXTURETYPE_CUBE,
+} SDL_GpuTextureType;
 
 typedef enum SDL_GpuSampleCount
 {
@@ -1980,6 +1988,41 @@ extern DECLSPEC void SDLCALL SDL_GpuDownloadFromBuffer(
  */
 extern DECLSPEC Uint32 SDLCALL SDL_GpuTextureFormatTexelBlockSize(
     SDL_GpuTextureFormat textureFormat
+);
+
+/**
+ * Determines whether a texture format is supported for a given type and usage.
+ * 
+ * \param device a GPU context
+ * \param format the texture format to check
+ * \param type the type of texture (2D, 3D, Cube)
+ * \param usage a bitmask of all usage scenarios to check
+ * \returns whether the texture format is supported for this type and usage
+ *
+ * \since This function is available since SDL 3.x.x
+ */
+extern DECLSPEC SDL_bool SDLCALL SDL_GpuIsTextureFormatSupported(
+    SDL_GpuDevice *device,
+    SDL_GpuTextureFormat format,
+    SDL_GpuTextureType type,
+    SDL_GpuTextureUsageFlags usage
+);
+
+/**
+ * Determines the "best" sample count for a texture format, i.e.
+ * the highest supported sample count that is <= the desired sample count.
+ *
+ * \param device a GPU context
+ * \param format the texture format to check
+ * \param desiredSampleCount the sample count you want
+ * \returns a hardware-specific version of min(preferred, possible)
+ *
+ * \since This function is available since SDL 3.x.x
+ */
+extern DECLSPEC SDL_GpuSampleCount SDLCALL SDL_GpuGetBestSampleCount(
+    SDL_GpuDevice *device,
+    SDL_GpuTextureFormat format,
+    SDL_GpuSampleCount desiredSampleCount
 );
 
 /* Queries */

@@ -1123,3 +1123,5 @@ SDL_DYNAPI_PROC(void,SDL_GpuQueueDestroyOcclusionQuery,(SDL_GpuDevice *a, SDL_Gp
 SDL_DYNAPI_PROC(void,SDL_GpuOcclusionQueryBegin,(SDL_GpuDevice *a, SDL_GpuCommandBuffer *b, SDL_GpuOcclusionQuery *c),(a,b,c),)
 SDL_DYNAPI_PROC(void,SDL_GpuOcclusionQueryEnd,(SDL_GpuDevice *a, SDL_GpuCommandBuffer *b, SDL_GpuOcclusionQuery *c),(a,b,c),)
 SDL_DYNAPI_PROC(SDL_bool,SDL_GpuOcclusionQueryPixelCount,(SDL_GpuDevice *a, SDL_GpuOcclusionQuery *b, Uint32 *c),(a,b,c),return)
+SDL_DYNAPI_PROC(SDL_bool,SDL_GpuIsTextureFormatSupported,(SDL_GpuDevice *a, SDL_GpuTextureFormat b, SDL_GpuTextureType c, SDL_GpuTextureUsageFlags d),(a,b,c,d),return)
+SDL_DYNAPI_PROC(SDL_GpuSampleCount,SDL_GpuGetBestSampleCount,(SDL_GpuDevice *a, SDL_GpuTextureFormat b, SDL_GpuSampleCount c),(a,b,c),return)

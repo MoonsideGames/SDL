@@ -69,6 +69,37 @@ static inline Sint32 Texture_GetBlockSize(
 	}
 }
 
+static inline SDL_bool IsDepthFormat(
+    SDL_GpuTextureFormat format
+) {
+    switch (format)
+    {
+        case SDL_GPU_TEXTUREFORMAT_D16_UNORM:
+        case SDL_GPU_TEXTUREFORMAT_D24_UNORM:
+        case SDL_GPU_TEXTUREFORMAT_D32_SFLOAT:
+        case SDL_GPU_TEXTUREFORMAT_D24_UNORM_S8_UINT:
+        case SDL_GPU_TEXTUREFORMAT_D32_SFLOAT_S8_UINT:
+            return SDL_TRUE;
+
+        default:
+            return SDL_FALSE;
+    }
+}
+
+static inline SDL_bool IsStencilFormat(
+    SDL_GpuTextureFormat format
+) {
+    switch (format)
+    {
+        case SDL_GPU_TEXTUREFORMAT_D24_UNORM_S8_UINT:
+        case SDL_GPU_TEXTUREFORMAT_D32_SFLOAT_S8_UINT:
+            return SDL_TRUE;
+
+        default:
+            return SDL_FALSE;
+    }
+}
+
 static inline Uint32 PrimitiveVerts(
 	SDL_GpuPrimitiveType primitiveType,
 	Uint32 primitiveCount
@@ -589,6 +620,21 @@ struct SDL_GpuDevice
         Uint32 *pixelCount
     );
 
+    /* Feature Queries */
+
+    SDL_bool (*IsTextureFormatSupported)(
+        SDL_GpuRenderer *driverData,
+        SDL_GpuTextureFormat format,
+        SDL_GpuTextureType type,
+        SDL_GpuTextureUsageFlags usage
+    );
+
+    SDL_GpuSampleCount (*GetBestSampleCount)(
+        SDL_GpuRenderer *driverData,
+        SDL_GpuTextureFormat format,
+        SDL_GpuSampleCount desiredSampleCount
+    );
+
 	/* Opaque pointer for the Driver */
 	SDL_GpuRenderer *driverData;
 
@@ -665,7 +711,9 @@ struct SDL_GpuDevice
 	ASSIGN_DRIVER_FUNC(ReleaseFence, name) \
     ASSIGN_DRIVER_FUNC(OcclusionQueryBegin, name) \
     ASSIGN_DRIVER_FUNC(OcclusionQueryEnd, name) \
-    ASSIGN_DRIVER_FUNC(OcclusionQueryPixelCount, name)
+    ASSIGN_DRIVER_FUNC(OcclusionQueryPixelCount, name) \
+    ASSIGN_DRIVER_FUNC(IsTextureFormatSupported, name) \
+    ASSIGN_DRIVER_FUNC(GetBestSampleCount, name)
 
 typedef struct SDL_GpuDriver
 {
