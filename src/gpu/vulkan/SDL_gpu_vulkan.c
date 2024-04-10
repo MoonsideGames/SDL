@@ -4937,7 +4937,8 @@ static Uint8 VULKAN_INTERNAL_CreateSwapchain(
         return 0;
     }
 
-    /* FIXME: This only works if SDL_HINT_VIDEO_SYNC_WINDOW_OPERATIONS is 1! */
+    /* Sync now to be sure that our swapchain size is correct */
+    SDL_SyncWindow(windowData->windowHandle);
     SDL_GetWindowSizeInPixels(
         windowData->windowHandle,
         &drawableWidth,
