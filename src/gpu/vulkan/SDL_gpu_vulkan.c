@@ -4933,6 +4933,7 @@ static Uint8 VULKAN_INTERNAL_CreateSwapchain(
         return 0;
     }
 
+    /* FIXME: This only works if SDL_HINT_VIDEO_SYNC_WINDOW_OPERATIONS is 1! */
     SDL_GetWindowSizeInPixels(
         windowData->windowHandle,
         &drawableWidth,
@@ -10048,20 +10049,15 @@ static void VULKAN_SetSwapchainParameters(
         return;
     }
 
-    if (
-        windowData->preferredPresentMode != presentMode ||
-        windowData->swapchainFormat != swapchainFormat ||
-        windowData->colorSpace != colorSpace
-    ) {
-        windowData->preferredPresentMode = presentMode;
-        windowData->swapchainFormat = swapchainFormat;
-        windowData->colorSpace = colorSpace;
+    /* The window size may have changed, always update even if these params are the same */
+    windowData->preferredPresentMode = presentMode;
+    windowData->swapchainFormat = swapchainFormat;
+    windowData->colorSpace = colorSpace;
 
-        VULKAN_INTERNAL_RecreateSwapchain(
-            (VulkanRenderer *)driverData,
-            windowData
-        );
-    }
+    VULKAN_INTERNAL_RecreateSwapchain(
+        (VulkanRenderer *)driverData,
+        windowData
+    );
 }
 
 /* Submission structure */
