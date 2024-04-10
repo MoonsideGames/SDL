@@ -2068,14 +2068,6 @@ static void METAL_UnclaimWindow(
     SDL_ClearProperty(SDL_GetWindowProperties(windowHandle), WINDOW_PROPERTY_DATA);
 }
 
-static void METAL_SetSwapchainPresentMode(
-	SDL_GpuRenderer *driverData,
-	SDL_Window *windowHandle,
-	SDL_GpuPresentMode presentMode
-) {
-	NOT_IMPLEMENTED
-}
-
 static SDL_GpuTextureFormat METAL_GetSwapchainFormat(
 	SDL_GpuRenderer *driverData,
 	SDL_Window *windowHandle
