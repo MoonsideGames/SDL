@@ -2082,6 +2082,16 @@ static SDL_GpuTextureFormat METAL_GetSwapchainFormat(
     return SDL_GPU_TEXTUREFORMAT_R8;
 }
 
+static void METAL_SetSwapchainParameters(
+    SDL_GpuRenderer *driverData,
+    SDL_Window *windowHandle,
+    SDL_GpuPresentMode presentMode,
+    SDL_GpuTextureFormat swapchainFormat,
+    SDL_GpuColorSpace colorSpace
+) {
+    NOT_IMPLEMENTED
+}
+
 /* Submission/Presentation */
 
 static void METAL_INTERNAL_AllocateCommandBuffers(
