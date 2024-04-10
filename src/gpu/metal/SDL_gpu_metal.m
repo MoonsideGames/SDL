@@ -1984,10 +1984,12 @@ static Uint8 METAL_INTERNAL_CreateSwapchain(
     return 1;
 }
 
-static Uint8 METAL_ClaimWindow(
+static SDL_bool METAL_ClaimWindow(
 	SDL_GpuRenderer *driverData,
 	SDL_Window *windowHandle,
-	SDL_GpuPresentMode presentMode
+	SDL_GpuPresentMode presentMode,
+	SDL_GpuTextureFormat swapchainFormat,
+	SDL_GpuColorSpace colorSpace
 ) {
     MetalRenderer *renderer = (MetalRenderer*) driverData;
     MetalWindowData *windowData = METAL_INTERNAL_FetchWindowData(windowHandle);
@@ -2016,19 +2018,19 @@ static Uint8 METAL_ClaimWindow(
 
             SDL_UnlockMutex(renderer->windowLock);
 
-            return 1;
+            return SDL_TRUE;
         }
         else
         {
             SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Could not create swapchain, failed to claim window!");
             SDL_free(windowData);
-            return 0;
+            return SDL_FALSE;
         }
     }
     else
     {
         SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Window already claimed!");
-        return 0;
+        return SDL_FALSE;
     }
 }
 
