@@ -2865,10 +2865,15 @@ static void D3D11_UploadToTexture(
      * and upload to it in the immediate context before using a copy command.
      */
 
-    stagingTextureCreateInfo = ((D3D11TextureContainer *)textureRegion->textureSlice.texture)->createInfo;
     stagingTextureCreateInfo.width = w;
     stagingTextureCreateInfo.height = h;
     stagingTextureCreateInfo.depth = textureRegion->d;
+    stagingTextureCreateInfo.layerCount = 1;
+    stagingTextureCreateInfo.levelCount = 1;
+    stagingTextureCreateInfo.isCube = 0;
+    stagingTextureCreateInfo.usageFlags = 0;
+    stagingTextureCreateInfo.sampleCount = SDL_GPU_SAMPLECOUNT_1;
+    stagingTextureCreateInfo.format = ((D3D11TextureContainer *)textureRegion->textureSlice.texture)->createInfo.format;
 
     stagingTexture = (D3D11TextureContainer*) D3D11_CreateTexture(
         driverData,
@@ -2911,8 +2916,9 @@ static void D3D11_UploadToTexture(
         (SDL_GpuTexture *)stagingTexture
     );
 
-	D3D11_INTERNAL_TrackTextureSubresource(d3d11CommandBuffer, textureSubresource);
-	D3D11_INTERNAL_TrackTransferBuffer(d3d11CommandBuffer, d3d11TransferBuffer);
+    D3D11_INTERNAL_TrackTextureSubresource(d3d11CommandBuffer, &stagingTexture->activeTexture->subresources[0]);
+    D3D11_INTERNAL_TrackTextureSubresource(d3d11CommandBuffer, textureSubresource);
+    D3D11_INTERNAL_TrackTransferBuffer(d3d11CommandBuffer, d3d11TransferBuffer);
 }
 
 static void D3D11_UploadToBuffer(
