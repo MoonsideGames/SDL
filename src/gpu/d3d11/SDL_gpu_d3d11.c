@@ -2823,7 +2823,6 @@ static void D3D11_UploadToTexture(
 	Sint32 h = textureRegion->h;
     D3D11TextureContainer *stagingTexture;
     SDL_GpuTextureCreateInfo stagingTextureCreateInfo;
-    HRESULT res;
 
     D3D11TextureSubresource *textureSubresource = D3D11_INTERNAL_PrepareTextureSubresourceForWrite(
         renderer,
@@ -4804,7 +4803,6 @@ static void D3D11_SetSwapchainParameters(
 ) {
     D3D11Renderer *renderer = (D3D11Renderer*) driverData;
 	D3D11WindowData *windowData = D3D11_INTERNAL_FetchWindowData(windowHandle);
-    HRESULT res;
 
     if (
         swapchainFormat != windowData->swapchainFormat ||
