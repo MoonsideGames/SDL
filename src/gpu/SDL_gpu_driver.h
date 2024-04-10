@@ -147,6 +147,7 @@ static inline Sint32 BytesPerImage(
 
 #define MAX_COLOR_TARGET_BINDINGS	4
 #define MAX_PRESENT_COUNT           16
+#define MAX_FRAMES_IN_FLIGHT        3
 
 /* SDL_GpuDevice Definition */
 

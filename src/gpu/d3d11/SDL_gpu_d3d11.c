@@ -476,6 +476,12 @@ typedef struct D3D11TextureContainer
 	char *debugName;
 } D3D11TextureContainer;
 
+typedef struct D3D11Fence
+{
+	ID3D11Query *handle;
+    SDL_AtomicInt referenceCount;
+} D3D11Fence;
+
 typedef struct D3D11WindowData
 {
 	SDL_Window *windowHandle;
@@ -485,6 +491,8 @@ typedef struct D3D11WindowData
 	SDL_GpuPresentMode presentMode;
     SDL_GpuTextureFormat swapchainFormat;
     SDL_GpuColorSpace colorSpace;
+    D3D11Fence *inFlightFences[MAX_FRAMES_IN_FLIGHT];
+    Uint32 frameCounter;
 } D3D11WindowData;
 
 typedef struct D3D11ShaderModule
@@ -593,11 +601,6 @@ typedef struct D3D11UniformBuffer
 	Uint32 offset; /* number of bytes written */
 	Uint32 drawOffset; /* parameter for SetConstantBuffers */
 } D3D11UniformBuffer;
-
-typedef struct D3D11Fence
-{
-	ID3D11Query *handle;
-} D3D11Fence;
 
 typedef struct D3D11CommandBuffer
 {
@@ -3616,6 +3619,7 @@ static Uint8 D3D11_INTERNAL_CreateFence(
 
 	fence = SDL_malloc(sizeof(D3D11Fence));
 	fence->handle = queryHandle;
+    SDL_AtomicSet(&fence->referenceCount, 0);
 
 	/* Add it to the available pool */
 	if (renderer->availableFenceCount >= renderer->availableFenceCapacity)
@@ -3660,6 +3664,7 @@ static Uint8 D3D11_INTERNAL_AcquireFence(
 
 	/* Associate the fence with the command buffer */
 	commandBuffer->fence = fence;
+    (void)SDL_AtomicIncRef(&commandBuffer->fence->referenceCount);
 
 	return 1;
 }
@@ -4314,6 +4319,137 @@ static void D3D11_EndComputePass(
 	/* no-op */
 }
 
+/* Fences */
+
+static void D3D11_INTERNAL_ReleaseFenceToPool(
+	D3D11Renderer *renderer,
+	D3D11Fence *fence
+) {
+	SDL_LockMutex(renderer->fenceLock);
+
+	if (renderer->availableFenceCount == renderer->availableFenceCapacity)
+	{
+		renderer->availableFenceCapacity *= 2;
+		renderer->availableFences = SDL_realloc(
+			renderer->availableFences,
+			renderer->availableFenceCapacity * sizeof(D3D11Fence*)
+		);
+	}
+	renderer->availableFences[renderer->availableFenceCount] = fence;
+	renderer->availableFenceCount += 1;
+
+	SDL_UnlockMutex(renderer->fenceLock);
+}
+
+static void D3D11_INTERNAL_WaitForFence(
+	D3D11Renderer *renderer,
+	D3D11Fence *fence
+) {
+	BOOL queryData;
+	HRESULT res;
+
+	SDL_LockMutex(renderer->contextLock);
+
+	do
+	{
+		res = ID3D11DeviceContext_GetData(
+			renderer->immediateContext,
+			(ID3D11Asynchronous*)fence->handle,
+			&queryData,
+			sizeof(queryData),
+			0
+		);
+	}
+	while (res != S_OK); /* Spin until we get a result back... */
+
+	SDL_UnlockMutex(renderer->contextLock);
+}
+
+static void D3D11_WaitForFences(
+	SDL_GpuRenderer *driverData,
+	Uint8 waitAll,
+	Uint32 fenceCount,
+	SDL_GpuFence **pFences
+) {
+	D3D11Renderer *renderer = (D3D11Renderer*) driverData;
+	D3D11Fence *fence;
+	BOOL queryData;
+	HRESULT res = S_FALSE;
+
+	if (waitAll)
+	{
+		for (Uint32 i = 0; i < fenceCount; i += 1)
+		{
+			fence = (D3D11Fence*) pFences[i];
+			D3D11_INTERNAL_WaitForFence(renderer, fence);
+		}
+	}
+	else
+	{
+		SDL_LockMutex(renderer->contextLock);
+
+		while (res != S_OK)
+		{
+			for (Uint32 i = 0; i < fenceCount; i += 1)
+			{
+				fence = (D3D11Fence*) pFences[i];
+				res = ID3D11DeviceContext_GetData(
+					renderer->immediateContext,
+					(ID3D11Asynchronous*) fence->handle,
+					&queryData,
+					sizeof(queryData),
+					0
+				);
+				if (res == S_OK)
+				{
+					break;
+				}
+			}
+		}
+
+		SDL_UnlockMutex(renderer->contextLock);
+	}
+}
+
+static SDL_bool D3D11_QueryFence(
+	SDL_GpuRenderer *driverData,
+	SDL_GpuFence *fence
+) {
+	D3D11Renderer *renderer = (D3D11Renderer*) driverData;
+	D3D11Fence *d3d11Fence = (D3D11Fence*) fence;
+	BOOL queryData;
+	HRESULT res;
+
+	SDL_LockMutex(renderer->contextLock);
+
+	res = ID3D11DeviceContext_GetData(
+		renderer->immediateContext,
+		(ID3D11Asynchronous*) d3d11Fence->handle,
+		&queryData,
+		sizeof(queryData),
+		0
+	);
+
+	SDL_UnlockMutex(renderer->contextLock);
+
+	return res == S_OK;
+}
+
+static void D3D11_ReleaseFence(
+	SDL_GpuRenderer *driverData,
+	SDL_GpuFence *fence
+) {
+    D3D11Fence *d3d11Fence = (D3D11Fence*) fence;
+
+    if (SDL_AtomicDecRef(&d3d11Fence->referenceCount))
+    {
+        D3D11_INTERNAL_ReleaseFenceToPool(
+            (D3D11Renderer*) driverData,
+            d3d11Fence
+        );
+    }
+}
+
 /* Window and Swapchain Management */
 
 static D3D11WindowData* D3D11_INTERNAL_FetchWindowData(
@@ -4447,6 +4583,7 @@ static Uint8 D3D11_INTERNAL_CreateSwapchain(
 ) {
 	HWND dxgiHandle;
 	int width, height;
+    Uint32 i;
 	DXGI_SWAP_CHAIN_DESC swapchainDesc;
 	IDXGIFactory1 *pParent;
 	IDXGISwapChain *swapchain;
@@ -4550,6 +4687,12 @@ static Uint8 D3D11_INTERNAL_CreateSwapchain(
     windowData->presentMode = presentMode;
     windowData->swapchainFormat = swapchainFormat;
     windowData->colorSpace = colorSpace;
+    windowData->frameCounter = 0;
+
+    for (i = 0; i < MAX_FRAMES_IN_FLIGHT; i += 1)
+    {
+        windowData->inFlightFences[i] = NULL;
+    }
 
     if (SUCCEEDED(IDXGISwapChain3_QueryInterface(
         swapchain,
@@ -4663,6 +4806,8 @@ static void D3D11_INTERNAL_DestroySwapchain(
     D3D11Renderer *renderer,
     D3D11WindowData *windowData
 ) {
+    Uint32 i;
+
     D3D11_Wait((SDL_GpuRenderer*) renderer);
 
     ID3D11ShaderResourceView_Release(windowData->texture.shaderView);
@@ -4679,6 +4824,17 @@ static void D3D11_INTERNAL_DestroySwapchain(
     SDL_UnlockMutex(renderer->contextLock);
 
     windowData->swapchain = NULL;
+
+    for (i = 0; i < MAX_FRAMES_IN_FLIGHT; i += 1)
+    {
+        if (windowData->inFlightFences[i] != NULL)
+        {
+            D3D11_ReleaseFence(
+                (SDL_GpuRenderer*) renderer,
+                (SDL_GpuFence*) windowData->inFlightFences[i]
+            );
+        }
+    }
 }
 
 static void D3D11_UnclaimWindow(
@@ -4693,14 +4849,10 @@ static void D3D11_UnclaimWindow(
 		return;
 	}
 
-	D3D11_Wait(driverData);
-
-	ID3D11ShaderResourceView_Release(windowData->texture.shaderView);
-	ID3D11RenderTargetView_Release(windowData->texture.subresources[0].colorTargetView);
-	ID3D11UnorderedAccessView_Release(windowData->texture.subresources[0].uav);
-	SDL_free(windowData->texture.subresources);
-    SDL_free(windowData->textureContainer.textures);
-	IDXGISwapChain_Release(windowData->swapchain);
+    D3D11_INTERNAL_DestroySwapchain(
+        renderer,
+        windowData
+    );
 
 	SDL_LockMutex(renderer->windowLock);
 	for (Uint32 i = 0; i < renderer->claimedWindowCount; i += 1)
@@ -4717,12 +4869,6 @@ static void D3D11_UnclaimWindow(
 	SDL_free(windowData);
 
     SDL_ClearProperty(SDL_GetWindowProperties(windowHandle), WINDOW_PROPERTY_DATA);
-
-    /* DXGI will crash if we don't flush deferred swapchain destruction */
-    SDL_LockMutex(renderer->contextLock);
-    ID3D11DeviceContext_ClearState(renderer->immediateContext);
-    ID3D11DeviceContext_Flush(renderer->immediateContext);
-    SDL_UnlockMutex(renderer->contextLock);
 }
 
 static SDL_GpuTexture* D3D11_AcquireSwapchainTexture(
@@ -4759,6 +4905,22 @@ static SDL_GpuTexture* D3D11_AcquireSwapchainTexture(
 		);
 		ERROR_CHECK_RETURN("Could not resize swapchain", NULL);
 	}
+
+    /* Block if there are too many frames in flight */
+    if (windowData->inFlightFences[windowData->frameCounter] != NULL)
+    {
+        D3D11_INTERNAL_WaitForFence(
+            renderer,
+            windowData->inFlightFences[windowData->frameCounter]
+        );
+
+        D3D11_ReleaseFence(
+            driverData,
+            (SDL_GpuFence*) windowData->inFlightFences[windowData->frameCounter]
+        );
+
+        windowData->inFlightFences[windowData->frameCounter] = NULL;
+    }
 
 	/* Set the handle on the windowData texture data. */
 	res = IDXGISwapChain_GetBuffer(
@@ -4827,27 +4989,7 @@ static void D3D11_SetSwapchainParameters(
     }
 }
 
-/* Submission and Fences */
-
-static void D3D11_INTERNAL_ReleaseFenceToPool(
-	D3D11Renderer *renderer,
-	D3D11Fence *fence
-) {
-	SDL_LockMutex(renderer->fenceLock);
-
-	if (renderer->availableFenceCount == renderer->availableFenceCapacity)
-	{
-		renderer->availableFenceCapacity *= 2;
-		renderer->availableFences = SDL_realloc(
-			renderer->availableFences,
-			renderer->availableFenceCapacity * sizeof(D3D11Fence*)
-		);
-	}
-	renderer->availableFences[renderer->availableFenceCount] = fence;
-	renderer->availableFenceCount += 1;
-
-	SDL_UnlockMutex(renderer->fenceLock);
-}
+/* Submission */
 
 static void D3D11_INTERNAL_CleanCommandBuffer(
 	D3D11Renderer *renderer,
@@ -4896,7 +5038,10 @@ static void D3D11_INTERNAL_CleanCommandBuffer(
 	/* The fence is now available (unless SubmitAndAcquireFence was called) */
 	if (commandBuffer->autoReleaseFence)
 	{
-		D3D11_INTERNAL_ReleaseFenceToPool(renderer, commandBuffer->fence);
+        D3D11_ReleaseFence(
+            (SDL_GpuRenderer*) renderer,
+            (SDL_GpuFence*) commandBuffer->fence
+        );
 	}
 
 	/* Return command buffer to pool */
@@ -4922,30 +5067,6 @@ static void D3D11_INTERNAL_CleanCommandBuffer(
 			renderer->submittedCommandBufferCount -= 1;
 		}
 	}
-}
-
-static void D3D11_INTERNAL_WaitForFence(
-	D3D11Renderer *renderer,
-	D3D11Fence *fence
-) {
-	BOOL queryData;
-	HRESULT res;
-
-	SDL_LockMutex(renderer->contextLock);
-
-	do
-	{
-		res = ID3D11DeviceContext_GetData(
-			renderer->immediateContext,
-			(ID3D11Asynchronous*)fence->handle,
-			&queryData,
-			sizeof(queryData),
-			0
-		);
-	}
-	while (res != S_OK); /* Spin until we get a result back... */
-
-	SDL_UnlockMutex(renderer->contextLock);
 }
 
 static void D3D11_INTERNAL_PerformPendingDestroys(
@@ -5089,6 +5210,15 @@ static void D3D11_Submit(
 		);
 
 		ID3D11Texture2D_Release(d3d11CommandBuffer->windowData->texture.handle);
+
+        d3d11CommandBuffer->windowData->inFlightFences[
+            d3d11CommandBuffer->windowData->frameCounter
+        ] = d3d11CommandBuffer->fence;
+
+        (void)SDL_AtomicIncRef(&d3d11CommandBuffer->fence->referenceCount);
+
+        d3d11CommandBuffer->windowData->frameCounter =
+            (d3d11CommandBuffer->windowData->frameCounter + 1) % MAX_FRAMES_IN_FLIGHT;
 	}
 
 	/* Check if we can perform any cleanups */
@@ -5158,86 +5288,6 @@ static void D3D11_Wait(
 	D3D11_INTERNAL_PerformPendingDestroys(renderer);
 
 	SDL_UnlockMutex(renderer->contextLock);
-}
-
-static void D3D11_WaitForFences(
-	SDL_GpuRenderer *driverData,
-	Uint8 waitAll,
-	Uint32 fenceCount,
-	SDL_GpuFence **pFences
-) {
-	D3D11Renderer *renderer = (D3D11Renderer*) driverData;
-	D3D11Fence *fence;
-	BOOL queryData;
-	HRESULT res = S_FALSE;
-
-	if (waitAll)
-	{
-		for (Uint32 i = 0; i < fenceCount; i += 1)
-		{
-			fence = (D3D11Fence*) pFences[i];
-			D3D11_INTERNAL_WaitForFence(renderer, fence);
-		}
-	}
-	else
-	{
-		SDL_LockMutex(renderer->contextLock);
-
-		while (res != S_OK)
-		{
-			for (Uint32 i = 0; i < fenceCount; i += 1)
-			{
-				fence = (D3D11Fence*) pFences[i];
-				res = ID3D11DeviceContext_GetData(
-					renderer->immediateContext,
-					(ID3D11Asynchronous*) fence->handle,
-					&queryData,
-					sizeof(queryData),
-					0
-				);
-				if (res == S_OK)
-				{
-					break;
-				}
-			}
-		}
-
-		SDL_UnlockMutex(renderer->contextLock);
-	}
-}
-
-static SDL_bool D3D11_QueryFence(
-	SDL_GpuRenderer *driverData,
-	SDL_GpuFence *fence
-) {
-	D3D11Renderer *renderer = (D3D11Renderer*) driverData;
-	D3D11Fence *d3d11Fence = (D3D11Fence*) fence;
-	BOOL queryData;
-	HRESULT res;
-
-	SDL_LockMutex(renderer->contextLock);
-
-	res = ID3D11DeviceContext_GetData(
-		renderer->immediateContext,
-		(ID3D11Asynchronous*) d3d11Fence->handle,
-		&queryData,
-		sizeof(queryData),
-		0
-	);
-
-	SDL_UnlockMutex(renderer->contextLock);
-
-	return res == S_OK;
-}
-
-static void D3D11_ReleaseFence(
-	SDL_GpuRenderer *driverData,
-	SDL_GpuFence *fence
-) {
-	D3D11_INTERNAL_ReleaseFenceToPool(
-		(D3D11Renderer*) driverData,
-		(D3D11Fence*) fence
-	);
 }
 
 /* Queries */
