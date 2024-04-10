@@ -4909,10 +4909,13 @@ static SDL_GpuTexture* D3D11_AcquireSwapchainTexture(
     /* Block if there are too many frames in flight */
     if (windowData->inFlightFences[windowData->frameCounter] != NULL)
     {
-        D3D11_INTERNAL_WaitForFence(
-            renderer,
-            windowData->inFlightFences[windowData->frameCounter]
-        );
+        if (!D3D11_QueryFence(
+            driverData,
+            (SDL_GpuFence*) windowData->inFlightFences[windowData->frameCounter]
+        )) {
+            /* Too many frames in flight, bail */
+            return NULL;
+        }
 
         D3D11_ReleaseFence(
             driverData,

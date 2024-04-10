@@ -10017,13 +10017,13 @@ static SDL_GpuTexture* VULKAN_AcquireSwapchainTexture(
 
     if (swapchainData->inFlightFences[swapchainData->frameCounter] != NULL)
     {
-        renderer->vkWaitForFences(
-            renderer->logicalDevice,
-            1,
-            &swapchainData->inFlightFences[swapchainData->frameCounter]->fence,
-            VK_TRUE,
-            UINT64_MAX
-        );
+        if (!VULKAN_QueryFence(
+            driverData,
+            (SDL_GpuFence*) swapchainData->inFlightFences[swapchainData->frameCounter]
+        )) {
+            /* Too many frames in flight, bail */
+            return NULL;
+        }
 
         VULKAN_ReleaseFence(
             driverData,
