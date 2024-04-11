@@ -820,7 +820,7 @@ static DXGI_FORMAT D3D11_INTERNAL_GetTypelessFormat(
 	case DXGI_FORMAT_D32_FLOAT_S8X24_UINT:
 		return DXGI_FORMAT_R32G8X24_TYPELESS;
 	default:
-		return 0;
+		return DXGI_FORMAT_UNKNOWN;
 	}
 }
 
