@@ -2547,6 +2547,27 @@ static SDL_bool METAL_OcclusionQueryPixelCount(
     return SDL_FALSE;
 }
 
+/* Format Info */
+
+static SDL_bool METAL_IsTextureFormatSupported(
+    SDL_GpuRenderer *driverData,
+    SDL_GpuTextureFormat format,
+    SDL_GpuTextureType type,
+    SDL_GpuTextureUsageFlags usage
+) {
+    NOT_IMPLEMENTED
+    return SDL_FALSE;
+}
+
+static SDL_GpuSampleCount METAL_GetBestSampleCount(
+    SDL_GpuRenderer *driverData,
+    SDL_GpuTextureFormat format,
+    SDL_GpuSampleCount desiredSampleCount
+) {
+    NOT_IMPLEMENTED
+    return SDL_GPU_SAMPLECOUNT_1;
+}
+
 /* Device Creation */
 
 static Uint8 METAL_PrepareDriver(

@@ -1909,6 +1909,18 @@ static inline void LogVulkanResultAsError(
 
 /* Utility */
 
+static inline SDL_bool VULKAN_INTERNAL_IsVulkanDepthFormat(VkFormat format)
+{
+    /* FIXME: Can we refactor and use the regular IsDepthFormat for this? */
+    return (
+        format == RefreshToVK_SurfaceFormat[SDL_GPU_TEXTUREFORMAT_D16_UNORM] ||
+        format == RefreshToVK_SurfaceFormat[SDL_GPU_TEXTUREFORMAT_D24_UNORM] ||
+        format == RefreshToVK_SurfaceFormat[SDL_GPU_TEXTUREFORMAT_D24_UNORM_S8_UINT] ||
+        format == RefreshToVK_SurfaceFormat[SDL_GPU_TEXTUREFORMAT_D32_SFLOAT] ||
+        format == RefreshToVK_SurfaceFormat[SDL_GPU_TEXTUREFORMAT_D32_SFLOAT_S8_UINT]
+    );
+}
+
 static inline VkSampleCountFlagBits VULKAN_INTERNAL_GetMaxMultiSampleCount(
     VulkanRenderer *renderer,
     VkSampleCountFlagBits multiSampleCount
@@ -5736,7 +5748,7 @@ static VulkanTexture* VULKAN_INTERNAL_CreateTexture(
     imageCreateInfo.extent.depth = depth;
     imageCreateInfo.mipLevels = levelCount;
     imageCreateInfo.arrayLayers = layerCount;
-    imageCreateInfo.samples = isMsaaTexture || IsDepthFormat(format) ? sampleCount : VK_SAMPLE_COUNT_1_BIT;
+    imageCreateInfo.samples = isMsaaTexture || VULKAN_INTERNAL_IsVulkanDepthFormat(format) ? sampleCount : VK_SAMPLE_COUNT_1_BIT;
     imageCreateInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
     imageCreateInfo.usage = imageUsageFlags;
     imageCreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
@@ -5865,7 +5877,7 @@ static VulkanTexture* VULKAN_INTERNAL_CreateTexture(
             if (
                 sampleCount > VK_SAMPLE_COUNT_1_BIT &&
                 isRenderTarget &&
-                !IsDepthFormat(texture->format) &&
+                !VULKAN_INTERNAL_IsVulkanDepthFormat(texture->format) &&
                 !isMsaaTexture
             ) {
                 texture->slices[sliceIndex].msaaTex = VULKAN_INTERNAL_CreateTexture(
@@ -11193,7 +11205,7 @@ static SDL_bool VULKAN_OcclusionQueryPixelCount(
     return vulkanResult == VK_SUCCESS;
 }
 
-/* Feature Queries */
+/* Format Info */
 
 static SDL_bool VULKAN_IsTextureFormatSupported(
     SDL_GpuRenderer *driverData,
@@ -11201,7 +11213,7 @@ static SDL_bool VULKAN_IsTextureFormatSupported(
     SDL_GpuTextureType type,
     SDL_GpuTextureUsageFlags usage
 ) {
-    VulkanRenderer *renderer = (VulkanRenderer *)driverData;
+    VulkanRenderer *renderer = (VulkanRenderer*) driverData;
     VkFormat vulkanFormat = RefreshToVK_SurfaceFormat[format];
     VkImageUsageFlags vulkanUsage = 0;
     VkImageCreateFlags createFlags = 0;

@@ -5370,7 +5370,7 @@ static SDL_bool D3D11_OcclusionQueryPixelCount(
     return res == S_OK;
 }
 
-/* Feature Queries */
+/* Format Info */
 
 static SDL_bool D3D11_IsTextureFormatSupported(
     SDL_GpuRenderer *driverData,
