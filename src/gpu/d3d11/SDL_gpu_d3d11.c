@@ -3854,10 +3854,10 @@ static void D3D11_BeginRenderPass(
 		{
 			float clearColors[] =
 			{
-				colorAttachmentInfos[i].clearColor.x,
-				colorAttachmentInfos[i].clearColor.y,
-				colorAttachmentInfos[i].clearColor.z,
-				colorAttachmentInfos[i].clearColor.w
+				colorAttachmentInfos[i].clearColor.r,
+				colorAttachmentInfos[i].clearColor.g,
+				colorAttachmentInfos[i].clearColor.b,
+				colorAttachmentInfos[i].clearColor.a
 			};
 			ID3D11DeviceContext_ClearRenderTargetView(
 				d3d11CommandBuffer->context,
@@ -4171,10 +4171,10 @@ static void D3D11_Blit(
     }
 
     /* Unused */
-    colorAttachmentInfo.clearColor.x = 0;
-    colorAttachmentInfo.clearColor.y = 0;
-    colorAttachmentInfo.clearColor.z = 0;
-    colorAttachmentInfo.clearColor.w = 0;
+    colorAttachmentInfo.clearColor.r = 0;
+    colorAttachmentInfo.clearColor.g = 0;
+    colorAttachmentInfo.clearColor.b = 0;
+    colorAttachmentInfo.clearColor.a = 0;
 
     /* If the entire destination is blitted, we don't have to load */
     if (

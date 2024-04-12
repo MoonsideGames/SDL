@@ -1216,10 +1216,10 @@ static void METAL_BeginRenderPass(
         passDescriptor.colorAttachments[i].level = attachmentInfo->textureSlice.mipLevel;
         passDescriptor.colorAttachments[i].slice = attachmentInfo->textureSlice.layer;
         passDescriptor.colorAttachments[i].clearColor = MTLClearColorMake(
-            attachmentInfo->clearColor.x,
-            attachmentInfo->clearColor.y,
-            attachmentInfo->clearColor.z,
-            attachmentInfo->clearColor.w
+            attachmentInfo->clearColor.r,
+            attachmentInfo->clearColor.g,
+            attachmentInfo->clearColor.b,
+            attachmentInfo->clearColor.a
         );
         passDescriptor.colorAttachments[i].loadAction = SDLToMetal_LoadOp[attachmentInfo->loadOp];
         passDescriptor.colorAttachments[i].storeAction = SDLToMetal_StoreOp(attachmentInfo->storeOp, 0);

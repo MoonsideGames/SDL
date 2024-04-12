@@ -1090,7 +1090,7 @@ static inline void DescriptorSetLayoutHashTable_Insert(
 typedef struct RenderPassColorTargetDescription
 {
     VkFormat format;
-    SDL_GpuVec4 clearColor;
+    SDL_GpuColor clearColor;
     SDL_GpuLoadOp loadOp;
     SDL_GpuStoreOp storeOp;
 } RenderPassColorTargetDescription;
@@ -1148,10 +1148,10 @@ static inline Uint8 RenderPassHash_Compare(
             return 0;
         }
 
-        if (	a->colorTargetDescriptions[i].clearColor.x != b->colorTargetDescriptions[i].clearColor.x ||
-            a->colorTargetDescriptions[i].clearColor.y != b->colorTargetDescriptions[i].clearColor.y ||
-            a->colorTargetDescriptions[i].clearColor.z != b->colorTargetDescriptions[i].clearColor.z ||
-            a->colorTargetDescriptions[i].clearColor.w != b->colorTargetDescriptions[i].clearColor.w	)
+        if (	a->colorTargetDescriptions[i].clearColor.r != b->colorTargetDescriptions[i].clearColor.r ||
+            a->colorTargetDescriptions[i].clearColor.g != b->colorTargetDescriptions[i].clearColor.g ||
+            a->colorTargetDescriptions[i].clearColor.b != b->colorTargetDescriptions[i].clearColor.b ||
+            a->colorTargetDescriptions[i].clearColor.a != b->colorTargetDescriptions[i].clearColor.a	)
         {
             return 0;
         }
@@ -8330,19 +8330,19 @@ static void VULKAN_BeginRenderPass(
 
     for (i = 0; i < totalColorAttachmentCount; i += 1)
     {
-        clearValues[i].color.float32[0] = colorAttachmentInfos[i].clearColor.x;
-        clearValues[i].color.float32[1] = colorAttachmentInfos[i].clearColor.y;
-        clearValues[i].color.float32[2] = colorAttachmentInfos[i].clearColor.z;
-        clearValues[i].color.float32[3] = colorAttachmentInfos[i].clearColor.w;
+        clearValues[i].color.float32[0] = colorAttachmentInfos[i].clearColor.r;
+        clearValues[i].color.float32[1] = colorAttachmentInfos[i].clearColor.g;
+        clearValues[i].color.float32[2] = colorAttachmentInfos[i].clearColor.b;
+        clearValues[i].color.float32[3] = colorAttachmentInfos[i].clearColor.a;
 
         textureSlice = VULKAN_INTERNAL_RefreshToVulkanTextureSlice(&colorAttachmentInfos[i].textureSlice);
 
         if (textureSlice->parent->sampleCount > VK_SAMPLE_COUNT_1_BIT)
         {
-            clearValues[i+1].color.float32[0] = colorAttachmentInfos[i].clearColor.x;
-            clearValues[i+1].color.float32[1] = colorAttachmentInfos[i].clearColor.y;
-            clearValues[i+1].color.float32[2] = colorAttachmentInfos[i].clearColor.z;
-            clearValues[i+1].color.float32[3] = colorAttachmentInfos[i].clearColor.w;
+            clearValues[i+1].color.float32[0] = colorAttachmentInfos[i].clearColor.r;
+            clearValues[i+1].color.float32[1] = colorAttachmentInfos[i].clearColor.g;
+            clearValues[i+1].color.float32[2] = colorAttachmentInfos[i].clearColor.b;
+            clearValues[i+1].color.float32[3] = colorAttachmentInfos[i].clearColor.a;
             i += 1;
         }
     }

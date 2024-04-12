@@ -352,13 +352,13 @@ typedef struct SDL_GpuRect
 	Sint32 h;
 } SDL_GpuRect;
 
-typedef struct SDL_GpuVec4
+typedef struct SDL_GpuColor
 {
-	float x;
-	float y;
-	float z;
-	float w;
-} SDL_GpuVec4;
+	float r;
+	float g;
+	float b;
+	float a;
+} SDL_GpuColor;
 
 typedef struct SDL_GpuViewport
 {
@@ -579,7 +579,7 @@ typedef struct SDL_GpuColorAttachmentInfo
 	SDL_GpuTextureSlice textureSlice;
 
     /* Can be ignored by RenderPass if CLEAR is not used */
-	SDL_GpuVec4 clearColor;
+	SDL_GpuColor clearColor;
 
     /* Determines what is done with the texture slice at the beginning of the render pass.
      *
