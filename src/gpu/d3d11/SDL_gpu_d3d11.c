@@ -165,7 +165,7 @@ static void D3D11_INTERNAL_DestroyBlitPipelines(SDL_GpuRenderer *driverData);
 
  /* Conversions */
 
-static DXGI_FORMAT RefreshToD3D11_TextureFormat[] =
+static DXGI_FORMAT SDLToD3D11_TextureFormat[] =
 {
 	DXGI_FORMAT_R8G8B8A8_UNORM,	/* R8G8B8A8 */
 	DXGI_FORMAT_B8G8R8A8_UNORM,	/* B8G8R8A8 */
@@ -211,7 +211,7 @@ static DXGI_COLOR_SPACE_TYPE SDLToD3D11_ColorSpace[] =
     DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020
 };
 
-static DXGI_FORMAT RefreshToD3D11_VertexFormat[] =
+static DXGI_FORMAT SDLToD3D11_VertexFormat[] =
 {
 	DXGI_FORMAT_R32_UINT,		/* UINT */
 	DXGI_FORMAT_R32_FLOAT,		/* FLOAT */
@@ -228,7 +228,7 @@ static DXGI_FORMAT RefreshToD3D11_VertexFormat[] =
 	DXGI_FORMAT_R16G16B16A16_FLOAT	/* HALFVECTOR4 */
 };
 
-static Uint32 RefreshToD3D11_SampleCount[] =
+static Uint32 SDLToD3D11_SampleCount[] =
 {
        1,      /* SDL_GPU_SAMPLECOUNT_1 */
        2,      /* SDL_GPU_SAMPLECOUNT_2 */
@@ -236,13 +236,13 @@ static Uint32 RefreshToD3D11_SampleCount[] =
        8       /* SDL_GPU_SAMPLECOUNT_8 */
 };
 
-static DXGI_FORMAT RefreshToD3D11_IndexType[] =
+static DXGI_FORMAT SDLToD3D11_IndexType[] =
 {
 	DXGI_FORMAT_R16_UINT,	/* 16BIT */
 	DXGI_FORMAT_R32_UINT	/* 32BIT */
 };
 
-static D3D11_PRIMITIVE_TOPOLOGY RefreshToD3D11_PrimitiveType[] =
+static D3D11_PRIMITIVE_TOPOLOGY SDLToD3D11_PrimitiveType[] =
 {
 	D3D_PRIMITIVE_TOPOLOGY_POINTLIST,	/* POINTLIST */
 	D3D_PRIMITIVE_TOPOLOGY_LINELIST,	/* LINELIST */
@@ -251,14 +251,14 @@ static D3D11_PRIMITIVE_TOPOLOGY RefreshToD3D11_PrimitiveType[] =
 	D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP	/* TRIANGLESTRIP */
 };
 
-static D3D11_CULL_MODE RefreshToD3D11_CullMode[] =
+static D3D11_CULL_MODE SDLToD3D11_CullMode[] =
 {
 	D3D11_CULL_NONE,	/* NONE */
 	D3D11_CULL_FRONT,	/* FRONT */
 	D3D11_CULL_BACK		/* BACK */
 };
 
-static D3D11_BLEND RefreshToD3D11_BlendFactor[] =
+static D3D11_BLEND SDLToD3D11_BlendFactor[] =
 {
 	D3D11_BLEND_ZERO,		/* ZERO */
 	D3D11_BLEND_ONE,		/* ONE */
@@ -275,7 +275,7 @@ static D3D11_BLEND RefreshToD3D11_BlendFactor[] =
 	D3D11_BLEND_SRC_ALPHA_SAT,	/* SRC_ALPHA_SATURATE */
 };
 
-static D3D11_BLEND RefreshToD3D11_BlendFactorAlpha[] =
+static D3D11_BLEND SDLToD3D11_BlendFactorAlpha[] =
 {
 	D3D11_BLEND_ZERO,		/* ZERO */
 	D3D11_BLEND_ONE,		/* ONE */
@@ -292,7 +292,7 @@ static D3D11_BLEND RefreshToD3D11_BlendFactorAlpha[] =
 	D3D11_BLEND_SRC_ALPHA_SAT,	/* SRC_ALPHA_SATURATE */
 };
 
-static D3D11_BLEND_OP RefreshToD3D11_BlendOp[] =
+static D3D11_BLEND_OP SDLToD3D11_BlendOp[] =
 {
 	D3D11_BLEND_OP_ADD,		/* ADD */
 	D3D11_BLEND_OP_SUBTRACT,	/* SUBTRACT */
@@ -301,7 +301,7 @@ static D3D11_BLEND_OP RefreshToD3D11_BlendOp[] =
 	D3D11_BLEND_OP_MAX		/* MAX */
 };
 
-static D3D11_COMPARISON_FUNC RefreshToD3D11_CompareOp[] =
+static D3D11_COMPARISON_FUNC SDLToD3D11_CompareOp[] =
 {
 	D3D11_COMPARISON_NEVER,		/* NEVER */
 	D3D11_COMPARISON_LESS,		/* LESS */
@@ -313,7 +313,7 @@ static D3D11_COMPARISON_FUNC RefreshToD3D11_CompareOp[] =
 	D3D11_COMPARISON_ALWAYS		/* ALWAYS */
 };
 
-static D3D11_STENCIL_OP RefreshToD3D11_StencilOp[] =
+static D3D11_STENCIL_OP SDLToD3D11_StencilOp[] =
 {
 	D3D11_STENCIL_OP_KEEP,		/* KEEP */
 	D3D11_STENCIL_OP_ZERO,		/* ZERO */
@@ -325,13 +325,13 @@ static D3D11_STENCIL_OP RefreshToD3D11_StencilOp[] =
 	D3D11_STENCIL_OP_DECR		/* DECREMENT_AND_WRAP */
 };
 
-static D3D11_INPUT_CLASSIFICATION RefreshToD3D11_VertexInputRate[] =
+static D3D11_INPUT_CLASSIFICATION SDLToD3D11_VertexInputRate[] =
 {
 	D3D11_INPUT_PER_VERTEX_DATA,	/* VERTEX */
 	D3D11_INPUT_PER_INSTANCE_DATA	/* INSTANCE */
 };
 
-static D3D11_TEXTURE_ADDRESS_MODE RefreshToD3D11_SamplerAddressMode[] =
+static D3D11_TEXTURE_ADDRESS_MODE SDLToD3D11_SamplerAddressMode[] =
 {
 	D3D11_TEXTURE_ADDRESS_WRAP,     /* REPEAT */
 	D3D11_TEXTURE_ADDRESS_MIRROR,   /* MIRRORED_REPEAT */
@@ -339,7 +339,7 @@ static D3D11_TEXTURE_ADDRESS_MODE RefreshToD3D11_SamplerAddressMode[] =
 	D3D11_TEXTURE_ADDRESS_BORDER    /* CLAMP_TO_BORDER */
 };
 
-static void RefreshToD3D11_BorderColor(
+static void SDLToD3D11_BorderColor(
 	SDL_GpuSamplerStateCreateInfo *createInfo,
 	D3D11_SAMPLER_DESC *desc
 ) {
@@ -371,7 +371,7 @@ static void RefreshToD3D11_BorderColor(
 	}
 }
 
-static D3D11_FILTER RefreshToD3D11_Filter(SDL_GpuSamplerStateCreateInfo *createInfo)
+static D3D11_FILTER SDLToD3D11_Filter(SDL_GpuSamplerStateCreateInfo *createInfo)
 {
 	if (createInfo->minFilter == SDL_GPU_FILTER_LINEAR)
 	{
@@ -1409,23 +1409,23 @@ static ID3D11BlendState* D3D11_INTERNAL_FetchBlendState(
 	for (Uint32 i = 0; i < numColorAttachments; i += 1)
 	{
 		blendDesc.RenderTarget[i].BlendEnable = colorAttachments[i].blendState.blendEnable;
-		blendDesc.RenderTarget[i].BlendOp = RefreshToD3D11_BlendOp[
+		blendDesc.RenderTarget[i].BlendOp = SDLToD3D11_BlendOp[
 			colorAttachments[i].blendState.colorBlendOp
 		];
-		blendDesc.RenderTarget[i].BlendOpAlpha = RefreshToD3D11_BlendOp[
+		blendDesc.RenderTarget[i].BlendOpAlpha = SDLToD3D11_BlendOp[
 			colorAttachments[i].blendState.alphaBlendOp
 		];
-		blendDesc.RenderTarget[i].DestBlend = RefreshToD3D11_BlendFactor[
+		blendDesc.RenderTarget[i].DestBlend = SDLToD3D11_BlendFactor[
 			colorAttachments[i].blendState.dstColorBlendFactor
 		];
-		blendDesc.RenderTarget[i].DestBlendAlpha = RefreshToD3D11_BlendFactorAlpha[
+		blendDesc.RenderTarget[i].DestBlendAlpha = SDLToD3D11_BlendFactorAlpha[
 			colorAttachments[i].blendState.dstAlphaBlendFactor
 		];
 		blendDesc.RenderTarget[i].RenderTargetWriteMask = colorAttachments[i].blendState.colorWriteMask;
-		blendDesc.RenderTarget[i].SrcBlend = RefreshToD3D11_BlendFactor[
+		blendDesc.RenderTarget[i].SrcBlend = SDLToD3D11_BlendFactor[
 			colorAttachments[i].blendState.srcColorBlendFactor
 		];
-		blendDesc.RenderTarget[i].SrcBlendAlpha = RefreshToD3D11_BlendFactorAlpha[
+		blendDesc.RenderTarget[i].SrcBlendAlpha = SDLToD3D11_BlendFactorAlpha[
 			colorAttachments[i].blendState.srcAlphaBlendFactor
 		];
 	}
@@ -1453,22 +1453,22 @@ static ID3D11DepthStencilState* D3D11_INTERNAL_FetchDepthStencilState(
 	 */
 	dsDesc.DepthEnable = depthStencilState.depthTestEnable;
 	dsDesc.StencilEnable = depthStencilState.stencilTestEnable;
-	dsDesc.DepthFunc = RefreshToD3D11_CompareOp[depthStencilState.compareOp];
+	dsDesc.DepthFunc = SDLToD3D11_CompareOp[depthStencilState.compareOp];
 	dsDesc.DepthWriteMask = (
 		depthStencilState.depthWriteEnable ?
 			D3D11_DEPTH_WRITE_MASK_ALL :
 			D3D11_DEPTH_WRITE_MASK_ZERO
 	);
 
-	dsDesc.BackFace.StencilFunc = RefreshToD3D11_CompareOp[depthStencilState.backStencilState.compareOp];
-	dsDesc.BackFace.StencilDepthFailOp = RefreshToD3D11_StencilOp[depthStencilState.backStencilState.depthFailOp];
-	dsDesc.BackFace.StencilFailOp = RefreshToD3D11_StencilOp[depthStencilState.backStencilState.failOp];
-	dsDesc.BackFace.StencilPassOp = RefreshToD3D11_StencilOp[depthStencilState.backStencilState.passOp];
+	dsDesc.BackFace.StencilFunc = SDLToD3D11_CompareOp[depthStencilState.backStencilState.compareOp];
+	dsDesc.BackFace.StencilDepthFailOp = SDLToD3D11_StencilOp[depthStencilState.backStencilState.depthFailOp];
+	dsDesc.BackFace.StencilFailOp = SDLToD3D11_StencilOp[depthStencilState.backStencilState.failOp];
+	dsDesc.BackFace.StencilPassOp = SDLToD3D11_StencilOp[depthStencilState.backStencilState.passOp];
 
-	dsDesc.FrontFace.StencilFunc = RefreshToD3D11_CompareOp[depthStencilState.frontStencilState.compareOp];
-	dsDesc.FrontFace.StencilDepthFailOp = RefreshToD3D11_StencilOp[depthStencilState.frontStencilState.depthFailOp];
-	dsDesc.FrontFace.StencilFailOp = RefreshToD3D11_StencilOp[depthStencilState.frontStencilState.failOp];
-	dsDesc.FrontFace.StencilPassOp = RefreshToD3D11_StencilOp[depthStencilState.frontStencilState.passOp];
+	dsDesc.FrontFace.StencilFunc = SDLToD3D11_CompareOp[depthStencilState.frontStencilState.compareOp];
+	dsDesc.FrontFace.StencilDepthFailOp = SDLToD3D11_StencilOp[depthStencilState.frontStencilState.depthFailOp];
+	dsDesc.FrontFace.StencilFailOp = SDLToD3D11_StencilOp[depthStencilState.frontStencilState.failOp];
+	dsDesc.FrontFace.StencilPassOp = SDLToD3D11_StencilOp[depthStencilState.frontStencilState.passOp];
 
 	dsDesc.StencilReadMask = depthStencilState.compareMask;
 	dsDesc.StencilWriteMask = depthStencilState.writeMask;
@@ -1500,7 +1500,7 @@ static ID3D11RasterizerState* D3D11_INTERNAL_FetchRasterizerState(
 	 * The spec says the driver will not create duplicate states, so there's no need to cache.
 	 */
 	rasterizerDesc.AntialiasedLineEnable = FALSE;
-	rasterizerDesc.CullMode = RefreshToD3D11_CullMode[rasterizerState.cullMode];
+	rasterizerDesc.CullMode = SDLToD3D11_CullMode[rasterizerState.cullMode];
 	rasterizerDesc.DepthBias = SDL_lroundf(rasterizerState.depthBiasConstantFactor);
 	rasterizerDesc.DepthBiasClamp = rasterizerState.depthBiasClamp;
 	rasterizerDesc.DepthClipEnable = TRUE;
@@ -1564,7 +1564,7 @@ static ID3D11InputLayout* D3D11_INTERNAL_FetchInputLayout(
 	for (Uint32 i = 0; i < inputState.vertexAttributeCount; i += 1)
 	{
 		elementDescs[i].AlignedByteOffset = inputState.vertexAttributes[i].offset;
-		elementDescs[i].Format = RefreshToD3D11_VertexFormat[
+		elementDescs[i].Format = SDLToD3D11_VertexFormat[
 			inputState.vertexAttributes[i].format
 		];
 		elementDescs[i].InputSlot = inputState.vertexAttributes[i].binding;
@@ -1574,7 +1574,7 @@ static ID3D11InputLayout* D3D11_INTERNAL_FetchInputLayout(
 			inputState.vertexBindings,
 			inputState.vertexBindingCount
 		);
-		elementDescs[i].InputSlotClass = RefreshToD3D11_VertexInputRate[
+		elementDescs[i].InputSlotClass = SDLToD3D11_VertexInputRate[
 			inputState.vertexBindings[bindingIndex].inputRate
 		];
 		/* The spec requires this to be 0 for per-vertex data */
@@ -1654,7 +1654,7 @@ static SDL_GpuGraphicsPipeline* D3D11_CreateGraphicsPipeline(
 	pipeline->numColorAttachments = pipelineCreateInfo->attachmentInfo.colorAttachmentCount;
 	for (Sint32 i = 0; i < pipeline->numColorAttachments; i += 1)
 	{
-		pipeline->colorAttachmentFormats[i] = RefreshToD3D11_TextureFormat[
+		pipeline->colorAttachmentFormats[i] = SDLToD3D11_TextureFormat[
 			pipelineCreateInfo->attachmentInfo.colorAttachmentDescriptions[i].format
 		];
 	}
@@ -1676,7 +1676,7 @@ static SDL_GpuGraphicsPipeline* D3D11_CreateGraphicsPipeline(
 	);
 
 	pipeline->hasDepthStencilAttachment = pipelineCreateInfo->attachmentInfo.hasDepthStencilAttachment;
-	pipeline->depthStencilAttachmentFormat = RefreshToD3D11_TextureFormat[
+	pipeline->depthStencilAttachmentFormat = SDLToD3D11_TextureFormat[
 		pipelineCreateInfo->attachmentInfo.depthStencilFormat
 	];
 	pipeline->stencilRef = pipelineCreateInfo->depthStencilState.reference;
@@ -1897,26 +1897,26 @@ static SDL_GpuSampler* D3D11_CreateSampler(
 	D3D11Sampler *d3d11Sampler;
 	HRESULT res;
 
-	samplerDesc.AddressU = RefreshToD3D11_SamplerAddressMode[samplerStateCreateInfo->addressModeU];
-	samplerDesc.AddressV = RefreshToD3D11_SamplerAddressMode[samplerStateCreateInfo->addressModeV];
-	samplerDesc.AddressW = RefreshToD3D11_SamplerAddressMode[samplerStateCreateInfo->addressModeW];
+	samplerDesc.AddressU = SDLToD3D11_SamplerAddressMode[samplerStateCreateInfo->addressModeU];
+	samplerDesc.AddressV = SDLToD3D11_SamplerAddressMode[samplerStateCreateInfo->addressModeV];
+	samplerDesc.AddressW = SDLToD3D11_SamplerAddressMode[samplerStateCreateInfo->addressModeW];
 
-	RefreshToD3D11_BorderColor(
+	SDLToD3D11_BorderColor(
 		samplerStateCreateInfo,
 		&samplerDesc
 	);
 
 	samplerDesc.ComparisonFunc = (
 		samplerStateCreateInfo->compareEnable ?
-			RefreshToD3D11_CompareOp[samplerStateCreateInfo->compareOp] :
-			RefreshToD3D11_CompareOp[SDL_GPU_COMPAREOP_ALWAYS]
+			SDLToD3D11_CompareOp[samplerStateCreateInfo->compareOp] :
+			SDLToD3D11_CompareOp[SDL_GPU_COMPAREOP_ALWAYS]
 	);
 	samplerDesc.MaxAnisotropy = (
 		samplerStateCreateInfo->anisotropyEnable ?
 			(UINT) samplerStateCreateInfo->maxAnisotropy :
 			0
 	);
-	samplerDesc.Filter = RefreshToD3D11_Filter(samplerStateCreateInfo);
+	samplerDesc.Filter = SDLToD3D11_Filter(samplerStateCreateInfo);
 	samplerDesc.MaxLOD = samplerStateCreateInfo->maxLod;
 	samplerDesc.MinLOD = samplerStateCreateInfo->minLod;
 	samplerDesc.MipLODBias = samplerStateCreateInfo->mipLodBias;
@@ -2022,7 +2022,7 @@ Uint8 isColorTarget, isDepthStencil, isSampler, isCompute, isMultisample;
 	isCompute = textureCreateInfo->usageFlags & SDL_GPU_TEXTUREUSAGE_COMPUTE_BIT;
 	isMultisample = textureCreateInfo->sampleCount > 1;
 
-	format = RefreshToD3D11_TextureFormat[textureCreateInfo->format];
+	format = SDLToD3D11_TextureFormat[textureCreateInfo->format];
 	if (isDepthStencil)
 	{
 		format = D3D11_INTERNAL_GetTypelessFormat(format);
@@ -2228,7 +2228,7 @@ Uint8 isColorTarget, isDepthStencil, isSampler, isCompute, isMultisample;
 				desc2D.Format = format;
 				desc2D.MipLevels = 1;
 				desc2D.MiscFlags = 0;
-				desc2D.SampleDesc.Count = RefreshToD3D11_SampleCount[textureCreateInfo->sampleCount];
+				desc2D.SampleDesc.Count = SDLToD3D11_SampleCount[textureCreateInfo->sampleCount];
 				desc2D.SampleDesc.Quality = D3D11_STANDARD_MULTISAMPLE_PATTERN;
 				desc2D.Usage = D3D11_USAGE_DEFAULT;
 
@@ -2263,7 +2263,7 @@ Uint8 isColorTarget, isDepthStencil, isSampler, isCompute, isMultisample;
 				{
 					D3D11_DEPTH_STENCIL_VIEW_DESC dsvDesc;
 
-					dsvDesc.Format = RefreshToD3D11_TextureFormat[d3d11Texture->format];
+					dsvDesc.Format = SDLToD3D11_TextureFormat[d3d11Texture->format];
 					dsvDesc.Flags = 0;
 
 					if (isMultisample)
@@ -2288,7 +2288,7 @@ Uint8 isColorTarget, isDepthStencil, isSampler, isCompute, isMultisample;
 				{
 					D3D11_RENDER_TARGET_VIEW_DESC rtvDesc;
 
-					rtvDesc.Format = RefreshToD3D11_TextureFormat[d3d11Texture->format];
+					rtvDesc.Format = SDLToD3D11_TextureFormat[d3d11Texture->format];
 
 					if (d3d11Texture->layerCount > 1)
 					{
@@ -3073,7 +3073,7 @@ static void D3D11_DownloadFromTexture(
 	stagingDesc.Height = textureRegion->h;
 	stagingDesc.MipLevels = 1;
 	stagingDesc.ArraySize = 1;
-	stagingDesc.Format = RefreshToD3D11_TextureFormat[textureSubresource->parent->format];
+	stagingDesc.Format = SDLToD3D11_TextureFormat[textureSubresource->parent->format];
 	stagingDesc.SampleDesc.Count = 1;
 	stagingDesc.SampleDesc.Quality = 0;
 	stagingDesc.Usage = D3D11_USAGE_STAGING;
@@ -3973,7 +3973,7 @@ static void D3D11_EndRenderPass(
 				d3d11CommandBuffer->colorTargetResolveSubresourceIndex[i],
 				d3d11CommandBuffer->colorTargetMsaaHandle[i],
 				0,
-				RefreshToD3D11_TextureFormat[d3d11CommandBuffer->colorTargetResolveTexture[i]->format]
+				SDLToD3D11_TextureFormat[d3d11CommandBuffer->colorTargetResolveTexture[i]->format]
 			);
 		}
 	}
@@ -4025,7 +4025,7 @@ static void D3D11_BindGraphicsPipeline(
 
 	ID3D11DeviceContext_IASetPrimitiveTopology(
 		d3d11CommandBuffer->context,
-		RefreshToD3D11_PrimitiveType[pipeline->primitiveType]
+		SDLToD3D11_PrimitiveType[pipeline->primitiveType]
 	);
 
 	ID3D11DeviceContext_IASetInputLayout(
@@ -4142,7 +4142,7 @@ static void D3D11_BindIndexBuffer(
 	ID3D11DeviceContext_IASetIndexBuffer(
 		d3d11CommandBuffer->context,
 		d3d11Buffer->handle,
-		RefreshToD3D11_IndexType[indexElementSize],
+		SDLToD3D11_IndexType[indexElementSize],
 		(UINT) pBinding->offset
 	);
 }
@@ -4846,7 +4846,7 @@ static Uint8 D3D11_INTERNAL_CreateSwapchain(
 	swapchainDesc.BufferDesc.Height = 0;
 	swapchainDesc.BufferDesc.RefreshRate.Numerator = 0;
 	swapchainDesc.BufferDesc.RefreshRate.Denominator = 0;
-	swapchainDesc.BufferDesc.Format = RefreshToD3D11_TextureFormat[swapchainFormat];
+	swapchainDesc.BufferDesc.Format = SDLToD3D11_TextureFormat[swapchainFormat];
 	swapchainDesc.BufferDesc.ScanlineOrdering = DXGI_MODE_SCANLINE_ORDER_UNSPECIFIED;
 	swapchainDesc.BufferDesc.Scaling = DXGI_MODE_SCALING_UNSPECIFIED;
 
@@ -4947,7 +4947,7 @@ static Uint8 D3D11_INTERNAL_CreateSwapchain(
 	if (!D3D11_INTERNAL_InitializeSwapchainTexture(
 		renderer,
 		swapchain,
-        RefreshToD3D11_TextureFormat[swapchainFormat],
+        SDLToD3D11_TextureFormat[swapchainFormat],
 		&windowData->texture
 	)) {
 		IDXGISwapChain_Release(swapchain);
@@ -4988,7 +4988,7 @@ static Uint8 D3D11_INTERNAL_ResizeSwapchain(
 	return D3D11_INTERNAL_InitializeSwapchainTexture(
 		renderer,
 		windowData->swapchain,
-        RefreshToD3D11_TextureFormat[windowData->swapchainFormat],
+        SDLToD3D11_TextureFormat[windowData->swapchainFormat],
 		&windowData->texture
 	);
 }
@@ -5474,7 +5474,7 @@ static SDL_bool D3D11_IsTextureFormatSupported(
     SDL_GpuTextureUsageFlags usage
 ) {
     D3D11Renderer *renderer = (D3D11Renderer*) driverData;
-    DXGI_FORMAT dxgiFormat = RefreshToD3D11_TextureFormat[format];
+    DXGI_FORMAT dxgiFormat = SDLToD3D11_TextureFormat[format];
     DXGI_FORMAT typelessFormat = D3D11_INTERNAL_GetTypelessFormat(dxgiFormat);
     UINT formatSupport, sampleableFormatSupport;
     HRESULT res;
@@ -5555,8 +5555,8 @@ static SDL_GpuSampleCount D3D11_GetBestSampleCount(
     {
         res = ID3D11Device_CheckMultisampleQualityLevels(
             renderer->device,
-            RefreshToD3D11_TextureFormat[format],
-            RefreshToD3D11_SampleCount[desiredSampleCount],
+            SDLToD3D11_TextureFormat[format],
+            SDLToD3D11_SampleCount[desiredSampleCount],
             &levels
         );
         if (SUCCEEDED(res) && levels > 0)
