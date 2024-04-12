@@ -1070,7 +1070,7 @@ SDL_DYNAPI_PROC(SDL_GpuTransferBuffer*,SDL_GpuCreateTransferBuffer,(SDL_GpuDevic
 SDL_DYNAPI_PROC(SDL_GpuOcclusionQuery*,SDL_GpuCreateOcclusionQuery,(SDL_GpuDevice *a),(a),return)
 SDL_DYNAPI_PROC(void,SDL_GpuSetGpuBufferName,(SDL_GpuDevice *a, SDL_GpuBuffer *b, const char *c),(a,b,c),)
 SDL_DYNAPI_PROC(void,SDL_GpuSetTextureName,(SDL_GpuDevice *a, SDL_GpuTexture *b, const char *c),(a,b,c),)
-SDL_DYNAPI_PROC(void,SDL_GpuSetStringMarker,(SDL_GpuDevice *a, SDL_GpuCommandBuffer *b, const char *c),(a,b,c),)
+SDL_DYNAPI_PROC(void,SDL_GpuSetStringMarker,(SDL_GpuCommandBuffer *a, const char *b),(a,b),)
 SDL_DYNAPI_PROC(void,SDL_GpuQueueDestroyTexture,(SDL_GpuDevice *a, SDL_GpuTexture *b),(a,b),)
 SDL_DYNAPI_PROC(void,SDL_GpuQueueDestroySampler,(SDL_GpuDevice *a, SDL_GpuSampler *b),(a,b),)
 SDL_DYNAPI_PROC(void,SDL_GpuQueueDestroyGpuBuffer,(SDL_GpuDevice *a, SDL_GpuBuffer *b),(a,b),)

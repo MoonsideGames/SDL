@@ -1534,8 +1534,13 @@ typedef struct VulkanFencePool
 
 typedef struct VulkanCommandPool VulkanCommandPool;
 
+typedef struct VulkanRenderer VulkanRenderer;
+
 typedef struct VulkanCommandBuffer
 {
+    CommandBufferCommonHeader common;
+    VulkanRenderer *renderer;
+
     VkCommandBuffer commandBuffer;
     VulkanCommandPool *commandPool;
 
@@ -1719,7 +1724,7 @@ static inline void CommandPoolHashTable_Insert(
 
 /* Context */
 
-typedef struct VulkanRenderer
+struct VulkanRenderer
 {
     VkInstance instance;
     VkPhysicalDevice physicalDevice;
@@ -1846,7 +1851,7 @@ typedef struct VulkanRenderer
     #define VULKAN_DEVICE_FUNCTION(ext, ret, func, params) \
         vkfntype_##func func;
     #include "SDL_gpu_vulkan_vkfuncs.h"
-} VulkanRenderer;
+};
 
 /* Forward declarations */
 
@@ -1854,7 +1859,7 @@ static Uint8 VULKAN_INTERNAL_DefragmentMemory(VulkanRenderer *renderer);
 static void VULKAN_INTERNAL_BeginCommandBuffer(VulkanRenderer *renderer, VulkanCommandBuffer *commandBuffer);
 static void VULKAN_UnclaimWindow(SDL_GpuRenderer *driverData, SDL_Window *windowHandle);
 static void VULKAN_Wait(SDL_GpuRenderer *driverData);
-static void VULKAN_Submit(SDL_GpuRenderer *driverData, SDL_GpuCommandBuffer *commandBuffer);
+static void VULKAN_Submit(SDL_GpuCommandBuffer *commandBuffer);
 static VulkanTextureSlice* VULKAN_INTERNAL_FetchTextureSlice(VulkanTexture* texture, Uint32 layer, Uint32 level);
 
 /* Error Handling */
@@ -5512,15 +5517,14 @@ static void VULKAN_INTERNAL_BindGraphicsDescriptorSets(
 }
 
 static void VULKAN_DrawInstancedPrimitives(
-    SDL_GpuRenderer *driverData,
     SDL_GpuCommandBuffer *commandBuffer,
     Uint32 baseVertex,
     Uint32 startIndex,
     Uint32 primitiveCount,
     Uint32 instanceCount
 ) {
-    VulkanRenderer* renderer = (VulkanRenderer*) driverData;
     VulkanCommandBuffer *vulkanCommandBuffer = (VulkanCommandBuffer*) commandBuffer;
+    VulkanRenderer* renderer = (VulkanRenderer*) vulkanCommandBuffer->renderer;
 
     VULKAN_INTERNAL_BindGraphicsDescriptorSets(renderer, vulkanCommandBuffer);
 
@@ -5538,13 +5542,12 @@ static void VULKAN_DrawInstancedPrimitives(
 }
 
 static void VULKAN_DrawPrimitives(
-    SDL_GpuRenderer *driverData,
     SDL_GpuCommandBuffer *commandBuffer,
     Uint32 vertexStart,
     Uint32 primitiveCount
 ) {
-    VulkanRenderer* renderer = (VulkanRenderer*) driverData;
     VulkanCommandBuffer *vulkanCommandBuffer = (VulkanCommandBuffer*) commandBuffer;
+    VulkanRenderer* renderer = (VulkanRenderer*) vulkanCommandBuffer->renderer;
 
     VULKAN_INTERNAL_BindGraphicsDescriptorSets(renderer, vulkanCommandBuffer);
 
@@ -5561,15 +5564,14 @@ static void VULKAN_DrawPrimitives(
 }
 
 static void VULKAN_DrawPrimitivesIndirect(
-    SDL_GpuRenderer *driverData,
     SDL_GpuCommandBuffer *commandBuffer,
     SDL_GpuBuffer *gpuBuffer,
     Uint32 offsetInBytes,
     Uint32 drawCount,
     Uint32 stride
 ) {
-    VulkanRenderer* renderer = (VulkanRenderer*) driverData;
     VulkanCommandBuffer *vulkanCommandBuffer = (VulkanCommandBuffer*) commandBuffer;
+    VulkanRenderer* renderer = (VulkanRenderer*) vulkanCommandBuffer->renderer;
     VulkanBuffer *vulkanBuffer = ((VulkanBufferContainer*) gpuBuffer)->activeBufferHandle->vulkanBuffer;
 
     VULKAN_INTERNAL_BindGraphicsDescriptorSets(renderer, vulkanCommandBuffer);
@@ -5696,12 +5698,11 @@ static void VULKAN_SetTextureName(
 }
 
 static void VULKAN_SetStringMarker(
-    SDL_GpuRenderer *driverData,
     SDL_GpuCommandBuffer *commandBuffer,
     const char *text
 ) {
-    VulkanRenderer *renderer = (VulkanRenderer*) driverData;
     VulkanCommandBuffer *vulkanCommandBuffer = (VulkanCommandBuffer*) commandBuffer;
+    VulkanRenderer* renderer = (VulkanRenderer*) vulkanCommandBuffer->renderer;
     VkDebugUtilsLabelEXT labelInfo;
 
     if (renderer->supportsDebugUtils)
@@ -7396,13 +7397,12 @@ static void VULKAN_INTERNAL_SetUniformBufferData(
 }
 
 static void VULKAN_PushVertexShaderUniforms(
-    SDL_GpuRenderer *driverData,
     SDL_GpuCommandBuffer *commandBuffer,
     void *data,
     Uint32 dataLengthInBytes
 ) {
-    VulkanRenderer* renderer = (VulkanRenderer*) driverData;
-    VulkanCommandBuffer* vulkanCommandBuffer = (VulkanCommandBuffer*) commandBuffer;
+    VulkanCommandBuffer *vulkanCommandBuffer = (VulkanCommandBuffer*) commandBuffer;
+    VulkanRenderer* renderer = (VulkanRenderer*) vulkanCommandBuffer->renderer;
     VulkanGraphicsPipeline* graphicsPipeline = vulkanCommandBuffer->currentGraphicsPipeline;
 
     if (vulkanCommandBuffer->vertexUniformBuffer->offset + graphicsPipeline->vertexUniformBlockSize + MAX_UBO_SECTION_SIZE >= UBO_BUFFER_SIZE)
@@ -7427,13 +7427,12 @@ static void VULKAN_PushVertexShaderUniforms(
 }
 
 static void VULKAN_PushFragmentShaderUniforms(
-    SDL_GpuRenderer *driverData,
     SDL_GpuCommandBuffer *commandBuffer,
     void *data,
     Uint32 dataLengthInBytes
 ) {
-    VulkanRenderer* renderer = (VulkanRenderer*) driverData;
-    VulkanCommandBuffer* vulkanCommandBuffer = (VulkanCommandBuffer*) commandBuffer;
+    VulkanCommandBuffer *vulkanCommandBuffer = (VulkanCommandBuffer*) commandBuffer;
+    VulkanRenderer* renderer = (VulkanRenderer*) vulkanCommandBuffer->renderer;
     VulkanGraphicsPipeline* graphicsPipeline = vulkanCommandBuffer->currentGraphicsPipeline;
 
     if (vulkanCommandBuffer->fragmentUniformBuffer->offset + graphicsPipeline->fragmentUniformBlockSize + MAX_UBO_SECTION_SIZE >= UBO_BUFFER_SIZE)
@@ -7458,13 +7457,12 @@ static void VULKAN_PushFragmentShaderUniforms(
 }
 
 static void VULKAN_PushComputeShaderUniforms(
-    SDL_GpuRenderer *driverData,
     SDL_GpuCommandBuffer *commandBuffer,
     void *data,
     Uint32 dataLengthInBytes
 ) {
-    VulkanRenderer* renderer = (VulkanRenderer*) driverData;
-    VulkanCommandBuffer* vulkanCommandBuffer = (VulkanCommandBuffer*) commandBuffer;
+    VulkanCommandBuffer *vulkanCommandBuffer = (VulkanCommandBuffer*) commandBuffer;
+    VulkanRenderer* renderer = (VulkanRenderer*) vulkanCommandBuffer->renderer;
     VulkanComputePipeline* computePipeline = vulkanCommandBuffer->currentComputePipeline;
 
     if (vulkanCommandBuffer->computeUniformBuffer->offset + computePipeline->uniformBlockSize + MAX_UBO_SECTION_SIZE >= UBO_BUFFER_SIZE)
@@ -8091,12 +8089,11 @@ static void VULKAN_INTERNAL_SetCurrentViewport(
 }
 
 static void VULKAN_SetViewport(
-    SDL_GpuRenderer *driverData,
     SDL_GpuCommandBuffer *commandBuffer,
     SDL_GpuViewport *viewport
 ) {
-    VulkanRenderer* renderer = (VulkanRenderer*) driverData;
     VulkanCommandBuffer *vulkanCommandBuffer = (VulkanCommandBuffer*) commandBuffer;
+    VulkanRenderer *renderer = (VulkanRenderer*) vulkanCommandBuffer->renderer;
 
     VULKAN_INTERNAL_SetCurrentViewport(
         vulkanCommandBuffer,
@@ -8122,12 +8119,11 @@ static void VULKAN_INTERNAL_SetCurrentScissor(
 }
 
 static void VULKAN_SetScissor(
-    SDL_GpuRenderer *driverData,
     SDL_GpuCommandBuffer *commandBuffer,
     SDL_GpuRect *scissor
 ) {
-    VulkanRenderer* renderer = (VulkanRenderer*) driverData;
     VulkanCommandBuffer *vulkanCommandBuffer = (VulkanCommandBuffer*) commandBuffer;
+    VulkanRenderer *renderer = (VulkanRenderer*) vulkanCommandBuffer->renderer;
 
     VULKAN_INTERNAL_SetCurrentScissor(
         vulkanCommandBuffer,
@@ -8143,14 +8139,13 @@ static void VULKAN_SetScissor(
 }
 
 static void VULKAN_BeginRenderPass(
-    SDL_GpuRenderer *driverData,
     SDL_GpuCommandBuffer *commandBuffer,
     SDL_GpuColorAttachmentInfo *colorAttachmentInfos,
     Uint32 colorAttachmentCount,
     SDL_GpuDepthStencilAttachmentInfo *depthStencilAttachmentInfo
 ) {
-    VulkanRenderer* renderer = (VulkanRenderer*) driverData;
     VulkanCommandBuffer *vulkanCommandBuffer = (VulkanCommandBuffer*) commandBuffer;
+    VulkanRenderer *renderer = (VulkanRenderer*) vulkanCommandBuffer->renderer;
     VkRenderPass renderPass;
     VulkanFramebuffer *framebuffer;
 
@@ -8401,12 +8396,11 @@ static void VULKAN_BeginRenderPass(
 }
 
 static void VULKAN_BindGraphicsPipeline(
-    SDL_GpuRenderer *driverData,
     SDL_GpuCommandBuffer *commandBuffer,
     SDL_GpuGraphicsPipeline *graphicsPipeline
 ) {
-    VulkanRenderer* renderer = (VulkanRenderer*) driverData;
     VulkanCommandBuffer *vulkanCommandBuffer = (VulkanCommandBuffer*) commandBuffer;
+    VulkanRenderer *renderer = (VulkanRenderer*) vulkanCommandBuffer->renderer;
     VulkanGraphicsPipeline* pipeline = (VulkanGraphicsPipeline*) graphicsPipeline;
 
     /* Bind dummy sets if necessary */
@@ -8466,14 +8460,13 @@ static void VULKAN_BindGraphicsPipeline(
 }
 
 static void VULKAN_BindVertexBuffers(
-    SDL_GpuRenderer *driverData,
     SDL_GpuCommandBuffer *commandBuffer,
     Uint32 firstBinding,
     Uint32 bindingCount,
     SDL_GpuBufferBinding *pBindings
 ) {
-    VulkanRenderer* renderer = (VulkanRenderer*) driverData;
     VulkanCommandBuffer *vulkanCommandBuffer = (VulkanCommandBuffer*) commandBuffer;
+    VulkanRenderer *renderer = (VulkanRenderer*) vulkanCommandBuffer->renderer;
     VulkanBuffer *currentVulkanBuffer;
     VkBuffer *buffers = SDL_stack_alloc(VkBuffer, bindingCount);
     VkDeviceSize *offsets = SDL_stack_alloc(VkDeviceSize, bindingCount);
@@ -8500,13 +8493,12 @@ static void VULKAN_BindVertexBuffers(
 }
 
 static void VULKAN_BindIndexBuffer(
-    SDL_GpuRenderer *driverData,
     SDL_GpuCommandBuffer *commandBuffer,
     SDL_GpuBufferBinding *pBinding,
     SDL_GpuIndexElementSize indexElementSize
 ) {
-    VulkanRenderer* renderer = (VulkanRenderer*) driverData;
     VulkanCommandBuffer *vulkanCommandBuffer = (VulkanCommandBuffer*) commandBuffer;
+    VulkanRenderer *renderer = (VulkanRenderer*) vulkanCommandBuffer->renderer;
     VulkanBuffer* vulkanBuffer = ((VulkanBufferContainer*) pBinding->gpuBuffer)->activeBufferHandle->vulkanBuffer;
 
     VULKAN_INTERNAL_TrackBuffer(renderer, vulkanCommandBuffer, vulkanBuffer);
@@ -8520,12 +8512,11 @@ static void VULKAN_BindIndexBuffer(
 }
 
 static void VULKAN_BindVertexSamplers(
-    SDL_GpuRenderer *driverData,
     SDL_GpuCommandBuffer *commandBuffer,
     SDL_GpuTextureSamplerBinding *pBindings
 ) {
-    VulkanRenderer* renderer = (VulkanRenderer*) driverData;
     VulkanCommandBuffer *vulkanCommandBuffer = (VulkanCommandBuffer*) commandBuffer;
+    VulkanRenderer *renderer = (VulkanRenderer*) vulkanCommandBuffer->renderer;
     VulkanGraphicsPipeline *graphicsPipeline = vulkanCommandBuffer->currentGraphicsPipeline;
 
     VulkanTexture *currentTexture;
@@ -8566,12 +8557,11 @@ static void VULKAN_BindVertexSamplers(
 }
 
 static void VULKAN_BindFragmentSamplers(
-    SDL_GpuRenderer *driverData,
     SDL_GpuCommandBuffer *commandBuffer,
     SDL_GpuTextureSamplerBinding *pBindings
 ) {
-    VulkanRenderer* renderer = (VulkanRenderer*) driverData;
     VulkanCommandBuffer *vulkanCommandBuffer = (VulkanCommandBuffer*) commandBuffer;
+    VulkanRenderer *renderer = (VulkanRenderer*) vulkanCommandBuffer->renderer;
     VulkanGraphicsPipeline *graphicsPipeline = vulkanCommandBuffer->currentGraphicsPipeline;
 
     VulkanTexture *currentTexture;
@@ -8612,11 +8602,10 @@ static void VULKAN_BindFragmentSamplers(
 }
 
 static void VULKAN_EndRenderPass(
-    SDL_GpuRenderer *driverData,
     SDL_GpuCommandBuffer *commandBuffer
 ) {
-    VulkanRenderer* renderer = (VulkanRenderer*) driverData;
     VulkanCommandBuffer *vulkanCommandBuffer = (VulkanCommandBuffer*) commandBuffer;
+    VulkanRenderer *renderer = (VulkanRenderer*) vulkanCommandBuffer->renderer;
     VulkanTextureSlice *currentTextureSlice;
     Uint32 i;
 
@@ -8670,7 +8659,6 @@ static void VULKAN_EndRenderPass(
 }
 
 static void VULKAN_BeginComputePass(
-    SDL_GpuRenderer *driverData,
     SDL_GpuCommandBuffer *commandBuffer
 ) {
     VulkanCommandBuffer *vulkanCommandBuffer = (VulkanCommandBuffer*) commandBuffer;
@@ -8680,12 +8668,11 @@ static void VULKAN_BeginComputePass(
 }
 
 static void VULKAN_BindComputePipeline(
-    SDL_GpuRenderer *driverData,
     SDL_GpuCommandBuffer *commandBuffer,
     SDL_GpuComputePipeline *computePipeline
 ) {
-    VulkanRenderer* renderer = (VulkanRenderer*) driverData;
     VulkanCommandBuffer *vulkanCommandBuffer = (VulkanCommandBuffer*) commandBuffer;
+    VulkanRenderer *renderer = (VulkanRenderer*) vulkanCommandBuffer->renderer;
     VulkanComputePipeline *vulkanComputePipeline = (VulkanComputePipeline*) computePipeline;
 
     /* Bind dummy sets if necessary */
@@ -8721,12 +8708,11 @@ static void VULKAN_BindComputePipeline(
 }
 
 static void VULKAN_BindComputeBuffers(
-    SDL_GpuRenderer *driverData,
     SDL_GpuCommandBuffer *commandBuffer,
     SDL_GpuComputeBufferBinding *pBindings
 ) {
-    VulkanRenderer* renderer = (VulkanRenderer*) driverData;
     VulkanCommandBuffer *vulkanCommandBuffer = (VulkanCommandBuffer*) commandBuffer;
+    VulkanRenderer *renderer = (VulkanRenderer*) vulkanCommandBuffer->renderer;
     VulkanComputePipeline *computePipeline = vulkanCommandBuffer->currentComputePipeline;
 
     VulkanBufferContainer *bufferContainer;
@@ -8772,12 +8758,11 @@ static void VULKAN_BindComputeBuffers(
 }
 
 static void VULKAN_BindComputeTextures(
-    SDL_GpuRenderer *driverData,
     SDL_GpuCommandBuffer *commandBuffer,
     SDL_GpuComputeTextureBinding *pBindings
 ) {
-    VulkanRenderer* renderer = (VulkanRenderer*) driverData;
     VulkanCommandBuffer *vulkanCommandBuffer = (VulkanCommandBuffer*) commandBuffer;
+    VulkanRenderer *renderer = (VulkanRenderer*) vulkanCommandBuffer->renderer;
     VulkanComputePipeline *computePipeline = vulkanCommandBuffer->currentComputePipeline;
     VulkanTextureContainer *currentTextureContainer;
     VulkanTextureSlice *currentTextureSlice;
@@ -8822,14 +8807,13 @@ static void VULKAN_BindComputeTextures(
 }
 
 static void VULKAN_DispatchCompute(
-    SDL_GpuRenderer *driverData,
     SDL_GpuCommandBuffer *commandBuffer,
     Uint32 groupCountX,
     Uint32 groupCountY,
     Uint32 groupCountZ
 ) {
-    VulkanRenderer* renderer = (VulkanRenderer*) driverData;
     VulkanCommandBuffer *vulkanCommandBuffer = (VulkanCommandBuffer*) commandBuffer;
+    VulkanRenderer *renderer = (VulkanRenderer*) vulkanCommandBuffer->renderer;
     VulkanComputePipeline *computePipeline = vulkanCommandBuffer->currentComputePipeline;
     VkDescriptorSet descriptorSets[3];
 
@@ -8857,11 +8841,10 @@ static void VULKAN_DispatchCompute(
 }
 
 static void VULKAN_EndComputePass(
-    SDL_GpuRenderer *driverData,
     SDL_GpuCommandBuffer *commandBuffer
 ) {
-    VulkanRenderer *renderer = (VulkanRenderer*) driverData;
     VulkanCommandBuffer *vulkanCommandBuffer = (VulkanCommandBuffer*) commandBuffer;
+    VulkanRenderer *renderer = (VulkanRenderer*) vulkanCommandBuffer->renderer;
     VulkanBuffer *currentComputeBuffer;
     VulkanTextureSlice *currentComputeTextureSlice;
     VulkanResourceAccessType resourceAccessType = RESOURCE_ACCESS_NONE;
@@ -8970,10 +8953,8 @@ static void VULKAN_GetTransferData(
 }
 
 static void VULKAN_BeginCopyPass(
-    SDL_GpuRenderer *driverData,
     SDL_GpuCommandBuffer *commandBuffer
 ) {
-    (void) driverData; /* used by other backends */
     VulkanCommandBuffer *vulkanCommandBuffer = (VulkanCommandBuffer*) commandBuffer;
 
     vulkanCommandBuffer->copiedGpuBufferCount = 0;
@@ -8981,15 +8962,14 @@ static void VULKAN_BeginCopyPass(
 }
 
 static void VULKAN_UploadToTexture(
-    SDL_GpuRenderer *driverData,
     SDL_GpuCommandBuffer *commandBuffer,
     SDL_GpuTransferBuffer *transferBuffer,
     SDL_GpuTextureRegion *textureRegion,
     SDL_GpuBufferImageCopy *copyParams,
 	SDL_bool cycle
 ) {
-    VulkanRenderer *renderer = (VulkanRenderer*) driverData;
     VulkanCommandBuffer *vulkanCommandBuffer = (VulkanCommandBuffer*) commandBuffer;
+    VulkanRenderer *renderer = (VulkanRenderer*) vulkanCommandBuffer->renderer;
     VulkanBufferContainer *transferBufferContainer = (VulkanBufferContainer*) transferBuffer;
     VulkanTextureContainer *vulkanTextureContainer = (VulkanTextureContainer*) textureRegion->textureSlice.texture;
     VulkanTextureSlice *vulkanTextureSlice;
@@ -9041,15 +9021,14 @@ static void VULKAN_UploadToTexture(
 }
 
 static void VULKAN_UploadToBuffer(
-    SDL_GpuRenderer *driverData,
     SDL_GpuCommandBuffer *commandBuffer,
     SDL_GpuTransferBuffer *transferBuffer,
     SDL_GpuBuffer *gpuBuffer,
     SDL_GpuBufferCopy *copyParams,
 	SDL_bool cycle
 ) {
-    VulkanRenderer *renderer = (VulkanRenderer*) driverData;
     VulkanCommandBuffer *vulkanCommandBuffer = (VulkanCommandBuffer*) commandBuffer;
+    VulkanRenderer *renderer = (VulkanRenderer*) vulkanCommandBuffer->renderer;
     VulkanBufferContainer *transferBufferContainer = (VulkanBufferContainer*) transferBuffer;
     VulkanBufferContainer *gpuBufferContainer = (VulkanBufferContainer*) gpuBuffer;
     VkBufferCopy bufferCopy;
@@ -9087,14 +9066,13 @@ static void VULKAN_UploadToBuffer(
 }
 
 static void VULKAN_CopyTextureToTexture(
-    SDL_GpuRenderer *driverData,
     SDL_GpuCommandBuffer *commandBuffer,
     SDL_GpuTextureRegion *source,
     SDL_GpuTextureRegion *destination,
 	SDL_bool cycle
 ) {
-    VulkanRenderer *renderer = (VulkanRenderer*) driverData;
     VulkanCommandBuffer *vulkanCommandBuffer = (VulkanCommandBuffer*) commandBuffer;
+    VulkanRenderer *renderer = (VulkanRenderer*) vulkanCommandBuffer->renderer;
     VulkanTextureContainer *dstContainer = (VulkanTextureContainer*) destination->textureSlice.texture;
     VulkanTextureSlice *srcSlice;
     VulkanTextureSlice *dstSlice;
@@ -9154,15 +9132,14 @@ static void VULKAN_CopyTextureToTexture(
 }
 
 static void VULKAN_CopyBufferToBuffer(
-    SDL_GpuRenderer *driverData,
     SDL_GpuCommandBuffer *commandBuffer,
     SDL_GpuBuffer *source,
     SDL_GpuBuffer *destination,
     SDL_GpuBufferCopy *copyParams,
 	SDL_bool cycle
 ) {
-    VulkanRenderer *renderer = (VulkanRenderer*) driverData;
     VulkanCommandBuffer *vulkanCommandBuffer = (VulkanCommandBuffer*) commandBuffer;
+    VulkanRenderer *renderer = (VulkanRenderer*) vulkanCommandBuffer->renderer;
     VulkanBufferContainer *srcContainer = (VulkanBufferContainer*) source;
     VulkanBufferContainer *dstContainer = (VulkanBufferContainer*) destination;
     VkBufferCopy bufferCopy;
@@ -9201,12 +9178,11 @@ static void VULKAN_CopyBufferToBuffer(
 }
 
 static void VULKAN_GenerateMipmaps(
-    SDL_GpuRenderer *driverData,
     SDL_GpuCommandBuffer *commandBuffer,
     SDL_GpuTexture *texture
 ) {
-    VulkanRenderer *renderer = (VulkanRenderer*) driverData;
     VulkanCommandBuffer *vulkanCommandBuffer = (VulkanCommandBuffer*) commandBuffer;
+    VulkanRenderer *renderer = (VulkanRenderer*) vulkanCommandBuffer->renderer;
     VulkanTexture *vulkanTexture = ((VulkanTextureContainer*) texture)->activeTextureHandle->vulkanTexture;
     VulkanTextureSlice *srcTextureSlice;
     VulkanTextureSlice *dstTextureSlice;
@@ -9290,11 +9266,10 @@ static void VULKAN_GenerateMipmaps(
 }
 
 static void VULKAN_EndCopyPass(
-    SDL_GpuRenderer *driverData,
     SDL_GpuCommandBuffer *commandBuffer
 ) {
-    VulkanRenderer *renderer = (VulkanRenderer*) driverData;
     VulkanCommandBuffer *vulkanCommandBuffer = (VulkanCommandBuffer*) commandBuffer;
+    VulkanRenderer *renderer = (VulkanRenderer*) vulkanCommandBuffer->renderer;
     VulkanBuffer *currentBuffer;
     VulkanTextureSlice *currentTextureSlice;
     VulkanResourceAccessType resourceAccessType = RESOURCE_ACCESS_NONE;
@@ -9352,15 +9327,14 @@ static void VULKAN_EndCopyPass(
 }
 
 static void VULKAN_Blit(
-    SDL_GpuRenderer *driverData,
     SDL_GpuCommandBuffer *commandBuffer,
     SDL_GpuTextureRegion *source,
     SDL_GpuTextureRegion *destination,
     SDL_GpuFilter filterMode,
 	SDL_bool cycle
 ) {
-    VulkanRenderer *renderer = (VulkanRenderer*) driverData;
-    VulkanCommandBuffer* vulkanCommandBuffer = (VulkanCommandBuffer*) commandBuffer;
+    VulkanCommandBuffer *vulkanCommandBuffer = (VulkanCommandBuffer*) commandBuffer;
+    VulkanRenderer *renderer = (VulkanRenderer*) vulkanCommandBuffer->renderer;
     VulkanTextureContainer *sourceTextureContainer = (VulkanTextureContainer*) source->textureSlice.texture;
     VkImageBlit region;
 
@@ -9485,6 +9459,7 @@ static void VULKAN_INTERNAL_AllocateCommandBuffers(
     for (i = 0; i < allocateCount; i += 1)
     {
         commandBuffer = SDL_malloc(sizeof(VulkanCommandBuffer));
+        commandBuffer->renderer = renderer;
         commandBuffer->commandPool = vulkanCommandPool;
         commandBuffer->commandBuffer = commandBuffers[i];
 
@@ -9903,14 +9878,13 @@ static void VULKAN_UnclaimWindow(
 }
 
 static SDL_GpuTexture* VULKAN_AcquireSwapchainTexture(
-    SDL_GpuRenderer *driverData,
     SDL_GpuCommandBuffer *commandBuffer,
     SDL_Window *windowHandle,
     Uint32 *pWidth,
     Uint32 *pHeight
 ) {
-    VulkanRenderer *renderer = (VulkanRenderer*) driverData;
     VulkanCommandBuffer *vulkanCommandBuffer = (VulkanCommandBuffer*) commandBuffer;
+    VulkanRenderer *renderer = (VulkanRenderer*) vulkanCommandBuffer->renderer;
     Uint32 swapchainImageIndex;
     WindowData *windowData;
     VulkanSwapchainData *swapchainData;
@@ -9950,7 +9924,7 @@ static SDL_GpuTexture* VULKAN_AcquireSwapchainTexture(
     if (swapchainData->inFlightFences[swapchainData->frameCounter] != NULL)
     {
         if (!VULKAN_QueryFence(
-            driverData,
+            (SDL_GpuRenderer*) renderer,
             (SDL_GpuFence*) swapchainData->inFlightFences[swapchainData->frameCounter]
         )) {
             /* Too many frames in flight, bail */
@@ -9958,7 +9932,7 @@ static SDL_GpuTexture* VULKAN_AcquireSwapchainTexture(
         }
 
         VULKAN_ReleaseFence(
-            driverData,
+            (SDL_GpuRenderer*) renderer,
             (SDL_GpuFence*) swapchainData->inFlightFences[swapchainData->frameCounter]
         );
 
@@ -10539,7 +10513,6 @@ static void VULKAN_Wait(
 }
 
 static SDL_GpuFence* VULKAN_SubmitAndAcquireFence(
-    SDL_GpuRenderer *driverData,
     SDL_GpuCommandBuffer *commandBuffer
 ) {
     VulkanCommandBuffer *vulkanCommandBuffer;
@@ -10547,21 +10520,20 @@ static SDL_GpuFence* VULKAN_SubmitAndAcquireFence(
     vulkanCommandBuffer = (VulkanCommandBuffer*) commandBuffer;
     vulkanCommandBuffer->autoReleaseFence = 0;
 
-    VULKAN_Submit(driverData, commandBuffer);
+    VULKAN_Submit(commandBuffer);
 
     return (SDL_GpuFence*) vulkanCommandBuffer->inFlightFence;
 }
 
 static void VULKAN_Submit(
-    SDL_GpuRenderer *driverData,
     SDL_GpuCommandBuffer *commandBuffer
 ) {
-    VulkanRenderer* renderer = (VulkanRenderer*)driverData;
+    VulkanCommandBuffer *vulkanCommandBuffer = (VulkanCommandBuffer*) commandBuffer;
+    VulkanRenderer *renderer = (VulkanRenderer*) vulkanCommandBuffer->renderer;
     VkSubmitInfo submitInfo;
     VkPresentInfoKHR presentInfo;
     VulkanPresentData *presentData;
     VkResult vulkanResult, presentResult = VK_SUCCESS;
-    VulkanCommandBuffer *vulkanCommandBuffer;
     VkPipelineStageFlags waitStages[MAX_PRESENT_COUNT];
     Uint32 swapchainImageIndex;
     VulkanTextureSlice *swapchainTextureSlice;
@@ -10577,8 +10549,6 @@ static void VULKAN_Submit(
     {
         waitStages[i] = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
     }
-
-    vulkanCommandBuffer = (VulkanCommandBuffer*) commandBuffer;
 
     for (j = 0; j < vulkanCommandBuffer->presentDataCount; j += 1)
     {
@@ -10988,7 +10958,6 @@ static Uint8 VULKAN_INTERNAL_DefragmentMemory(
     SDL_UnlockMutex(renderer->allocatorLock);
 
     VULKAN_Submit(
-        (SDL_GpuRenderer*) renderer,
         (SDL_GpuCommandBuffer*) commandBuffer
     );
 
@@ -11076,7 +11045,7 @@ static void VULKAN_DownloadFromTexture(
     VULKAN_INTERNAL_TrackBuffer(renderer, vulkanCommandBuffer, transferBufferContainer->activeBufferHandle->vulkanBuffer);
     VULKAN_INTERNAL_TrackTextureSlice(renderer, vulkanCommandBuffer, vulkanTextureSlice);
 
-    fence = VULKAN_SubmitAndAcquireFence(driverData, (SDL_GpuCommandBuffer*) vulkanCommandBuffer);
+    fence = VULKAN_SubmitAndAcquireFence((SDL_GpuCommandBuffer*) vulkanCommandBuffer);
     VULKAN_WaitForFences(driverData, 1, 1, &fence);
     VULKAN_ReleaseFence(driverData, fence);
 }
@@ -11147,7 +11116,7 @@ static void VULKAN_DownloadFromBuffer(
     VULKAN_INTERNAL_TrackBuffer(renderer, vulkanCommandBuffer, transferBufferContainer->activeBufferHandle->vulkanBuffer);
     VULKAN_INTERNAL_TrackBuffer(renderer, vulkanCommandBuffer, gpuBufferContainer->activeBufferHandle->vulkanBuffer);
 
-    fence = VULKAN_SubmitAndAcquireFence(driverData, (SDL_GpuCommandBuffer*) vulkanCommandBuffer);
+    fence = VULKAN_SubmitAndAcquireFence((SDL_GpuCommandBuffer*) vulkanCommandBuffer);
     VULKAN_WaitForFences(driverData, 1, 1, &fence);
     VULKAN_ReleaseFence(driverData, fence);
 }
@@ -11181,13 +11150,12 @@ static SDL_GpuOcclusionQuery* VULKAN_CreateOcclusionQuery(
 }
 
 static void VULKAN_OcclusionQueryBegin(
-    SDL_GpuRenderer *driverData,
     SDL_GpuCommandBuffer *commandBuffer,
     SDL_GpuOcclusionQuery *query
 ) {
-    VulkanRenderer *renderer = (VulkanRenderer*) driverData;
+    VulkanCommandBuffer *vulkanCommandBuffer = (VulkanCommandBuffer*) commandBuffer;
+    VulkanRenderer *renderer = (VulkanRenderer*) vulkanCommandBuffer->renderer;
 	VulkanOcclusionQuery *vulkanQuery = (VulkanOcclusionQuery*) query;
-	VulkanCommandBuffer *vulkanCommandBuffer = (VulkanCommandBuffer*) commandBuffer;
 
 	renderer->vkCmdResetQueryPool(
 		vulkanCommandBuffer->commandBuffer,
@@ -11207,13 +11175,12 @@ static void VULKAN_OcclusionQueryBegin(
 }
 
 static void VULKAN_OcclusionQueryEnd(
-    SDL_GpuRenderer *driverData,
     SDL_GpuCommandBuffer *commandBuffer,
     SDL_GpuOcclusionQuery *query
 ) {
-    VulkanRenderer *renderer = (VulkanRenderer*) driverData;
+    VulkanCommandBuffer *vulkanCommandBuffer = (VulkanCommandBuffer*) commandBuffer;
+    VulkanRenderer *renderer = (VulkanRenderer*) vulkanCommandBuffer->renderer;
 	VulkanOcclusionQuery *vulkanQuery = (VulkanOcclusionQuery*) query;
-	VulkanCommandBuffer *vulkanCommandBuffer = (VulkanCommandBuffer*) commandBuffer;
 
 	renderer->vkCmdEndQuery(
 		vulkanCommandBuffer->commandBuffer,

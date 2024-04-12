@@ -966,14 +966,12 @@ extern DECLSPEC void SDLCALL SDL_GpuSetTextureName(
 /**
  * Sets an arbitrary string constant to label a section of a command buffer. Useful for debugging.
  *
- * \param device a GPU context
  * \param commandBuffer a command buffer
  * \param text a UTF-8 string constant to mark as the label
  *
  * \since This function is available since SDL 3.x.x
  */
 extern DECLSPEC void SDLCALL SDL_GpuSetStringMarker(
-    SDL_GpuDevice *device,
     SDL_GpuCommandBuffer *commandBuffer,
     const char *text
 );

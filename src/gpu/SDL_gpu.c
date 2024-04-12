@@ -428,15 +428,11 @@ void SDL_GpuSetTextureName(
 }
 
 void SDL_GpuSetStringMarker(
-    SDL_GpuDevice *device,
     SDL_GpuCommandBuffer *commandBuffer,
     const char *text
 ) {
-    NULL_RETURN(device)
     CHECK_COMMAND_BUFFER
-
-    device->SetStringMarker(
-        device->driverData,
+    COMMAND_BUFFER_DEVICE->SetStringMarker(
         commandBuffer,
         text
     );

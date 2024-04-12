@@ -265,7 +265,6 @@ struct SDL_GpuDevice
 	);
 
     void (*SetStringMarker)(
-        SDL_GpuRenderer *driverData,
         SDL_GpuCommandBuffer *commandBuffer,
         const char *text
     );
