@@ -1501,7 +1501,7 @@ static ID3D11RasterizerState* D3D11_INTERNAL_FetchRasterizerState(
 	 */
 	rasterizerDesc.AntialiasedLineEnable = FALSE;
 	rasterizerDesc.CullMode = RefreshToD3D11_CullMode[rasterizerState.cullMode];
-	rasterizerDesc.DepthBias = (INT) rasterizerState.depthBiasConstantFactor;
+	rasterizerDesc.DepthBias = SDL_lroundf(rasterizerState.depthBiasConstantFactor);
 	rasterizerDesc.DepthBiasClamp = rasterizerState.depthBiasClamp;
 	rasterizerDesc.DepthClipEnable = TRUE;
 	rasterizerDesc.FillMode = (rasterizerState.fillMode == SDL_GPU_FILLMODE_FILL) ? D3D11_FILL_SOLID : D3D11_FILL_WIREFRAME;
