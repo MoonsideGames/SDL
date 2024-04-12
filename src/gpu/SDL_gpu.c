@@ -24,6 +24,22 @@
 #define NULL_RETURN(name) if (name == NULL) { return; }
 #define NULL_RETURN_NULL(name) if (name == NULL) { return NULL; }
 
+#define CHECK_COMMAND_BUFFER \
+    if (commandBuffer == NULL) { return; } \
+    if (((CommandBufferCommonHeader*) commandBuffer)->submitted) \
+    { \
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Command buffer already submitted!"); \
+        return; \
+    }
+
+#define CHECK_COMMAND_BUFFER_RETURN_NULL \
+    if (commandBuffer == NULL) { return NULL; } \
+    if (((CommandBufferCommonHeader*) commandBuffer)->submitted) \
+    { \
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Command buffer already submitted!"); \
+        return NULL; \
+    }
+
 #define CHECK_ANY_PASS_IN_PROGRESS \
     if ( \
         ((CommandBufferCommonHeader*) commandBuffer)->renderPass.inProgress || \
@@ -31,7 +47,7 @@
         ((CommandBufferCommonHeader*) commandBuffer)->copyPass.inProgress ) \
     { \
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Pass already in progress!"); \
-        return; \
+        return NULL; \
     }
 
 #define CHECK_RENDERPASS \
@@ -50,7 +66,7 @@
     if (!((Pass*) copyPass)->inProgress) { \
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Copy pass not in progress!"); \
         return; \
-    }
+    } \
 
 #define COMMAND_BUFFER_DEVICE \
     ((CommandBufferCommonHeader*) commandBuffer)->device
@@ -246,7 +262,7 @@ SDL_GpuComputePipeline* SDL_GpuCreateComputePipeline(
 	SDL_GpuDevice *device,
 	SDL_GpuComputeShaderInfo *computeShaderInfo
 ) {
-	NULL_RETURN_NULL(device);
+	NULL_RETURN_NULL(device)
 	return device->CreateComputePipeline(
 		device->driverData,
 		computeShaderInfo
@@ -257,7 +273,7 @@ SDL_GpuGraphicsPipeline* SDL_GpuCreateGraphicsPipeline(
 	SDL_GpuDevice *device,
 	SDL_GpuGraphicsPipelineCreateInfo *pipelineCreateInfo
 ) {
-	NULL_RETURN_NULL(device);
+	NULL_RETURN_NULL(device)
 	return device->CreateGraphicsPipeline(
 		device->driverData,
 		pipelineCreateInfo
@@ -268,7 +284,7 @@ SDL_GpuSampler* SDL_GpuCreateSampler(
 	SDL_GpuDevice *device,
 	SDL_GpuSamplerStateCreateInfo *samplerStateCreateInfo
 ) {
-	NULL_RETURN_NULL(device);
+	NULL_RETURN_NULL(device)
 	return device->CreateSampler(
 		device->driverData,
 		samplerStateCreateInfo
@@ -291,7 +307,7 @@ SDL_GpuTexture* SDL_GpuCreateTexture(
 ) {
 	SDL_GpuTextureFormat newFormat;
 
-	NULL_RETURN_NULL(device);
+	NULL_RETURN_NULL(device)
 
 	/* Automatically swap out the depth format if it's unsupported.
 	 * All backends have universal support for D16.
@@ -349,7 +365,7 @@ SDL_GpuBuffer* SDL_GpuCreateGpuBuffer(
 	SDL_GpuBufferUsageFlags usageFlags,
 	Uint32 sizeInBytes
 ) {
-	NULL_RETURN_NULL(device);
+	NULL_RETURN_NULL(device)
 	return device->CreateGpuBuffer(
 		device->driverData,
 		usageFlags,
@@ -362,7 +378,7 @@ SDL_GpuTransferBuffer* SDL_GpuCreateTransferBuffer(
 	SDL_GpuTransferUsage usage,
 	Uint32 sizeInBytes
 ) {
-	NULL_RETURN_NULL(device);
+	NULL_RETURN_NULL(device)
 	return device->CreateTransferBuffer(
 		device->driverData,
 		usage,
@@ -373,7 +389,7 @@ SDL_GpuTransferBuffer* SDL_GpuCreateTransferBuffer(
 SDL_GpuOcclusionQuery* SDL_GpuCreateOcclusionQuery(
     SDL_GpuDevice *device
 ) {
-    NULL_RETURN_NULL(device);
+    NULL_RETURN_NULL(device)
     return device->CreateOcclusionQuery(
         device->driverData
     );
@@ -386,8 +402,8 @@ void SDL_GpuSetGpuBufferName(
 	SDL_GpuBuffer *buffer,
 	const char *text
 ) {
-	NULL_RETURN(device);
-	NULL_RETURN(buffer);
+	NULL_RETURN(device)
+	NULL_RETURN(buffer)
 
 	device->SetGpuBufferName(
 		device->driverData,
@@ -401,8 +417,8 @@ void SDL_GpuSetTextureName(
 	SDL_GpuTexture *texture,
 	const char *text
 ) {
-	NULL_RETURN(device);
-	NULL_RETURN(texture);
+	NULL_RETURN(device)
+	NULL_RETURN(texture)
 
 	device->SetTextureName(
 		device->driverData,
@@ -416,8 +432,8 @@ void SDL_GpuSetStringMarker(
     SDL_GpuCommandBuffer *commandBuffer,
     const char *text
 ) {
-    NULL_RETURN(device);
-    NULL_RETURN(commandBuffer);
+    NULL_RETURN(device)
+    CHECK_COMMAND_BUFFER
 
     device->SetStringMarker(
         device->driverData,
@@ -526,7 +542,7 @@ SDL_GpuRenderPass* SDL_GpuBeginRenderPass(
 ) {
     CommandBufferCommonHeader *commandBufferHeader;
 
-    NULL_RETURN(commandBuffer)
+    CHECK_COMMAND_BUFFER_RETURN_NULL
     CHECK_ANY_PASS_IN_PROGRESS
 	COMMAND_BUFFER_DEVICE->BeginRenderPass(
 		commandBuffer,
@@ -726,7 +742,7 @@ SDL_GpuComputePass* SDL_GpuBeginComputePass(
 ) {
     CommandBufferCommonHeader* commandBufferHeader;
 
-	NULL_RETURN(commandBuffer)
+    CHECK_COMMAND_BUFFER_RETURN_NULL
     CHECK_ANY_PASS_IN_PROGRESS
 	COMMAND_BUFFER_DEVICE->BeginComputePass(
 		commandBuffer
@@ -851,12 +867,12 @@ void SDL_GpuGetTransferData(
 
 /* Copy Pass */
 
-void SDL_GpuBeginCopyPass(
+SDL_GpuCopyPass* SDL_GpuBeginCopyPass(
 	SDL_GpuCommandBuffer *commandBuffer
 ) {
     CommandBufferCommonHeader *commandBufferHeader;
 
-	NULL_RETURN(commandBuffer)
+    CHECK_COMMAND_BUFFER_RETURN_NULL
     CHECK_ANY_PASS_IN_PROGRESS
 	COMMAND_BUFFER_DEVICE->BeginCopyPass(
 		commandBuffer
@@ -964,7 +980,7 @@ void SDL_GpuBlit(
     SDL_GpuFilter filterMode,
 	SDL_bool cycle
 ) {
-    NULL_RETURN(commandBuffer);
+    CHECK_COMMAND_BUFFER
     COMMAND_BUFFER_DEVICE->Blit(
         commandBuffer,
         source,
@@ -1062,15 +1078,13 @@ SDL_GpuCommandBuffer* SDL_GpuAcquireCommandBuffer(
 }
 
 SDL_GpuTexture* SDL_GpuAcquireSwapchainTexture(
-	SDL_GpuDevice *device,
 	SDL_GpuCommandBuffer *commandBuffer,
 	SDL_Window *windowHandle,
 	Uint32 *pWidth,
 	Uint32 *pHeight
 ) {
-	NULL_RETURN_NULL(device);
-	return device->AcquireSwapchainTexture(
-		device->driverData,
+    CHECK_COMMAND_BUFFER_RETURN_NULL
+	return COMMAND_BUFFER_DEVICE->AcquireSwapchainTexture(
 		commandBuffer,
 		windowHandle,
 		pWidth,
@@ -1081,8 +1095,8 @@ SDL_GpuTexture* SDL_GpuAcquireSwapchainTexture(
 void SDL_GpuSubmit(
 	SDL_GpuCommandBuffer *commandBuffer
 ) {
-	NULL_RETURN(commandBuffer)
-    CommandBufferCommonHeader* commandBufferHeader = (CommandBufferCommonHeader*) commandBuffer;
+    CHECK_COMMAND_BUFFER
+    CommandBufferCommonHeader *commandBufferHeader = (CommandBufferCommonHeader*) commandBuffer;
 
     if (
         commandBufferHeader->renderPass.inProgress ||
@@ -1101,12 +1115,23 @@ void SDL_GpuSubmit(
 }
 
 SDL_GpuFence* SDL_GpuSubmitAndAcquireFence(
-	SDL_GpuDevice *device,
 	SDL_GpuCommandBuffer *commandBuffer
 ) {
-	NULL_RETURN_NULL(device);
-	return device->SubmitAndAcquireFence(
-		device->driverData,
+    CHECK_COMMAND_BUFFER_RETURN_NULL
+    CommandBufferCommonHeader *commandBufferHeader = (CommandBufferCommonHeader*) commandBuffer;
+
+    if (
+        commandBufferHeader->renderPass.inProgress ||
+        commandBufferHeader->computePass.inProgress ||
+        commandBufferHeader->copyPass.inProgress
+    ) {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Cannot submit command buffer while a pass is in progress!");
+        return NULL;
+    }
+
+    commandBufferHeader->submitted = SDL_TRUE;
+
+	return COMMAND_BUFFER_DEVICE->SubmitAndAcquireFence(
 		commandBuffer
 	);
 }
@@ -1193,26 +1218,22 @@ void SDL_GpuDownloadFromBuffer(
 }
 
 void SDL_GpuOcclusionQueryBegin(
-    SDL_GpuDevice *device,
     SDL_GpuCommandBuffer *commandBuffer,
     SDL_GpuOcclusionQuery *query
 ) {
-    NULL_RETURN(device);
-    device->OcclusionQueryBegin(
-        device->driverData,
+    NULL_RETURN(commandBuffer);
+    COMMAND_BUFFER_DEVICE->OcclusionQueryBegin(
         commandBuffer,
         query
     );
 }
 
 void SDL_GpuOcclusionQueryEnd(
-    SDL_GpuDevice *device,
     SDL_GpuCommandBuffer *commandBuffer,
     SDL_GpuOcclusionQuery *query
 ) {
-    NULL_RETURN(device);
-    device->OcclusionQueryEnd(
-        device->driverData,
+    NULL_RETURN(commandBuffer);
+    COMMAND_BUFFER_DEVICE->OcclusionQueryEnd(
         commandBuffer,
         query
     );

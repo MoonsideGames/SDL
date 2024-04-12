@@ -539,7 +539,6 @@ struct SDL_GpuDevice
 	);
 
 	SDL_GpuTexture* (*AcquireSwapchainTexture)(
-		SDL_GpuRenderer *driverData,
 		SDL_GpuCommandBuffer *commandBuffer,
 		SDL_Window *windowHandle,
 		Uint32 *pWidth,
@@ -595,13 +594,11 @@ struct SDL_GpuDevice
     /* Queries */
 
     void (*OcclusionQueryBegin)(
-        SDL_GpuRenderer *driverData,
         SDL_GpuCommandBuffer *commandBuffer,
         SDL_GpuOcclusionQuery *query
     );
 
     void (*OcclusionQueryEnd)(
-        SDL_GpuRenderer *driverData,
         SDL_GpuCommandBuffer *commandBuffer,
         SDL_GpuOcclusionQuery *query
     );

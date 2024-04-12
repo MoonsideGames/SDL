@@ -1133,7 +1133,6 @@ extern DECLSPEC void SDLCALL SDL_GpuQueueDestroyOcclusionQuery(
  * You cannot begin another render pass, or begin a compute pass or copy pass
  * until you have ended the render pass.
  *
- * \param device a GPU context
  * \param commandBuffer a command buffer
  * \param colorAttachmentInfos an array of SDL_GpuColorAttachmentInfo structs
  * \param colorAttachmentCount the number of color attachments in the colorAttachmentInfos array
@@ -1508,14 +1507,12 @@ extern DECLSPEC void SDLCALL SDL_GpuGetTransferData(
  * You must not begin another copy pass, or a render pass or compute pass
  * before ending the copy pass.
  *
- * \param device a GPU context
  * \param commandBuffer a command buffer
  * \returns a copy pass handle
  *
  * \since This function is available since SDL 3.x.x
  */
 extern DECLSPEC SDL_GpuCopyPass *SDLCALL SDL_GpuBeginCopyPass(
-	SDL_GpuDevice *device,
 	SDL_GpuCommandBuffer *commandBuffer
 );
 
