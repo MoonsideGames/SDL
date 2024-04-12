@@ -45,6 +45,9 @@ typedef struct SDL_GpuShaderModule SDL_GpuShaderModule;
 typedef struct SDL_GpuComputePipeline SDL_GpuComputePipeline;
 typedef struct SDL_GpuGraphicsPipeline SDL_GpuGraphicsPipeline;
 typedef struct SDL_GpuCommandBuffer SDL_GpuCommandBuffer;
+typedef struct SDL_GpuRenderPass SDL_GpuRenderPass;
+typedef struct SDL_GpuComputePass SDL_GpuComputePass;
+typedef struct SDL_GpuCopyPass SDL_GpuCopyPass;
 typedef struct SDL_GpuFence SDL_GpuFence;
 typedef struct SDL_GpuOcclusionQuery SDL_GpuOcclusionQuery;
 
@@ -1126,21 +1129,22 @@ extern DECLSPEC void SDLCALL SDL_GpuQueueDestroyOcclusionQuery(
  * A render pass consists of a set of textures, clear values, and load/store operations
  * which will be rendered to during the render pass.
  * All operations related to graphics pipelines must take place inside of a render pass.
- * You must not begin a compute pass or a copy pass while inside of a render pass.
  * A default viewport and scissor state are automatically set when this is called.
+ * You cannot begin another render pass, or begin a compute pass or copy pass
+ * until you have ended the render pass.
  *
  * \param device a GPU context
  * \param commandBuffer a command buffer
  * \param colorAttachmentInfos an array of SDL_GpuColorAttachmentInfo structs
  * \param colorAttachmentCount the number of color attachments in the colorAttachmentInfos array
  * \param depthStencilAttachmentInfo the depth-stencil target and clear value, may be NULL
+ * \returns a render pass handle
  *
  * \since This function is available since SDL 3.x.x
  *
  * \sa SDL_GpuEndRenderPass
  */
-extern DECLSPEC void SDLCALL SDL_GpuBeginRenderPass(
-	SDL_GpuDevice *device,
+extern DECLSPEC SDL_GpuRenderPass *SDLCALL SDL_GpuBeginRenderPass(
 	SDL_GpuCommandBuffer *commandBuffer,
 	SDL_GpuColorAttachmentInfo *colorAttachmentInfos,
 	Uint32 colorAttachmentCount,
@@ -1148,60 +1152,49 @@ extern DECLSPEC void SDLCALL SDL_GpuBeginRenderPass(
 );
 
 /**
- * Binds a graphics pipeline on a command buffer to be used in rendering.
+ * Binds a graphics pipeline on a render pass to be used in rendering.
  * A graphics pipeline must be bound before making any draw calls.
- * You must call this function inside of a render pass.
  *
- * \param device a GPU context
- * \param commandBuffer a command buffer
+ * \param renderPass a render pass handle
  * \param graphicsPipeline the graphics pipeline to bind
  *
  * \since This function is available since SDL 3.x.x
  */
 extern DECLSPEC void SDLCALL SDL_GpuBindGraphicsPipeline(
-	SDL_GpuDevice *device,
-	SDL_GpuCommandBuffer *commandBuffer,
+    SDL_GpuRenderPass *renderPass,
 	SDL_GpuGraphicsPipeline *graphicsPipeline
 );
 
 /**
  * Sets the current viewport state on a command buffer.
- * You must call this function inside of a render pass.
  *
- * \param device a GPU context
- * \param commandBuffer a command buffer
+ * \param renderPass a render pass handle
  * \param viewport the viewport to set
  *
  * \since This function is available since SDL 3.x.x
  */
 extern DECLSPEC void SDLCALL SDL_GpuSetViewport(
-	SDL_GpuDevice *device,
-	SDL_GpuCommandBuffer *commandBuffer,
+    SDL_GpuRenderPass *renderPass,
 	SDL_GpuViewport *viewport
 );
 
 /**
  * Sets the current scissor state on a command buffer.
- * You must call this function inside of a render pass.
  *
- * \param device a GPU context
- * \param commandBuffer a command buffer
+ * \param renderPass a render pass handle
  * \param scissor the scissor area to set
  *
  * \since This function is available since SDL 3.x.x
  */
 extern DECLSPEC void SDLCALL SDL_GpuSetScissor(
-	SDL_GpuDevice *device,
-	SDL_GpuCommandBuffer *commandBuffer,
+    SDL_GpuRenderPass *renderPass,
 	SDL_GpuRect *scissor
 );
 
 /**
  * Binds vertex buffers on a command buffer for use with subsequent draw calls.
- * You must call this function inside of a render pass.
  *
- * \param device a GPU context
- * \param commandBuffer a command buffer
+ * \param renderPass a render pass handle
  * \param firstBinding the starting bind point for the vertex buffers
  * \param bindingCount the number of bindings in the pBindings array
  * \param pBindings an array of SDL_GpuBufferBinding structs containing vertex buffers and offset values
@@ -1209,8 +1202,7 @@ extern DECLSPEC void SDLCALL SDL_GpuSetScissor(
  * \since This function is available since SDL 3.x.x
  */
 extern DECLSPEC void SDLCALL SDL_GpuBindVertexBuffers(
-	SDL_GpuDevice *device,
-	SDL_GpuCommandBuffer *commandBuffer,
+    SDL_GpuRenderPass *renderPass,
 	Uint32 firstBinding,
 	Uint32 bindingCount,
 	SDL_GpuBufferBinding *pBindings
@@ -1218,90 +1210,75 @@ extern DECLSPEC void SDLCALL SDL_GpuBindVertexBuffers(
 
 /**
  * Binds an index buffer on a command buffer for use with subsequent draw calls.
- * You must call this function inside of a render pass.
  *
- * \param device a GPU context
- * \param commandBuffer a command buffer
+ * \param renderPass a render pass handle
  * \param pBinding a pointer to a struct containing an index buffer and offset
  * \param indexElementSize whether the index values in the buffer are 16- or 32-bit
  *
  * \since This function is available since SDL 3.x.x
  */
 extern DECLSPEC void SDLCALL SDL_GpuBindIndexBuffer(
-	SDL_GpuDevice *device,
-	SDL_GpuCommandBuffer *commandBuffer,
+    SDL_GpuRenderPass *renderPass,
 	SDL_GpuBufferBinding *pBinding,
 	SDL_GpuIndexElementSize indexElementSize
 );
 
 /**
  * Sets texture-sampler pairs on a command buffer for use with the currently bound vertex shader.
- * You must call this function inside of a render pass.
  *
- * \param device a GPU context
- * \param commandBuffer a command buffer
+ * \param renderPass a render pass handle
  * \param pBindings an array of structs containing texture-sampler pairs.
  *                  Must be at least as long as the number of sampler bindings specified in the pipeline.
  *
  * \since This function is available since SDL 3.x.x
  */
 extern DECLSPEC void SDLCALL SDL_GpuBindVertexSamplers(
-	SDL_GpuDevice *device,
-	SDL_GpuCommandBuffer *commandBuffer,
+    SDL_GpuRenderPass *renderPass,
 	SDL_GpuTextureSamplerBinding *pBindings
 );
 
 /**
  * Sets texture-sampler pairs on a command buffer for use with the currently bound fragment shader.
- * You must call this function inside of a render pass.
  *
- * \param device a GPU context
- * \param commandBuffer a command buffer
+ * \param renderPass a render pass handle
  * \param pBindings an array of structs containing texture-sampler pairs.
  *                  Must be at least as long as the number of sampler bindings specified in the pipeline.
  *
  * \since This function is available since SDL 3.x.x
  */
 extern DECLSPEC void SDLCALL SDL_GpuBindFragmentSamplers(
-	SDL_GpuDevice *device,
-	SDL_GpuCommandBuffer *commandBuffer,
+	SDL_GpuRenderPass *renderPass,
 	SDL_GpuTextureSamplerBinding *pBindings
 );
 
 /**
  * Pushes vertex shader uniforms to the bound graphics pipeline.
- * You must call this function inside of a render pass.
  * You must not call this function before binding a graphics pipeline.
  *
- * \param device a GPU context
- * \param commandBuffer a command buffer
+ * \param renderPass a render pass handle
  * \param data client data to write into the uniform buffer
  * \param dataLengthInBytes the length of the data to write
  *
  * \since This function is available since SDL 3.x.x
  */
 extern DECLSPEC void SDLCALL SDL_GpuPushVertexShaderUniforms(
-	SDL_GpuDevice *device,
-	SDL_GpuCommandBuffer * commandBuffer,
+	SDL_GpuRenderPass *renderPass,
 	void *data,
 	Uint32 dataLengthInBytes
 );
 
 /**
  * Pushes fragment shader uniforms to the bound graphics pipeline.
- * You must call this function inside of a render pass.
  * You must not call this function before binding a graphics pipeline.
  *
- * \param device a GPU context
- * \param commandBuffer a command buffer
+ * \param renderPass a render pass handle
  * \param data client data to write into the uniform buffer
  * \param dataLengthInBytes the length of the data to write
  *
  * \since This function is available since SDL 3.x.x
  */
 extern DECLSPEC void SDLCALL SDL_GpuPushFragmentShaderUniforms(
-	SDL_GpuDevice *device,
-	SDL_GpuCommandBuffer *commandBuffer,
+    SDL_GpuRenderPass *renderPass,
 	void *data,
 	Uint32 dataLengthInBytes
 );
@@ -1312,8 +1289,7 @@ extern DECLSPEC void SDLCALL SDL_GpuPushFragmentShaderUniforms(
  * Draws data using bound graphics state with instancing enabled.
  * You must not call this function before binding a graphics pipeline.
  *
- * \param device a GPU context
- * \param commandBuffer a command buffer
+ * \param renderPass a render pass handle
  * \param baseVertex the starting offset to read from the vertex buffer
  * \param startIndex the starting offset to read from the index buffer
  * \param primitiveCount the number of primitives to draw
@@ -1322,8 +1298,7 @@ extern DECLSPEC void SDLCALL SDL_GpuPushFragmentShaderUniforms(
  * \since This function is available since SDL 3.x.x
  */
 extern DECLSPEC void SDLCALL SDL_GpuDrawInstancedPrimitives(
-	SDL_GpuDevice *device,
-	SDL_GpuCommandBuffer *commandBuffer,
+	SDL_GpuRenderPass *renderPass,
 	Uint32 baseVertex,
 	Uint32 startIndex,
 	Uint32 primitiveCount,
@@ -1334,16 +1309,14 @@ extern DECLSPEC void SDLCALL SDL_GpuDrawInstancedPrimitives(
  * Draws data using bound graphics state.
  * You must not call this function before binding a graphics pipeline.
  *
- * \param device a GPU context
- * \param commandBuffer a command buffer
+ * \param renderPass a render pass handle
  * \param vertexStart The starting offset to read from the vertex buffer
  * \param primitiveCount The number of primitives to draw
  *
  * \since This function is available since SDL 3.x.x
  */
 extern DECLSPEC void SDLCALL SDL_GpuDrawPrimitives(
-	SDL_GpuDevice *device,
-	SDL_GpuCommandBuffer *commandBuffer,
+	SDL_GpuRenderPass *renderPass,
 	Uint32 vertexStart,
 	Uint32 primitiveCount
 );
@@ -1353,8 +1326,7 @@ extern DECLSPEC void SDLCALL SDL_GpuDrawPrimitives(
  * The buffer layout should match the layout of SDL_GpuIndirectDrawCommand.
  * You must not call this function before binding a graphics pipeline.
  *
- * \param device a GPU context
- * \param commandBuffer a command buffer
+ * \param renderPass a render pass handle
  * \param gpuBuffer a buffer containing draw parameters
  * \param offsetInBytes the offset to start reading from the draw buffer
  * \param drawCount the number of draw parameter sets that should be read from the draw buffer
@@ -1363,8 +1335,7 @@ extern DECLSPEC void SDLCALL SDL_GpuDrawPrimitives(
  * \since This function is available since SDL 3.x.x
  */
 extern DECLSPEC void SDLCALL SDL_GpuDrawPrimitivesIndirect(
-	SDL_GpuDevice *device,
-	SDL_GpuCommandBuffer *commandBuffer,
+	SDL_GpuRenderPass *renderPass,
 	SDL_GpuBuffer *gpuBuffer,
 	Uint32 offsetInBytes,
 	Uint32 drawCount,
@@ -1372,17 +1343,16 @@ extern DECLSPEC void SDLCALL SDL_GpuDrawPrimitivesIndirect(
 );
 
 /**
- * Ends the current render pass.
- * All bound graphics state on the command buffer is unset.
+ * Ends the given render pass.
+ * All bound graphics state on the render pass command buffer is unset.
+ * The render pass handle is now invalid.
  *
- * \param device a GPU context
- * \param commandBuffer a command buffer
+ * \param renderPass a render pass handle
  *
  * \since This function is available since SDL 3.x.x
  */
 extern DECLSPEC void SDLCALL SDL_GpuEndRenderPass(
-	SDL_GpuDevice *device,
-	SDL_GpuCommandBuffer *commandBuffer
+	SDL_GpuRenderPass *renderPass
 );
 
 /* Compute Pass */
@@ -1390,94 +1360,82 @@ extern DECLSPEC void SDLCALL SDL_GpuEndRenderPass(
 /**
  * Begins a compute pass on a command buffer.
  * All operations related to compute pipelines must take place inside of a compute pass.
- * You must not being a render pass or copy pass while inside of a compute pass.
+ * You must not begin another compute pass, or a render pass or copy pass
+ * before ending the compute pass.
  *
- * \param device a GPU context
  * \param commandBuffer a command buffer
+ * \returns a compute pass handle
  *
  * \since This function is available since SDL 3.x.x
+ *
+ * \sa SDL_GpuEndComputePass
  */
-extern DECLSPEC void SDLCALL SDL_GpuBeginComputePass(
-	SDL_GpuDevice *device,
+extern DECLSPEC SDL_GpuComputePass *SDLCALL SDL_GpuBeginComputePass(
 	SDL_GpuCommandBuffer *commandBuffer
 );
 
 /**
- * Binds a compute pipeline on a command buffer for use in dispatching compute.
- * You must call this function inside a compute pass.
+ * Binds a compute pipeline on a command buffer for use in compute dispatch.
  *
- * \param device a GPU context
- * \param commandBuffer a command buffer
+ * \param computePass a compute pass handle
  * \param computePipeline a compute pipeline to bind
  *
  * \since This function is available since SDL 3.x.x
  */
 extern DECLSPEC void SDLCALL SDL_GpuBindComputePipeline(
-	SDL_GpuDevice *device,
-	SDL_GpuCommandBuffer *commandBuffer,
+	SDL_GpuComputePass *computePass,
 	SDL_GpuComputePipeline *computePipeline
 );
 
 /**
  * Binds buffers for use with the bound compute pipeline.
- * You must call this function inside a compute pass.
  *
- * \param device a GPU context
- * \param commandBuffer a command buffer
+ * \param computePass a compute pass handle
  * \param pBindings an array of structs each containing a buffer and cycle option.
  *                  Must be at least as long as the number of buffer bindings specified in the pipeline.
  *
  * \since This function is available since SDL 3.x.x
  */
 extern DECLSPEC void SDLCALL SDL_GpuBindComputeBuffers(
-	SDL_GpuDevice *device,
-	SDL_GpuCommandBuffer *commandBuffer,
+	SDL_GpuComputePass *computePass,
 	SDL_GpuComputeBufferBinding *pBindings
 );
 
 /**
  * Binds textures for use with the bound compute pipeline.
- * You must call this function inside a compute pass.
  *
- * \param device a GPU context
- * \param commandBuffer a command buffer
+ * \param computePass a compute pass handle
  * \param pBindings an array of structs each containing a texture and cycle option.
  *                  Must be at least as long as the number of texture bindings specified in the pipeline.
  *
  * \since This function is available since SDL 3.x.x
  */
 extern DECLSPEC void SDLCALL SDL_GpuBindComputeTextures(
-	SDL_GpuDevice *device,
-	SDL_GpuCommandBuffer *commandBuffer,
+	SDL_GpuComputePass *computePass,
 	SDL_GpuComputeTextureBinding *pBindings
 );
 
 /**
  * Pushes compute shader uniforms to the bound compute pipeline.
- * You must call this function inside of a compute pass.
  * You must not call this function before binding a compute pipeline.
  *
- * \param device a GPU context
- * \param commandBuffer a command buffer
+ * \param computePass a compute pass handle
  * \param data client data to write into the uniform buffer
  * \param dataLengthInBytes the length of the data to write
  *
  * \since This function is available since SDL 3.x.x
  */
 extern DECLSPEC void SDLCALL SDL_GpuPushComputeShaderUniforms(
-	SDL_GpuDevice *device,
-	SDL_GpuCommandBuffer * commandBuffer,
+	SDL_GpuComputePass *computePass,
 	void *data,
 	Uint32 dataLengthInBytes
 );
 
 /**
  * Dispatches compute work.
- * You must call this function inside of a compute pass.
  * You must not call this function before binding a compute pipeline.
  *
- * \param device a GPU context
- * \param commandBuffer a command buffer
+ * \param computePass a compute pass handle
  * \param groupCountX number of local workgroups to dispatch in the X dimension
  * \param groupCountY number of local workgroups to dispatch in the Y dimension
  * \param groupCountZ number of local workgroups to dispatch in the Z dimension
@@ -1485,8 +1443,7 @@ extern DECLSPEC void SDLCALL SDL_GpuPushComputeShaderUniforms(
  * \since This function is available since SDL 3.x.x
  */
 extern DECLSPEC void SDLCALL SDL_GpuDispatchCompute(
-	SDL_GpuDevice *device,
-	SDL_GpuCommandBuffer *commandBuffer,
+	SDL_GpuComputePass *computePass,
 	Uint32 groupCountX,
 	Uint32 groupCountY,
 	Uint32 groupCountZ
@@ -1495,15 +1452,14 @@ extern DECLSPEC void SDLCALL SDL_GpuDispatchCompute(
 /**
  * Ends the current compute pass.
  * All bound compute state on the command buffer is unset.
+ * The compute pass handle is now invalid.
  *
- * \param device a GPU context
- * \param commandBuffer a command buffer
+ * \param computePass a compute pass handle
  *
  * \since This function is available since SDL 3.x.x
  */
 extern DECLSPEC void SDLCALL SDL_GpuEndComputePass(
-	SDL_GpuDevice *device,
-	SDL_GpuCommandBuffer *commandBuffer
+	SDL_GpuComputePass *computePass
 );
 
 /* TransferBuffer Set/Get */
@@ -1548,15 +1504,17 @@ extern DECLSPEC void SDLCALL SDL_GpuGetTransferData(
 
 /**
  * Begins a copy pass on a command buffer.
- * All operations related to copying to or from buffers or textures must take place inside a copy pass.
- * You must not being a copy pass while inside of a render pass or compute pass.
+ * All operations related to copying to or from buffers or textures take place inside a copy pass.
+ * You must not begin another copy pass, or a render pass or compute pass
+ * before ending the copy pass.
  *
  * \param device a GPU context
  * \param commandBuffer a command buffer
+ * \returns a copy pass handle
  *
  * \since This function is available since SDL 3.x.x
  */
-extern DECLSPEC void SDLCALL SDL_GpuBeginCopyPass(
+extern DECLSPEC SDL_GpuCopyPass *SDLCALL SDL_GpuBeginCopyPass(
 	SDL_GpuDevice *device,
 	SDL_GpuCommandBuffer *commandBuffer
 );
@@ -1565,13 +1523,11 @@ extern DECLSPEC void SDLCALL SDL_GpuBeginCopyPass(
  * Uploads data from a transfer buffer to a texture.
  * The upload occurs on the GPU timeline.
  * You may assume that the upload has finished in subsequent commands.
- * You must not call this function outside of a copy pass.
  *
  * You must align the data in the transfer buffer to a multiple of
  * the texel size of the texture format.
  *
- * \param device a GPU context
- * \param commandBuffer a command buffer
+ * \param copyPass a copy pass handle
  * \param transferBuffer a transfer buffer
  * \param textureRegion a struct containing parameters specifying the texture region to upload data to
  * \param copyParams a struct containing parameters specifying buffer offset, stride, and height
@@ -1580,8 +1536,7 @@ extern DECLSPEC void SDLCALL SDL_GpuBeginCopyPass(
  * \since This function is available since SDL 3.x.x
  */
 extern DECLSPEC void SDLCALL SDL_GpuUploadToTexture(
-	SDL_GpuDevice *device,
-	SDL_GpuCommandBuffer *commandBuffer,
+	SDL_GpuCopyPass *copyPass,
 	SDL_GpuTransferBuffer *transferBuffer,
 	SDL_GpuTextureRegion *textureRegion,
 	SDL_GpuBufferImageCopy *copyParams,
@@ -1594,10 +1549,8 @@ extern DECLSPEC void SDLCALL SDL_GpuUploadToTexture(
  * Uploads data from a transfer buffer to a buffer.
  * The upload occurs on the GPU timeline.
  * You may assume that the upload has finished in subsequent commands.
- * You must not call this function outside of a copy pass.
  *
- * \param device a GPU context
- * \param commandBuffer a command buffer
+ * \param copyPass a copy pass handle
  * \param transferBuffer a transfer buffer
  * \param gpuBuffer a buffer
  * \param copyParams a struct containing offsets and length
@@ -1606,8 +1559,7 @@ extern DECLSPEC void SDLCALL SDL_GpuUploadToTexture(
  * \since This function is available since SDL 3.x.x
  */
 extern DECLSPEC void SDLCALL SDL_GpuUploadToBuffer(
-	SDL_GpuDevice *device,
-	SDL_GpuCommandBuffer *commandBuffer,
+	SDL_GpuCopyPass *copyPass,
 	SDL_GpuTransferBuffer *transferBuffer,
 	SDL_GpuBuffer *gpuBuffer,
 	SDL_GpuBufferCopy *copyParams,
@@ -1618,10 +1570,8 @@ extern DECLSPEC void SDLCALL SDL_GpuUploadToBuffer(
  * Performs a texture-to-texture copy.
  * This copy occurs on the GPU timeline.
  * You may assume the copy has finished in subsequent commands.
- * You must not call this function outside of a copy pass.
  *
- * \param device a GPU context
- * \param commandBuffer a command buffer
+ * \param copyPass a copy pass handle
  * \param source a source texture region
  * \param destination must be the same dimensions as the source region
  * \param cycle if SDL_TRUE, cycles the destination texture if the destination texture slice is bound, otherwise overwrites the data.
@@ -1629,8 +1579,7 @@ extern DECLSPEC void SDLCALL SDL_GpuUploadToBuffer(
  * \since This function is available since SDL 3.x.x
  */
 extern DECLSPEC void SDLCALL SDL_GpuCopyTextureToTexture(
-	SDL_GpuDevice *device,
-	SDL_GpuCommandBuffer *commandBuffer,
+	SDL_GpuCopyPass *copyPass,
 	SDL_GpuTextureRegion *source,
 	SDL_GpuTextureRegion *destination,
 	SDL_bool cycle
@@ -1642,10 +1591,8 @@ extern DECLSPEC void SDLCALL SDL_GpuCopyTextureToTexture(
  * Performs a buffer-to-buffer copy.
  * This copy occurs on the GPU timeline.
  * You may assume the copy has finished in subsequent commands.
- * You must not call this function outside of a copy pass.
  *
- * \param device a GPU context
- * \param commandBuffer a command buffer
+ * \param copyPass a copy pass handle
  * \param source the buffer to copy from
  * \param destination the buffer to copy to
  * \param copyParams a struct containing offset and length data
@@ -1654,8 +1601,7 @@ extern DECLSPEC void SDLCALL SDL_GpuCopyTextureToTexture(
  * \since This function is available since SDL 3.x.x
  */
 extern DECLSPEC void SDLCALL SDL_GpuCopyBufferToBuffer(
-	SDL_GpuDevice *device,
-	SDL_GpuCommandBuffer *commandBuffer,
+	SDL_GpuCopyPass *copyPass,
 	SDL_GpuBuffer *source,
 	SDL_GpuBuffer *destination,
 	SDL_GpuBufferCopy *copyParams,
@@ -1664,38 +1610,32 @@ extern DECLSPEC void SDLCALL SDL_GpuCopyBufferToBuffer(
 
 /**
  * Generates mipmaps for the given texture.
- * You must not call this function outside of a copy pass.
  *
- * \param device a GPU context
- * \param commandBuffer a command buffer
+ * \param copyPass a copy pass handle
  * \param texture a texture with more than 1 mip level
  *
  * \since This function is available since SDL 3.x.x
  */
 extern DECLSPEC void SDLCALL SDL_GpuGenerateMipmaps(
-	SDL_GpuDevice *device,
-	SDL_GpuCommandBuffer *commandBuffer,
+	SDL_GpuCopyPass *copyPass,
 	SDL_GpuTexture *texture
 );
 
 /**
  * Ends the current copy pass.
  *
- * \param device a GPU context
- * \param commandBuffer a command buffer
+ * \param copyPass a copy pass handle
  *
  * \since This function is available since SDL 3.x.x
  */
 extern DECLSPEC void SDLCALL SDL_GpuEndCopyPass(
-	SDL_GpuDevice *device,
-	SDL_GpuCommandBuffer *commandBuffer
+	SDL_GpuCopyPass *copyPass
 );
 
 /**
  * Blits from a source texture region to a destination texture region.
  * This function must not be called inside of any render, compute, or copy pass.
  *
- * \param device a GPU context
  * \param commandBuffer a command buffer
  * \param source the texture region to copy from
  * \param destination the texture region to copy to
@@ -1706,7 +1646,6 @@ extern DECLSPEC void SDLCALL SDL_GpuEndCopyPass(
  * \since This function is available since SDL 3.x.x
  */
 extern DECLSPEC void SDLCALL SDL_GpuBlit(
-    SDL_GpuDevice *device,
     SDL_GpuCommandBuffer *commandBuffer,
     SDL_GpuTextureRegion *source,
     SDL_GpuTextureRegion *destination,
@@ -1818,7 +1757,6 @@ extern DECLSPEC SDL_GpuCommandBuffer *SDLCALL SDL_GpuAcquireCommandBuffer(
  * This texture is managed by the implementation and must not be freed by the user.
  * You MUST NOT call this function from any thread other than the one that created the window.
  *
- * \param device a GPU context
  * \param commandBuffer a command buffer
  * \param windowHandle a window that has been claimed
  * \param pWidth a pointer filled in with the swapchain width
@@ -1832,7 +1770,6 @@ extern DECLSPEC SDL_GpuCommandBuffer *SDLCALL SDL_GpuAcquireCommandBuffer(
  * \sa SDL_GpuSubmitAndAcquireFence
  */
 extern DECLSPEC SDL_GpuTexture *SDLCALL SDL_GpuAcquireSwapchainTexture(
-	SDL_GpuDevice *device,
 	SDL_GpuCommandBuffer *commandBuffer,
 	SDL_Window *windowHandle,
 	Uint32 *pWidth,
@@ -1841,9 +1778,8 @@ extern DECLSPEC SDL_GpuTexture *SDLCALL SDL_GpuAcquireSwapchainTexture(
 
 /**
  * Submits a command buffer so its commands can be processed on the GPU.
- * It is invalid to further use the command buffer after this is called.
+ * It is invalid to use the command buffer after this is called.
  *
- * \param device a GPU context
  * \param commandBuffer a command buffer
  *
  * \since This function is available since SDL 3.x.x
@@ -1853,7 +1789,6 @@ extern DECLSPEC SDL_GpuTexture *SDLCALL SDL_GpuAcquireSwapchainTexture(
  * \sa SDL_GpuSubmitAndAcquireFence
  */
 extern DECLSPEC void SDLCALL SDL_GpuSubmit(
-	SDL_GpuDevice* device,
 	SDL_GpuCommandBuffer *commandBuffer
 );
 
@@ -1861,8 +1796,8 @@ extern DECLSPEC void SDLCALL SDL_GpuSubmit(
  * Submits a command buffer so its commands can be processed on the GPU,
  * and acquires a fence associated with the command buffer.
  * You must release this fence when it is no longer needed or it will cause a leak.
+ * It is invalid to use the command buffer after this is called.
  *
- * \param device a GPU context
  * \param commandBuffer a command buffer
  * \returns a fence associated with the command buffer
  *
@@ -1874,7 +1809,6 @@ extern DECLSPEC void SDLCALL SDL_GpuSubmit(
  * \sa SDL_GpuReleaseFence
  */
 extern DECLSPEC SDL_GpuFence *SDLCALL SDL_GpuSubmitAndAcquireFence(
-	SDL_GpuDevice* device,
 	SDL_GpuCommandBuffer *commandBuffer
 );
 
@@ -2052,14 +1986,12 @@ extern DECLSPEC SDL_GpuSampleCount SDLCALL SDL_GpuGetBestSampleCount(
  * This function is included for compatibility with old render systems.
  * If you are not supporting an old application, do NOT use this.
  *
- * \param device a GPU context
  * \param commandBuffer a command buffer
  * \param query an occlusion query object
  *
  * \since This function is available since SDL 3.x.x
  */
 extern DECLSPEC void SDLCALL SDL_GpuOcclusionQueryBegin(
-    SDL_GpuDevice *device,
     SDL_GpuCommandBuffer *commandBuffer,
     SDL_GpuOcclusionQuery *query
 );
@@ -2071,7 +2003,6 @@ extern DECLSPEC void SDLCALL SDL_GpuOcclusionQueryBegin(
  * This function is included for compatibility with old render systems.
  * If you are not supporting an old application, do NOT use this.
  *
- * \param device a GPU context
  * \param commandBuffer a commandBuffer
  * \param query an occlusion query object
  *
@@ -2080,7 +2011,6 @@ extern DECLSPEC void SDLCALL SDL_GpuOcclusionQueryBegin(
  * \sa SDL_GpuBeginQuery
  */
 extern DECLSPEC void SDLCALL SDL_GpuOcclusionQueryEnd(
-    SDL_GpuDevice *device,
     SDL_GpuCommandBuffer *commandBuffer,
     SDL_GpuOcclusionQuery *query
 );
