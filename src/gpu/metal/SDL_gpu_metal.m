@@ -410,8 +410,13 @@ typedef struct MetalFence
     SDL_AtomicInt complete;
 } MetalFence;
 
+typedef struct MetalRenderer MetalRenderer;
+
 typedef struct MetalCommandBuffer
 {
+    CommandBufferCommonHeader common;
+    MetalRenderer *renderer;
+
     id<MTLCommandBuffer> handle;
     id<MTLRenderCommandEncoder> renderEncoder;
     id<MTLBlitCommandEncoder> blitEncoder;
@@ -445,7 +450,7 @@ typedef struct MetalCommandBuffer
     /* FIXME: Texture subresources? */
 } MetalCommandBuffer;
 
-typedef struct MetalRenderer
+struct MetalRenderer
 {
     id<MTLDevice> device;
     id<MTLCommandQueue> queue;
@@ -475,7 +480,7 @@ typedef struct MetalRenderer
     SDL_Mutex *uniformBufferLock;
     SDL_Mutex *fenceLock;
     SDL_Mutex *windowLock;
-} MetalRenderer;
+};
 
 /* Forward Declarations */
 
@@ -886,12 +891,8 @@ static SDL_GpuBuffer* METAL_CreateGpuBuffer(
 
 static MetalTransferBuffer* METAL_INTERNAL_CreateTransferBuffer(
     MetalRenderer *renderer,
-    SDL_GpuTransferUsage usage,
     Uint32 sizeInBytes
 ) {
-    (void) renderer; /* used by other backends */
-    (void) usage; /* used by other backends */
-
     MetalTransferBuffer *transferBuffer = SDL_malloc(sizeof(MetalTransferBuffer));
     transferBuffer->size = sizeInBytes;
     SDL_AtomicSet(&transferBuffer->referenceCount, 0);
@@ -923,7 +924,6 @@ static SDL_GpuTransferBuffer* METAL_CreateTransferBuffer(
 
     container->buffers[0] = METAL_INTERNAL_CreateTransferBuffer(
         renderer,
-        usage,
         sizeInBytes
     );
 
@@ -951,7 +951,6 @@ static void METAL_SetTextureName(
 }
 
 static void METAL_SetStringMarker(
-    SDL_GpuRenderer *driverData,
     SDL_GpuCommandBuffer *commandBuffer,
     const char *text
 ) {
@@ -1125,13 +1124,12 @@ static void METAL_INTERNAL_SetUniformBufferData(
 }
 
 static void METAL_PushVertexShaderUniforms(
-    SDL_GpuRenderer *driverData,
     SDL_GpuCommandBuffer *commandBuffer,
     void *data,
     Uint32 dataLengthInBytes
 ) {
-    MetalRenderer *renderer = (MetalRenderer*) driverData;
     MetalCommandBuffer *metalCommandBuffer = (MetalCommandBuffer*) commandBuffer;
+    MetalRenderer *renderer = metalCommandBuffer->renderer;
 
     if (metalCommandBuffer->vertexUniformBuffer->offset + metalCommandBuffer->graphicsPipeline->vertexUniformBlockSize >= UBO_BUFFER_SIZE)
     {
@@ -1158,13 +1156,12 @@ static void METAL_PushVertexShaderUniforms(
 }
 
 static void METAL_PushFragmentShaderUniforms(
-    SDL_GpuRenderer *driverData,
     SDL_GpuCommandBuffer *commandBuffer,
     void *data,
     Uint32 dataLengthInBytes
 ) {
-    MetalRenderer *renderer = (MetalRenderer*) driverData;
     MetalCommandBuffer *metalCommandBuffer = (MetalCommandBuffer*) commandBuffer;
+    MetalRenderer *renderer = metalCommandBuffer->renderer;
 
     if (metalCommandBuffer->fragmentUniformBuffer->offset + metalCommandBuffer->graphicsPipeline->fragmentUniformBlockSize >= UBO_BUFFER_SIZE)
     {
@@ -1193,13 +1190,11 @@ static void METAL_PushFragmentShaderUniforms(
 /* Render Pass */
 
 static void METAL_BeginRenderPass(
-	SDL_GpuRenderer *driverData,
 	SDL_GpuCommandBuffer *commandBuffer,
 	SDL_GpuColorAttachmentInfo *colorAttachmentInfos,
 	Uint32 colorAttachmentCount,
 	SDL_GpuDepthStencilAttachmentInfo *depthStencilAttachmentInfo
 ) {
-    (void) driverData; /* used by other backends */
     MetalCommandBuffer *metalCommandBuffer = (MetalCommandBuffer*) commandBuffer;
     MTLRenderPassDescriptor *passDescriptor = [MTLRenderPassDescriptor renderPassDescriptor];
     SDL_GpuColorAttachmentInfo *attachmentInfo;
@@ -1267,12 +1262,11 @@ static void METAL_BeginRenderPass(
 }
 
 static void METAL_BindGraphicsPipeline(
-	SDL_GpuRenderer *driverData,
 	SDL_GpuCommandBuffer *commandBuffer,
 	SDL_GpuGraphicsPipeline *graphicsPipeline
 ) {
-    MetalRenderer *renderer = (MetalRenderer*) driverData;
     MetalCommandBuffer *metalCommandBuffer = (MetalCommandBuffer*) commandBuffer;
+    MetalRenderer *renderer = metalCommandBuffer->renderer;
     MetalGraphicsPipeline *metalGraphicsPipeline = (MetalGraphicsPipeline*) graphicsPipeline;
     SDL_GpuRasterizerState *rast = &metalGraphicsPipeline->rasterizerState;
 
@@ -1318,11 +1312,9 @@ static void METAL_BindGraphicsPipeline(
 }
 
 static void METAL_SetViewport(
-	SDL_GpuRenderer *driverData,
 	SDL_GpuCommandBuffer *commandBuffer,
 	SDL_GpuViewport *viewport
 ) {
-    (void) driverData; /* used by other backends */
     MetalCommandBuffer *metalCommandBuffer = (MetalCommandBuffer*) commandBuffer;
     MTLViewport metalViewport;
 
@@ -1337,11 +1329,9 @@ static void METAL_SetViewport(
 }
 
 static void METAL_SetScissor(
-	SDL_GpuRenderer *driverData,
 	SDL_GpuCommandBuffer *commandBuffer,
 	SDL_GpuRect *scissor
 ) {
-    (void) driverData; /* used by other backends */
     MetalCommandBuffer *metalCommandBuffer = (MetalCommandBuffer*) commandBuffer;
     MTLScissorRect metalScissor;
 
@@ -1354,13 +1344,11 @@ static void METAL_SetScissor(
 }
 
 static void METAL_BindVertexBuffers(
-	SDL_GpuRenderer *driverData,
 	SDL_GpuCommandBuffer *commandBuffer,
 	Uint32 firstBinding,
 	Uint32 bindingCount,
 	SDL_GpuBufferBinding *pBindings
 ) {
-    (void) driverData; /* used by other backends */
     MetalCommandBuffer *metalCommandBuffer = (MetalCommandBuffer*) commandBuffer;
     id<MTLBuffer> metalBuffers[MAX_BUFFER_BINDINGS];
     NSUInteger bufferOffsets[MAX_BUFFER_BINDINGS];
@@ -1384,12 +1372,10 @@ static void METAL_BindVertexBuffers(
 }
 
 static void METAL_BindIndexBuffer(
-	SDL_GpuRenderer *driverData,
 	SDL_GpuCommandBuffer *commandBuffer,
 	SDL_GpuBufferBinding *pBinding,
 	SDL_GpuIndexElementSize indexElementSize
 ) {
-    (void) driverData; /* used by other backends */
     MetalCommandBuffer *metalCommandBuffer = (MetalCommandBuffer*) commandBuffer;
     metalCommandBuffer->indexBuffer = ((MetalBufferContainer*) pBinding->gpuBuffer)->activeBuffer;
     metalCommandBuffer->indexBufferOffset = pBinding->offset;
@@ -1399,11 +1385,9 @@ static void METAL_BindIndexBuffer(
 }
 
 static void METAL_BindVertexSamplers(
-	SDL_GpuRenderer *driverData,
 	SDL_GpuCommandBuffer *commandBuffer,
 	SDL_GpuTextureSamplerBinding *pBindings
 ) {
-    (void) driverData; /* used by other backends */
     MetalCommandBuffer *metalCommandBuffer = (MetalCommandBuffer*) commandBuffer;
     id<MTLTexture> metalTextures[MAX_VERTEXTEXTURE_SAMPLERS];
     id<MTLSamplerState> metalSamplers[MAX_VERTEXTEXTURE_SAMPLERS];
@@ -1425,11 +1409,9 @@ static void METAL_BindVertexSamplers(
 }
 
 static void METAL_BindFragmentSamplers(
-	SDL_GpuRenderer *driverData,
 	SDL_GpuCommandBuffer *commandBuffer,
 	SDL_GpuTextureSamplerBinding *pBindings
 ) {
-    (void) driverData; /* used by other backends */
     MetalCommandBuffer *metalCommandBuffer = (MetalCommandBuffer*) commandBuffer;
     id<MTLTexture> metalTextures[MAX_TEXTURE_SAMPLERS];
     id<MTLSamplerState> metalSamplers[MAX_TEXTURE_SAMPLERS];
@@ -1471,14 +1453,12 @@ static void METAL_SetGraphicsUniformBuffers(
 }
 
 static void METAL_DrawInstancedPrimitives(
-	SDL_GpuRenderer *driverData,
 	SDL_GpuCommandBuffer *commandBuffer,
 	Uint32 baseVertex,
 	Uint32 startIndex,
 	Uint32 primitiveCount,
 	Uint32 instanceCount
 ) {
-    (void) driverData; /* Used by other backends */
     MetalCommandBuffer *metalCommandBuffer = (MetalCommandBuffer*) commandBuffer;
     SDL_GpuPrimitiveType primitiveType = metalCommandBuffer->graphicsPipeline->primitiveType;
     Uint32 sizeofIndex = (metalCommandBuffer->indexElementSize == SDL_GPU_INDEXELEMENTSIZE_16BIT) ? 2 : 4;
@@ -1497,12 +1477,10 @@ static void METAL_DrawInstancedPrimitives(
 }
 
 static void METAL_DrawPrimitives(
-	SDL_GpuRenderer *driverData,
 	SDL_GpuCommandBuffer *commandBuffer,
 	Uint32 vertexStart,
 	Uint32 primitiveCount
 ) {
-    (void) driverData; /* Used by other backends */
     MetalCommandBuffer *metalCommandBuffer = (MetalCommandBuffer*) commandBuffer;
     SDL_GpuPrimitiveType primitiveType = metalCommandBuffer->graphicsPipeline->primitiveType;
 
@@ -1515,7 +1493,6 @@ static void METAL_DrawPrimitives(
 }
 
 static void METAL_DrawPrimitivesIndirect(
-	SDL_GpuRenderer *driverData,
 	SDL_GpuCommandBuffer *commandBuffer,
 	SDL_GpuBuffer *gpuBuffer,
 	Uint32 offsetInBytes,
@@ -1526,10 +1503,8 @@ static void METAL_DrawPrimitivesIndirect(
 }
 
 static void METAL_EndRenderPass(
-	SDL_GpuRenderer *driverData,
 	SDL_GpuCommandBuffer *commandBuffer
 ) {
-    (void) driverData; /* used by other backends */
     MetalCommandBuffer *metalCommandBuffer = (MetalCommandBuffer*) commandBuffer;
 
     [metalCommandBuffer->renderEncoder endEncoding];
@@ -1545,14 +1520,12 @@ static void METAL_EndRenderPass(
 /* Compute Pass */
 
 static void METAL_BeginComputePass(
-	SDL_GpuRenderer *driverData,
 	SDL_GpuCommandBuffer *commandBuffer
 ) {
     NOT_IMPLEMENTED
 }
 
 static void METAL_BindComputePipeline(
-	SDL_GpuRenderer *driverData,
 	SDL_GpuCommandBuffer *commandBuffer,
 	SDL_GpuComputePipeline *computePipeline
 ) {
@@ -1560,7 +1533,6 @@ static void METAL_BindComputePipeline(
 }
 
 static void METAL_BindComputeBuffers(
-	SDL_GpuRenderer *driverData,
 	SDL_GpuCommandBuffer *commandBuffer,
 	SDL_GpuComputeBufferBinding *pBindings
 ) {
@@ -1568,7 +1540,6 @@ static void METAL_BindComputeBuffers(
 }
 
 static void METAL_BindComputeTextures(
-	SDL_GpuRenderer *driverData,
 	SDL_GpuCommandBuffer *commandBuffer,
 	SDL_GpuComputeTextureBinding *pBindings
 ) {
@@ -1576,7 +1547,6 @@ static void METAL_BindComputeTextures(
 }
 
 static void METAL_PushComputeShaderUniforms(
-	SDL_GpuRenderer *driverData,
 	SDL_GpuCommandBuffer *commandBuffer,
 	void *data,
 	Uint32 dataLengthInBytes
@@ -1585,7 +1555,6 @@ static void METAL_PushComputeShaderUniforms(
 }
 
 static void METAL_DispatchCompute(
-	SDL_GpuRenderer *device,
 	SDL_GpuCommandBuffer *commandBuffer,
 	Uint32 groupCountX,
 	Uint32 groupCountY,
@@ -1595,7 +1564,6 @@ static void METAL_DispatchCompute(
 }
 
 static void METAL_EndComputePass(
-	SDL_GpuRenderer *driverData,
 	SDL_GpuCommandBuffer *commandBuffer
 ) {
     NOT_IMPLEMENTED
@@ -1628,7 +1596,6 @@ static void METAL_INTERNAL_CycleActiveTransferBuffer(
 
     container->buffers[container->bufferCount] = METAL_INTERNAL_CreateTransferBuffer(
         renderer,
-        container->usage,
         size
     );
     container->bufferCount += 1;
@@ -1681,7 +1648,6 @@ static void METAL_GetTransferData(
 /* Copy Pass */
 
 static void METAL_BeginCopyPass(
-	SDL_GpuRenderer *driverData,
 	SDL_GpuCommandBuffer *commandBuffer
 ) {
     MetalCommandBuffer *metalCommandBuffer = (MetalCommandBuffer*) commandBuffer;
@@ -1739,15 +1705,14 @@ static MetalTexture* METAL_INTERNAL_PrepareTextureForWrite(
 }
 
 static void METAL_UploadToTexture(
-	SDL_GpuRenderer *driverData,
 	SDL_GpuCommandBuffer *commandBuffer,
 	SDL_GpuTransferBuffer *transferBuffer,
 	SDL_GpuTextureRegion *textureRegion,
 	SDL_GpuBufferImageCopy *copyParams,
 	SDL_bool cycle
 ) {
-    MetalRenderer *renderer = (MetalRenderer*) driverData;
     MetalCommandBuffer *metalCommandBuffer = (MetalCommandBuffer*) commandBuffer;
+    MetalRenderer *renderer = metalCommandBuffer->renderer;
     MetalTransferBufferContainer *metalTransferBufferContainer = (MetalTransferBufferContainer*) transferBuffer;
     MetalTextureContainer *metalTextureContainer = (MetalTextureContainer*) textureRegion->textureSlice.texture;
 
@@ -1829,15 +1794,14 @@ static MetalBuffer* METAL_INTERNAL_PrepareGpuBufferForWrite(
 }
 
 static void METAL_UploadToBuffer(
-	SDL_GpuRenderer *driverData,
 	SDL_GpuCommandBuffer *commandBuffer,
 	SDL_GpuTransferBuffer *transferBuffer,
 	SDL_GpuBuffer *gpuBuffer,
 	SDL_GpuBufferCopy *copyParams,
 	SDL_bool cycle
 ) {
-    MetalRenderer *renderer = (MetalRenderer*) driverData;
     MetalCommandBuffer *metalCommandBuffer = (MetalCommandBuffer*) commandBuffer;
+    MetalRenderer *renderer = metalCommandBuffer->renderer;
     MetalTransferBufferContainer *metalTransferContainer = (MetalTransferBufferContainer*) transferBuffer;
     MetalBufferContainer *metalBufferContainer = (MetalBufferContainer*) gpuBuffer;
 
@@ -1875,14 +1839,13 @@ static void METAL_DownloadFromBuffer(
 }
 
 static void METAL_CopyTextureToTexture(
-	SDL_GpuRenderer *driverData,
 	SDL_GpuCommandBuffer *commandBuffer,
 	SDL_GpuTextureRegion *source,
 	SDL_GpuTextureRegion *destination,
 	SDL_bool cycle
 ) {
-    MetalRenderer *renderer = (MetalRenderer*) driverData;
     MetalCommandBuffer *metalCommandBuffer = (MetalCommandBuffer*) commandBuffer;
+    MetalRenderer *renderer = metalCommandBuffer->renderer;
     MetalTexture *metalSourceTexture = ((MetalTextureContainer*) source->textureSlice.texture)->activeTexture;
     MetalTexture *metalDestTexture = METAL_INTERNAL_PrepareTextureForWrite(
         renderer,
@@ -1908,7 +1871,6 @@ static void METAL_CopyTextureToTexture(
 }
 
 static void METAL_CopyBufferToBuffer(
-	SDL_GpuRenderer *driverData,
 	SDL_GpuCommandBuffer *commandBuffer,
 	SDL_GpuBuffer *source,
 	SDL_GpuBuffer *destination,
@@ -1919,7 +1881,6 @@ static void METAL_CopyBufferToBuffer(
 }
 
 static void METAL_GenerateMipmaps(
-	SDL_GpuRenderer *driverData,
 	SDL_GpuCommandBuffer *commandBuffer,
 	SDL_GpuTexture *texture
 ) {
@@ -1927,7 +1888,6 @@ static void METAL_GenerateMipmaps(
 }
 
 static void METAL_EndCopyPass(
-	SDL_GpuRenderer *driverData,
 	SDL_GpuCommandBuffer *commandBuffer
 ) {
     MetalCommandBuffer *metalCommandBuffer = (MetalCommandBuffer*) commandBuffer;
@@ -1936,7 +1896,6 @@ static void METAL_EndCopyPass(
 }
 
 static void METAL_Blit(
-    SDL_GpuRenderer *driverData,
     SDL_GpuCommandBuffer *commandBuffer,
     SDL_GpuTextureRegion *source,
     SDL_GpuTextureRegion *destination,
@@ -2111,6 +2070,7 @@ static void METAL_INTERNAL_AllocateCommandBuffers(
     for (Uint32 i = 0; i < allocateCount; i += 1)
     {
         commandBuffer = SDL_malloc(sizeof(MetalCommandBuffer));
+        commandBuffer->renderer = renderer;
 
         /* The native Metal command buffer is created later */
 
@@ -2327,13 +2287,11 @@ static void METAL_INTERNAL_CleanCommandBuffer(
 }
 
 static SDL_GpuTexture* METAL_AcquireSwapchainTexture(
-	SDL_GpuRenderer *driverData,
 	SDL_GpuCommandBuffer *commandBuffer,
 	SDL_Window *windowHandle,
 	Uint32 *pWidth,
 	Uint32 *pHeight
 ) {
-    (void) driverData; /* used by other backends */
     MetalCommandBuffer *metalCommandBuffer = (MetalCommandBuffer*) commandBuffer;
     MetalWindowData *windowData;
     CGSize drawableSize;
@@ -2369,11 +2327,10 @@ static SDL_GpuTexture* METAL_AcquireSwapchainTexture(
 }
 
 static void METAL_Submit(
-	SDL_GpuRenderer *driverData,
 	SDL_GpuCommandBuffer *commandBuffer
 ) {
-    MetalRenderer *renderer = (MetalRenderer*) driverData;
     MetalCommandBuffer *metalCommandBuffer = (MetalCommandBuffer*) commandBuffer;
+    MetalRenderer *renderer = metalCommandBuffer->renderer;
 
     SDL_LockMutex(renderer->submitLock);
 
@@ -2425,14 +2382,13 @@ static void METAL_Submit(
 }
 
 static SDL_GpuFence* METAL_SubmitAndAcquireFence(
-	SDL_GpuRenderer *driverData,
 	SDL_GpuCommandBuffer *commandBuffer
 ) {
     MetalCommandBuffer *metalCommandBuffer = (MetalCommandBuffer*) commandBuffer;
     MetalFence *fence = metalCommandBuffer->fence;
 
     metalCommandBuffer->autoReleaseFence = 0;
-    METAL_Submit(driverData, commandBuffer);
+    METAL_Submit(commandBuffer);
 
     return (SDL_GpuFence*) fence;
 }
@@ -2476,7 +2432,6 @@ static void METAL_WaitForFences(
 	Uint32 fenceCount,
 	SDL_GpuFence **pFences
 ) {
-    (void) driverData; /* used by other backends */
     if (waitAll)
     {
         for (Uint32 i = 0; i < fenceCount; i += 1)
@@ -2530,7 +2485,6 @@ static SDL_GpuOcclusionQuery* METAL_CreateOcclusionQuery(
 }
 
 static void METAL_OcclusionQueryBegin(
-    SDL_GpuRenderer *driverData,
     SDL_GpuCommandBuffer *commandBuffer,
     SDL_GpuOcclusionQuery *query
 ) {
@@ -2538,7 +2492,6 @@ static void METAL_OcclusionQueryBegin(
 }
 
 static void METAL_OcclusionQueryEnd(
-    SDL_GpuRenderer *driverData,
     SDL_GpuCommandBuffer *commandBuffer,
     SDL_GpuOcclusionQuery *query
 ) {
