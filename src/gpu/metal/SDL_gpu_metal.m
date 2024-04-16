@@ -311,9 +311,9 @@ static MTLColorWriteMask SDLToMetal_ColorWriteMask(
 
 typedef struct MetalTransferBuffer
 {
+    id<MTLBuffer> stagingBuffer;
     Uint32 size;
     SDL_AtomicInt referenceCount;
-    id<MTLBuffer> stagingBuffer;
 } MetalTransferBuffer;
 
 typedef struct MetalTransferBufferContainer
@@ -360,6 +360,7 @@ typedef struct MetalUniformBuffer
 typedef struct MetalTexture
 {
     id<MTLTexture> handle;
+    SDL_AtomicInt referenceCount;
 } MetalTexture;
 
 typedef struct MetalSampler
@@ -452,7 +453,9 @@ typedef struct MetalCommandBuffer
     Uint32 usedTransferBufferCount;
     Uint32 usedTransferBufferCapacity;
 
-    /* FIXME: Texture subresources? */
+    MetalTexture **usedTextures;
+    Uint32 usedTextureCount;
+    Uint32 usedTextureCapacity;
 } MetalCommandBuffer;
 
 struct MetalRenderer
@@ -472,16 +475,29 @@ struct MetalRenderer
     Uint32 submittedCommandBufferCount;
     Uint32 submittedCommandBufferCapacity;
 
-    MetalFence **availableFences;
-    Uint32 availableFenceCount;
-    Uint32 availableFenceCapacity;
-
     MetalUniformBuffer **availableUniformBuffers;
     Uint32 availableUniformBufferCount;
     Uint32 availableUniformBufferCapacity;
 
+    MetalFence **availableFences;
+    Uint32 availableFenceCount;
+    Uint32 availableFenceCapacity;
+
+    MetalTransferBufferContainer **transferBufferContainersToDestroy;
+    Uint32 transferBufferContainersToDestroyCount;
+    Uint32 transferBufferContainersToDestroyCapacity;
+
+    MetalBufferContainer **bufferContainersToDestroy;
+    Uint32 bufferContainersToDestroyCount;
+    Uint32 bufferContainersToDestroyCapacity;
+
+    MetalTextureContainer **textureContainersToDestroy;
+    Uint32 textureContainersToDestroyCount;
+    Uint32 textureContainersToDestroyCapacity;
+
     SDL_Mutex *submitLock;
     SDL_Mutex *acquireCommandBufferLock;
+    SDL_Mutex *disposeLock;
     SDL_Mutex *uniformBufferLock;
     SDL_Mutex *fenceLock;
     SDL_Mutex *windowLock;
@@ -518,6 +534,7 @@ static void METAL_DestroyDevice(SDL_GpuDevice *device)
         SDL_free(commandBuffer->boundUniformBuffers);
         SDL_free(commandBuffer->usedGpuBuffers);
         SDL_free(commandBuffer->usedTransferBuffers);
+        SDL_free(commandBuffer->usedTextures);
         SDL_free(commandBuffer);
     }
     SDL_free(renderer->availableCommandBuffers);
@@ -544,6 +561,7 @@ static void METAL_DestroyDevice(SDL_GpuDevice *device)
     /* Release the mutexes */
     SDL_DestroyMutex(renderer->submitLock);
     SDL_DestroyMutex(renderer->acquireCommandBufferLock);
+    SDL_DestroyMutex(renderer->disposeLock);
     SDL_DestroyMutex(renderer->uniformBufferLock);
     SDL_DestroyMutex(renderer->fenceLock);
     SDL_DestroyMutex(renderer->windowLock);
@@ -585,7 +603,18 @@ static void METAL_INTERNAL_TrackTransferBuffer(
     );
 }
 
-/* FIXME: Texture subresources? */
+static void METAL_INTERNAL_TrackTexture(
+    MetalCommandBuffer *commandBuffer,
+    MetalTexture *texture
+) {
+    TRACK_RESOURCE(
+        texture,
+        MetalTexture*,
+        usedTextures,
+        usedTextureCount,
+        usedTextureCapacity
+    );
+}
 
 /* State Creation */
 
@@ -1008,13 +1037,38 @@ static void METAL_QueueDestroyTexture(
 	SDL_GpuRenderer *driverData,
 	SDL_GpuTexture *texture
 ) {
-    MetalTextureContainer *metalTextureContainer = (MetalTextureContainer*) texture;
-    for (Uint32 i = 0; i < metalTextureContainer->textureCount; i += 1)
-    {
-        metalTextureContainer->textures[i]->handle = nil;
-        SDL_free(metalTextureContainer->textures[i]);
-    }
-    SDL_free(metalTextureContainer);
+    MetalRenderer *renderer = (MetalRenderer*) driverData;
+	MetalTextureContainer *container = (MetalTextureContainer*) texture;
+
+    SDL_LockMutex(renderer->disposeLock);
+
+    EXPAND_ARRAY_IF_NEEDED(
+        renderer->textureContainersToDestroy,
+        MetalTextureContainer*,
+        renderer->textureContainersToDestroyCount + 1,
+        renderer->textureContainersToDestroyCapacity,
+        renderer->textureContainersToDestroyCapacity + 1
+    );
+
+    renderer->textureContainersToDestroy[
+        renderer->textureContainersToDestroyCount
+    ] = container;
+    renderer->textureContainersToDestroyCount += 1;
+
+    SDL_UnlockMutex(renderer->disposeLock);
+}
+
+static void METAL_INTERNAL_DestroyTextureContainer(
+    MetalTextureContainer *container
+) {
+    for (Uint32 i = 0; i < container->textureCount; i += 1)
+	{
+        container->textures[i]->handle = nil;
+        SDL_free(container->textures[i]);
+	}
+
+	SDL_free(container->textures);
+	SDL_free(container);
 }
 
 static void METAL_QueueDestroySampler(
@@ -1028,28 +1082,74 @@ static void METAL_QueueDestroyGpuBuffer(
 	SDL_GpuRenderer *driverData,
 	SDL_GpuBuffer *gpuBuffer
 ) {
-    MetalBufferContainer *container = (MetalBufferContainer*) gpuBuffer;
+    MetalRenderer *renderer = (MetalRenderer*) driverData;
+	MetalBufferContainer *container = (MetalBufferContainer*) gpuBuffer;
+
+    SDL_LockMutex(renderer->disposeLock);
+
+    EXPAND_ARRAY_IF_NEEDED(
+        renderer->bufferContainersToDestroy,
+        MetalBufferContainer*,
+        renderer->bufferContainersToDestroyCount + 1,
+        renderer->bufferContainersToDestroyCapacity,
+        renderer->bufferContainersToDestroyCapacity + 1
+    );
+
+    renderer->bufferContainersToDestroy[
+        renderer->bufferContainersToDestroyCount
+    ] = container;
+    renderer->bufferContainersToDestroyCount += 1;
+
+    SDL_UnlockMutex(renderer->disposeLock);
+}
+
+static void METAL_INTERNAL_DestroyBufferContainer(
+    MetalBufferContainer *container
+) {
     for (Uint32 i = 0; i < container->bufferCount; i += 1)
-    {
-        container->buffers[i]->handle = nil;
-        /* FIXME: refcount? */
-        SDL_free(container->buffers[i]);
-    }
-    SDL_free(container);
+	{
+		MetalBuffer *buffer = container->buffers[i];
+		buffer->handle = nil;
+		SDL_free(buffer);
+	}
+
+	SDL_free(container->buffers);
+	SDL_free(container);
 }
 
 static void METAL_QueueDestroyTransferBuffer(
 	SDL_GpuRenderer *driverData,
 	SDL_GpuTransferBuffer *transferBuffer
 ) {
-    MetalTransferBufferContainer *container = (MetalTransferBufferContainer*) transferBuffer;
-    for (Uint32 i = 0; i < container->bufferCount; i += 1)
-    {
-        container->buffers[i]->stagingBuffer = nil;
-        /* FIXME: refcount? */
-        SDL_free(container->buffers[i]);
-    }
-    SDL_free(container);
+	MetalRenderer *renderer = (MetalRenderer*) driverData;
+
+	SDL_LockMutex(renderer->disposeLock);
+
+	EXPAND_ARRAY_IF_NEEDED(
+		renderer->transferBufferContainersToDestroy,
+		MetalTransferBufferContainer*,
+		renderer->transferBufferContainersToDestroyCount + 1,
+		renderer->transferBufferContainersToDestroyCapacity,
+		renderer->transferBufferContainersToDestroyCapacity + 1
+	);
+
+	renderer->transferBufferContainersToDestroy[
+		renderer->transferBufferContainersToDestroyCount
+	] = (MetalTransferBufferContainer*) transferBuffer;
+	renderer->transferBufferContainersToDestroyCount += 1;
+
+	SDL_UnlockMutex(renderer->disposeLock);
+}
+
+static void METAL_INTERNAL_DestroyTransferBufferContainer(
+	MetalTransferBufferContainer *transferBufferContainer
+) {
+	for (Uint32 i = 0; i < transferBufferContainer->bufferCount; i += 1)
+	{
+		transferBufferContainer->buffers[i]->stagingBuffer = nil;
+		SDL_free(transferBufferContainer->buffers[i]);
+	}
+	SDL_free(transferBufferContainer->buffers);
 }
 
 static void METAL_QueueDestroyShaderModule(
@@ -1258,6 +1358,7 @@ static void METAL_BeginRenderPass(
     MetalCommandBuffer *metalCommandBuffer = (MetalCommandBuffer*) commandBuffer;
     MTLRenderPassDescriptor *passDescriptor = [MTLRenderPassDescriptor renderPassDescriptor];
     SDL_GpuColorAttachmentInfo *attachmentInfo;
+    MetalTexture *texture;
     Uint32 vpWidth = UINT_MAX;
     Uint32 vpHeight = UINT_MAX;
     MTLViewport viewport;
@@ -1266,9 +1367,10 @@ static void METAL_BeginRenderPass(
     for (Uint32 i = 0; i < colorAttachmentCount; i += 1)
     {
         attachmentInfo = &colorAttachmentInfos[i];
+        texture = ((MetalTextureContainer*) attachmentInfo->textureSlice.texture)->activeTexture;
 
         /* FIXME: cycle! */
-        passDescriptor.colorAttachments[i].texture = ((MetalTextureContainer*) attachmentInfo->textureSlice.texture)->activeTexture->handle;
+        passDescriptor.colorAttachments[i].texture = texture->handle;
         passDescriptor.colorAttachments[i].level = attachmentInfo->textureSlice.mipLevel;
         passDescriptor.colorAttachments[i].slice = attachmentInfo->textureSlice.layer;
         passDescriptor.colorAttachments[i].clearColor = MTLClearColorMake(
@@ -1280,21 +1382,24 @@ static void METAL_BeginRenderPass(
         passDescriptor.colorAttachments[i].loadAction = SDLToMetal_LoadOp[attachmentInfo->loadOp];
         passDescriptor.colorAttachments[i].storeAction = SDLToMetal_StoreOp(attachmentInfo->storeOp, 0);
         /* FIXME: Resolve texture! Also affects ^! */
+
+        METAL_INTERNAL_TrackTexture(metalCommandBuffer, texture);
     }
 
     if (depthStencilAttachmentInfo != NULL)
     {
-        MetalTextureContainer *texture = (MetalTextureContainer*) depthStencilAttachmentInfo->textureSlice.texture;
+        MetalTextureContainer *container = (MetalTextureContainer*) depthStencilAttachmentInfo->textureSlice.texture;
+        texture = container->activeTexture;
 
         /* FIXME: cycle! */
-        passDescriptor.depthAttachment.texture = texture->activeTexture->handle;
+        passDescriptor.depthAttachment.texture = texture->handle;
         passDescriptor.depthAttachment.level = depthStencilAttachmentInfo->textureSlice.mipLevel;
         passDescriptor.depthAttachment.slice = depthStencilAttachmentInfo->textureSlice.layer;
         passDescriptor.depthAttachment.loadAction = SDLToMetal_LoadOp[depthStencilAttachmentInfo->loadOp];
         passDescriptor.depthAttachment.storeAction = SDLToMetal_StoreOp(depthStencilAttachmentInfo->storeOp, 0);
         passDescriptor.depthAttachment.clearDepth = depthStencilAttachmentInfo->depthStencilClearValue.depth;
 
-        if (IsStencilFormat(texture->createInfo.format))
+        if (IsStencilFormat(container->createInfo.format))
         {
             /* FIXME: cycle! */
             passDescriptor.stencilAttachment.texture = passDescriptor.stencilAttachment.texture;
@@ -1304,6 +1409,8 @@ static void METAL_BeginRenderPass(
             passDescriptor.stencilAttachment.storeAction = SDLToMetal_StoreOp(depthStencilAttachmentInfo->storeOp, 0);
             passDescriptor.stencilAttachment.clearStencil = depthStencilAttachmentInfo->depthStencilClearValue.stencil;
         }
+
+        METAL_INTERNAL_TrackTexture(metalCommandBuffer, texture);
     }
 
     metalCommandBuffer->renderEncoder = [metalCommandBuffer->handle renderCommandEncoderWithDescriptor:passDescriptor];
@@ -1311,9 +1418,9 @@ static void METAL_BeginRenderPass(
     /* The viewport cannot be larger than the smallest attachment. */
     for (Uint32 i = 0; i < colorAttachmentCount; i += 1)
     {
-        MetalTextureContainer *texture = (MetalTextureContainer*) colorAttachmentInfos[i].textureSlice.texture;
-        Uint32 w = texture->createInfo.width >> colorAttachmentInfos[i].textureSlice.mipLevel;
-        Uint32 h = texture->createInfo.height >> colorAttachmentInfos[i].textureSlice.mipLevel;
+        MetalTextureContainer *container = (MetalTextureContainer*) colorAttachmentInfos[i].textureSlice.texture;
+        Uint32 w = container->createInfo.width >> colorAttachmentInfos[i].textureSlice.mipLevel;
+        Uint32 h = container->createInfo.height >> colorAttachmentInfos[i].textureSlice.mipLevel;
 
         if (w < vpWidth)
         {
@@ -1821,7 +1928,7 @@ static void METAL_UploadToTexture(
      destinationLevel:textureRegion->textureSlice.mipLevel
      destinationOrigin:MTLOriginMake(textureRegion->x, textureRegion->y, textureRegion->z)];
 
-    /* FIXME: METAL_INTERNAL_TrackTextureSubresource(metalCommandBuffer, textureSubresource); */
+    METAL_INTERNAL_TrackTexture(metalCommandBuffer, metalTexture);
     METAL_INTERNAL_TrackTransferBuffer(metalCommandBuffer, metalTransferBufferContainer->activeBuffer);
 }
 
@@ -1956,10 +2063,8 @@ static void METAL_CopyTextureToTexture(
      destinationLevel:destination->textureSlice.mipLevel
      destinationOrigin:MTLOriginMake(destination->x, destination->y, destination->z)];
 
-#if 0 /* FIXME */
-    METAL_INTERNAL_TrackTextureSubresource(metalCommandBuffer, srcSubresource);
-    METAL_INTERNAL_TrackTextureSubresource(metalCommandBuffer, dstSubresource);
-#endif
+    METAL_INTERNAL_TrackTexture(metalCommandBuffer, metalSourceTexture);
+    METAL_INTERNAL_TrackTexture(metalCommandBuffer, metalDestTexture);
 }
 
 static void METAL_CopyBufferToBuffer(
@@ -2193,7 +2298,11 @@ static void METAL_INTERNAL_AllocateCommandBuffers(
             commandBuffer->usedTransferBufferCapacity * sizeof(MetalTransferBuffer*)
         );
 
-        /* FIXME: Texture subresources? */
+        commandBuffer->usedTextureCapacity = 4;
+        commandBuffer->usedTextureCount = 0;
+        commandBuffer->usedTextures = SDL_malloc(
+            commandBuffer->usedTextureCapacity * sizeof(MetalTexture*)
+        );
 
         renderer->availableCommandBuffers[renderer->availableCommandBufferCount] = commandBuffer;
         renderer->availableCommandBufferCount += 1;
@@ -2359,7 +2468,11 @@ static void METAL_INTERNAL_CleanCommandBuffer(
     }
     commandBuffer->usedTransferBufferCount = 0;
 
-    /* FIXME: Texture subresources? */
+    for (Uint32 i = 0; i < commandBuffer->usedTextureCount; i += 1)
+    {
+        (void)SDL_AtomicDecRef(&commandBuffer->usedTextures[i]->referenceCount);
+    }
+    commandBuffer->usedTextureCount = 0;
 
     /* The fence is now available (unless SubmitAndAcquireFence was called) */
     if (commandBuffer->autoReleaseFence)
@@ -2388,6 +2501,71 @@ static void METAL_INTERNAL_CleanCommandBuffer(
         {
             renderer->submittedCommandBuffers[i] = renderer->submittedCommandBuffers[renderer->submittedCommandBufferCount - 1];
             renderer->submittedCommandBufferCount -= 1;
+        }
+    }
+}
+
+static void METAL_INTERNAL_PerformPendingDestroys(
+	MetalRenderer *renderer
+) {
+    Sint32 referenceCount = 0;
+    Sint32 i;
+    Uint32 j;
+
+	for (i = renderer->transferBufferContainersToDestroyCount - 1; i >= 0; i -= 1)
+	{
+        referenceCount = 0;
+		for (j = 0; j < renderer->transferBufferContainersToDestroy[i]->bufferCount; j += 1)
+		{
+			referenceCount += SDL_AtomicGet(&renderer->transferBufferContainersToDestroy[i]->buffers[j]->referenceCount);
+		}
+
+		if (referenceCount == 0)
+		{
+			METAL_INTERNAL_DestroyTransferBufferContainer(
+				renderer->transferBufferContainersToDestroy[i]
+			);
+
+			renderer->transferBufferContainersToDestroy[i] = renderer->transferBufferContainersToDestroy[renderer->transferBufferContainersToDestroyCount - 1];
+			renderer->transferBufferContainersToDestroyCount -= 1;
+		}
+	}
+
+    for (i = renderer->bufferContainersToDestroyCount - 1; i >= 0; i -= 1)
+    {
+        referenceCount = 0;
+        for (j = 0; j < renderer->bufferContainersToDestroy[i]->bufferCount; j += 1)
+        {
+            referenceCount += SDL_AtomicGet(&renderer->bufferContainersToDestroy[i]->buffers[j]->referenceCount);
+        }
+
+        if (referenceCount == 0)
+        {
+            METAL_INTERNAL_DestroyBufferContainer(
+                renderer->bufferContainersToDestroy[i]
+            );
+
+            renderer->bufferContainersToDestroy[i] = renderer->bufferContainersToDestroy[renderer->bufferContainersToDestroyCount - 1];
+            renderer->bufferContainersToDestroyCount -= 1;
+        }
+    }
+
+    for (i = renderer->textureContainersToDestroyCount - 1; i >= 0; i -= 1)
+    {
+        referenceCount = 0;
+        for (j = 0; j < renderer->textureContainersToDestroy[i]->textureCount; j += 1)
+        {
+            referenceCount += SDL_AtomicGet(&renderer->textureContainersToDestroy[i]->textures[j]->referenceCount);
+        }
+
+        if (referenceCount == 0)
+        {
+            METAL_INTERNAL_DestroyTextureContainer(
+                renderer->textureContainersToDestroy[i]
+            );
+
+            renderer->textureContainersToDestroy[i] = renderer->textureContainersToDestroy[renderer->textureContainersToDestroyCount - 1];
+            renderer->textureContainersToDestroyCount -= 1;
         }
     }
 }
@@ -2482,7 +2660,7 @@ static void METAL_Submit(
         }
     }
 
-    /* FIXME: METAL_INTERNAL_PerformPendingDestroys(renderer); */
+    METAL_INTERNAL_PerformPendingDestroys(renderer);
 
     SDL_UnlockMutex(renderer->submitLock);
 }
@@ -2525,9 +2703,7 @@ static void METAL_Wait(
         METAL_INTERNAL_CleanCommandBuffer(renderer, commandBuffer);
     }
 
-#if 0 /* FIXME */
     METAL_INTERNAL_PerformPendingDestroys(renderer);
-#endif
 
     SDL_UnlockMutex(renderer->submitLock);
 }
@@ -2538,6 +2714,9 @@ static void METAL_WaitForFences(
 	Uint32 fenceCount,
 	SDL_GpuFence **pFences
 ) {
+    MetalRenderer *renderer = (MetalRenderer*) driverData;
+    Uint8 waiting;
+
     if (waitAll)
     {
         for (Uint32 i = 0; i < fenceCount; i += 1)
@@ -2550,17 +2729,21 @@ static void METAL_WaitForFences(
     }
     else
     {
-        while (1)
+        waiting = 1;
+        while (waiting)
         {
             for (Uint32 i = 0; i < fenceCount; i += 1)
             {
                 if (SDL_AtomicGet(&((MetalFence*) pFences[i])->complete) > 0)
                 {
-                    return;
+                    waiting = 0;
+                    break;
                 }
             }
         }
     }
+
+    METAL_INTERNAL_PerformPendingDestroys(renderer);
 }
 
 static int METAL_QueryFence(
@@ -2716,6 +2899,7 @@ static SDL_GpuDevice* METAL_CreateDevice(
     /* Create mutexes */
     renderer->submitLock = SDL_CreateMutex();
     renderer->acquireCommandBufferLock = SDL_CreateMutex();
+    renderer->disposeLock = SDL_CreateMutex();
     renderer->uniformBufferLock = SDL_CreateMutex();
     renderer->fenceLock = SDL_CreateMutex();
     renderer->windowLock = SDL_CreateMutex();
@@ -2733,6 +2917,25 @@ static SDL_GpuDevice* METAL_CreateDevice(
     renderer->availableFenceCapacity = 2;
     renderer->availableFences = SDL_malloc(
         sizeof(MetalFence*) * renderer->availableFenceCapacity
+    );
+
+    /* Create deferred destroy arrays */
+    renderer->transferBufferContainersToDestroyCapacity = 2;
+    renderer->transferBufferContainersToDestroyCount = 0;
+    renderer->transferBufferContainersToDestroy = SDL_malloc(
+        renderer->transferBufferContainersToDestroyCapacity * sizeof(MetalTransferBufferContainer*)
+    );
+
+    renderer->bufferContainersToDestroyCapacity = 2;
+    renderer->bufferContainersToDestroyCount = 0;
+    renderer->bufferContainersToDestroy = SDL_malloc(
+        renderer->bufferContainersToDestroyCapacity * sizeof(MetalBufferContainer*)
+    );
+
+    renderer->textureContainersToDestroyCapacity = 2;
+    renderer->textureContainersToDestroyCount = 0;
+    renderer->textureContainersToDestroy = SDL_malloc(
+        renderer->textureContainersToDestroyCapacity * sizeof(MetalTextureContainer*)
     );
 
     /* Create claimed window list */
