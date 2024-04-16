@@ -867,7 +867,7 @@ extern DECLSPEC SDL_GpuShaderModule *SDLCALL SDL_GpuCreateShaderModule(
  * The contents of this texture are undefined until data is written to the texture.
  *
  * \param device a GPU Context
- * \param textureCreateInfo a struct describing the state of the desired texture
+ * \param textureCreateInfo a struct describing the state of the texture to create
  * \returns a texture object on success, or NULL on failure
  *
  * \since This function is available since SDL 3.x.x
@@ -1252,6 +1252,7 @@ extern DECLSPEC void SDLCALL SDL_GpuBindVertexSamplers(
 
 /**
  * Sets storage buffers for use with the currently bound vertex shader.
+ * You MUST NOT write to the storage buffer in your shader.
  *
  * \param renderPass a render pass handle
  * \param pBindings an array of structs each containing a buffer and cycle option.
@@ -1281,6 +1282,7 @@ extern DECLSPEC void SDLCALL SDL_GpuBindFragmentSamplers(
 
 /**
  * Sets storage buffers for use with the currently bound fragment shader.
+ * You MUST NOT write to the storage buffer in your shader.
  *
  * \param renderPass a render pass handle
  * \param pBindings an array of structs each containing a buffer and cycle option.

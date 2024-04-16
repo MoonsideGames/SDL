@@ -524,12 +524,14 @@ typedef struct D3D11GraphicsPipeline
 	ID3D11VertexShader *vertexShader;
 	ID3D11InputLayout *inputLayout;
 	Uint32 *vertexStrides;
-	Uint32 numVertexSamplers;
-	Uint32 vertexUniformBlockSize;
+    Uint32 numVertexSamplers;
+    Uint32 numVertexStorageBuffers;
+    Uint32 vertexUniformBlockSize;
 
 	ID3D11PixelShader *fragmentShader;
 	Uint32 numFragmentSamplers;
-	Uint32 fragmentUniformBlockSize;
+    Uint32 numFragmentStorageBuffers;
+    Uint32 fragmentUniformBlockSize;
 } D3D11GraphicsPipeline;
 
 typedef struct D3D11ComputePipeline
@@ -543,8 +545,9 @@ typedef struct D3D11ComputePipeline
 typedef struct D3D11Buffer
 {
 	ID3D11Buffer *handle;
-	ID3D11UnorderedAccessView* uav;
-	Uint32 size;
+	ID3D11UnorderedAccessView *uav;
+    ID3D11ShaderResourceView *srv;
+    Uint32 size;
 	SDL_AtomicInt referenceCount;
 } D3D11Buffer;
 
@@ -1089,10 +1092,15 @@ static void D3D11_INTERNAL_DestroyBufferContainer(
 	{
 		D3D11Buffer *d3d11Buffer = container->buffers[i];
 
-		if (d3d11Buffer->uav)
+		if (d3d11Buffer->uav != NULL)
 		{
 			ID3D11UnorderedAccessView_Release(d3d11Buffer->uav);
 		}
+
+        if (d3d11Buffer->srv != NULL)
+        {
+            ID3D11ShaderResourceView_Release(d3d11Buffer->srv);
+        }
 
 		ID3D11Buffer_Release(d3d11Buffer->handle);
 
@@ -1694,9 +1702,10 @@ static SDL_GpuGraphicsPipeline* D3D11_CreateGraphicsPipeline(
 
 	pipeline->vertexShader = (ID3D11VertexShader*) vertShaderModule->shader;
 	pipeline->numVertexSamplers = pipelineCreateInfo->vertexShaderInfo.samplerBindingCount;
-	pipeline->vertexUniformBlockSize = D3D11_INTERNAL_NextHighestAlignment(
-		(Uint32) pipelineCreateInfo->vertexShaderInfo.uniformBufferSize,
-		256
+    pipeline->numVertexStorageBuffers = pipelineCreateInfo->vertexShaderInfo.storageBufferBindingCount;
+    pipeline->vertexUniformBlockSize = D3D11_INTERNAL_NextHighestAlignment(
+        (Uint32) pipelineCreateInfo->vertexShaderInfo.uniformBufferSize,
+        256
 	);
 
 	/* Input Layout */
@@ -1729,7 +1738,8 @@ static SDL_GpuGraphicsPipeline* D3D11_CreateGraphicsPipeline(
 
 	pipeline->fragmentShader = (ID3D11PixelShader*) fragShaderModule->shader;
 	pipeline->numFragmentSamplers = pipelineCreateInfo->fragmentShaderInfo.samplerBindingCount;
-	pipeline->fragmentUniformBlockSize = D3D11_INTERNAL_NextHighestAlignment(
+    pipeline->numFragmentStorageBuffers = pipelineCreateInfo->vertexShaderInfo.storageBufferBindingCount;
+    pipeline->fragmentUniformBlockSize = D3D11_INTERNAL_NextHighestAlignment(
 		(Uint32) pipelineCreateInfo->fragmentShaderInfo.uniformBufferSize,
 		256
 	);
@@ -2485,16 +2495,20 @@ static D3D11TextureSubresource* D3D11_INTERNAL_PrepareTextureSubresourceForWrite
 
 static D3D11Buffer* D3D11_INTERNAL_CreateGpuBuffer(
 	D3D11Renderer *renderer,
-	SDL_GpuBufferUsageFlags usageFlags,
-	Uint32 sizeInBytes
+    SDL_GpuBufferUsageFlags usageFlags,
+    Uint32 sizeInBytes
 ) {
 	D3D11_BUFFER_DESC bufferDesc;
 	ID3D11Buffer *bufferHandle;
 	ID3D11UnorderedAccessView *uav = NULL;
-	D3D11Buffer *d3d11Buffer;
+    ID3D11ShaderResourceView *srv = NULL;
+    D3D11Buffer *d3d11Buffer;
 	HRESULT res;
 
-	bufferDesc.BindFlags = 0;
+    /* Storage buffers have to be 4-aligned, so might as well align them all */
+    sizeInBytes = D3D11_INTERNAL_NextHighestAlignment(sizeInBytes, 4);
+
+    bufferDesc.BindFlags = 0;
 	if (usageFlags & SDL_GPU_BUFFERUSAGE_VERTEX_BIT)
 	{
 		bufferDesc.BindFlags |= D3D11_BIND_VERTEX_BUFFER;
@@ -2505,7 +2519,7 @@ static D3D11Buffer* D3D11_INTERNAL_CreateGpuBuffer(
 	}
 	if ((usageFlags & SDL_GPU_BUFFERUSAGE_STORAGE_BIT) || (usageFlags & SDL_GPU_BUFFERUSAGE_INDIRECT_BIT))
 	{
-		bufferDesc.BindFlags |= D3D11_BIND_UNORDERED_ACCESS;
+		bufferDesc.BindFlags |= D3D11_BIND_UNORDERED_ACCESS | D3D11_BIND_SHADER_RESOURCE;
 	}
 
 	bufferDesc.ByteWidth = sizeInBytes;
@@ -2531,15 +2545,16 @@ static D3D11Buffer* D3D11_INTERNAL_CreateGpuBuffer(
 	);
 	ERROR_CHECK_RETURN("Could not create buffer", NULL);
 
-	/* Create a UAV for the buffer */
 	if (usageFlags & SDL_GPU_BUFFERUSAGE_STORAGE_BIT)
 	{
+       	/* Create a UAV for the buffer */
+
 		D3D11_UNORDERED_ACCESS_VIEW_DESC uavDesc;
 		uavDesc.Format = DXGI_FORMAT_R32_TYPELESS;
 		uavDesc.ViewDimension = D3D11_UAV_DIMENSION_BUFFER;
 		uavDesc.Buffer.FirstElement = 0;
-		uavDesc.Buffer.Flags = D3D11_BUFFER_UAV_FLAG_RAW;
-		uavDesc.Buffer.NumElements = sizeInBytes / sizeof(Uint32);
+        uavDesc.Buffer.NumElements = sizeInBytes / sizeof(Uint32);
+        uavDesc.Buffer.Flags = D3D11_BUFFER_UAV_FLAG_RAW;
 
 		res = ID3D11Device_CreateUnorderedAccessView(
 			renderer->device,
@@ -2552,13 +2567,35 @@ static D3D11Buffer* D3D11_INTERNAL_CreateGpuBuffer(
 			ID3D11Buffer_Release(bufferHandle);
 			ERROR_CHECK_RETURN("Could not create UAV for buffer!", NULL);
 		}
-	}
+
+        /* Create a SRV for the buffer */
+
+        D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc;
+        srvDesc.Format = DXGI_FORMAT_R32_TYPELESS;
+        srvDesc.ViewDimension = D3D11_SRV_DIMENSION_BUFFEREX;
+        srvDesc.BufferEx.FirstElement = 0;
+        srvDesc.BufferEx.NumElements = sizeInBytes / sizeof(Uint32);
+        srvDesc.BufferEx.Flags = D3D11_BUFFEREX_SRV_FLAG_RAW;
+
+        res = ID3D11Device_CreateShaderResourceView(
+            renderer->device,
+            (ID3D11Resource*) bufferHandle,
+            &srvDesc,
+            &srv
+        );
+        if (FAILED(res))
+        {
+            ID3D11Buffer_Release(bufferHandle);
+            ERROR_CHECK_RETURN("Could not create SRV for buffer!", NULL);
+        }
+    }
 
 	d3d11Buffer = SDL_malloc(sizeof(D3D11Buffer));
 	d3d11Buffer->handle = bufferHandle;
 	d3d11Buffer->size = sizeInBytes;
 	d3d11Buffer->uav = uav;
-	SDL_AtomicSet(&d3d11Buffer->referenceCount, 0);
+    d3d11Buffer->srv = srv;
+    SDL_AtomicSet(&d3d11Buffer->referenceCount, 0);
 
 	return d3d11Buffer;
 }
@@ -3578,11 +3615,58 @@ static void D3D11_BindFragmentSamplers(
 	);
 }
 
+/* Storage Buffers */
+
 static void D3D11_BindVertexStorageBuffers(
-    SDL_GpuRenderer *renderer,
+	SDL_GpuCommandBuffer *commandBuffer,
     SDL_GpuStorageBufferBinding *pBindings
 ) {
+	D3D11CommandBuffer *d3d11CommandBuffer = (D3D11CommandBuffer*) commandBuffer;
+    ID3D11ShaderResourceView *srvs[MAX_BUFFER_BINDINGS];
+    D3D11BufferContainer *currentBufferContainer;
+    Sint32 numBindings = d3d11CommandBuffer->graphicsPipeline->numVertexStorageBuffers;
+    Sint32 numVertexSamplers = d3d11CommandBuffer->graphicsPipeline->numVertexSamplers;
+    Sint32 i;
 
+    for (i = 0; i < numBindings; i += 1)
+    {
+        currentBufferContainer = (D3D11BufferContainer*) pBindings[i].gpuBuffer;
+        srvs[i] = currentBufferContainer->activeBuffer->srv;
+        D3D11_INTERNAL_TrackGpuBuffer(d3d11CommandBuffer, currentBufferContainer->activeBuffer);
+    }
+
+    ID3D11DeviceContext_VSSetShaderResources(
+        d3d11CommandBuffer->context,
+        numVertexSamplers,
+        numBindings,
+        srvs
+    );
+}
+
+static void D3D11_BindFragmentStorageBuffers(
+    SDL_GpuCommandBuffer *commandBuffer,
+    SDL_GpuStorageBufferBinding *pBindings
+) {
+    D3D11CommandBuffer *d3d11CommandBuffer = (D3D11CommandBuffer*) commandBuffer;
+    ID3D11ShaderResourceView *srvs[MAX_BUFFER_BINDINGS];
+    D3D11BufferContainer *currentBufferContainer;
+    Sint32 numBindings = d3d11CommandBuffer->graphicsPipeline->numFragmentStorageBuffers;
+    Sint32 numFragmentSamplers = d3d11CommandBuffer->graphicsPipeline->numFragmentSamplers;
+    Sint32 i;
+
+    for (i = 0; i < numBindings; i += 1)
+    {
+        currentBufferContainer = (D3D11BufferContainer*) pBindings[i].gpuBuffer;
+        srvs[i] = currentBufferContainer->activeBuffer->srv;
+        D3D11_INTERNAL_TrackGpuBuffer(d3d11CommandBuffer, currentBufferContainer->activeBuffer);
+    }
+
+    ID3D11DeviceContext_PSSetShaderResources(
+        d3d11CommandBuffer->context,
+        numFragmentSamplers,
+        numBindings,
+        srvs
+    );
 }
 
 /* Graphics State */
