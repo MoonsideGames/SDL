@@ -906,7 +906,7 @@ static MetalTexture* METAL_INTERNAL_CreateTexture(
     {
         textureDescriptor.usage |= MTLTextureUsageShaderRead;
     }
-    if (textureCreateInfo->usageFlags & SDL_GPU_TEXTUREUSAGE_COMPUTE_BIT)
+    if (textureCreateInfo->usageFlags & SDL_GPU_TEXTUREUSAGE_STORAGE_BIT)
     {
         textureDescriptor.usage |= MTLTextureUsageShaderRead | MTLTextureUsageShaderWrite;
     }
@@ -2192,7 +2192,7 @@ static Uint8 METAL_INTERNAL_CreateSwapchain(
     windowData->textureContainer.createInfo.depth = 1;
     windowData->textureContainer.createInfo.isCube = 0;
     windowData->textureContainer.createInfo.usageFlags =
-        SDL_GPU_TEXTUREUSAGE_COLOR_TARGET_BIT | SDL_GPU_TEXTUREUSAGE_SAMPLER_BIT | SDL_GPU_TEXTUREUSAGE_COMPUTE_BIT;
+        SDL_GPU_TEXTUREUSAGE_COLOR_TARGET_BIT | SDL_GPU_TEXTUREUSAGE_SAMPLER_BIT | SDL_GPU_TEXTUREUSAGE_STORAGE_BIT;
 
     drawableSize = windowData->layer.drawableSize;
     windowData->textureContainer.createInfo.width = (Uint32) drawableSize.width;
