@@ -2025,7 +2025,7 @@ static D3D11Texture* D3D11_Internal_CreateTexture(
 	D3D11Renderer *renderer,
 	SDL_GpuTextureCreateInfo *textureCreateInfo
 ) {
-Uint8 isColorTarget, isDepthStencil, isSampler, isCompute, isMultisample;
+Uint8 isColorTarget, isDepthStencil, isSampler, isStorage, isMultisample;
 	DXGI_FORMAT format;
 	ID3D11Resource *textureHandle;
 	ID3D11ShaderResourceView *srv = NULL;
@@ -2035,7 +2035,7 @@ Uint8 isColorTarget, isDepthStencil, isSampler, isCompute, isMultisample;
 	isColorTarget = textureCreateInfo->usageFlags & SDL_GPU_TEXTUREUSAGE_COLOR_TARGET_BIT;
 	isDepthStencil = textureCreateInfo->usageFlags & SDL_GPU_TEXTUREUSAGE_DEPTH_STENCIL_TARGET_BIT;
 	isSampler = textureCreateInfo->usageFlags & SDL_GPU_TEXTUREUSAGE_SAMPLER_BIT;
-	isCompute = textureCreateInfo->usageFlags & SDL_GPU_TEXTUREUSAGE_COMPUTE_BIT;
+	isStorage = textureCreateInfo->usageFlags & SDL_GPU_TEXTUREUSAGE_STORAGE_BIT;
 	isMultisample = textureCreateInfo->sampleCount > 1;
 
 	format = SDLToD3D11_TextureFormat[textureCreateInfo->format];
@@ -2053,7 +2053,7 @@ Uint8 isColorTarget, isDepthStencil, isSampler, isCompute, isMultisample;
 		{
 			desc2D.BindFlags |= D3D11_BIND_SHADER_RESOURCE;
 		}
-		if (isCompute)
+		if (isStorage)
 		{
 			desc2D.BindFlags |= D3D11_BIND_UNORDERED_ACCESS;
 		}
@@ -2135,7 +2135,7 @@ Uint8 isColorTarget, isDepthStencil, isSampler, isCompute, isMultisample;
 		{
 			desc3D.BindFlags |= D3D11_BIND_SHADER_RESOURCE;
 		}
-		if (isCompute)
+		if (isStorage)
 		{
 			desc3D.BindFlags |= D3D11_BIND_UNORDERED_ACCESS;
 		}
@@ -2336,7 +2336,7 @@ Uint8 isColorTarget, isDepthStencil, isSampler, isCompute, isMultisample;
 				}
 			}
 
-			if (isCompute)
+			if (isStorage)
 			{
 				D3D11_UNORDERED_ACCESS_VIEW_DESC uavDesc;
 				uavDesc.Format = format;
@@ -5600,7 +5600,7 @@ static SDL_bool D3D11_IsTextureFormatSupported(
     {
         return SDL_FALSE;
     }
-    if ((usage & SDL_GPU_TEXTUREUSAGE_COMPUTE_BIT) && !(formatSupport & D3D11_FORMAT_SUPPORT_SHADER_LOAD))
+    if ((usage & SDL_GPU_TEXTUREUSAGE_STORAGE_BIT) && !(formatSupport & D3D11_FORMAT_SUPPORT_SHADER_LOAD))
     {
         return SDL_FALSE;
     }

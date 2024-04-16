@@ -7372,7 +7372,7 @@ static SDL_GpuTexture* VULKAN_CreateTexture(
         imageUsageFlags |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
     }
 
-    if (textureCreateInfo->usageFlags & SDL_GPU_TEXTUREUSAGE_COMPUTE_BIT)
+    if (textureCreateInfo->usageFlags & SDL_GPU_TEXTUREUSAGE_STORAGE_BIT)
     {
         imageUsageFlags |= VK_IMAGE_USAGE_STORAGE_BIT;
     }
@@ -11471,7 +11471,7 @@ static SDL_bool VULKAN_IsTextureFormatSupported(
     {
         vulkanUsage |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
     }
-    if (usage & SDL_GPU_TEXTUREUSAGE_COMPUTE_BIT)
+    if (usage & SDL_GPU_TEXTUREUSAGE_STORAGE_BIT)
     {
         vulkanUsage |= VK_IMAGE_USAGE_STORAGE_BIT;
     }
