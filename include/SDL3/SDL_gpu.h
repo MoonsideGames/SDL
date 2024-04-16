@@ -182,7 +182,7 @@ typedef enum SDL_GpuBufferUsageFlagBits
 {
 	SDL_GPU_BUFFERUSAGE_VERTEX_BIT 	 = 0x00000001,
 	SDL_GPU_BUFFERUSAGE_INDEX_BIT  	 = 0x00000002,
-	SDL_GPU_BUFFERUSAGE_COMPUTE_BIT  = 0x00000004,
+	SDL_GPU_BUFFERUSAGE_STORAGE_BIT  = 0x00000004,
 	SDL_GPU_BUFFERUSAGE_INDIRECT_BIT = 0x00000008
 } SDL_GpuBufferUsageFlagBits;
 
@@ -520,6 +520,7 @@ typedef struct SDL_GpuGraphicsShaderInfo
 	const char* entryPointName;
 	Uint32 uniformBufferSize;
 	Uint32 samplerBindingCount;
+    Uint32 storageBufferBindingCount;
 } SDL_GpuGraphicsShaderInfo;
 
 typedef struct SDL_GpuComputeShaderInfo
@@ -704,13 +705,13 @@ typedef struct SDL_GpuTextureSamplerBinding
 	SDL_GpuSampler *sampler;
 } SDL_GpuTextureSamplerBinding;
 
-typedef struct SDL_GpuComputeBufferBinding
+typedef struct SDL_GpuStorageBufferBinding
 {
 	SDL_GpuBuffer *gpuBuffer;
 
     /* if SDL_TRUE, cycles the buffer if it is bound. */
 	SDL_bool cycle;
-} SDL_GpuComputeBufferBinding;
+} SDL_GpuStorageBufferBinding;
 
 typedef struct SDL_GpuComputeTextureBinding
 {
@@ -898,7 +899,7 @@ extern DECLSPEC SDL_GpuTexture *SDLCALL SDL_GpuCreateTexture(
  * \sa SDL_GpuUploadToBuffer
  * \sa SDL_GpuBindVertexBuffers
  * \sa SDL_GpuBindIndexBuffer
- * \sa SDL_GpuBindComputeBuffers
+ * \sa SDL_GpuBindComputeStorageBuffers
  * \sa SDL_GpuQueueDestroyGpuBuffer
  */
 extern DECLSPEC SDL_GpuBuffer *SDLCALL SDL_GpuCreateGpuBuffer(
@@ -1236,7 +1237,7 @@ extern DECLSPEC void SDLCALL SDL_GpuBindIndexBuffer(
 );
 
 /**
- * Sets texture-sampler pairs on a command buffer for use with the currently bound vertex shader.
+ * Sets texture-sampler pairs for use with the currently bound vertex shader.
  *
  * \param renderPass a render pass handle
  * \param pBindings an array of structs containing texture-sampler pairs.
@@ -1247,6 +1248,21 @@ extern DECLSPEC void SDLCALL SDL_GpuBindIndexBuffer(
 extern DECLSPEC void SDLCALL SDL_GpuBindVertexSamplers(
     SDL_GpuRenderPass *renderPass,
 	SDL_GpuTextureSamplerBinding *pBindings
+);
+
+/**
+ * Sets storage buffers for use with the currently bound vertex shader.
+ *
+ * \param renderPass a render pass handle
+ * \param pBindings an array of structs each containing a buffer and cycle option.
+ *                  The buffers must have been created using the STORAGE bit.
+ *                  Must be at least as long as the number of storage buffer bindings specified in the pipeline.
+ *
+ * \since This function is available since SDL 3.x.x
+ */
+extern DECLSPEC void SDLCALL SDL_GpuBindVertexStorageBuffers(
+    SDL_GpuRenderPass *renderPass,
+    SDL_GpuStorageBufferBinding *pBindings
 );
 
 /**
@@ -1261,6 +1277,19 @@ extern DECLSPEC void SDLCALL SDL_GpuBindVertexSamplers(
 extern DECLSPEC void SDLCALL SDL_GpuBindFragmentSamplers(
 	SDL_GpuRenderPass *renderPass,
 	SDL_GpuTextureSamplerBinding *pBindings
+);
+
+/**
+ * Sets storage buffers for use with the currently bound fragment shader.
+ *
+ * \param renderPass a render pass handle
+ * \param pBindings an array of structs each containing a buffer and cycle option.
+ *                  The buffers must have been created using the STORAGE bit.
+ *                  Must be at least as long as the number of storage buffer bindings specified in the pipeline.
+ */
+extern DECLSPEC void SDLCALL SDL_GpuBindFragmentStorageBuffers(
+    SDL_GpuRenderPass *renderPass,
+    SDL_GpuStorageBufferBinding *pBindings
 );
 
 /**
@@ -1404,13 +1433,14 @@ extern DECLSPEC void SDLCALL SDL_GpuBindComputePipeline(
  *
  * \param computePass a compute pass handle
  * \param pBindings an array of structs each containing a buffer and cycle option.
+ *                  The buffers must have been created using the STORAGE bit.
  *                  Must be at least as long as the number of buffer bindings specified in the pipeline.
  *
  * \since This function is available since SDL 3.x.x
  */
-extern DECLSPEC void SDLCALL SDL_GpuBindComputeBuffers(
+extern DECLSPEC void SDLCALL SDL_GpuBindComputeStorageBuffers(
 	SDL_GpuComputePass *computePass,
-	SDL_GpuComputeBufferBinding *pBindings
+	SDL_GpuStorageBufferBinding *pBindings
 );
 
 /**

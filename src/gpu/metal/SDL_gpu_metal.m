@@ -1767,7 +1767,7 @@ static void METAL_BindComputePipeline(
 	NOT_IMPLEMENTED
 }
 
-static void METAL_BindComputeBuffers(
+static void METAL_BindComputeStorageBuffers(
 	SDL_GpuCommandBuffer *commandBuffer,
 	SDL_GpuComputeBufferBinding *pBindings
 ) {

@@ -355,10 +355,20 @@ struct SDL_GpuDevice
 		SDL_GpuTextureSamplerBinding *pBindings
 	);
 
+    void (*BindVertexStorageBuffers)(
+        SDL_GpuCommandBuffer *commandBuffer,
+        SDL_GpuStorageBufferBinding *pBindings
+    );
+
 	void (*BindFragmentSamplers)(
 		SDL_GpuCommandBuffer *commandBuffer,
 		SDL_GpuTextureSamplerBinding *pBindings
 	);
+
+    void (*BindFragmentStorageBuffers)(
+        SDL_GpuCommandBuffer *commandBuffer,
+        SDL_GpuStorageBufferBinding *pBindings
+    );
 
 	void (*PushVertexShaderUniforms)(
 		SDL_GpuCommandBuffer *commandBuffer,
@@ -409,9 +419,9 @@ struct SDL_GpuDevice
 		SDL_GpuComputePipeline *computePipeline
 	);
 
-	void (*BindComputeBuffers)(
+	void (*BindComputeStorageBuffers)(
 		SDL_GpuCommandBuffer *commandBuffer,
-		SDL_GpuComputeBufferBinding *pBindings
+		SDL_GpuStorageBufferBinding *pBindings
 	);
 
 	void (*BindComputeTextures)(
@@ -667,7 +677,9 @@ struct SDL_GpuDevice
 	ASSIGN_DRIVER_FUNC(BindVertexBuffers, name) \
 	ASSIGN_DRIVER_FUNC(BindIndexBuffer, name) \
 	ASSIGN_DRIVER_FUNC(BindVertexSamplers, name) \
+    ASSIGN_DRIVER_FUNC(BindVertexStorageBuffers, name) \
 	ASSIGN_DRIVER_FUNC(BindFragmentSamplers, name) \
+    ASSIGN_DRIVER_FUNC(BindFragmentStorageBuffers, name) \
 	ASSIGN_DRIVER_FUNC(PushVertexShaderUniforms, name) \
 	ASSIGN_DRIVER_FUNC(PushFragmentShaderUniforms, name) \
 	ASSIGN_DRIVER_FUNC(DrawInstancedPrimitives, name) \
@@ -676,7 +688,7 @@ struct SDL_GpuDevice
 	ASSIGN_DRIVER_FUNC(EndRenderPass, name) \
 	ASSIGN_DRIVER_FUNC(BeginComputePass, name) \
 	ASSIGN_DRIVER_FUNC(BindComputePipeline, name) \
-	ASSIGN_DRIVER_FUNC(BindComputeBuffers, name) \
+	ASSIGN_DRIVER_FUNC(BindComputeStorageBuffers, name) \
 	ASSIGN_DRIVER_FUNC(BindComputeTextures, name) \
 	ASSIGN_DRIVER_FUNC(PushComputeShaderUniforms, name) \
 	ASSIGN_DRIVER_FUNC(DispatchCompute, name) \

@@ -2503,7 +2503,7 @@ static D3D11Buffer* D3D11_INTERNAL_CreateGpuBuffer(
 	{
 		bufferDesc.BindFlags |= D3D11_BIND_INDEX_BUFFER;
 	}
-	if ((usageFlags & SDL_GPU_BUFFERUSAGE_COMPUTE_BIT) || (usageFlags & SDL_GPU_BUFFERUSAGE_INDIRECT_BIT))
+	if ((usageFlags & SDL_GPU_BUFFERUSAGE_STORAGE_BIT) || (usageFlags & SDL_GPU_BUFFERUSAGE_INDIRECT_BIT))
 	{
 		bufferDesc.BindFlags |= D3D11_BIND_UNORDERED_ACCESS;
 	}
@@ -2518,7 +2518,7 @@ static D3D11Buffer* D3D11_INTERNAL_CreateGpuBuffer(
 	{
 		bufferDesc.MiscFlags |= D3D11_RESOURCE_MISC_DRAWINDIRECT_ARGS;
 	}
-	if (usageFlags & SDL_GPU_BUFFERUSAGE_COMPUTE_BIT)
+	if (usageFlags & SDL_GPU_BUFFERUSAGE_STORAGE_BIT)
 	{
 		bufferDesc.MiscFlags |= D3D11_RESOURCE_MISC_BUFFER_ALLOW_RAW_VIEWS;
 	}
@@ -2532,7 +2532,7 @@ static D3D11Buffer* D3D11_INTERNAL_CreateGpuBuffer(
 	ERROR_CHECK_RETURN("Could not create buffer", NULL);
 
 	/* Create a UAV for the buffer */
-	if (usageFlags & SDL_GPU_BUFFERUSAGE_COMPUTE_BIT)
+	if (usageFlags & SDL_GPU_BUFFERUSAGE_STORAGE_BIT)
 	{
 		D3D11_UNORDERED_ACCESS_VIEW_DESC uavDesc;
 		uavDesc.Format = DXGI_FORMAT_R32_TYPELESS;
@@ -3578,6 +3578,13 @@ static void D3D11_BindFragmentSamplers(
 	);
 }
 
+static void D3D11_BindVertexStorageBuffers(
+    SDL_GpuRenderer *renderer,
+    SDL_GpuStorageBufferBinding *pBindings
+) {
+
+}
+
 /* Graphics State */
 
 static void D3D11_INTERNAL_AllocateCommandBuffers(
@@ -4286,9 +4293,9 @@ static void D3D11_BindComputePipeline(
 	);
 }
 
-static void D3D11_BindComputeBuffers(
+static void D3D11_BindComputeStorageBuffers(
 	SDL_GpuCommandBuffer *commandBuffer,
-	SDL_GpuComputeBufferBinding *pBindings
+	SDL_GpuStorageBufferBinding *pBindings
 ) {
 	D3D11CommandBuffer *d3d11CommandBuffer = (D3D11CommandBuffer*) commandBuffer;
     D3D11Renderer *renderer = (D3D11Renderer*) d3d11CommandBuffer->renderer;

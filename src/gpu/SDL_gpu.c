@@ -631,6 +631,18 @@ void SDL_GpuBindVertexSamplers(
 	);
 }
 
+void SDL_GpuBindVertexStorageBuffers(
+    SDL_GpuRenderPass *renderPass,
+    SDL_GpuStorageBufferBinding *pBindings
+) {
+    NULL_RETURN(renderPass)
+    CHECK_RENDERPASS
+    RENDERPASS_DEVICE->BindVertexStorageBuffers(
+        RENDERPASS_COMMAND_BUFFER,
+        pBindings
+    );
+}
+
 void SDL_GpuBindFragmentSamplers(
     SDL_GpuRenderPass *renderPass,
 	SDL_GpuTextureSamplerBinding *pBindings
@@ -641,6 +653,18 @@ void SDL_GpuBindFragmentSamplers(
 		RENDERPASS_COMMAND_BUFFER,
 		pBindings
 	);
+}
+
+void SDL_GpuBindFragmentStorageBuffers(
+    SDL_GpuRenderPass *renderPass,
+    SDL_GpuStorageBufferBinding *pBindings
+) {
+    NULL_RETURN(renderPass)
+    CHECK_RENDERPASS
+    RENDERPASS_DEVICE->BindFragmentStorageBuffers(
+        RENDERPASS_COMMAND_BUFFER,
+        pBindings
+    );
 }
 
 void SDL_GpuPushVertexShaderUniforms(
@@ -763,13 +787,13 @@ void SDL_GpuBindComputePipeline(
 	);
 }
 
-void SDL_GpuBindComputeBuffers(
+void SDL_GpuBindComputeStorageBuffers(
 	SDL_GpuComputePass *computePass,
-	SDL_GpuComputeBufferBinding *pBindings
+	SDL_GpuStorageBufferBinding *pBindings
 ) {
 	NULL_RETURN(computePass)
     CHECK_COMPUTEPASS
-	COMPUTEPASS_DEVICE->BindComputeBuffers(
+	COMPUTEPASS_DEVICE->BindComputeStorageBuffers(
 		COMPUTEPASS_COMMAND_BUFFER,
 		pBindings
 	);
