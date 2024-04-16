@@ -1667,6 +1667,20 @@ static void METAL_BindFragmentSamplers(
     [metalCommandBuffer->renderEncoder setFragmentSamplerStates:metalSamplers withRange:range];
 }
 
+static void METAL_BindVertexStorageBuffers(
+    SDL_GpuCommandBuffer *commandBuffer,
+    SDL_GpuStorageBufferBinding *pBindings
+) {
+    NOT_IMPLEMENTED
+}
+
+static void METAL_BindFragmentStorageBuffers(
+    SDL_GpuCommandBuffer *commandBuffer,
+    SDL_GpuStorageBufferBinding *pBindings
+) {
+    NOT_IMPLEMENTED
+}
+
 static void METAL_SetGraphicsUniformBuffers(
     MetalCommandBuffer *commandBuffer
 ) {
@@ -1769,7 +1783,7 @@ static void METAL_BindComputePipeline(
 
 static void METAL_BindComputeStorageBuffers(
 	SDL_GpuCommandBuffer *commandBuffer,
-	SDL_GpuComputeBufferBinding *pBindings
+	SDL_GpuStorageBufferBinding *pBindings
 ) {
 	NOT_IMPLEMENTED
 }
