@@ -83,10 +83,17 @@ static MTLPixelFormat SDLToMetal_SurfaceFormat[] =
     MTLPixelFormatRGBA16Unorm,    /* R16G16B16A16 */
     MTLPixelFormatR8Unorm,        /* R8 */
     MTLPixelFormatA8Unorm,        /* A8 */
+#ifdef SDL_PLATFORM_MACOS
     MTLPixelFormatBC1_RGBA,        /* BC1 */
     MTLPixelFormatBC2_RGBA,        /* BC2 */
     MTLPixelFormatBC3_RGBA,        /* BC3 */
     MTLPixelFormatBC7_RGBAUnorm,        /* BC7 */
+#else
+    MTLPixelFormatInvalid,        /* BC1 */
+    MTLPixelFormatInvalid,        /* BC2 */
+    MTLPixelFormatInvalid,        /* BC3 */
+    MTLPixelFormatInvalid,        /* BC7 */
+#endif
     MTLPixelFormatRG8Snorm,        /* R8G8_SNORM */
     MTLPixelFormatRGBA8Snorm,    /* R8G8B8A8_SNORM */
     MTLPixelFormatR16Float,        /* R16_SFLOAT */
@@ -103,12 +110,25 @@ static MTLPixelFormat SDLToMetal_SurfaceFormat[] =
     MTLPixelFormatRGBA16Uint,    /* R16G16B16A16_UINT */
     MTLPixelFormatRGBA8Unorm_sRGB, /* R8G8B8A8_SRGB*/
     MTLPixelFormatBGRA8Unorm_sRGB, /* B8G8R8A8_SRGB */
+#ifdef SDL_PLATFORM_MACOS
     MTLPixelFormatBC3_RGBA_sRGB, /* BC3_SRGB */
     MTLPixelFormatBC7_RGBAUnorm_sRGB, /* BC7_SRGB */
+#else
+    MTLPixelFormatInvalid, /* BC3_SRGB */
+    MTLPixelFormatInvalid, /* BC7_SRGB */
+#endif
     MTLPixelFormatDepth16Unorm,        /* D16_UNORM */
+#ifdef SDL_PLATFORM_MACOS
     MTLPixelFormatDepth24Unorm_Stencil8,    /* D24_UNORM */
+#else
+    MTLPixelFormatInvalid,    /* D24_UNORM */
+#endif
     MTLPixelFormatDepth32Float,        /* D32_SFLOAT */
+#ifdef SDL_PLATFORM_MACOS
     MTLPixelFormatDepth24Unorm_Stencil8,    /* D24_UNORM_S8_UINT */
+#else
+    MTLPixelFormatInvalid,    /* D24_UNORM_S8_UINT */
+#endif
     MTLPixelFormatDepth32Float_Stencil8,    /* D32_SFLOAT_S8_UINT */
 };
 
@@ -1829,10 +1849,12 @@ static void METAL_SetTransferData(
         copyParams->size
     );
 
+#ifdef SDL_PLATFORM_MACOS
     if (buffer->stagingBuffer.storageMode == MTLStorageModeManaged)
     {
         [buffer->stagingBuffer didModifyRange:NSMakeRange(copyParams->dstOffset, copyParams->size)];
     }
+#endif
 }
 
 static void METAL_GetTransferData(
@@ -2122,7 +2144,9 @@ static Uint8 METAL_INTERNAL_CreateSwapchain(
 
     windowData->layer = (__bridge CAMetalLayer *)(SDL_Metal_GetLayer(windowData->view));
     windowData->layer.device = renderer->device;
+#ifdef SDL_PLATFORM_MACOS
     windowData->layer.displaySyncEnabled = (presentMode != SDL_GPU_PRESENTMODE_IMMEDIATE);
+#endif
     windowData->layer.framebufferOnly = FALSE; /* Allow sampling swapchain textures, at the expense of performance */
     windowData->layer.pixelFormat = MTLPixelFormatRGBA8Unorm;
 
@@ -2245,7 +2269,9 @@ static SDL_bool METAL_SupportsPresentMode(
 ) {
 	switch (presentMode)
 	{
+#ifdef SDL_PLATFORM_MACOS
 	case SDL_GPU_PRESENTMODE_IMMEDIATE:
+#endif
 	case SDL_GPU_PRESENTMODE_FIFO:
 		return SDL_TRUE;
 	default:
@@ -2828,14 +2854,22 @@ static SDL_bool METAL_IsTextureFormatSupported(
         case SDL_GPU_TEXTUREFORMAT_BC2:
         case SDL_GPU_TEXTUREFORMAT_BC3:
         case SDL_GPU_TEXTUREFORMAT_BC7:
+#ifdef SDL_PLATFORM_MACOS
             return (
                 [renderer->device supportsBCTextureCompression] &&
                 !(usage & SDL_GPU_TEXTUREUSAGE_COLOR_TARGET_BIT) );
+#else
+            return SDL_FALSE;
+#endif
 
         /* Requires D24S8 support */
         case SDL_GPU_TEXTUREFORMAT_D24_UNORM:
         case SDL_GPU_TEXTUREFORMAT_D24_UNORM_S8_UINT:
+#ifdef SDL_PLATFORM_MACOS
             return [renderer->device isDepth24Stencil8PixelFormatSupported];
+#else
+            return SDL_FALSE;
+#endif
 
         default:
             return SDL_TRUE;
