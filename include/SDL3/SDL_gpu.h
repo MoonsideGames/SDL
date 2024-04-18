@@ -188,12 +188,23 @@ typedef enum SDL_GpuBufferUsageFlagBits
 
 typedef Uint32 SDL_GpuBufferUsageFlags;
 
-typedef enum SDL_GpuShaderType
+typedef enum SDL_GpuShaderStage
 {
-	SDL_GPU_SHADERTYPE_VERTEX,
-	SDL_GPU_SHADERTYPE_FRAGMENT,
-	SDL_GPU_SHADERTYPE_COMPUTE
-} SDL_GpuShaderType;
+	SDL_GPU_SHADERSTAGE_VERTEX,
+	SDL_GPU_SHADERSTAGE_FRAGMENT,
+	SDL_GPU_SHADERSTAGE_COMPUTE
+} SDL_GpuShaderStage;
+
+typedef enum SDL_GpuShaderFormat
+{
+	SDL_GPU_SHADERFORMAT_INVALID,
+	SDL_GPU_SHADERFORMAT_SPIRV,	/* Vulkan */
+	SDL_GPU_SHADERFORMAT_DXBC,	/* D3D11, D3D12 */
+	SDL_GPU_SHADERFORMAT_DXIL,	/* D3D12 */
+	SDL_GPU_SHADERFORMAT_MSL,	/* Metal */
+	SDL_GPU_SHADERFORMAT_METALLIB,	/* Metal */
+	SDL_GPU_SHADERFORMAT_SECRET	/* NDA'd platforms */
+} SDL_GpuShaderFormat;
 
 typedef enum SDL_GpuVertexElementFormat
 {
@@ -484,7 +495,8 @@ typedef struct SDL_GpuShaderModuleCreateInfo
 {
 	size_t codeSize;
 	const Uint8 *code;
-	SDL_GpuShaderType type;
+	SDL_GpuShaderStage stage;
+	SDL_GpuShaderFormat format;
 } SDL_GpuShaderModuleCreateInfo;
 
 typedef struct SDL_GpuTextureCreateInfo

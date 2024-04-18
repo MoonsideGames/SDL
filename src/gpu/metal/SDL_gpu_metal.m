@@ -822,18 +822,34 @@ static SDL_GpuShaderModule* METAL_CreateShaderModule(
     SDL_GpuRenderer *driverData,
     SDL_GpuShaderModuleCreateInfo *shaderModuleCreateInfo
 ) {
-    MetalRenderer *renderer = (MetalRenderer*) driverData;
-    NSString *sourceString = [NSString
-        stringWithCString:(const char*) shaderModuleCreateInfo->code
-        encoding:[NSString defaultCStringEncoding]];
-    id<MTLLibrary> library = nil;
-    NSError *error = NULL;
-    MetalShaderModule *result = NULL;
+    MetalRenderer *renderer = (MetalRenderer*) driverData;;
+    id<MTLLibrary> library;
+    NSError *error;
+    dispatch_data_t data;
+    MetalShaderModule *result;
 
-    library = [renderer->device
-               newLibraryWithSource:sourceString
-               options:nil /* FIXME: Do we need any compile options? */
-               error:&error];
+	if (shaderModuleCreateInfo->format == SDL_GPU_SHADERFORMAT_MSL)
+	{
+		library = [renderer->device
+            newLibraryWithSource:@((const char*) shaderModuleCreateInfo->code)
+            options:nil /* FIXME: Do we need any compile options? */
+            error:&error];
+	}
+    else if (shaderModuleCreateInfo->format == SDL_GPU_SHADERFORMAT_METALLIB)
+    {
+        data = dispatch_data_create(
+            shaderModuleCreateInfo->code,
+            shaderModuleCreateInfo->codeSize,
+            dispatch_get_global_queue(0, 0),
+            ^{} /* FIXME: is this right? */
+        );
+        library = [renderer->device newLibraryWithData:data error:&error];
+    }
+    else
+    {
+		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Incompatible shader format for Metal");
+		return NULL;
+    }
 
     if (error != NULL)
     {

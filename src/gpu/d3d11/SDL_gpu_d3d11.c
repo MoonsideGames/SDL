@@ -1940,12 +1940,18 @@ static SDL_GpuShaderModule* D3D11_CreateShaderModule(
 ) {
 	D3D11Renderer *renderer = (D3D11Renderer*) driverData;
 	D3D11ShaderModule* shaderModule;
-	SDL_GpuShaderType shaderType = shaderModuleCreateInfo->type;
+	SDL_GpuShaderStage shaderStage = shaderModuleCreateInfo->stage;
 	ID3D11DeviceChild *shader = NULL;
 	HRESULT res;
 
-	/* Actually create the shader */
-	if (shaderType == SDL_GPU_SHADERTYPE_VERTEX)
+	if (shaderModuleCreateInfo->format != SDL_GPU_SHADERFORMAT_DXBC)
+	{
+		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Incompatible shader format for D3D11");
+		return NULL;
+	}
+
+	/* Create the shader from the byte blob */
+	if (shaderStage == SDL_GPU_SHADERSTAGE_VERTEX)
 	{
 		res = ID3D11Device_CreateVertexShader(
 			renderer->device,
@@ -1960,7 +1966,7 @@ static SDL_GpuShaderModule* D3D11_CreateShaderModule(
 			return NULL;
 		}
 	}
-	else if (shaderType == SDL_GPU_SHADERTYPE_FRAGMENT)
+	else if (shaderStage == SDL_GPU_SHADERSTAGE_FRAGMENT)
 	{
 		res = ID3D11Device_CreatePixelShader(
 			renderer->device,
@@ -1975,7 +1981,7 @@ static SDL_GpuShaderModule* D3D11_CreateShaderModule(
 			return NULL;
 		}
 	}
-	else if (shaderType == SDL_GPU_SHADERTYPE_COMPUTE)
+	else if (shaderStage == SDL_GPU_SHADERSTAGE_COMPUTE)
 	{
 		res = ID3D11Device_CreateComputeShader(
 			renderer->device,
@@ -1994,7 +2000,7 @@ static SDL_GpuShaderModule* D3D11_CreateShaderModule(
 	/* Allocate and set up the shader module */
 	shaderModule = (D3D11ShaderModule*) SDL_calloc(1, sizeof(D3D11ShaderModule));
 	shaderModule->shader = shader;
-    if (shaderType == SDL_GPU_SHADERTYPE_VERTEX)
+    if (shaderStage == SDL_GPU_SHADERSTAGE_VERTEX)
     {
         /* Store the raw bytecode and its length for creating InputLayouts */
         shaderModule->bytecode = SDL_malloc(shaderModuleCreateInfo->codeSize);
@@ -5676,7 +5682,7 @@ static void D3D11_INTERNAL_InitBlitPipelines(
     /* Fullscreen vertex shader */
     shaderModuleCreateInfo.code = (Uint8*) D3D11_FullscreenVert;
     shaderModuleCreateInfo.codeSize = sizeof(D3D11_FullscreenVert);
-    shaderModuleCreateInfo.type = SDL_GPU_SHADERTYPE_VERTEX;
+    shaderModuleCreateInfo.stage = SDL_GPU_SHADERSTAGE_VERTEX;
 
     renderer->fullscreenVertexShaderModule = D3D11_CreateShaderModule(
         (SDL_GpuRenderer*) renderer,
@@ -5691,7 +5697,7 @@ static void D3D11_INTERNAL_InitBlitPipelines(
     /* Blit from 2D pixel shader */
     shaderModuleCreateInfo.code = (Uint8*) D3D11_BlitFrom2D;
     shaderModuleCreateInfo.codeSize = sizeof(D3D11_BlitFrom2D);
-    shaderModuleCreateInfo.type = SDL_GPU_SHADERTYPE_FRAGMENT;
+    shaderModuleCreateInfo.stage = SDL_GPU_SHADERSTAGE_FRAGMENT;
 
     renderer->blitFrom2DPixelShaderModule = D3D11_CreateShaderModule(
         (SDL_GpuRenderer*) renderer,
@@ -5706,7 +5712,7 @@ static void D3D11_INTERNAL_InitBlitPipelines(
     /* Blit from 2D array pixel shader */
     shaderModuleCreateInfo.code = (Uint8 *) D3D11_BlitFrom2DArray;
     shaderModuleCreateInfo.codeSize = sizeof(D3D11_BlitFrom2DArray);
-    shaderModuleCreateInfo.type = SDL_GPU_SHADERTYPE_FRAGMENT;
+    shaderModuleCreateInfo.stage = SDL_GPU_SHADERSTAGE_FRAGMENT;
 
     renderer->blitFrom2DArrayPixelShaderModule = D3D11_CreateShaderModule(
         (SDL_GpuRenderer*) renderer,
