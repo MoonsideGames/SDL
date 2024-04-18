@@ -5683,6 +5683,7 @@ static void D3D11_INTERNAL_InitBlitPipelines(
     shaderModuleCreateInfo.code = (Uint8*) D3D11_FullscreenVert;
     shaderModuleCreateInfo.codeSize = sizeof(D3D11_FullscreenVert);
     shaderModuleCreateInfo.stage = SDL_GPU_SHADERSTAGE_VERTEX;
+    shaderModuleCreateInfo.format = SDL_GPU_SHADERFORMAT_DXBC;
 
     renderer->fullscreenVertexShaderModule = D3D11_CreateShaderModule(
         (SDL_GpuRenderer*) renderer,
