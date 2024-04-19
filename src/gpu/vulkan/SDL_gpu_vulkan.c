@@ -6781,7 +6781,7 @@ static SDL_GpuGraphicsPipeline* VULKAN_CreateGraphicsPipeline(
 
     /* Shader stages */
 
-    graphicsPipeline->vertexShaderModule = (VulkanShaderModule*) pipelineCreateInfo->vertexShaderInfo.shaderModule;
+    graphicsPipeline->vertexShaderModule = (VulkanShaderModule*) pipelineCreateInfo->vertexShader.shaderModule;
     SDL_AtomicIncRef(&graphicsPipeline->vertexShaderModule->referenceCount);
 
     shaderStageCreateInfos[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
@@ -6789,16 +6789,16 @@ static SDL_GpuGraphicsPipeline* VULKAN_CreateGraphicsPipeline(
     shaderStageCreateInfos[0].flags = 0;
     shaderStageCreateInfos[0].stage = VK_SHADER_STAGE_VERTEX_BIT;
     shaderStageCreateInfos[0].module = graphicsPipeline->vertexShaderModule->shaderModule;
-    shaderStageCreateInfos[0].pName = pipelineCreateInfo->vertexShaderInfo.entryPointName;
+    shaderStageCreateInfos[0].pName = pipelineCreateInfo->vertexShader.entryPointName;
     shaderStageCreateInfos[0].pSpecializationInfo = NULL;
 
     graphicsPipeline->vertexUniformBlockSize =
         VULKAN_INTERNAL_NextHighestAlignment32(
-            pipelineCreateInfo->vertexShaderInfo.uniformBufferSize,
+            pipelineCreateInfo->vertexShader.uniformBufferSize,
             renderer->minUBOAlignment
         );
 
-    graphicsPipeline->fragmentShaderModule = (VulkanShaderModule*) pipelineCreateInfo->fragmentShaderInfo.shaderModule;
+    graphicsPipeline->fragmentShaderModule = (VulkanShaderModule*) pipelineCreateInfo->fragmentShader.shaderModule;
     SDL_AtomicIncRef(&graphicsPipeline->fragmentShaderModule->referenceCount);
 
     shaderStageCreateInfos[1].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
@@ -6806,12 +6806,12 @@ static SDL_GpuGraphicsPipeline* VULKAN_CreateGraphicsPipeline(
     shaderStageCreateInfos[1].flags = 0;
     shaderStageCreateInfos[1].stage = VK_SHADER_STAGE_FRAGMENT_BIT;
     shaderStageCreateInfos[1].module = graphicsPipeline->fragmentShaderModule->shaderModule;
-    shaderStageCreateInfos[1].pName = pipelineCreateInfo->fragmentShaderInfo.entryPointName;
+    shaderStageCreateInfos[1].pName = pipelineCreateInfo->fragmentShader.entryPointName;
     shaderStageCreateInfos[1].pSpecializationInfo = NULL;
 
     graphicsPipeline->fragmentUniformBlockSize =
         VULKAN_INTERNAL_NextHighestAlignment32(
-            pipelineCreateInfo->fragmentShaderInfo.uniformBufferSize,
+            pipelineCreateInfo->fragmentShader.uniformBufferSize,
             renderer->minUBOAlignment
         );
 
@@ -7051,10 +7051,10 @@ static SDL_GpuGraphicsPipeline* VULKAN_CreateGraphicsPipeline(
 
     graphicsPipeline->pipelineLayout = VULKAN_INTERNAL_FetchGraphicsPipelineLayout(
         renderer,
-        pipelineCreateInfo->vertexShaderInfo.samplerBindingCount,
-        pipelineCreateInfo->fragmentShaderInfo.samplerBindingCount,
-        pipelineCreateInfo->vertexShaderInfo.storageBufferBindingCount,
-        pipelineCreateInfo->fragmentShaderInfo.storageBufferBindingCount
+        pipelineCreateInfo->vertexShader.samplerBindingCount,
+        pipelineCreateInfo->fragmentShader.samplerBindingCount,
+        pipelineCreateInfo->vertexShader.storageBufferBindingCount,
+        pipelineCreateInfo->fragmentShader.storageBufferBindingCount
     );
 
     /* Pipeline */
@@ -7340,9 +7340,9 @@ static SDL_GpuSampler* VULKAN_CreateSampler(
     return (SDL_GpuSampler*) vulkanSampler;
 }
 
-static SDL_GpuShaderModule* VULKAN_CreateShaderModule(
+static SDL_GpuShader* VULKAN_CreateShaderModule(
     SDL_GpuRenderer *driverData,
-    SDL_GpuShaderModuleCreateInfo *shaderModuleCreateInfo
+    SDL_GpuShaderCreateInfo *shaderModuleCreateInfo
 ) {
     VulkanShaderModule *vulkanShaderModule = SDL_malloc(sizeof(VulkanShaderModule));
     VkResult vulkanResult;
@@ -7378,7 +7378,7 @@ static SDL_GpuShaderModule* VULKAN_CreateShaderModule(
 
     SDL_AtomicSet(&vulkanShaderModule->referenceCount, 0);
 
-    return (SDL_GpuShaderModule*) vulkanShaderModule;
+    return (SDL_GpuShader*) vulkanShaderModule;
 }
 
 static SDL_GpuTexture* VULKAN_CreateTexture(
@@ -7932,7 +7932,7 @@ static void VULKAN_QueueDestroyTransferBuffer(
 
 static void VULKAN_QueueDestroyShaderModule(
     SDL_GpuRenderer *driverData,
-    SDL_GpuShaderModule *shaderModule
+    SDL_GpuShader *shaderModule
 ) {
     VulkanRenderer *renderer = (VulkanRenderer*) driverData;
     VulkanShaderModule *vulkanShaderModule = (VulkanShaderModule*) shaderModule;

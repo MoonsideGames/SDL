@@ -690,9 +690,9 @@ struct D3D11Renderer
     SDL_iconv_t iconv;
 
     /* Blit */
-    SDL_GpuShaderModule *fullscreenVertexShaderModule;
-    SDL_GpuShaderModule *blitFrom2DPixelShaderModule;
-    SDL_GpuShaderModule *blitFrom2DArrayPixelShaderModule;
+    SDL_GpuShader *fullscreenVertexShaderModule;
+    SDL_GpuShader *blitFrom2DPixelShaderModule;
+    SDL_GpuShader *blitFrom2DArrayPixelShaderModule;
     SDL_GpuGraphicsPipeline *blitFrom2DPipeline;
     SDL_GpuGraphicsPipeline *blitFrom2DArrayPipeline; /* also cube */
     SDL_GpuSampler *blitNearestSampler;
@@ -1180,7 +1180,7 @@ static void D3D11_INTERNAL_DestroyTransferBufferContainer(
 
 static void D3D11_QueueDestroyShaderModule(
 	SDL_GpuRenderer *driverData,
-	SDL_GpuShaderModule *shaderModule
+	SDL_GpuShader *shaderModule
 ) {
     (void) driverData; /* used by other backends */
 	D3D11ShaderModule *d3dShaderModule = (D3D11ShaderModule*) shaderModule;
@@ -1647,8 +1647,8 @@ static SDL_GpuGraphicsPipeline* D3D11_CreateGraphicsPipeline(
 	SDL_GpuGraphicsPipelineCreateInfo *pipelineCreateInfo
 ) {
 	D3D11Renderer *renderer = (D3D11Renderer*) driverData;
-	D3D11ShaderModule *vertShaderModule = (D3D11ShaderModule*) pipelineCreateInfo->vertexShaderInfo.shaderModule;
-	D3D11ShaderModule *fragShaderModule = (D3D11ShaderModule*) pipelineCreateInfo->fragmentShaderInfo.shaderModule;
+	D3D11ShaderModule *vertShaderModule = (D3D11ShaderModule*) pipelineCreateInfo->vertexShader.shaderModule;
+	D3D11ShaderModule *fragShaderModule = (D3D11ShaderModule*) pipelineCreateInfo->fragmentShader.shaderModule;
 
 	D3D11GraphicsPipeline *pipeline = SDL_malloc(sizeof(D3D11GraphicsPipeline));
 
@@ -1701,10 +1701,10 @@ static SDL_GpuGraphicsPipeline* D3D11_CreateGraphicsPipeline(
 	/* Vertex Shader */
 
 	pipeline->vertexShader = (ID3D11VertexShader*) vertShaderModule->shader;
-	pipeline->numVertexSamplers = pipelineCreateInfo->vertexShaderInfo.samplerBindingCount;
-    pipeline->numVertexStorageBuffers = pipelineCreateInfo->vertexShaderInfo.storageBufferBindingCount;
+	pipeline->numVertexSamplers = pipelineCreateInfo->vertexShader.samplerBindingCount;
+    pipeline->numVertexStorageBuffers = pipelineCreateInfo->vertexShader.storageBufferBindingCount;
     pipeline->vertexUniformBlockSize = D3D11_INTERNAL_NextHighestAlignment(
-        (Uint32) pipelineCreateInfo->vertexShaderInfo.uniformBufferSize,
+        (Uint32) pipelineCreateInfo->vertexShader.uniformBufferSize,
         256
 	);
 
@@ -1737,10 +1737,10 @@ static SDL_GpuGraphicsPipeline* D3D11_CreateGraphicsPipeline(
 	/* Fragment Shader */
 
 	pipeline->fragmentShader = (ID3D11PixelShader*) fragShaderModule->shader;
-	pipeline->numFragmentSamplers = pipelineCreateInfo->fragmentShaderInfo.samplerBindingCount;
-    pipeline->numFragmentStorageBuffers = pipelineCreateInfo->vertexShaderInfo.storageBufferBindingCount;
+	pipeline->numFragmentSamplers = pipelineCreateInfo->fragmentShader.samplerBindingCount;
+    pipeline->numFragmentStorageBuffers = pipelineCreateInfo->vertexShader.storageBufferBindingCount;
     pipeline->fragmentUniformBlockSize = D3D11_INTERNAL_NextHighestAlignment(
-		(Uint32) pipelineCreateInfo->fragmentShaderInfo.uniformBufferSize,
+		(Uint32) pipelineCreateInfo->fragmentShader.uniformBufferSize,
 		256
 	);
 
@@ -1944,9 +1944,9 @@ static SDL_GpuSampler* D3D11_CreateSampler(
 	return (SDL_GpuSampler*) d3d11Sampler;
 }
 
-static SDL_GpuShaderModule* D3D11_CreateShaderModule(
+static SDL_GpuShader* D3D11_CreateShaderModule(
 	SDL_GpuRenderer *driverData,
-	SDL_GpuShaderModuleCreateInfo *shaderModuleCreateInfo
+	SDL_GpuShaderCreateInfo *shaderModuleCreateInfo
 ) {
 	D3D11Renderer *renderer = (D3D11Renderer*) driverData;
 	D3D11ShaderModule* shaderModule;
@@ -2018,7 +2018,7 @@ static SDL_GpuShaderModule* D3D11_CreateShaderModule(
         shaderModule->bytecodeLength = shaderModuleCreateInfo->codeSize;
     }
 
-	return (SDL_GpuShaderModule*) shaderModule;
+	return (SDL_GpuShader*) shaderModule;
 }
 
 static D3D11Texture* D3D11_Internal_CreateTexture(
@@ -5763,7 +5763,7 @@ static void D3D11_INTERNAL_TryInitializeDXGIDebug(D3D11Renderer *renderer)
 static void D3D11_INTERNAL_InitBlitPipelines(
     D3D11Renderer *renderer
 ) {
-    SDL_GpuShaderModuleCreateInfo shaderModuleCreateInfo;
+    SDL_GpuShaderCreateInfo shaderModuleCreateInfo;
     SDL_GpuGraphicsPipelineCreateInfo blitPipelineCreateInfo;
     SDL_GpuSamplerStateCreateInfo samplerCreateInfo;
     SDL_GpuVertexBinding binding;
@@ -5852,15 +5852,15 @@ static void D3D11_INTERNAL_InitBlitPipelines(
     blitPipelineCreateInfo.vertexInputState.vertexBindingCount = 1;
     blitPipelineCreateInfo.vertexInputState.vertexBindings = &binding;
 
-    blitPipelineCreateInfo.vertexShaderInfo.entryPointName = "main";
-    blitPipelineCreateInfo.vertexShaderInfo.samplerBindingCount = 0;
-    blitPipelineCreateInfo.vertexShaderInfo.shaderModule = renderer->fullscreenVertexShaderModule;
-    blitPipelineCreateInfo.vertexShaderInfo.uniformBufferSize = 0;
+    blitPipelineCreateInfo.vertexShader.entryPointName = "main";
+    blitPipelineCreateInfo.vertexShader.samplerBindingCount = 0;
+    blitPipelineCreateInfo.vertexShader.shaderModule = renderer->fullscreenVertexShaderModule;
+    blitPipelineCreateInfo.vertexShader.uniformBufferSize = 0;
 
-    blitPipelineCreateInfo.fragmentShaderInfo.entryPointName = "main";
-    blitPipelineCreateInfo.fragmentShaderInfo.samplerBindingCount = 1;
-    blitPipelineCreateInfo.fragmentShaderInfo.shaderModule = renderer->blitFrom2DPixelShaderModule;
-    blitPipelineCreateInfo.fragmentShaderInfo.uniformBufferSize = 0;
+    blitPipelineCreateInfo.fragmentShader.entryPointName = "main";
+    blitPipelineCreateInfo.fragmentShader.samplerBindingCount = 1;
+    blitPipelineCreateInfo.fragmentShader.shaderModule = renderer->blitFrom2DPixelShaderModule;
+    blitPipelineCreateInfo.fragmentShader.uniformBufferSize = 0;
 
     blitPipelineCreateInfo.multisampleState.multisampleCount = SDL_GPU_SAMPLECOUNT_1;
     blitPipelineCreateInfo.multisampleState.sampleMask = 0xFFFFFFFF;
@@ -5891,8 +5891,8 @@ static void D3D11_INTERNAL_InitBlitPipelines(
     }
 
     /* Blit from 2D array pipeline */
-    blitPipelineCreateInfo.fragmentShaderInfo.shaderModule = renderer->blitFrom2DArrayPixelShaderModule;
-    blitPipelineCreateInfo.fragmentShaderInfo.uniformBufferSize = sizeof(Sint32);
+    blitPipelineCreateInfo.fragmentShader.shaderModule = renderer->blitFrom2DArrayPixelShaderModule;
+    blitPipelineCreateInfo.fragmentShader.uniformBufferSize = sizeof(Sint32);
 
     renderer->blitFrom2DArrayPipeline = D3D11_CreateGraphicsPipeline(
         (SDL_GpuRenderer*) renderer,

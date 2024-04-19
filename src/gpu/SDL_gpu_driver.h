@@ -213,7 +213,7 @@ struct SDL_GpuDevice
 
 	SDL_GpuComputePipeline* (*CreateComputePipeline)(
 		SDL_GpuRenderer *driverData,
-		SDL_GpuComputeShaderInfo *computeShaderInfo
+		SDL_GpuComputePipelineCreateInfo *pipelineCreateInfo
 	);
 
 	SDL_GpuGraphicsPipeline* (*CreateGraphicsPipeline)(
@@ -226,9 +226,9 @@ struct SDL_GpuDevice
 		SDL_GpuSamplerStateCreateInfo *samplerStateCreateInfo
 	);
 
-	SDL_GpuShaderModule* (*CreateShaderModule)(
+	SDL_GpuShader* (*CreateShader)(
 		SDL_GpuRenderer *driverData,
-		SDL_GpuShaderModuleCreateInfo *shaderModuleCreateInfo
+		SDL_GpuShaderCreateInfo *shaderCreateInfo
 	);
 
 	SDL_GpuTexture* (*CreateTexture)(
@@ -239,6 +239,11 @@ struct SDL_GpuDevice
 	SDL_GpuBuffer* (*CreateGpuBuffer)(
 		SDL_GpuRenderer *driverData,
 		SDL_GpuBufferUsageFlags usageFlags,
+		Uint32 sizeInBytes
+	);
+
+	SDL_GpuUniformBuffer* (*CreateUniformBuffer)(
+		SDL_GpuRenderer *driverData,
 		Uint32 sizeInBytes
 	);
 
@@ -288,14 +293,19 @@ struct SDL_GpuDevice
 		SDL_GpuBuffer *gpuBuffer
 	);
 
+	void (*QueueDestroyUniformBuffer)(
+		SDL_GpuRenderer *driverData,
+		SDL_GpuUniformBuffer *uniformBuffer
+	);
+
 	void (*QueueDestroyTransferBuffer)(
 		SDL_GpuRenderer *driverData,
 		SDL_GpuTransferBuffer *transferBuffer
 	);
 
-	void (*QueueDestroyShaderModule)(
+	void (*QueueDestroyShader)(
 		SDL_GpuRenderer *driverData,
-		SDL_GpuShaderModule *shaderModule
+		SDL_GpuShader *shader
 	);
 
 	void (*QueueDestroyComputePipeline)(
@@ -350,25 +360,19 @@ struct SDL_GpuDevice
 		SDL_GpuIndexElementSize indexElementSize
 	);
 
-	void (*BindVertexSamplers)(
+	void (*BindGraphicsResourceSet)(
 		SDL_GpuCommandBuffer *commandBuffer,
-		SDL_GpuTextureSamplerBinding *pBindings
+		Uint32 setIndex,
+		SDL_GpuShaderResourceBinding *resourceBindings,
+		Uint32 resourceBindingCount
 	);
 
-    void (*BindVertexStorageBuffers)(
-        SDL_GpuCommandBuffer *commandBuffer,
-        SDL_GpuStorageBufferBinding *pBindings
-    );
-
-	void (*BindFragmentSamplers)(
-		SDL_GpuCommandBuffer *commandBuffer,
-		SDL_GpuTextureSamplerBinding *pBindings
+	void (*PushGraphicsUniformData)(
+		SDL_GpuRenderPass *renderPass,
+		SDL_GpuUniformBuffer *uniformBuffer,
+		void *data,
+		Uint32 dataLengthInBytes
 	);
-
-    void (*BindFragmentStorageBuffers)(
-        SDL_GpuCommandBuffer *commandBuffer,
-        SDL_GpuStorageBufferBinding *pBindings
-    );
 
 	void (*PushVertexShaderUniforms)(
 		SDL_GpuCommandBuffer *commandBuffer,
@@ -419,18 +423,16 @@ struct SDL_GpuDevice
 		SDL_GpuComputePipeline *computePipeline
 	);
 
-	void (*BindComputeStorageBuffers)(
-		SDL_GpuCommandBuffer *commandBuffer,
-		SDL_GpuStorageBufferBinding *pBindings
+	void (*BindComputeResourceSet)(
+		SDL_GpuComputePass *computePass,
+		Uint32 setIndex,
+		SDL_GpuShaderResourceBinding *resourceBinding,
+		Uint32 resourceBindingCount
 	);
 
-	void (*BindComputeTextures)(
-		SDL_GpuCommandBuffer *commandBuffer,
-		SDL_GpuComputeTextureBinding *pBindings
-	);
-
-	void (*PushComputeShaderUniforms)(
-		SDL_GpuCommandBuffer *commandBuffer,
+	void (*PushComputeUniformData)(
+		SDL_GpuComputePass *computePass,
+		SDL_GpuUniformBuffer *uniformBuffer,
 		void *data,
 		Uint32 dataLengthInBytes
 	);
@@ -654,9 +656,10 @@ struct SDL_GpuDevice
 	ASSIGN_DRIVER_FUNC(CreateComputePipeline, name) \
 	ASSIGN_DRIVER_FUNC(CreateGraphicsPipeline, name) \
 	ASSIGN_DRIVER_FUNC(CreateSampler, name) \
-	ASSIGN_DRIVER_FUNC(CreateShaderModule, name) \
+	ASSIGN_DRIVER_FUNC(CreateShader, name) \
 	ASSIGN_DRIVER_FUNC(CreateTexture, name) \
 	ASSIGN_DRIVER_FUNC(CreateGpuBuffer, name) \
+	ASSIGN_DRIVER_FUNC(CreateUniformBuffer, name) \
 	ASSIGN_DRIVER_FUNC(CreateTransferBuffer, name) \
     ASSIGN_DRIVER_FUNC(CreateOcclusionQuery, name) \
 	ASSIGN_DRIVER_FUNC(SetGpuBufferName, name) \
@@ -665,8 +668,9 @@ struct SDL_GpuDevice
 	ASSIGN_DRIVER_FUNC(QueueDestroyTexture, name) \
 	ASSIGN_DRIVER_FUNC(QueueDestroySampler, name) \
 	ASSIGN_DRIVER_FUNC(QueueDestroyGpuBuffer, name) \
+	ASSIGN_DRIVER_FUNC(QueueDestroyUniformBuffer, name) \
 	ASSIGN_DRIVER_FUNC(QueueDestroyTransferBuffer, name) \
-	ASSIGN_DRIVER_FUNC(QueueDestroyShaderModule, name) \
+	ASSIGN_DRIVER_FUNC(QueueDestroyShader, name) \
 	ASSIGN_DRIVER_FUNC(QueueDestroyComputePipeline, name) \
 	ASSIGN_DRIVER_FUNC(QueueDestroyGraphicsPipeline, name) \
     ASSIGN_DRIVER_FUNC(QueueDestroyOcclusionQuery, name) \
@@ -676,21 +680,16 @@ struct SDL_GpuDevice
 	ASSIGN_DRIVER_FUNC(SetScissor, name) \
 	ASSIGN_DRIVER_FUNC(BindVertexBuffers, name) \
 	ASSIGN_DRIVER_FUNC(BindIndexBuffer, name) \
-	ASSIGN_DRIVER_FUNC(BindVertexSamplers, name) \
-    ASSIGN_DRIVER_FUNC(BindVertexStorageBuffers, name) \
-	ASSIGN_DRIVER_FUNC(BindFragmentSamplers, name) \
-    ASSIGN_DRIVER_FUNC(BindFragmentStorageBuffers, name) \
-	ASSIGN_DRIVER_FUNC(PushVertexShaderUniforms, name) \
-	ASSIGN_DRIVER_FUNC(PushFragmentShaderUniforms, name) \
+	ASSIGN_DRIVER_FUNC(BindGraphicsResourceSet, name) \
+	ASSIGN_DRIVER_FUNC(PushGraphicsUniformData, name) \
 	ASSIGN_DRIVER_FUNC(DrawInstancedPrimitives, name) \
 	ASSIGN_DRIVER_FUNC(DrawPrimitives, name) \
 	ASSIGN_DRIVER_FUNC(DrawPrimitivesIndirect, name) \
 	ASSIGN_DRIVER_FUNC(EndRenderPass, name) \
 	ASSIGN_DRIVER_FUNC(BeginComputePass, name) \
 	ASSIGN_DRIVER_FUNC(BindComputePipeline, name) \
-	ASSIGN_DRIVER_FUNC(BindComputeStorageBuffers, name) \
-	ASSIGN_DRIVER_FUNC(BindComputeTextures, name) \
-	ASSIGN_DRIVER_FUNC(PushComputeShaderUniforms, name) \
+	ASSIGN_DRIVER_FUNC(BindComputeResourceSet, name) \
+	ASSIGN_DRIVER_FUNC(PushComputeUniformData, name) \
 	ASSIGN_DRIVER_FUNC(DispatchCompute, name) \
 	ASSIGN_DRIVER_FUNC(EndComputePass, name) \
 	ASSIGN_DRIVER_FUNC(SetTransferData, name) \
