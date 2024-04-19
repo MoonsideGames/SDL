@@ -808,20 +808,20 @@ static inline Uint32 MurmurHash3_32_ptr (const void *ptr)
 
 /* Hashtable functions */
 
-static Uint32 HashPointer(void *key, void *data)
+static Uint32 HashPointer(const void *key, void *data)
 {
     return MurmurHash3_32_ptr(key);
 }
 
-static SDL_bool HashPointerMatch(void *a, void *b, void *data)
+static SDL_bool HashPointerMatch(const void *a, const void *b, void *data)
 {
     return a == b;
 }
 
-static void NukeSyncHashItem(void *key, void *value, void *data)
+static void NukeSyncHashItem(const void *key, const void *value, void *data)
 {
     /* free the AccessInfo struct */
-    SDL_free(value);
+    SDL_free((void*) value);
 }
 
 /* FIXME: replace cache structures with SDL_HashTable */
@@ -1707,6 +1707,20 @@ static void VULKAN_UnclaimWindow(SDL_GpuRenderer *driverData, SDL_Window *window
 static void VULKAN_Wait(SDL_GpuRenderer *driverData);
 static void VULKAN_Submit(SDL_GpuCommandBuffer *commandBuffer);
 static VulkanTextureSlice* VULKAN_INTERNAL_FetchTextureSlice(VulkanTexture* texture, Uint32 layer, Uint32 level);
+static VulkanTexture* VULKAN_INTERNAL_CreateTexture(
+    VulkanRenderer *renderer,
+    Uint32 width,
+    Uint32 height,
+    Uint32 depth,
+    Uint32 isCube,
+    Uint32 layerCount,
+    Uint32 levelCount,
+    VkSampleCountFlagBits sampleCount,
+    VkFormat format,
+    VkComponentMapping swizzle,
+    VkImageAspectFlags aspectMask,
+    SDL_GpuTextureUsageFlags imageUsageFlags
+);
 
 /* Error Handling */
 
@@ -2969,7 +2983,7 @@ static void VULKAN_INTERNAL_BufferMemoryBarrier(
     VkPipelineStageFlags srcStages = 0;
     VkPipelineStageFlags dstStages = 0;
     VkBufferMemoryBarrier memoryBarrier;
-    VulkanResourceAccessInfo *prevAccessInfo, *nextAccessInfo;
+    VulkanResourceAccessInfo *prevAccessInfo;
 
     memoryBarrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
     memoryBarrier.pNext = NULL;
@@ -2984,7 +2998,7 @@ static void VULKAN_INTERNAL_BufferMemoryBarrier(
     if (!SDL_FindInHashTable(
         commandBuffer->bufferSyncInfo,
         buffer,
-        &prevAccessInfo
+        (const void**) &prevAccessInfo
     )) {
         /* FIXME: these could be pooled instead of malloc'd */
         prevAccessInfo = SDL_malloc(sizeof(VulkanResourceAccessInfo));
@@ -3058,7 +3072,7 @@ static void VULKAN_INTERNAL_ImageMemoryBarrier(
     VkPipelineStageFlags srcStages = 0;
     VkPipelineStageFlags dstStages = 0;
     VkImageMemoryBarrier memoryBarrier;
-    VulkanResourceAccessInfo *prevAccessInfo, *nextAccessInfo;
+    VulkanResourceAccessInfo *prevAccessInfo;
 
     memoryBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
     memoryBarrier.pNext = NULL;
@@ -3078,7 +3092,7 @@ static void VULKAN_INTERNAL_ImageMemoryBarrier(
     if (!SDL_FindInHashTable(
         commandBuffer->textureSliceSyncInfo,
         textureSlice,
-        &prevAccessInfo
+        (const void**) &prevAccessInfo
     )) {
         /* FIXME: these should be pooled */
         prevAccessInfo = SDL_malloc(sizeof(VulkanResourceAccessInfo));
@@ -3130,7 +3144,7 @@ static void VULKAN_INTERNAL_ImageMemoryBarrier(
     }
 
     renderer->vkCmdPipelineBarrier(
-        commandBuffer,
+        commandBuffer->commandBuffer,
         srcStages,
         dstStages,
         0,
@@ -5850,6 +5864,53 @@ static void VULKAN_SetStringMarker(
     }
 }
 
+static VulkanTextureHandle* VULKAN_INTERNAL_CreateTextureHandle(
+    VulkanRenderer *renderer,
+    Uint32 width,
+    Uint32 height,
+    Uint32 depth,
+    Uint32 isCube,
+    Uint32 layerCount,
+    Uint32 levelCount,
+    VkSampleCountFlagBits sampleCount,
+    VkFormat format,
+    VkComponentMapping swizzle,
+    VkImageAspectFlags aspectMask,
+    VkImageUsageFlags imageUsageFlags
+) {
+    VulkanTextureHandle *textureHandle;
+    VulkanTexture *texture;
+
+    texture = VULKAN_INTERNAL_CreateTexture(
+        renderer,
+        width,
+        height,
+        depth,
+        isCube,
+        layerCount,
+        levelCount,
+        sampleCount,
+        format,
+        swizzle,
+        aspectMask,
+        imageUsageFlags
+    );
+
+    if (texture == NULL)
+    {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to create texture!");
+        return NULL;
+    }
+
+    textureHandle = SDL_malloc(sizeof(VulkanTextureHandle));
+    textureHandle->vulkanTexture = texture;
+    textureHandle->container = NULL;
+
+    texture->handle = textureHandle;
+
+    return textureHandle;
+}
+
 static VulkanTexture* VULKAN_INTERNAL_CreateTexture(
     VulkanRenderer *renderer,
     Uint32 width,
@@ -6075,53 +6136,6 @@ static VulkanTexture* VULKAN_INTERNAL_CreateTexture(
     return texture;
 }
 
-static VulkanTextureHandle* VULKAN_INTERNAL_CreateTextureHandle(
-    VulkanRenderer *renderer,
-    Uint32 width,
-    Uint32 height,
-    Uint32 depth,
-    Uint32 isCube,
-    Uint32 layerCount,
-    Uint32 levelCount,
-    VkSampleCountFlagBits sampleCount,
-    VkFormat format,
-    VkComponentMapping swizzle,
-    VkImageAspectFlags aspectMask,
-    VkImageUsageFlags imageUsageFlags
-) {
-    VulkanTextureHandle *textureHandle;
-    VulkanTexture *texture;
-
-    texture = VULKAN_INTERNAL_CreateTexture(
-        renderer,
-        width,
-        height,
-        depth,
-        isCube,
-        layerCount,
-        levelCount,
-        sampleCount,
-        format,
-        swizzle,
-        aspectMask,
-        imageUsageFlags
-    );
-
-    if (texture == NULL)
-    {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to create texture!");
-        return NULL;
-    }
-
-    textureHandle = SDL_malloc(sizeof(VulkanTextureHandle));
-    textureHandle->vulkanTexture = texture;
-    textureHandle->container = NULL;
-
-    texture->handle = textureHandle;
-
-    return textureHandle;
-}
-
 static void VULKAN_INTERNAL_CycleActiveBuffer(
     VulkanRenderer *renderer,
     VulkanBufferContainer *bufferContainer
@@ -6269,7 +6283,7 @@ static VulkanBuffer* VULKAN_INTERNAL_PrepareBufferForWrite(
     {
         VULKAN_INTERNAL_BufferMemoryBarrier(
             renderer,
-            commandBuffer->commandBuffer,
+            commandBuffer,
             nextResourceAccessInfo,
             bufferContainer->activeBufferHandle->vulkanBuffer
         );
@@ -6314,7 +6328,7 @@ static VulkanTextureSlice* VULKAN_INTERNAL_PrepareTextureSliceForWrite(
     /* always do barrier because of layout transitions */
     VULKAN_INTERNAL_ImageMemoryBarrier(
         renderer,
-        commandBuffer->commandBuffer,
+        commandBuffer,
         nextResourceAccessInfo,
         textureSlice
     );
@@ -8402,7 +8416,7 @@ static void VULKAN_BeginRenderPass(
             /* Transition the multisample attachment */
             VULKAN_INTERNAL_ImageMemoryBarrier(
                 renderer,
-                vulkanCommandBuffer->commandBuffer,
+                vulkanCommandBuffer,
                 &resourceAccessInfo,
                 &textureSlice->msaaTexHandle->vulkanTexture->slices[0]
             );
@@ -9142,7 +9156,7 @@ static void VULKAN_EndComputePass(
         )) {
             VULKAN_INTERNAL_BufferMemoryBarrier(
                 renderer,
-                vulkanCommandBuffer->commandBuffer,
+                vulkanCommandBuffer,
                 &resourceAccessInfo,
                 currentComputeBuffer
             );
@@ -9160,7 +9174,7 @@ static void VULKAN_EndComputePass(
         )) {
             VULKAN_INTERNAL_ImageMemoryBarrier(
                 renderer,
-                vulkanCommandBuffer->commandBuffer,
+                vulkanCommandBuffer,
                 &resourceAccessInfo,
                 currentComputeTextureSlice
             );
@@ -9267,7 +9281,7 @@ static void VULKAN_UploadToTexture(
 
     VULKAN_INTERNAL_BufferMemoryBarrier(
         renderer,
-        vulkanCommandBuffer->commandBuffer,
+        vulkanCommandBuffer,
         &resourceAccessInfo,
         transferBufferContainer->activeBufferHandle->vulkanBuffer
     );
@@ -9330,7 +9344,7 @@ static void VULKAN_UploadToBuffer(
 
     VULKAN_INTERNAL_BufferMemoryBarrier(
         renderer,
-        vulkanCommandBuffer->commandBuffer,
+        vulkanCommandBuffer,
         &nextResourceAccessInfo,
         transferBufferContainer->activeBufferHandle->vulkanBuffer
     );
@@ -9387,7 +9401,7 @@ static void VULKAN_CopyTextureToTexture(
 
     VULKAN_INTERNAL_ImageMemoryBarrier(
         renderer,
-        vulkanCommandBuffer->commandBuffer,
+        vulkanCommandBuffer,
         &resourceAccessInfo,
         srcSlice
     );
@@ -9456,7 +9470,7 @@ static void VULKAN_CopyBufferToBuffer(
 
     VULKAN_INTERNAL_BufferMemoryBarrier(
         renderer,
-        vulkanCommandBuffer->commandBuffer,
+        vulkanCommandBuffer,
         &resourceAccessInfo,
         srcContainer->activeBufferHandle->vulkanBuffer
     );
@@ -9516,7 +9530,7 @@ static void VULKAN_GenerateMipmaps(
 
         VULKAN_INTERNAL_ImageMemoryBarrier(
             renderer,
-            vulkanCommandBuffer->commandBuffer,
+            vulkanCommandBuffer,
             &resourceAccessInfo,
             srcTextureSlice
         );
@@ -9526,7 +9540,7 @@ static void VULKAN_GenerateMipmaps(
 
         VULKAN_INTERNAL_ImageMemoryBarrier(
             renderer,
-            vulkanCommandBuffer->commandBuffer,
+            vulkanCommandBuffer,
             &resourceAccessInfo,
             dstTextureSlice
         );
@@ -9596,7 +9610,7 @@ static void VULKAN_EndCopyPass(
         )) {
             VULKAN_INTERNAL_BufferMemoryBarrier(
                 renderer,
-                vulkanCommandBuffer->commandBuffer,
+                vulkanCommandBuffer,
                 &resourceAccessInfo,
                 currentBuffer
             );
@@ -9614,7 +9628,7 @@ static void VULKAN_EndCopyPass(
         )) {
             VULKAN_INTERNAL_ImageMemoryBarrier(
                 renderer,
-                vulkanCommandBuffer->commandBuffer,
+                vulkanCommandBuffer,
                 &resourceAccessInfo,
                 currentTextureSlice
             );
@@ -9663,7 +9677,7 @@ static void VULKAN_Blit(
 
     VULKAN_INTERNAL_ImageMemoryBarrier(
         renderer,
-        vulkanCommandBuffer->commandBuffer,
+        vulkanCommandBuffer,
         &resourceAccessInfo,
         srcTextureSlice
     );
@@ -9707,7 +9721,7 @@ static void VULKAN_Blit(
     )) {
         VULKAN_INTERNAL_ImageMemoryBarrier(
             renderer,
-            vulkanCommandBuffer->commandBuffer,
+            vulkanCommandBuffer,
             &resourceAccessInfo,
             srcTextureSlice
         );
@@ -9719,7 +9733,7 @@ static void VULKAN_Blit(
     )) {
         VULKAN_INTERNAL_ImageMemoryBarrier(
             renderer,
-            vulkanCommandBuffer->commandBuffer,
+            vulkanCommandBuffer,
             &resourceAccessInfo,
             dstTextureSlice
         );
@@ -10240,7 +10254,6 @@ static SDL_GpuTexture* VULKAN_AcquireSwapchainTexture(
     VulkanSwapchainData *swapchainData;
     VkResult acquireResult = VK_SUCCESS;
     VulkanTextureContainer *swapchainTextureContainer = NULL;
-    VulkanTextureSlice *swapchainTextureSlice;
     VulkanPresentData *presentData;
 
     windowData = VULKAN_INTERNAL_FetchWindowData(windowHandle);
@@ -10327,11 +10340,6 @@ static SDL_GpuTexture* VULKAN_AcquireSwapchainTexture(
     }
 
     swapchainTextureContainer = &swapchainData->textureContainers[swapchainImageIndex];
-    swapchainTextureSlice = VULKAN_INTERNAL_FetchTextureSlice(
-        swapchainTextureContainer->activeTextureHandle->vulkanTexture,
-        0,
-        0
-    );
 
     /* Set up present struct */
 
@@ -10919,7 +10927,7 @@ static void VULKAN_Submit(
 
         VULKAN_INTERNAL_ImageMemoryBarrier(
             renderer,
-            vulkanCommandBuffer->commandBuffer,
+            vulkanCommandBuffer,
             &resourceAccessInfo,
             swapchainTextureSlice
         );
@@ -11160,7 +11168,7 @@ static Uint8 VULKAN_INTERNAL_DefragmentMemory(
 
                 VULKAN_INTERNAL_BufferMemoryBarrier(
                     renderer,
-                    commandBuffer->commandBuffer,
+                    commandBuffer,
                     &resourceAccessInfo,
                     currentRegion->vulkanBuffer
                 );
@@ -11170,7 +11178,7 @@ static Uint8 VULKAN_INTERNAL_DefragmentMemory(
 
                 VULKAN_INTERNAL_BufferMemoryBarrier(
                     renderer,
-                    commandBuffer->commandBuffer,
+                    commandBuffer,
                     &resourceAccessInfo,
                     newBuffer
                 );
@@ -11193,7 +11201,7 @@ static Uint8 VULKAN_INTERNAL_DefragmentMemory(
                 )) {
                     VULKAN_INTERNAL_BufferMemoryBarrier(
                         renderer,
-                        commandBuffer->commandBuffer,
+                        commandBuffer,
                         &resourceAccessInfo,
                         newBuffer
                     );
@@ -11267,7 +11275,7 @@ static Uint8 VULKAN_INTERNAL_DefragmentMemory(
 
                     VULKAN_INTERNAL_ImageMemoryBarrier(
                         renderer,
-                        commandBuffer->commandBuffer,
+                        commandBuffer,
                         &resourceAccessInfo,
                         srcSlice
                     );
@@ -11277,7 +11285,7 @@ static Uint8 VULKAN_INTERNAL_DefragmentMemory(
 
                     VULKAN_INTERNAL_ImageMemoryBarrier(
                         renderer,
-                        commandBuffer->commandBuffer,
+                        commandBuffer,
                         &resourceAccessInfo,
                         dstSlice
                     );
@@ -11316,7 +11324,7 @@ static Uint8 VULKAN_INTERNAL_DefragmentMemory(
                     )) {
                         VULKAN_INTERNAL_ImageMemoryBarrier(
                             renderer,
-                            commandBuffer->commandBuffer,
+                            commandBuffer,
                             &resourceAccessInfo,
                             dstSlice
                         );
@@ -11383,7 +11391,7 @@ static void VULKAN_DownloadFromTexture(
 
     VULKAN_INTERNAL_BufferMemoryBarrier(
         renderer,
-        vulkanCommandBuffer->commandBuffer,
+        vulkanCommandBuffer,
         &resourceAccessInfo,
         transferBufferContainer->activeBufferHandle->vulkanBuffer
     );
@@ -11394,7 +11402,7 @@ static void VULKAN_DownloadFromTexture(
 
     VULKAN_INTERNAL_ImageMemoryBarrier(
         renderer,
-        vulkanCommandBuffer->commandBuffer,
+        vulkanCommandBuffer,
         &resourceAccessInfo,
         vulkanTextureSlice
     );
@@ -11428,7 +11436,7 @@ static void VULKAN_DownloadFromTexture(
     )) {
         VULKAN_INTERNAL_ImageMemoryBarrier(
             renderer,
-            vulkanCommandBuffer->commandBuffer,
+            vulkanCommandBuffer,
             &resourceAccessInfo,
             vulkanTextureSlice
         );
@@ -11473,7 +11481,7 @@ static void VULKAN_DownloadFromBuffer(
 
     VULKAN_INTERNAL_BufferMemoryBarrier(
         renderer,
-        vulkanCommandBuffer->commandBuffer,
+        vulkanCommandBuffer,
         &resourceAccessInfo,
         transferBufferContainer->activeBufferHandle->vulkanBuffer
     );
@@ -11482,7 +11490,7 @@ static void VULKAN_DownloadFromBuffer(
 
     VULKAN_INTERNAL_BufferMemoryBarrier(
         renderer,
-        vulkanCommandBuffer->commandBuffer,
+        vulkanCommandBuffer,
         &resourceAccessInfo,
         gpuBufferContainer->activeBufferHandle->vulkanBuffer
     );
@@ -11505,7 +11513,7 @@ static void VULKAN_DownloadFromBuffer(
     )) {
         VULKAN_INTERNAL_BufferMemoryBarrier(
             renderer,
-            vulkanCommandBuffer->commandBuffer,
+            vulkanCommandBuffer,
             &resourceAccessInfo,
             gpuBufferContainer->activeBufferHandle->vulkanBuffer
         );
