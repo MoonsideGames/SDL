@@ -752,13 +752,19 @@ typedef struct SDL_GpuStorageBufferBinding
 	SDL_bool cycle;
 } SDL_GpuStorageBufferBinding;
 
-typedef struct SDL_GpuComputeTextureBinding
+typedef struct SDL_GpuStorageTextureBinding
 {
 	SDL_GpuTextureSlice textureSlice;
 
     /* if SDL_TRUE, cycles the texture if the texture slice is bound. */
 	SDL_bool cycle;
-} SDL_GpuComputeTextureBinding;
+} SDL_GpuStorageTextureBinding;
+
+typedef struct SDL_GpuUniformBufferBinding
+{
+	SDL_GpuUniformBuffer *uniformBuffer;
+	Uint32 uniformDataSizeInBytes;
+} SDL_GpuUniformBufferBinding;
 
 typedef struct SDL_GpuShaderResourceBinding
 {
@@ -769,8 +775,8 @@ typedef struct SDL_GpuShaderResourceBinding
 		SDL_GpuBuffer *storageBufferReadOnly; /* FIXME: should this contain an offset/range? */
 		SDL_GpuStorageBufferBinding storageBufferReadWrite;
 		SDL_GpuTextureSlice storageTextureReadOnly;
-		SDL_GpuComputeTextureBinding storageTextureReadWrite;
-		SDL_GpuUniformBuffer *uniformBuffer;
+		SDL_GpuStorageTextureBinding storageTextureReadWrite;
+		SDL_GpuUniformBufferBinding uniformBuffer;
 	};
 } SDL_GpuShaderResourceBinding;
 
@@ -976,7 +982,7 @@ extern DECLSPEC SDL_GpuBuffer *SDLCALL SDL_GpuCreateGpuBuffer(
  * \sa SDL_GpuPushComputeUniformData
  * \sa SDL_GpuQueueDestroyUniformBuffer
  */
-extern DECLSPEC SDL_GpuBuffer *SDLCALL SDL_GpuCreateUniformBuffer(
+extern DECLSPEC SDL_GpuUniformBuffer *SDLCALL SDL_GpuCreateUniformBuffer(
 	SDL_GpuDevice *device,
 	Uint32 sizeInBytes
 );
@@ -1486,7 +1492,7 @@ extern DECLSPEC void SDLCALL SDL_GpuBindComputeResourceSet(
  * SDL_GpuBindComputeResourceSet using this uniform buffer.
  * Subsequent draw calls will use this uniform data.
  *
- * \param renderPass a render pass handle
+ * \param computePass a compute pass handle
  * \param uniformBuffer a uniform buffer object
  * \param data client data to write into the uniform buffer
  * \param dataLengthInBytes the length of the data to write

@@ -664,21 +664,29 @@ typedef struct VulkanUniformBuffer
 {
     VulkanBufferContainer *bufferContainer;
 
-    Uint32 offset;
-    Uint32 setIndex;
     VkDescriptorSet descriptorSet;
+    Uint32 setIndex;
+
+    Uint32 offset;
+    Uint32 currentBlockSize;
 } VulkanUniformBuffer;
 
 typedef struct DescriptorSetPool DescriptorSetPool;
 
+/* This structure removes duplication between graphics and compute */
+typedef struct VulkanPipelineResourceLayout
+{
+    VkPipelineLayout pipelineLayout;
+    DescriptorSetPool *descriptorSetPools;
+    Uint32 descriptorSetCount;
+} VulkanPipelineResourceLayout;
+
 typedef struct VulkanGraphicsPipeline
 {
     VkPipeline pipeline;
-    VkPipelineLayout pipelineLayout;
     SDL_GpuPrimitiveType primitiveType;
 
-    DescriptorSetPool *descriptorSetPools;
-    Uint32 descriptorSetCount;
+    VulkanPipelineResourceLayout resourceLayout;
 
     VulkanShader *vertexShader;
     VulkanShader *fragmentShader;
@@ -689,10 +697,8 @@ typedef struct VulkanGraphicsPipeline
 typedef struct VulkanComputePipeline
 {
     VkPipeline pipeline;
-    VkPipelineLayout pipelineLayout;
 
-    DescriptorSetPool *descriptorSetPools;
-    Uint32 descriptorSetCount;
+    VulkanPipelineResourceLayout resourceLayout;
 
     VulkanShader *computeShader;
 
@@ -1119,10 +1125,6 @@ typedef struct VulkanCommandBuffer
     Uint32 fragmentUniformDrawOffset;
     Uint32 computeUniformDrawOffset;
 
-    VulkanTextureSlice *renderPassColorTargetTextureSlices[MAX_COLOR_TARGET_BINDINGS];
-    Uint32 renderPassColorTargetTextureSliceCount;
-    VulkanTextureSlice *renderPassDepthTextureSlice; /* can be NULL */
-
     VkDescriptorSet vertexSamplerDescriptorSet; /* updated by BindVertexSamplers */
     VkDescriptorSet fragmentSamplerDescriptorSet; /* updated by BindFragmentSamplers */
     VkDescriptorSet vertexStorageDescriptorSet; /* updated by BindVertexStorageBuffers */
@@ -1135,39 +1137,15 @@ typedef struct VulkanCommandBuffer
     Uint32 boundDescriptorSetDataCount;
     Uint32 boundDescriptorSetDataCapacity;
 
-    VulkanUniformBuffer **boundUniformBuffers;
-    Uint32 boundUniformBufferCount;
-    Uint32 boundUniformBufferCapacity;
+    /* Keep track of writeable resources used in passes to set up memory barriers */
 
-    /* Keep track of compute pass resources for memory barriers */
+    VulkanBuffer **writeBuffers;
+    Uint32 writeBufferCount;
+    Uint32 writeBufferCapacity;
 
-    VulkanBuffer **computePassBuffers;
-    Uint32 computePassBufferCount;
-    Uint32 computePassBufferCapacity;
-
-    VulkanTextureSlice **computePassTextureSlices;
-    Uint32 computePassTextureSliceCount;
-    Uint32 computePassTextureSliceCapacity;
-
-    /* Keep track of copy pass resources for memory barriers */
-
-    VulkanBuffer **copyPassBuffers;
-    Uint32 copyPassBufferCount;
-    Uint32 copyPassBufferCapacity;
-
-    VulkanTextureSlice **copyPassTextureSlices;
-    Uint32 copyPassTextureSliceCount;
-    Uint32 copyPassTextureSliceCapacity;
-
-    /* Keep track of render pass resources for memory barriers */
-
-    VulkanBuffer **renderPassStorageBuffers;
-    Uint32 renderPassStorageBufferCount;
-    Uint32 renderPassStorageBufferCapacity;
-
-    VulkanTextureSlice **renderPassStorageTextureSlices;
-    Uint32 renderPassStorageTextureSliceCount;
-    Uint32 renderPassStorageTextureSliceCapacity;
+    VulkanTextureSlice **writeTextureSlices;
+    Uint32 writeTextureSliceCount;
+    Uint32 writeTextureSliceCapacity;
 
     /* Viewport/scissor state */
 
@@ -1361,9 +1339,9 @@ struct VulkanRenderer
     Uint32 computePipelinesToDestroyCount;
     Uint32 computePipelinesToDestroyCapacity;
 
-    VulkanShader **shaderModulesToDestroy;
-    Uint32 shaderModulesToDestroyCount;
-    Uint32 shaderModulesToDestroyCapacity;
+    VulkanShader **shadersToDestroy;
+    Uint32 shadersToDestroyCount;
+    Uint32 shadersToDestroyCapacity;
 
     VulkanFramebuffer **framebuffersToDestroy;
     Uint32 framebuffersToDestroyCount;
@@ -2898,6 +2876,33 @@ static void VULKAN_INTERNAL_PostPassTextureSliceBarrier(
     }
 }
 
+static void VULKAN_INTERNAL_PostPassBarriers(
+    VulkanRenderer *renderer,
+    VulkanCommandBuffer *commandBuffer
+) {
+    Uint32 i;
+
+    for (i = 0; i < commandBuffer->writeBufferCount; i += 1)
+    {
+        VULKAN_INTERNAL_PostPassBufferBarrier(
+            renderer,
+            commandBuffer,
+            commandBuffer->writeBuffers[i]
+        );
+    }
+    commandBuffer->writeBufferCount = 0;
+
+    for (i = 0; i < commandBuffer->writeTextureSliceCount; i += 1)
+    {
+        VULKAN_INTERNAL_PostPassTextureSliceBarrier(
+            renderer,
+            commandBuffer,
+            commandBuffer->writeTextureSlices[i]
+        );
+    }
+    commandBuffer->writeTextureSliceCount = 0;
+}
+
 /* Resource tracking */
 
 #define ADD_TO_ARRAY_UNIQUE(resource, type, array, count, capacity) \
@@ -3029,51 +3034,7 @@ static void VULKAN_INTERNAL_TrackFramebuffer(
     );
 }
 
-static void VULKAN_INTERNAL_TrackComputePassBuffer(
-    VulkanRenderer *renderer,
-    VulkanCommandBuffer *commandBuffer,
-    VulkanBuffer *computeBuffer
-) {
-    ADD_TO_ARRAY_UNIQUE(
-        computeBuffer,
-        VulkanBuffer*,
-        computePassBuffers,
-        computePassBufferCount,
-        computePassBufferCapacity
-    );
-}
-
-static void VULKAN_INTERNAL_TrackComputePassTextureSlice(
-    VulkanRenderer *renderer,
-    VulkanCommandBuffer *commandBuffer,
-    VulkanTextureSlice *textureSlice
-) {
-    ADD_TO_ARRAY_UNIQUE(
-        textureSlice,
-        VulkanTextureSlice*,
-        computePassTextureSlices,
-        computePassTextureSliceCount,
-        computePassTextureSliceCapacity
-    );
-}
-
-/* For tracking Textures used in a copy pass. */
-static void VULKAN_INTERNAL_TrackCopyPassTextureSlice(
-    VulkanRenderer *renderer,
-    VulkanCommandBuffer *commandBuffer,
-    VulkanTextureSlice *textureSlice
-) {
-    ADD_TO_ARRAY_UNIQUE(
-        textureSlice,
-        VulkanTextureSlice*,
-        copyPassTextureSlices,
-        copyPassTextureSliceCount,
-        copyPassTextureSliceCapacity
-    );
-}
-
-/* For tracking GpuBuffers used in a copy pass. */
-static void VULKAN_INTERNAL_TrackCopyPassBuffer(
+static void VULKAN_INTERNAL_TrackWriteBuffer(
     VulkanRenderer *renderer,
     VulkanCommandBuffer *commandBuffer,
     VulkanBuffer *buffer
@@ -3081,37 +3042,23 @@ static void VULKAN_INTERNAL_TrackCopyPassBuffer(
     ADD_TO_ARRAY_UNIQUE(
         buffer,
         VulkanBuffer*,
-        copyPassBuffers,
-        copyPassBufferCount,
-        copyPassBufferCapacity
+        writeBuffers,
+        writeBufferCount,
+        writeBufferCapacity
     );
 }
 
-static void VULKAN_INTERNAL_TrackRenderPassStorageTextureSlice(
+static void VULKAN_INTERNAL_TrackWriteTextureSlice(
     VulkanRenderer *renderer,
     VulkanCommandBuffer *commandBuffer,
-    VulkanTextureSlice* textureSlice
+    VulkanTextureSlice *textureSlice
 ) {
     ADD_TO_ARRAY_UNIQUE(
         textureSlice,
         VulkanTextureSlice*,
-        renderPassStorageTextureSlices,
-        renderPassStorageTextureSliceCount,
-        renderPassStorageTextureSliceCapacity
-    );
-}
-
-static void VULKAN_INTERNAL_TrackRenderPassStorageBuffer(
-    VulkanRenderer *renderer,
-    VulkanCommandBuffer *commandBuffer,
-    VulkanBuffer *buffer
-) {
-    ADD_TO_ARRAY_UNIQUE(
-        buffer,
-        VulkanBuffer*,
-        renderPassStorageBuffers,
-        renderPassStorageBufferCount,
-        renderPassStorageBufferCapacity
+        writeTextureSlices,
+        writeTextureSliceCount,
+        writeTextureSliceCapacity
     );
 }
 
@@ -3284,12 +3231,8 @@ static void VULKAN_INTERNAL_DestroyCommandPool(
         SDL_free(commandBuffer->waitSemaphores);
         SDL_free(commandBuffer->signalSemaphores);
         SDL_free(commandBuffer->boundDescriptorSetDatas);
-        SDL_free(commandBuffer->computePassBuffers);
-        SDL_free(commandBuffer->computePassTextureSlices);
-        SDL_free(commandBuffer->copyPassBuffers);
-        SDL_free(commandBuffer->copyPassTextureSlices);
-        SDL_free(commandBuffer->renderPassStorageBuffers);
-        SDL_free(commandBuffer->renderPassStorageTextureSlices);
+        SDL_free(commandBuffer->writeBuffers);
+        SDL_free(commandBuffer->writeTextureSlices);
         SDL_free(commandBuffer->usedBuffers);
         SDL_free(commandBuffer->usedTextureSlices);
         SDL_free(commandBuffer->usedSamplers);
@@ -3318,15 +3261,15 @@ static void VULKAN_INTERNAL_DestroyGraphicsPipeline(
 
     renderer->vkDestroyPipelineLayout(
         renderer->logicalDevice,
-        graphicsPipeline->pipelineLayout,
+        graphicsPipeline->resourceLayout.pipelineLayout,
         NULL
     );
 
-    for (i = 0; i < graphicsPipeline->descriptorSetCount; i += 1)
+    for (i = 0; i < graphicsPipeline->resourceLayout.descriptorSetCount; i += 1)
     {
         VULKAN_INTERNAL_DestroyDescriptorSetPool(
             renderer,
-            &graphicsPipeline->descriptorSetPools[i]
+            &graphicsPipeline->resourceLayout.descriptorSetPools[i]
         );
     }
 
@@ -3572,8 +3515,6 @@ static void VULKAN_INTERNAL_InitializeDescriptorSetPool(
     VulkanRenderer *renderer,
     DescriptorSetPool *descriptorSetPool
 ) {
-    VkResult vulkanResult;
-
     descriptorSetPool->lock = SDL_CreateMutex();
 
     /* Descriptor set layout and descriptor infos are already set when this function is called */
@@ -3605,14 +3546,12 @@ static void VULKAN_INTERNAL_InitializeDescriptorSetPool(
         DESCRIPTOR_POOL_STARTING_SIZE,
         descriptorSetPool->inactiveDescriptorSets
     );
-
-    return descriptorSetPool;
 }
 
-static SDL_bool VULKAN_INTERNAL_InitializeGraphicsPipelineLayout(
+static SDL_bool VULKAN_INTERNAL_InitializePipelineResourceLayout(
     VulkanRenderer *renderer,
     SDL_GpuPipelineResourceLayoutInfo *resourceLayoutInfo,
-    VulkanGraphicsPipeline *graphicsPipeline
+    VulkanPipelineResourceLayout *pipelineResourceLayout
 ) {
     VulkanDescriptorInfo *vulkanDescriptorInfos;
     VkDescriptorSetLayoutBinding *descriptorSetLayoutBindings;
@@ -3623,18 +3562,18 @@ static SDL_bool VULKAN_INTERNAL_InitializeGraphicsPipelineLayout(
     VkResult vulkanResult;
     Uint32 i, j;
 
-    graphicsPipeline->descriptorSetCount = resourceLayoutInfo->setLayoutInfos;
-    graphicsPipeline->descriptorSetPools = SDL_malloc(
-        graphicsPipeline->descriptorSetCount * sizeof(DescriptorSetPool)
+    pipelineResourceLayout->descriptorSetCount = resourceLayoutInfo->setLayoutInfos;
+    pipelineResourceLayout->descriptorSetPools = SDL_malloc(
+        pipelineResourceLayout->descriptorSetCount * sizeof(DescriptorSetPool)
     );
 
-    descriptorSetLayouts = SDL_stack_alloc(VkDescriptorSetLayout, graphicsPipeline->descriptorSetCount);
+    descriptorSetLayouts = SDL_stack_alloc(VkDescriptorSetLayout, pipelineResourceLayout->descriptorSetCount);
 
     for (i = 0; i < resourceLayoutInfo->setLayoutInfoCount; i += 1)
     {
-        graphicsPipeline->descriptorSetPools[i].descriptorInfoCount = resourceLayoutInfo->setLayoutInfos[i].elementDescriptionCount;
-        graphicsPipeline->descriptorSetPools[i].descriptorPools = SDL_malloc(
-            graphicsPipeline->descriptorSetPools[i].descriptorInfoCount * sizeof(VkDescriptorPool)
+        pipelineResourceLayout->descriptorSetPools[i].descriptorInfoCount = resourceLayoutInfo->setLayoutInfos[i].elementDescriptionCount;
+        pipelineResourceLayout->descriptorSetPools[i].descriptorPools = SDL_malloc(
+            pipelineResourceLayout->descriptorSetPools[i].descriptorInfoCount * sizeof(VkDescriptorPool)
         );
 
         descriptorSetLayoutCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
@@ -3662,9 +3601,9 @@ static SDL_bool VULKAN_INTERNAL_InitializeGraphicsPipelineLayout(
                 }
             }
 
-            graphicsPipeline->descriptorSetPools[i].descriptorInfos = SDL_malloc(sizeof(VulkanDescriptorInfo));
-            graphicsPipeline->descriptorSetPools[i].descriptorInfos[j].descriptorType = descriptorSetLayoutBindings[j].descriptorType;
-            graphicsPipeline->descriptorSetPools[i].descriptorInfos[j].stageFlags = descriptorSetLayoutBindings[j].stageFlags;
+            pipelineResourceLayout->descriptorSetPools[i].descriptorInfos = SDL_malloc(sizeof(VulkanDescriptorInfo));
+            pipelineResourceLayout->descriptorSetPools[i].descriptorInfos[j].descriptorType = descriptorSetLayoutBindings[j].descriptorType;
+            pipelineResourceLayout->descriptorSetPools[i].descriptorInfos[j].stageFlags = descriptorSetLayoutBindings[j].stageFlags;
         }
 
         descriptorSetLayoutCreateInfo.pBindings = descriptorSetLayoutBindings;
@@ -3673,10 +3612,10 @@ static SDL_bool VULKAN_INTERNAL_InitializeGraphicsPipelineLayout(
             renderer->logicalDevice,
             &descriptorSetLayoutCreateInfo,
             NULL,
-            &graphicsPipeline->descriptorSetPools[i].descriptorSetLayout
+            &pipelineResourceLayout->descriptorSetPools[i].descriptorSetLayout
         );
 
-        descriptorSetLayouts[i] = &graphicsPipeline->descriptorSetPools[i].descriptorSetLayout;
+        descriptorSetLayouts[i] = pipelineResourceLayout->descriptorSetPools[i].descriptorSetLayout;
 
         SDL_stack_free(descriptorSetLayoutBindings);
 
@@ -3699,7 +3638,7 @@ static SDL_bool VULKAN_INTERNAL_InitializeGraphicsPipelineLayout(
         renderer->logicalDevice,
         &pipelineLayoutCreateInfo,
         NULL,
-        &graphicsPipeline->pipelineLayout
+        &pipelineResourceLayout->pipelineLayout
     );
 
     SDL_stack_free(descriptorSetLayouts);
@@ -3714,7 +3653,7 @@ static SDL_bool VULKAN_INTERNAL_InitializeGraphicsPipelineLayout(
     {
         VULKAN_INTERNAL_InitializeDescriptorSetPool(
             renderer,
-            &graphicsPipeline->descriptorSetPools[i]
+            &pipelineResourceLayout->descriptorSetPools[i]
         );
     }
 
@@ -4761,7 +4700,7 @@ static void VULKAN_DestroyDevice(
     SDL_free(renderer->buffersToDestroy);
     SDL_free(renderer->graphicsPipelinesToDestroy);
     SDL_free(renderer->computePipelinesToDestroy);
-    SDL_free(renderer->shaderModulesToDestroy);
+    SDL_free(renderer->shadersToDestroy);
     SDL_free(renderer->samplersToDestroy);
     SDL_free(renderer->framebuffersToDestroy);
 
@@ -6149,12 +6088,19 @@ static SDL_GpuGraphicsPipeline* VULKAN_CreateGraphicsPipeline(
 
     /* Pipeline Layout */
 
-    /* FIXME: should this return a bool? */
-    VULKAN_INTERNAL_InitializeGraphicsPipelineLayout(
+    if (!VULKAN_INTERNAL_InitializePipelineResourceLayout(
         renderer,
         &pipelineCreateInfo->pipelineResourceLayoutInfo,
-        graphicsPipeline
-    );
+        &graphicsPipeline->resourceLayout
+    )) {
+        SDL_stack_free(vertexInputBindingDescriptions);
+        SDL_stack_free(vertexInputAttributeDescriptions);
+        SDL_stack_free(colorBlendAttachmentStates);
+        SDL_stack_free(divisorDescriptions);
+        SDL_free(graphicsPipeline);
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to initialize pipeline resource layout!");
+        return NULL;
+    }
 
     /* Pipeline */
 
@@ -6172,7 +6118,7 @@ static SDL_GpuGraphicsPipeline* VULKAN_CreateGraphicsPipeline(
     vkPipelineCreateInfo.pDepthStencilState = &depthStencilStateCreateInfo;
     vkPipelineCreateInfo.pColorBlendState = &colorBlendStateCreateInfo;
     vkPipelineCreateInfo.pDynamicState = &dynamicStateCreateInfo;
-    vkPipelineCreateInfo.layout = graphicsPipeline->pipelineLayout;
+    vkPipelineCreateInfo.layout = graphicsPipeline->resourceLayout.pipelineLayout;
     vkPipelineCreateInfo.renderPass = transientRenderPass;
     vkPipelineCreateInfo.subpass = 0;
     vkPipelineCreateInfo.basePipelineHandle = VK_NULL_HANDLE;
@@ -6212,111 +6158,6 @@ static SDL_GpuGraphicsPipeline* VULKAN_CreateGraphicsPipeline(
     return (SDL_GpuGraphicsPipeline*) graphicsPipeline;
 }
 
-/* FIXME: this is mostly duplicated code of InitializeGraphicsPipelineLayout */
-static SDL_bool VULKAN_INTERNAL_InitializeComputePipelineLayout(
-    VulkanRenderer *renderer,
-    SDL_GpuPipelineResourceLayoutInfo *resourceLayoutInfo,
-    VulkanComputePipeline *computePipeline
-) {
-    VulkanDescriptorInfo *vulkanDescriptorInfos;
-    VkDescriptorSetLayoutBinding *descriptorSetLayoutBindings;
-    VkDescriptorSetLayoutCreateInfo descriptorSetLayoutCreateInfo;
-    VkDescriptorSetLayout *descriptorSetLayouts;
-    VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo;
-    VkPipelineLayout pipelineLayout;
-    VkResult vulkanResult;
-    Uint32 i, j;
-
-    computePipeline->descriptorSetCount = resourceLayoutInfo->setLayoutInfoCount;
-    computePipeline->descriptorSetPools = SDL_malloc(
-        computePipeline->descriptorSetCount * sizeof(DescriptorSetPool)
-    );
-
-    descriptorSetLayouts = SDL_stack_alloc(VkDescriptorSetLayout, computePipeline->descriptorSetCount);
-
-    for (i = 0; i < resourceLayoutInfo->setLayoutInfoCount; i += 1)
-    {
-        computePipeline->descriptorSetPools[i].descriptorInfoCount =
-            resourceLayoutInfo->setLayoutInfos[i].elementDescriptionCount;
-        computePipeline->descriptorSetPools[i].descriptorPools = SDL_malloc(
-            computePipeline->descriptorSetPools[i].descriptorInfoCount * sizeof(VkDescriptorPool)
-        );
-
-        descriptorSetLayoutCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-        descriptorSetLayoutCreateInfo.pNext = NULL;
-        descriptorSetLayoutCreateInfo.flags = 0;
-        descriptorSetLayoutCreateInfo.bindingCount = resourceLayoutInfo->setLayoutInfos[i].elementDescriptionCount;
-
-        descriptorSetLayoutBindings = SDL_stack_alloc(VkDescriptorSetLayoutBinding, descriptorSetLayoutCreateInfo.bindingCount);
-
-        for (j = 0; j < descriptorSetLayoutCreateInfo.bindingCount; j += 1)
-        {
-            /* FIXME: convert descriptorType and stageFlags to actual vulkan types */
-            descriptorSetLayoutBindings[j].binding = j;
-            descriptorSetLayoutBindings[j].descriptorCount = 1;
-            descriptorSetLayoutBindings[j].descriptorType = resourceLayoutInfo->setLayoutInfos[i].elementDescriptions[j].resourceType;
-            descriptorSetLayoutBindings[j].stageFlags = resourceLayoutInfo->setLayoutInfos[i].elementDescriptions[j].shaderStageFlags;
-            descriptorSetLayoutBindings[j].pImmutableSamplers = NULL;
-
-            computePipeline->descriptorSetPools[i].descriptorInfos = SDL_malloc(sizeof(VulkanDescriptorInfo));
-            computePipeline->descriptorSetPools[i].descriptorInfos[j].descriptorType = descriptorSetLayoutBindings[j].descriptorType;
-            computePipeline->descriptorSetPools[i].descriptorInfos[j].stageFlags = descriptorSetLayoutBindings[j].stageFlags;
-        }
-
-        descriptorSetLayoutCreateInfo.pBindings = descriptorSetLayoutBindings;
-
-        vulkanResult = renderer->vkCreateDescriptorSetLayout(
-            renderer->logicalDevice,
-            &descriptorSetLayoutCreateInfo,
-            NULL,
-            &computePipeline->descriptorSetPools[i].descriptorSetLayout
-        );
-
-        descriptorSetLayouts[i] = &computePipeline->descriptorSetPools[i].descriptorSetLayout;
-
-        SDL_stack_free(descriptorSetLayoutBindings);
-
-        if (vulkanResult != VK_SUCCESS)
-        {
-            LogVulkanResultAsError("vkCreateDescriptorSetLayout", vulkanResult);
-            return SDL_FALSE;
-        }
-    }
-
-    pipelineLayoutCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-    pipelineLayoutCreateInfo.pNext = NULL;
-    pipelineLayoutCreateInfo.flags = 0;
-    pipelineLayoutCreateInfo.setLayoutCount = resourceLayoutInfo->setLayoutInfoCount;
-    pipelineLayoutCreateInfo.pSetLayouts = descriptorSetLayouts;
-    pipelineLayoutCreateInfo.pushConstantRangeCount = 0;
-    pipelineLayoutCreateInfo.pPushConstantRanges = NULL;
-
-    vulkanResult = renderer->vkCreatePipelineLayout(
-        renderer->logicalDevice,
-        &pipelineLayoutCreateInfo,
-        NULL,
-        &computePipeline->pipelineLayout
-    );
-
-    SDL_stack_free(descriptorSetLayouts);
-
-    if (vulkanResult != VK_SUCCESS)
-    {
-        LogVulkanResultAsError("vkCreatePipelineLayout", vulkanResult);
-        return SDL_FALSE;
-    }
-
-    for (i = 0; i < resourceLayoutInfo->setLayoutInfoCount; i += 1)
-    {
-        VULKAN_INTERNAL_InitializeDescriptorSetPool(
-            renderer,
-            &computePipeline->descriptorSetPools[i]
-        );
-    }
-
-    return SDL_TRUE;
-}
-
 static SDL_GpuComputePipeline* VULKAN_CreateComputePipeline(
     SDL_GpuRenderer *driverData,
     SDL_GpuComputePipelineCreateInfo *pipelineCreateInfo
@@ -6338,10 +6179,10 @@ static SDL_GpuComputePipeline* VULKAN_CreateComputePipeline(
     pipelineShaderStageCreateInfo.pName = vulkanComputePipeline->computeShader->entryPointName;
     pipelineShaderStageCreateInfo.pSpecializationInfo = NULL;
 
-    if (!VULKAN_INTERNAL_InitializeComputePipelineLayout(
+    if (!VULKAN_INTERNAL_InitializePipelineResourceLayout(
         renderer,
         &pipelineCreateInfo->pipelineResourceLayoutInfo,
-        vulkanComputePipeline
+        &vulkanComputePipeline->resourceLayout
     ))
     {
         SDL_free(vulkanComputePipeline);
@@ -6353,7 +6194,7 @@ static SDL_GpuComputePipeline* VULKAN_CreateComputePipeline(
     computePipelineCreateInfo.flags = 0;
     computePipelineCreateInfo.stage = pipelineShaderStageCreateInfo;
     computePipelineCreateInfo.layout =
-        vulkanComputePipeline->pipelineLayout;
+        vulkanComputePipeline->resourceLayout.pipelineLayout;
     computePipelineCreateInfo.basePipelineHandle = (VkPipeline) VK_NULL_HANDLE;
     computePipelineCreateInfo.basePipelineIndex = 0;
 
@@ -6659,32 +6500,13 @@ static SDL_GpuTransferBuffer* VULKAN_CreateTransferBuffer(
     );
 }
 
-/* Setters */
-
-static void VULKAN_INTERNAL_SetUniformBufferData(
-    VulkanUniformBuffer *uniformBuffer,
-    void* data,
-    Uint32 dataLength
-) {
-    Uint8 *dst =
-        uniformBuffer->bufferContainer->activeBufferHandle->vulkanBuffer->usedRegion->allocation->mapPointer +
-        uniformBuffer->bufferContainer->activeBufferHandle->vulkanBuffer->usedRegion->resourceOffset +
-        uniformBuffer->offset;
-
-    SDL_memcpy(
-        dst,
-        data,
-        dataLength
-    );
-}
-
-static VkDescriptorSet VULKAN_INTERNAL_FetchGraphicsDescriptorSet(
+static VkDescriptorSet VULKAN_INTERNAL_FetchDescriptorSet(
     VulkanRenderer *renderer,
     VulkanCommandBuffer *vulkanCommandBuffer,
-    VulkanGraphicsPipeline *graphicsPipeline,
+    VulkanPipelineResourceLayout *resourceLayout,
     Uint32 setIndex
 ) {
-    DescriptorSetPool *descriptorSetPool = &graphicsPipeline->descriptorSetPools[setIndex];
+    DescriptorSetPool *descriptorSetPool = &resourceLayout->descriptorSetPools[setIndex];
     VkDescriptorSet descriptorSet;
 
     SDL_LockMutex(descriptorSetPool->lock);
@@ -6885,6 +6707,36 @@ static void VULKAN_QueueDestroyGpuBuffer(
     SDL_UnlockMutex(renderer->disposeLock);
 }
 
+static void VULKAN_QueueDestroyUniformBuffer(
+    SDL_GpuRenderer *driverData,
+    SDL_GpuUniformBuffer *uniformBuffer
+) {
+    VulkanRenderer *renderer = (VulkanRenderer*) driverData;
+    VulkanUniformBuffer *vulkanUniformBuffer = (VulkanUniformBuffer*) uniformBuffer;
+    VulkanBufferContainer *vulkanBufferContainer = vulkanUniformBuffer->bufferContainer;
+    Uint32 i;
+
+    SDL_LockMutex(renderer->disposeLock);
+
+    for (i = 0; i < vulkanBufferContainer->bufferCount; i += 1)
+    {
+        VULKAN_INTERNAL_QueueDestroyBuffer(renderer, vulkanBufferContainer->bufferHandles[i]->vulkanBuffer);
+        SDL_free(vulkanBufferContainer->bufferHandles[i]);
+    }
+
+    /* Containers are just client handles, so we can free immediately */
+    if (vulkanBufferContainer->debugName != NULL)
+    {
+        SDL_free(vulkanBufferContainer->debugName);
+    }
+    SDL_free(vulkanBufferContainer->bufferHandles);
+    SDL_free(vulkanBufferContainer);
+
+    SDL_free(vulkanUniformBuffer);
+
+    SDL_UnlockMutex(renderer->disposeLock);
+}
+
 static void VULKAN_QueueDestroyTransferBuffer(
     SDL_GpuRenderer *driverData,
     SDL_GpuTransferBuffer *transferBuffer
@@ -6908,25 +6760,25 @@ static void VULKAN_QueueDestroyTransferBuffer(
     SDL_UnlockMutex(renderer->disposeLock);
 }
 
-static void VULKAN_QueueDestroyShaderModule(
+static void VULKAN_QueueDestroyShader(
     SDL_GpuRenderer *driverData,
-    SDL_GpuShader *shaderModule
+    SDL_GpuShader *shader
 ) {
     VulkanRenderer *renderer = (VulkanRenderer*) driverData;
-    VulkanShader *vulkanShaderModule = (VulkanShader*) shaderModule;
+    VulkanShader *vulkanShader = (VulkanShader*) shader;
 
     SDL_LockMutex(renderer->disposeLock);
 
     EXPAND_ARRAY_IF_NEEDED(
-        renderer->shaderModulesToDestroy,
+        renderer->shadersToDestroy,
         VulkanShader*,
-        renderer->shaderModulesToDestroyCount + 1,
-        renderer->shaderModulesToDestroyCapacity,
-        renderer->shaderModulesToDestroyCapacity * 2
+        renderer->shadersToDestroyCount + 1,
+        renderer->shadersToDestroyCapacity,
+        renderer->shadersToDestroyCapacity * 2
     )
 
-    renderer->shaderModulesToDestroy[renderer->shaderModulesToDestroyCount] = vulkanShaderModule;
-    renderer->shaderModulesToDestroyCount += 1;
+    renderer->shadersToDestroy[renderer->shadersToDestroyCount] = vulkanShader;
+    renderer->shadersToDestroyCount += 1;
 
     SDL_UnlockMutex(renderer->disposeLock);
 }
@@ -7279,6 +7131,369 @@ static void VULKAN_SetScissor(
     );
 }
 
+static void VULKAN_INTERNAL_BindResourceSet(
+    SDL_GpuCommandBuffer *commandBuffer,
+    VkPipelineBindPoint pipelineBindPoint,
+    Uint32 setIndex,
+    SDL_GpuShaderResourceBinding *resourceBindings,
+    Uint32 resourceBindingCount
+) {
+    VulkanCommandBuffer *vulkanCommandBuffer = (VulkanCommandBuffer*) commandBuffer;
+    VulkanRenderer *renderer = (VulkanRenderer*) vulkanCommandBuffer->renderer;
+    VulkanPipelineResourceLayout *resourceLayout;
+    VulkanBufferContainer *bufferContainer;
+    VulkanTextureContainer *textureContainer;
+    VulkanTextureSlice *textureSlice;
+    VulkanUniformBuffer *uniformBuffer;
+    VkDescriptorSet descriptorSet;
+    VkWriteDescriptorSet *writeDescriptorSets;
+    VkDescriptorBufferInfo bufferInfos[16]; /* FIXME: magic value */
+    VkDescriptorImageInfo imageInfos[16]; /* FIXME: magic value */
+    VulkanResourceAccessInfo nextResourceAccessInfo;
+    Uint32 bufferInfoCount = 0;
+    Uint32 imageInfoCount = 0;
+    Uint32 i, j;
+
+    if (pipelineBindPoint == VK_PIPELINE_BIND_POINT_GRAPHICS)
+    {
+        resourceLayout = &vulkanCommandBuffer->currentGraphicsPipeline->resourceLayout;
+    }
+    else /* compute bind point */
+    {
+        resourceLayout = &vulkanCommandBuffer->currentComputePipeline->resourceLayout;
+    }
+
+    descriptorSet = VULKAN_INTERNAL_FetchDescriptorSet(
+        renderer,
+        vulkanCommandBuffer,
+        resourceLayout,
+        setIndex
+    );
+
+    if (descriptorSet == VK_NULL_HANDLE)
+    {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to fetch descriptor set!");
+        return;
+    }
+
+    writeDescriptorSets = SDL_stack_alloc(VkWriteDescriptorSet, resourceBindingCount);
+
+    for (i = 0; i < resourceBindingCount; i += 1)
+    {
+        writeDescriptorSets[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        writeDescriptorSets[i].pNext = NULL;
+        writeDescriptorSets[i].descriptorCount = 1;
+        writeDescriptorSets[i].descriptorType = SDLToVK_DescriptorType[resourceBindings[i].resourceType];
+        writeDescriptorSets[i].dstArrayElement = 0;
+        writeDescriptorSets[i].dstBinding = i;
+        writeDescriptorSets[i].dstSet = descriptorSet;
+        writeDescriptorSets[i].pTexelBufferView = NULL;
+        writeDescriptorSets[i].pImageInfo = NULL;
+        writeDescriptorSets[i].pBufferInfo = NULL;
+
+        /* TODO: validate types against pipeline layout */
+        switch (resourceBindings[i].resourceType)
+        {
+            case SDL_GPU_RESOURCETYPE_TEXTURE_SAMPLER:
+                textureContainer = (VulkanTextureContainer*) resourceBindings[i].textureSampler.texture;
+
+                imageInfos[imageInfoCount].sampler =
+                    (VkSampler) ((VulkanSampler*) resourceBindings[i].textureSampler.sampler)->sampler;
+                imageInfos[imageInfoCount].imageView =
+                    textureContainer->activeTextureHandle->vulkanTexture->view;
+                imageInfos[imageInfoCount].imageLayout =
+                    VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+                writeDescriptorSets[i].pImageInfo = &imageInfos[imageInfoCount];
+
+                for (j = 0; j < textureContainer->activeTextureHandle->vulkanTexture->sliceCount; j += 1)
+                {
+                    VULKAN_INTERNAL_TrackTextureSlice(
+                        renderer,
+                        vulkanCommandBuffer,
+                        &textureContainer->activeTextureHandle->vulkanTexture->slices[j]
+                    );
+                }
+
+                VULKAN_INTERNAL_TrackSampler(
+                    renderer,
+                    vulkanCommandBuffer,
+                    (VulkanSampler*) resourceBindings[i].textureSampler.sampler
+                );
+
+                imageInfoCount += 1;
+                break;
+
+            case SDL_GPU_RESOURCETYPE_STORAGE_BUFFER_READONLY:
+                bufferContainer = (VulkanBufferContainer*) resourceBindings[i].storageBufferReadOnly;
+                bufferInfos[bufferInfoCount].buffer =
+                    bufferContainer->activeBufferHandle->vulkanBuffer->buffer;
+                bufferInfos[bufferInfoCount].offset = 0;
+                bufferInfos[bufferInfoCount].range = VK_WHOLE_SIZE;
+
+                writeDescriptorSets[i].pBufferInfo = &bufferInfos[bufferInfoCount];
+
+                VULKAN_INTERNAL_TrackBuffer(
+                    renderer,
+                    vulkanCommandBuffer,
+                    bufferContainer->activeBufferHandle->vulkanBuffer
+                );
+
+                bufferInfoCount += 1;
+                break;
+
+            case SDL_GPU_RESOURCETYPE_STORAGE_BUFFER_READWRITE:
+                bufferContainer = (VulkanBufferContainer*) resourceBindings[i].storageBufferReadWrite.gpuBuffer;
+
+                if (pipelineBindPoint == VK_PIPELINE_BIND_POINT_GRAPHICS)
+                {
+                    if (
+                        resourceBindings[i].storageBufferReadWrite.cycle &&
+                        SDL_AtomicGet(&bufferContainer->activeBufferHandle->vulkanBuffer->referenceCount) > 0
+                    ) {
+                        VULKAN_INTERNAL_CycleActiveBuffer(
+                            renderer,
+                            bufferContainer
+                        );
+                    }
+                }
+                else /* compute bind point*/
+                {
+                    nextResourceAccessInfo.stageMask = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+                    nextResourceAccessInfo.accessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
+                    nextResourceAccessInfo.imageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+
+                    VULKAN_INTERNAL_PrepareBufferForWrite(
+                        renderer,
+                        vulkanCommandBuffer,
+                        bufferContainer,
+                        resourceBindings[i].storageBufferReadWrite.cycle,
+                        &nextResourceAccessInfo
+                    );
+                }
+
+                bufferInfos[bufferInfoCount].buffer = bufferContainer->activeBufferHandle->vulkanBuffer->buffer;
+                bufferInfos[bufferInfoCount].offset = 0;
+                bufferInfos[bufferInfoCount].range = VK_WHOLE_SIZE;
+
+                writeDescriptorSets[i].pBufferInfo = &bufferInfos[bufferInfoCount];
+
+                VULKAN_INTERNAL_TrackBuffer(
+                    renderer,
+                    vulkanCommandBuffer,
+                    bufferContainer->activeBufferHandle->vulkanBuffer
+                );
+
+                VULKAN_INTERNAL_TrackWriteBuffer(
+                    renderer,
+                    vulkanCommandBuffer,
+                    bufferContainer->activeBufferHandle->vulkanBuffer
+                );
+
+                bufferInfoCount += 1;
+                break;
+
+            case SDL_GPU_RESOURCETYPE_STORAGE_TEXTURE_READONLY:
+                textureSlice = VULKAN_INTERNAL_FetchTextureSlice(
+                    (VulkanTextureContainer*) resourceBindings[i].storageTextureReadOnly.texture,
+                    resourceBindings[i].storageTextureReadOnly.layer,
+                    resourceBindings[i].storageTextureReadOnly.mipLevel
+                );
+
+                imageInfos[imageInfoCount].sampler = VK_NULL_HANDLE;
+                imageInfos[imageInfoCount].imageView = textureSlice->view;
+                imageInfos[imageInfoCount].imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+
+                writeDescriptorSets[i].pImageInfo = &imageInfos[imageInfoCount];
+
+                VULKAN_INTERNAL_TrackTextureSlice(
+                    renderer,
+                    vulkanCommandBuffer,
+                    textureSlice
+                );
+
+                imageInfoCount += 1;
+                break;
+
+            case SDL_GPU_RESOURCETYPE_STORAGE_TEXTURE_READWRITE:
+                textureContainer = (VulkanTextureContainer*) resourceBindings[i].storageTextureReadWrite.textureSlice.texture;
+                textureSlice = VULKAN_INTERNAL_FetchTextureSlice(
+                    textureContainer->activeTextureHandle->vulkanTexture,
+                    resourceBindings[i].storageTextureReadWrite.textureSlice.layer,
+                    resourceBindings[i].storageTextureReadWrite.textureSlice.mipLevel
+                );
+
+                if (pipelineBindPoint == VK_PIPELINE_BIND_POINT_GRAPHICS)
+                {
+                    if (
+                        resourceBindings[i].storageTextureReadWrite.cycle &&
+                        textureContainer->canBeCycled &&
+                        !textureSlice->defragInProgress &&
+                        SDL_AtomicGet(&textureSlice->referenceCount) > 0
+                    ) {
+                        VULKAN_INTERNAL_CycleActiveTexture(
+                            renderer,
+                            textureContainer
+                        );
+
+                        textureSlice = VULKAN_INTERNAL_FetchTextureSlice(
+                            textureContainer->activeTextureHandle->vulkanTexture,
+                            resourceBindings[i].storageTextureReadWrite.textureSlice.layer,
+                            resourceBindings[i].storageTextureReadWrite.textureSlice.mipLevel
+                        );
+                    }
+                }
+                else /* compute bind point */
+                {
+                    nextResourceAccessInfo.stageMask = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+                    nextResourceAccessInfo.accessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
+                    nextResourceAccessInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+
+                    textureSlice = VULKAN_INTERNAL_PrepareTextureSliceForWrite(
+                        renderer,
+                        vulkanCommandBuffer,
+                        textureContainer,
+                        resourceBindings[i].storageTextureReadWrite.textureSlice.layer,
+                        resourceBindings[i].storageTextureReadWrite.textureSlice.mipLevel,
+                        resourceBindings[i].storageTextureReadWrite.cycle,
+                        &nextResourceAccessInfo
+                    );
+                }
+
+                imageInfos[imageInfoCount].sampler = VK_NULL_HANDLE;
+                imageInfos[imageInfoCount].imageView = textureSlice->view;
+                imageInfos[imageInfoCount].imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+
+                writeDescriptorSets[i].pImageInfo = &imageInfos[imageInfoCount];
+
+                VULKAN_INTERNAL_TrackTextureSlice(
+                    renderer,
+                    vulkanCommandBuffer,
+                    textureSlice
+                );
+
+                VULKAN_INTERNAL_TrackWriteTextureSlice(
+                    renderer,
+                    vulkanCommandBuffer,
+                    textureSlice
+                );
+
+                imageInfoCount += 1;
+                break;
+
+            case SDL_GPU_RESOURCETYPE_UNIFORM_BUFFER:
+                uniformBuffer = (VulkanUniformBuffer*) resourceBindings[i].uniformBuffer.uniformBuffer;
+
+                uniformBuffer->setIndex = setIndex;
+                uniformBuffer->descriptorSet = descriptorSet;
+
+                uniformBuffer->currentBlockSize =
+                    VULKAN_INTERNAL_NextHighestAlignment32(
+                        resourceBindings[i].uniformBuffer.uniformDataSizeInBytes,
+                        renderer->minUBOAlignment
+                    );
+
+                bufferInfos[bufferInfoCount].buffer = uniformBuffer->bufferContainer->activeBufferHandle->vulkanBuffer->buffer;
+                bufferInfos[bufferInfoCount].offset = 0; /* This will be replaced in the Push call */
+                bufferInfos[bufferInfoCount].range = MAX_UBO_SECTION_SIZE;
+
+                writeDescriptorSets[i].pBufferInfo = &bufferInfos[bufferInfoCount];
+
+                VULKAN_INTERNAL_TrackBuffer(
+                    renderer,
+                    vulkanCommandBuffer,
+                    uniformBuffer->bufferContainer->activeBufferHandle->vulkanBuffer
+                );
+
+                bufferInfoCount += 1;
+                break;
+
+            default:
+                SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Unrecognized shader resource type!");
+                return;
+        }
+    }
+
+    SDL_stack_free(writeDescriptorSets);
+
+    renderer->vkUpdateDescriptorSets(
+        renderer->logicalDevice,
+        resourceBindingCount,
+        writeDescriptorSets,
+        0,
+        NULL
+    );
+
+    renderer->vkCmdBindDescriptorSets(
+        vulkanCommandBuffer->commandBuffer,
+        pipelineBindPoint,
+        resourceLayout->pipelineLayout,
+        setIndex,
+        1,
+        &descriptorSet,
+        0,
+        NULL
+    );
+}
+
+static void VULKAN_INTERNAL_PushUniformData(
+    VulkanRenderer *renderer,
+    VulkanCommandBuffer *commandBuffer,
+    VkPipelineBindPoint pipelineBindPoint,
+    VulkanUniformBuffer *uniformBuffer,
+    void *data,
+    Uint32 dataLengthInBytes
+) {
+    VulkanPipelineResourceLayout *resourceLayout;
+    Uint32 drawOffset;
+
+    if (pipelineBindPoint == VK_PIPELINE_BIND_POINT_GRAPHICS)
+    {
+        resourceLayout = &commandBuffer->currentGraphicsPipeline->resourceLayout;
+    }
+    else
+    {
+        resourceLayout = &commandBuffer->currentComputePipeline->resourceLayout;
+    }
+
+    /* If there is no more room, cycle the uniform buffer */
+    if (uniformBuffer->offset + uniformBuffer->currentBlockSize + MAX_UBO_SECTION_SIZE >= UBO_BUFFER_SIZE)
+    {
+        VULKAN_INTERNAL_CycleActiveBuffer(
+            renderer,
+            uniformBuffer->bufferContainer
+        );
+
+        uniformBuffer->offset = 0;
+    }
+
+    drawOffset = uniformBuffer->offset;
+
+    Uint8 *dst =
+        uniformBuffer->bufferContainer->activeBufferHandle->vulkanBuffer->usedRegion->allocation->mapPointer +
+        uniformBuffer->bufferContainer->activeBufferHandle->vulkanBuffer->usedRegion->resourceOffset +
+        uniformBuffer->offset;
+
+    SDL_memcpy(
+        dst,
+        data,
+        dataLengthInBytes
+    );
+
+    uniformBuffer->offset += uniformBuffer->currentBlockSize;
+
+    renderer->vkCmdBindDescriptorSets(
+        commandBuffer->commandBuffer,
+        pipelineBindPoint,
+        resourceLayout->pipelineLayout,
+        uniformBuffer->setIndex,
+        1,
+        &uniformBuffer->descriptorSet,
+        1,
+        &drawOffset
+    );
+}
+
 static void VULKAN_BeginRenderPass(
     SDL_GpuCommandBuffer *commandBuffer,
     SDL_GpuColorAttachmentInfo *colorAttachmentInfos,
@@ -7385,8 +7600,6 @@ static void VULKAN_BeginRenderPass(
             &resourceAccessInfo
         );
 
-        vulkanCommandBuffer->renderPassColorTargetTextureSlices[i] = textureSlice;
-
         if (textureSlice->msaaTexHandle != NULL)
         {
             resourceAccessInfo.accessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
@@ -7404,11 +7617,9 @@ static void VULKAN_BeginRenderPass(
         }
 
         VULKAN_INTERNAL_TrackTextureSlice(renderer, vulkanCommandBuffer, textureSlice);
+        VULKAN_INTERNAL_TrackWriteTextureSlice(renderer, vulkanCommandBuffer, textureSlice);
         /* TODO: do we need to track the msaa texture? or is it implicitly only used when the regular texture is used? */
     }
-    vulkanCommandBuffer->renderPassColorTargetTextureSliceCount = colorAttachmentCount;
-
-    vulkanCommandBuffer->renderPassDepthTextureSlice = NULL;
 
     if (depthStencilAttachmentInfo != NULL)
     {
@@ -7440,11 +7651,10 @@ static void VULKAN_BeginRenderPass(
             &resourceAccessInfo
         );
 
-        vulkanCommandBuffer->renderPassDepthTextureSlice = textureSlice;
-
         clearCount += 1;
 
         VULKAN_INTERNAL_TrackTextureSlice(renderer, vulkanCommandBuffer, textureSlice);
+        VULKAN_INTERNAL_TrackWriteTextureSlice(renderer, vulkanCommandBuffer, textureSlice);
     }
 
     /* Fetch required render objects */
@@ -7638,193 +7848,31 @@ static void VULKAN_BindGraphicsResourceSet(
     SDL_GpuShaderResourceBinding *resourceBindings,
     Uint32 resourceBindingCount
 ) {
-    VulkanCommandBuffer *vulkanCommandBuffer = (VulkanCommandBuffer*) commandBuffer;
-    VulkanRenderer *renderer = (VulkanRenderer*) vulkanCommandBuffer->renderer;
-    VulkanGraphicsPipeline *graphicsPipeline = vulkanCommandBuffer->currentGraphicsPipeline;
-    VulkanBufferContainer *bufferContainer;
-    VulkanTextureContainer *textureContainer;
-    VulkanTextureSlice *textureSlice;
-    VulkanUniformBuffer *uniformBuffer;
-    VkDescriptorSet descriptorSet;
-    VkWriteDescriptorSet *writeDescriptorSets;
-    VkDescriptorBufferInfo bufferInfos[16]; /* FIXME: magic value */
-    VkDescriptorImageInfo imageInfos[16]; /* FIXME: magic value */
-    Uint32 bufferInfoCount = 0;
-    Uint32 imageInfoCount = 0;
-    Uint32 i, j;
-
-    descriptorSet = VULKAN_INTERNAL_FetchGraphicsDescriptorSet(
-        renderer,
-        vulkanCommandBuffer,
-        graphicsPipeline,
-        setIndex
-    );
-
-    if (descriptorSet == VK_NULL_HANDLE)
-    {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to fetch descriptor set!");
-        return;
-    }
-
-    writeDescriptorSets = SDL_stack_alloc(VkWriteDescriptorSet, resourceBindingCount);
-
-    for (i = 0; i < resourceBindingCount; i += 1)
-    {
-        writeDescriptorSets[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        writeDescriptorSets[i].pNext = NULL;
-        writeDescriptorSets[i].descriptorCount = 1;
-        writeDescriptorSets[i].descriptorType = SDLToVK_DescriptorType[resourceBindings[i].resourceType];
-        writeDescriptorSets[i].dstArrayElement = 0;
-        writeDescriptorSets[i].dstBinding = i;
-        writeDescriptorSets[i].dstSet = descriptorSet;
-        writeDescriptorSets[i].pTexelBufferView = NULL;
-        writeDescriptorSets[i].pImageInfo = NULL;
-        writeDescriptorSets[i].pBufferInfo = NULL;
-
-        /* TODO: track resources */
-        /* TODO: validate types against pipeline layout */
-        switch (resourceBindings[i].resourceType)
-        {
-            case SDL_GPU_RESOURCETYPE_TEXTURE_SAMPLER:
-                imageInfos[imageInfoCount].sampler =
-                    (VkSampler) ((VulkanSampler*) resourceBindings[i].textureSampler.sampler)->sampler;
-                imageInfos[imageInfoCount].imageView =
-                    ((VulkanTextureContainer*) resourceBindings[i].textureSampler.texture)->activeTextureHandle->vulkanTexture->image;
-                imageInfos[imageInfoCount].imageLayout =
-                    VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-
-                writeDescriptorSets[i].pImageInfo = &imageInfos[imageInfoCount];
-
-                imageInfoCount += 1;
-                break;
-
-            case SDL_GPU_RESOURCETYPE_STORAGE_BUFFER_READONLY:
-                bufferInfos[bufferInfoCount].buffer =
-                    ((VulkanBufferContainer*) resourceBindings[i].storageBufferReadOnly)->activeBufferHandle->vulkanBuffer->buffer;
-                bufferInfos[bufferInfoCount].offset = 0;
-                bufferInfos[bufferInfoCount].range = VK_WHOLE_SIZE;
-
-                writeDescriptorSets[i].pBufferInfo = &bufferInfos[bufferInfoCount];
-
-                bufferInfoCount += 1;
-                break;
-
-            case SDL_GPU_RESOURCETYPE_STORAGE_BUFFER_READWRITE:
-                bufferContainer = (VulkanBufferContainer*) resourceBindings[i].storageBufferReadWrite.gpuBuffer;
-
-                if (
-                    resourceBindings[i].storageBufferReadWrite.cycle &&
-                    SDL_AtomicGet(&bufferContainer->activeBufferHandle->vulkanBuffer->referenceCount) > 0
-                ) {
-                    VULKAN_INTERNAL_CycleActiveBuffer(
-                        renderer,
-                        bufferContainer
-                    );
-                }
-
-                bufferInfos[bufferInfoCount].buffer = bufferContainer->activeBufferHandle->vulkanBuffer->buffer;
-                bufferInfos[bufferInfoCount].offset = 0;
-                bufferInfos[bufferInfoCount].range = VK_WHOLE_SIZE;
-
-                writeDescriptorSets[i].pBufferInfo = &bufferInfos[bufferInfoCount];
-
-                bufferInfoCount += 1;
-
-                break;
-
-            case SDL_GPU_RESOURCETYPE_STORAGE_TEXTURE_READONLY:
-                textureSlice = VULKAN_INTERNAL_FetchTextureSlice(
-                    (VulkanTextureContainer*) resourceBindings[i].storageTextureReadOnly.texture,
-                    resourceBindings[i].storageTextureReadOnly.layer,
-                    resourceBindings[i].storageTextureReadOnly.mipLevel
-                );
-
-                imageInfos[imageInfoCount].sampler = VK_NULL_HANDLE;
-                imageInfos[imageInfoCount].imageView = textureSlice->view;
-                imageInfos[imageInfoCount].imageLayout = VK_IMAGE_LAYOUT_GENERAL;
-
-                writeDescriptorSets[i].pImageInfo = &imageInfos[imageInfoCount];
-
-                imageInfoCount += 1;
-                break;
-
-            case SDL_GPU_RESOURCETYPE_STORAGE_TEXTURE_READWRITE:
-                textureContainer = (VulkanTextureContainer*) resourceBindings[i].storageTextureReadWrite.textureSlice.texture;
-                textureSlice = VULKAN_INTERNAL_FetchTextureSlice(
-                    textureContainer->activeTextureHandle->vulkanTexture,
-                    resourceBindings[i].storageTextureReadWrite.textureSlice.layer,
-                    resourceBindings[i].storageTextureReadWrite.textureSlice.mipLevel
-                );
-
-                if (
-                    resourceBindings[i].storageTextureReadWrite.cycle &&
-                    textureContainer->canBeCycled &&
-                    !textureSlice->defragInProgress &&
-                    SDL_AtomicGet(&textureSlice->referenceCount) > 0
-                ) {
-                    VULKAN_INTERNAL_CycleActiveTexture(
-                        renderer,
-                        textureContainer
-                    );
-
-                    textureSlice = VULKAN_INTERNAL_FetchTextureSlice(
-                        textureContainer->activeTextureHandle->vulkanTexture,
-                        resourceBindings[i].storageTextureReadWrite.textureSlice.layer,
-                        resourceBindings[i].storageTextureReadWrite.textureSlice.mipLevel
-                    );
-                }
-
-                imageInfos[imageInfoCount].sampler = VK_NULL_HANDLE;
-                imageInfos[imageInfoCount].imageView = textureSlice->view;
-                imageInfos[imageInfoCount].imageLayout = VK_IMAGE_LAYOUT_GENERAL;
-
-                writeDescriptorSets[i].pImageInfo = &imageInfos[imageInfoCount];
-
-                imageInfoCount += 1;
-                break;
-
-            case SDL_GPU_RESOURCETYPE_UNIFORM_BUFFER:
-                uniformBuffer = (VulkanUniformBuffer*) resourceBindings[i].uniformBuffer;
-
-                uniformBuffer->setIndex = setIndex;
-                uniformBuffer->descriptorSet = descriptorSet;
-
-                bufferInfos[bufferInfoCount].buffer = uniformBuffer->bufferContainer->activeBufferHandle->vulkanBuffer->buffer;
-                bufferInfos[bufferInfoCount].offset = 0; /* This will be replaced in the Push call */
-                bufferInfos[bufferInfoCount].range = MAX_UBO_SECTION_SIZE;
-
-                writeDescriptorSets[i].pBufferInfo = &bufferInfos[bufferInfoCount];
-
-                /* TODO: track bound uniform buffers */
-
-                bufferInfoCount += 1;
-                break;
-
-            default:
-                SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Unrecognized shader resource type!");
-                return;
-        }
-    }
-
-    SDL_stack_free(writeDescriptorSets);
-
-    renderer->vkUpdateDescriptorSets(
-        renderer->logicalDevice,
-        resourceBindingCount,
-        writeDescriptorSets,
-        0,
-        NULL
-    );
-
-    renderer->vkCmdBindDescriptorSets(
-        vulkanCommandBuffer->commandBuffer,
+    VULKAN_INTERNAL_BindResourceSet(
+        commandBuffer,
         VK_PIPELINE_BIND_POINT_GRAPHICS,
-        graphicsPipeline->pipelineLayout,
         setIndex,
-        1,
-        &descriptorSet,
-        0,
-        NULL
+        resourceBindings,
+        resourceBindingCount
+    );
+}
+
+static void VULKAN_PushGraphicsUniformData(
+    SDL_GpuCommandBuffer *commandBuffer,
+    SDL_GpuUniformBuffer *uniformBuffer,
+    void *data,
+    Uint32 dataLengthInBytes
+) {
+    VulkanCommandBuffer *vulkanCommandBuffer = (VulkanCommandBuffer*) commandBuffer;
+    VulkanUniformBuffer *vulkanUniformBuffer = (VulkanUniformBuffer*) uniformBuffer;
+
+    VULKAN_INTERNAL_PushUniformData(
+        vulkanCommandBuffer->renderer,
+        vulkanCommandBuffer,
+        VK_PIPELINE_BIND_POINT_GRAPHICS,
+        vulkanUniformBuffer,
+        data,
+        dataLengthInBytes
     );
 }
 
@@ -7833,49 +7881,15 @@ static void VULKAN_EndRenderPass(
 ) {
     VulkanCommandBuffer *vulkanCommandBuffer = (VulkanCommandBuffer*) commandBuffer;
     VulkanRenderer *renderer = (VulkanRenderer*) vulkanCommandBuffer->renderer;
-    VulkanTextureSlice *currentTextureSlice;
-    Uint32 i;
 
     renderer->vkCmdEndRenderPass(
         vulkanCommandBuffer->commandBuffer
     );
 
-    /* If the render targets can be sampled, transition them to sample layout */
-    for (i = 0; i < vulkanCommandBuffer->renderPassColorTargetTextureSliceCount; i += 1)
-    {
-        currentTextureSlice = vulkanCommandBuffer->renderPassColorTargetTextureSlices[i];
-
-        VULKAN_INTERNAL_PostPassTextureSliceBarrier(
-            renderer,
-            vulkanCommandBuffer,
-            currentTextureSlice
-        );
-    }
-
-    vulkanCommandBuffer->renderPassColorTargetTextureSliceCount = 0;
-
-    if (vulkanCommandBuffer->renderPassDepthTextureSlice != NULL)
-    {
-        currentTextureSlice = vulkanCommandBuffer->renderPassDepthTextureSlice;
-
-        VULKAN_INTERNAL_PostPassTextureSliceBarrier(
-            renderer,
-            vulkanCommandBuffer,
-            currentTextureSlice
-        );
-    }
-    vulkanCommandBuffer->renderPassDepthTextureSlice = NULL;
-
-    /* FIXME: actually track these */
-    for (i = 0; i < vulkanCommandBuffer->renderPassStorageTextureSliceCount; i += 1)
-    {
-        VULKAN_INTERNAL_PostPassBufferBarrier(
-            renderer,
-            vulkanCommandBuffer,
-            vulkanCommandBuffer->renderPassStorageBuffers[i]
-        );
-    }
-    vulkanCommandBuffer->renderPassStorageTextureSliceCount = 0;
+    VULKAN_INTERNAL_PostPassBarriers(
+        renderer,
+        vulkanCommandBuffer
+    );
 
     vulkanCommandBuffer->currentGraphicsPipeline = NULL;
 }
@@ -7883,10 +7897,8 @@ static void VULKAN_EndRenderPass(
 static void VULKAN_BeginComputePass(
     SDL_GpuCommandBuffer *commandBuffer
 ) {
-    VulkanCommandBuffer *vulkanCommandBuffer = (VulkanCommandBuffer*) commandBuffer;
-
-    vulkanCommandBuffer->computePassBufferCount = 0;
-    vulkanCommandBuffer->computePassTextureSliceCount = 0;
+    /* no-op */
+    (void)commandBuffer;
 }
 
 static void VULKAN_BindComputePipeline(
@@ -7896,16 +7908,6 @@ static void VULKAN_BindComputePipeline(
     VulkanCommandBuffer *vulkanCommandBuffer = (VulkanCommandBuffer*) commandBuffer;
     VulkanRenderer *renderer = (VulkanRenderer*) vulkanCommandBuffer->renderer;
     VulkanComputePipeline *vulkanComputePipeline = (VulkanComputePipeline*) computePipeline;
-
-    /* Acquire compute uniform buffer if necessary */
-    if (vulkanCommandBuffer->computeUniformBuffer == NULL && vulkanComputePipeline->uniformBlockSize > 0)
-    {
-        vulkanCommandBuffer->computeUniformBuffer = VULKAN_INTERNAL_AcquireUniformBufferFromPool(
-            renderer,
-            vulkanCommandBuffer,
-            &renderer->computeUniformBufferPool
-        );
-    }
 
     renderer->vkCmdBindPipeline(
         vulkanCommandBuffer->commandBuffer,
@@ -7918,113 +7920,38 @@ static void VULKAN_BindComputePipeline(
     VULKAN_INTERNAL_TrackComputePipeline(renderer, vulkanCommandBuffer, vulkanComputePipeline);
 }
 
-static void VULKAN_BindComputeStorageBuffers(
+static void VULKAN_BindComputeResourceSet(
     SDL_GpuCommandBuffer *commandBuffer,
-    SDL_GpuStorageBufferBinding *pBindings
+    Uint32 setIndex,
+	SDL_GpuShaderResourceBinding *resourceBindings,
+	Uint32 resourceBindingCount
 ) {
-    VulkanCommandBuffer *vulkanCommandBuffer = (VulkanCommandBuffer*) commandBuffer;
-    VulkanRenderer *renderer = (VulkanRenderer*) vulkanCommandBuffer->renderer;
-    VulkanComputePipeline *computePipeline = vulkanCommandBuffer->currentComputePipeline;
-
-    VulkanBufferContainer *bufferContainer;
-    VulkanBuffer *currentVulkanBuffer;
-    VkDescriptorBufferInfo descriptorBufferInfos[MAX_BUFFER_BINDINGS];
-    VulkanResourceAccessInfo nextResourceAccessInfo;
-    Uint32 i;
-
-    if (computePipeline->pipelineLayout->bufferDescriptorSetCache == NULL)
-    {
-        return;
-    }
-
-    for (i = 0; i < computePipeline->pipelineLayout->bufferDescriptorSetCache->bindingCount; i += 1)
-    {
-        bufferContainer = (VulkanBufferContainer*) pBindings[i].gpuBuffer;
-
-        /* FIXME: binding struct should contain read-write info */
-        nextResourceAccessInfo.stageMask = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
-        nextResourceAccessInfo.accessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
-        nextResourceAccessInfo.imageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-
-        VULKAN_INTERNAL_PrepareBufferForWrite(
-            renderer,
-            vulkanCommandBuffer,
-            bufferContainer,
-            pBindings[i].cycle,
-            &nextResourceAccessInfo
-        );
-
-        currentVulkanBuffer = bufferContainer->activeBufferHandle->vulkanBuffer;
-
-        descriptorBufferInfos[i].buffer = currentVulkanBuffer->buffer;
-        descriptorBufferInfos[i].offset = 0;
-        descriptorBufferInfos[i].range = currentVulkanBuffer->size;
-
-        VULKAN_INTERNAL_TrackBuffer(renderer, vulkanCommandBuffer, currentVulkanBuffer);
-        VULKAN_INTERNAL_TrackComputePassBuffer(renderer, vulkanCommandBuffer, currentVulkanBuffer);
-    }
-
-    vulkanCommandBuffer->computeBufferDescriptorSet =
-        VULKAN_INTERNAL_FetchDescriptorSet(
-            renderer,
-            vulkanCommandBuffer,
-            computePipeline->pipelineLayout->bufferDescriptorSetCache,
-            NULL,
-            descriptorBufferInfos
-        );
+    VULKAN_INTERNAL_BindResourceSet(
+        commandBuffer,
+        VK_PIPELINE_BIND_POINT_COMPUTE,
+        setIndex,
+        resourceBindings,
+        resourceBindingCount
+    );
 }
 
-static void VULKAN_BindComputeTextures(
+static void VULKAN_PushComputeUniformData(
     SDL_GpuCommandBuffer *commandBuffer,
-    SDL_GpuComputeTextureBinding *pBindings
+    SDL_GpuUniformBuffer *uniformBuffer,
+    void *data,
+    Uint32 dataLengthInBytes
 ) {
     VulkanCommandBuffer *vulkanCommandBuffer = (VulkanCommandBuffer*) commandBuffer;
-    VulkanRenderer *renderer = (VulkanRenderer*) vulkanCommandBuffer->renderer;
-    VulkanComputePipeline *computePipeline = vulkanCommandBuffer->currentComputePipeline;
-    VulkanTextureContainer *currentTextureContainer;
-    VulkanTextureSlice *currentTextureSlice;
-    VkDescriptorImageInfo descriptorImageInfos[MAX_TEXTURE_SAMPLERS];
-    VulkanResourceAccessInfo resourceAccessInfo;
-    Uint32 i;
+    VulkanUniformBuffer *vulkanUniformBuffer = (VulkanUniformBuffer*) uniformBuffer;
 
-    if (computePipeline->pipelineLayout->imageDescriptorSetCache == NULL)
-    {
-        return;
-    }
-
-    for (i = 0; i < computePipeline->pipelineLayout->imageDescriptorSetCache->bindingCount; i += 1)
-    {
-        resourceAccessInfo.stageMask = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
-        resourceAccessInfo.stageMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
-        resourceAccessInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
-
-        currentTextureContainer = (VulkanTextureContainer*) pBindings[i].textureSlice.texture;
-        currentTextureSlice = VULKAN_INTERNAL_PrepareTextureSliceForWrite(
-            renderer,
-            vulkanCommandBuffer,
-            currentTextureContainer,
-            pBindings[i].textureSlice.layer,
-            pBindings[i].textureSlice.mipLevel,
-            pBindings[i].cycle,
-            &resourceAccessInfo
-        );
-
-        descriptorImageInfos[i].imageView = currentTextureSlice->view;
-        descriptorImageInfos[i].sampler = VK_NULL_HANDLE;
-        descriptorImageInfos[i].imageLayout = VK_IMAGE_LAYOUT_GENERAL;
-
-        VULKAN_INTERNAL_TrackTextureSlice(renderer, vulkanCommandBuffer, currentTextureSlice);
-        VULKAN_INTERNAL_TrackComputePassTextureSlice(renderer, vulkanCommandBuffer, currentTextureSlice);
-    }
-
-    vulkanCommandBuffer->computeImageDescriptorSet =
-        VULKAN_INTERNAL_FetchDescriptorSet(
-            renderer,
-            vulkanCommandBuffer,
-            computePipeline->pipelineLayout->imageDescriptorSetCache,
-            descriptorImageInfos,
-            NULL
-        );
+    VULKAN_INTERNAL_PushUniformData(
+        vulkanCommandBuffer->renderer,
+        vulkanCommandBuffer,
+        VK_PIPELINE_BIND_POINT_COMPUTE,
+        vulkanUniformBuffer,
+        data,
+        dataLengthInBytes
+    );
 }
 
 static void VULKAN_DispatchCompute(
@@ -8048,47 +7975,11 @@ static void VULKAN_EndComputePass(
     SDL_GpuCommandBuffer *commandBuffer
 ) {
     VulkanCommandBuffer *vulkanCommandBuffer = (VulkanCommandBuffer*) commandBuffer;
-    VulkanRenderer *renderer = (VulkanRenderer*) vulkanCommandBuffer->renderer;
-    VulkanBuffer *currentComputeBuffer;
-    VulkanTextureSlice *currentComputeTextureSlice;
-    VulkanResourceAccessInfo resourceAccessInfo;
-    Uint32 i;
 
-    /* Re-transition buffers */
-    for (i = 0; i < vulkanCommandBuffer->computePassBufferCount; i += 1)
-    {
-        currentComputeBuffer = vulkanCommandBuffer->computePassBuffers[i];
-
-        if (VULKAN_INTERNAL_DefaultBufferAccessInfo(
-            currentComputeBuffer->usage,
-            &resourceAccessInfo
-        )) {
-            VULKAN_INTERNAL_BufferMemoryBarrier(
-                renderer,
-                vulkanCommandBuffer,
-                &resourceAccessInfo,
-                currentComputeBuffer
-            );
-        }
-    }
-
-    /* Re-transition images */
-    for (i = 0; i < vulkanCommandBuffer->computePassTextureSliceCount; i += 1)
-    {
-        currentComputeTextureSlice = vulkanCommandBuffer->computePassTextureSlices[i];
-
-        if (VULKAN_INTERNAL_DefaultTextureSliceAccessInfo(
-            currentComputeTextureSlice->parent->usageFlags,
-            &resourceAccessInfo
-        )) {
-            VULKAN_INTERNAL_ImageMemoryBarrier(
-                renderer,
-                vulkanCommandBuffer,
-                &resourceAccessInfo,
-                currentComputeTextureSlice
-            );
-        }
-    }
+    VULKAN_INTERNAL_PostPassBarriers(
+        vulkanCommandBuffer->renderer,
+        vulkanCommandBuffer
+    );
 
     vulkanCommandBuffer->currentComputePipeline = NULL;
 }
@@ -8150,10 +8041,8 @@ static void VULKAN_GetTransferData(
 static void VULKAN_BeginCopyPass(
     SDL_GpuCommandBuffer *commandBuffer
 ) {
-    VulkanCommandBuffer *vulkanCommandBuffer = (VulkanCommandBuffer*) commandBuffer;
-
-    vulkanCommandBuffer->copyPassBufferCount = 0;
-    vulkanCommandBuffer->copyPassTextureSliceCount = 0;
+    /* no-op */
+    (void)commandBuffer;
 }
 
 static void VULKAN_UploadToTexture(
@@ -8220,7 +8109,7 @@ static void VULKAN_UploadToTexture(
 
     VULKAN_INTERNAL_TrackBuffer(renderer, vulkanCommandBuffer, transferBufferContainer->activeBufferHandle->vulkanBuffer);
     VULKAN_INTERNAL_TrackTextureSlice(renderer, vulkanCommandBuffer, vulkanTextureSlice);
-    VULKAN_INTERNAL_TrackCopyPassTextureSlice(renderer, vulkanCommandBuffer, vulkanTextureSlice);
+    VULKAN_INTERNAL_TrackWriteTextureSlice(renderer, vulkanCommandBuffer, vulkanTextureSlice);
 }
 
 static void VULKAN_UploadToBuffer(
@@ -8272,7 +8161,7 @@ static void VULKAN_UploadToBuffer(
 
     VULKAN_INTERNAL_TrackBuffer(renderer, vulkanCommandBuffer, transferBufferContainer->activeBufferHandle->vulkanBuffer);
     VULKAN_INTERNAL_TrackBuffer(renderer, vulkanCommandBuffer, vulkanBuffer);
-    VULKAN_INTERNAL_TrackCopyPassBuffer(renderer, vulkanCommandBuffer, vulkanBuffer);
+    VULKAN_INTERNAL_TrackWriteBuffer(renderer, vulkanCommandBuffer, vulkanBuffer);
 }
 
 static void VULKAN_CopyTextureToTexture(
@@ -8502,50 +8391,11 @@ static void VULKAN_EndCopyPass(
     SDL_GpuCommandBuffer *commandBuffer
 ) {
     VulkanCommandBuffer *vulkanCommandBuffer = (VulkanCommandBuffer*) commandBuffer;
-    VulkanRenderer *renderer = (VulkanRenderer*) vulkanCommandBuffer->renderer;
-    VulkanBuffer *currentBuffer;
-    VulkanTextureSlice *currentTextureSlice;
-    VulkanResourceAccessInfo resourceAccessInfo;
-    Uint32 i;
 
-    /* Re-transition GpuBuffers */
-    for (i = 0; i < vulkanCommandBuffer->copyPassBufferCount; i += 1)
-    {
-        currentBuffer = vulkanCommandBuffer->copyPassBuffers[i];
-
-        if (VULKAN_INTERNAL_DefaultBufferAccessInfo(
-            currentBuffer->usage,
-            &resourceAccessInfo
-        )) {
-            VULKAN_INTERNAL_BufferMemoryBarrier(
-                renderer,
-                vulkanCommandBuffer,
-                &resourceAccessInfo,
-                currentBuffer
-            );
-        }
-    }
-
-    /* Re-transition textures */
-    for (i = 0; i < vulkanCommandBuffer->copyPassTextureSliceCount; i += 1)
-    {
-        currentTextureSlice = vulkanCommandBuffer->copyPassTextureSlices[i];
-
-        if (VULKAN_INTERNAL_DefaultTextureSliceAccessInfo(
-            currentTextureSlice->parent->usageFlags,
-            &resourceAccessInfo
-        )) {
-            VULKAN_INTERNAL_ImageMemoryBarrier(
-                renderer,
-                vulkanCommandBuffer,
-                &resourceAccessInfo,
-                currentTextureSlice
-            );
-        }
-    }
-
-    vulkanCommandBuffer->copyPassBufferCount = 0;
-    vulkanCommandBuffer->copyPassTextureSliceCount = 0;
+    VULKAN_INTERNAL_PostPassBarriers(
+        vulkanCommandBuffer->renderer,
+        vulkanCommandBuffer
+    );
 }
 
 static void VULKAN_Blit(
@@ -8698,7 +8548,6 @@ static void VULKAN_INTERNAL_AllocateCommandBuffers(
         commandBuffer->commandBuffer = commandBuffers[i];
 
         commandBuffer->inFlightFence = VK_NULL_HANDLE;
-        commandBuffer->renderPassDepthTextureSlice = NULL;
 
         /* Presentation tracking */
 
@@ -8728,52 +8577,18 @@ static void VULKAN_INTERNAL_AllocateCommandBuffers(
             commandBuffer->boundDescriptorSetDataCapacity * sizeof(DescriptorSetData)
         );
 
-        commandBuffer->boundUniformBufferCapacity = 16;
-        commandBuffer->boundUniformBufferCount = 0;
-        commandBuffer->boundUniformBuffers = SDL_malloc(
-            commandBuffer->boundUniformBufferCapacity * sizeof(VulkanUniformBuffer*)
+        /* Write pass resource tracking */
+
+        commandBuffer->writeBufferCapacity = 16;
+        commandBuffer->writeBufferCount = 0;
+        commandBuffer->writeBuffers = SDL_malloc(
+            commandBuffer->writeBufferCapacity * sizeof(VulkanBuffer*)
         );
 
-        /* Compute pass resource tracking */
-
-        commandBuffer->computePassBufferCapacity = 16;
-        commandBuffer->computePassBufferCount = 0;
-        commandBuffer->computePassBuffers = SDL_malloc(
-            commandBuffer->computePassBufferCapacity * sizeof(VulkanBuffer*)
-        );
-
-        commandBuffer->computePassTextureSliceCapacity = 16;
-        commandBuffer->computePassTextureSliceCount = 0;
-        commandBuffer->computePassTextureSlices = SDL_malloc(
-            commandBuffer->computePassTextureSliceCapacity * sizeof(VulkanTextureSlice*)
-        );
-
-        /* Copy pass resource tracking */
-
-        commandBuffer->copyPassBufferCapacity = 16;
-        commandBuffer->copyPassBufferCount = 0;
-        commandBuffer->copyPassBuffers = SDL_malloc(
-            commandBuffer->copyPassBufferCapacity * sizeof(VulkanBuffer*)
-        );
-
-        commandBuffer->copyPassTextureSliceCapacity = 16;
-        commandBuffer->copyPassTextureSliceCount = 0;
-        commandBuffer->copyPassTextureSlices = SDL_malloc(
-            commandBuffer->copyPassTextureSliceCapacity * sizeof(VulkanTextureSlice*)
-        );
-
-        /* Render pass resource tracking */
-
-        commandBuffer->renderPassStorageBufferCapacity = 16;
-        commandBuffer->renderPassStorageBufferCount = 0;
-        commandBuffer->renderPassStorageBuffers = SDL_malloc(
-            commandBuffer->renderPassStorageBufferCapacity * sizeof(VulkanBuffer*)
-        );
-
-        commandBuffer->renderPassStorageTextureSliceCapacity = 16;
-        commandBuffer->renderPassStorageTextureSliceCount = 0;
-        commandBuffer->renderPassStorageTextureSlices = SDL_malloc(
-            commandBuffer->renderPassStorageTextureSliceCapacity * sizeof(VulkanTextureSlice*)
+        commandBuffer->writeTextureSliceCapacity = 16;
+        commandBuffer->writeTextureSliceCount = 0;
+        commandBuffer->writeTextureSlices = SDL_malloc(
+            commandBuffer->writeTextureSliceCapacity * sizeof(VulkanTextureSlice*)
         );
 
         /* Resource tracking */
@@ -8940,7 +8755,6 @@ static SDL_GpuCommandBuffer* VULKAN_AcquireCommandBuffer(
     commandBuffer->fragmentUniformDrawOffset = 0;
     commandBuffer->computeUniformDrawOffset = 0;
 
-    commandBuffer->renderPassColorTargetTextureSliceCount = 0;
     commandBuffer->autoReleaseFence = 1;
 
     commandBuffer->isDefrag = 0;
@@ -9492,17 +9306,17 @@ static void VULKAN_INTERNAL_PerformPendingDestroys(
         }
     }
 
-    for (i = renderer->shaderModulesToDestroyCount - 1; i >= 0; i -= 1)
+    for (i = renderer->shadersToDestroyCount - 1; i >= 0; i -= 1)
     {
-        if (SDL_AtomicGet(&renderer->shaderModulesToDestroy[i]->referenceCount) == 0)
+        if (SDL_AtomicGet(&renderer->shadersToDestroy[i]->referenceCount) == 0)
         {
             VULKAN_INTERNAL_DestroyShaderModule(
                 renderer,
-                renderer->shaderModulesToDestroy[i]
+                renderer->shadersToDestroy[i]
             );
 
-            renderer->shaderModulesToDestroy[i] = renderer->shaderModulesToDestroy[renderer->shaderModulesToDestroyCount - 1];
-            renderer->shaderModulesToDestroyCount -= 1;
+            renderer->shadersToDestroy[i] = renderer->shadersToDestroy[renderer->shadersToDestroyCount - 1];
+            renderer->shadersToDestroyCount -= 1;
         }
     }
 
@@ -9543,7 +9357,6 @@ static void VULKAN_INTERNAL_CleanCommandBuffer(
 ) {
     Uint32 i;
     DescriptorSetData *descriptorSetData;
-    VulkanUniformBuffer *uniformBuffer;
 
     if (commandBuffer->autoReleaseFence)
     {
@@ -9579,20 +9392,6 @@ static void VULKAN_INTERNAL_CleanCommandBuffer(
     }
 
     commandBuffer->boundDescriptorSetDataCount = 0;
-
-    /* Bound uniform buffers are now available */
-
-    for (i = 0; i < commandBuffer->boundUniformBufferCount; i += 1)
-    {
-        uniformBuffer = commandBuffer->boundUniformBuffers[i];
-
-        uniformBuffer->bound = SDL_FALSE;
-        uniformBuffer->setIndex = 0;
-        uniformBuffer->descriptorSet = VK_NULL_HANDLE;
-        uniformBuffer->offset = 0;
-    }
-
-    commandBuffer->boundUniformBufferCount = 0;
 
     /* Decrement reference counts */
 
@@ -11454,15 +11253,6 @@ static SDL_GpuDevice* VULKAN_CreateDevice(
     VkResult vulkanResult;
     Uint32 i;
 
-    /* Variables: Descriptor set layouts */
-    VkDescriptorSetLayoutCreateInfo setLayoutCreateInfo;
-    VkDescriptorSetLayoutBinding layoutBinding;
-
-    /* Variables: UBO Creation */
-    VkDescriptorPoolCreateInfo defaultDescriptorPoolInfo;
-    VkDescriptorPoolSize poolSizes[4];
-    VkDescriptorSetAllocateInfo descriptorAllocateInfo;
-
     /* Variables: Image Format Detection */
     VkImageFormatProperties imageFormatProperties;
 
@@ -11692,12 +11482,12 @@ static SDL_GpuDevice* VULKAN_CreateDevice(
         renderer->computePipelinesToDestroyCapacity
     );
 
-    renderer->shaderModulesToDestroyCapacity = 16;
-    renderer->shaderModulesToDestroyCount = 0;
+    renderer->shadersToDestroyCapacity = 16;
+    renderer->shadersToDestroyCount = 0;
 
-    renderer->shaderModulesToDestroy = SDL_malloc(
+    renderer->shadersToDestroy = SDL_malloc(
         sizeof(VulkanShader*) *
-        renderer->shaderModulesToDestroyCapacity
+        renderer->shadersToDestroyCapacity
     );
 
     renderer->framebuffersToDestroyCapacity = 16;

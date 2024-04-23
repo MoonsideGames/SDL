@@ -4410,7 +4410,7 @@ static void D3D11_BindComputeStorageBuffers(
 
 static void D3D11_BindComputeTextures(
 	SDL_GpuCommandBuffer *commandBuffer,
-	SDL_GpuComputeTextureBinding *pBindings
+	SDL_GpuStorageTextureBinding *pBindings
 ) {
 	D3D11CommandBuffer *d3d11CommandBuffer = (D3D11CommandBuffer*) commandBuffer;
     D3D11Renderer *renderer = (D3D11Renderer*) d3d11CommandBuffer->renderer;

@@ -368,20 +368,8 @@ struct SDL_GpuDevice
 	);
 
 	void (*PushGraphicsUniformData)(
-		SDL_GpuRenderPass *renderPass,
+		SDL_GpuCommandBuffer *commandBuffer,
 		SDL_GpuUniformBuffer *uniformBuffer,
-		void *data,
-		Uint32 dataLengthInBytes
-	);
-
-	void (*PushVertexShaderUniforms)(
-		SDL_GpuCommandBuffer *commandBuffer,
-		void *data,
-		Uint32 dataLengthInBytes
-	);
-
-	void (*PushFragmentShaderUniforms)(
-		SDL_GpuCommandBuffer *commandBuffer,
 		void *data,
 		Uint32 dataLengthInBytes
 	);
@@ -424,14 +412,14 @@ struct SDL_GpuDevice
 	);
 
 	void (*BindComputeResourceSet)(
-		SDL_GpuComputePass *computePass,
+		SDL_GpuCommandBuffer *commandBuffer,
 		Uint32 setIndex,
 		SDL_GpuShaderResourceBinding *resourceBinding,
 		Uint32 resourceBindingCount
 	);
 
 	void (*PushComputeUniformData)(
-		SDL_GpuComputePass *computePass,
+		SDL_GpuCommandBuffer *commandBuffer,
 		SDL_GpuUniformBuffer *uniformBuffer,
 		void *data,
 		Uint32 dataLengthInBytes
