@@ -34,6 +34,15 @@
 extern "C" {
 #endif /* __cplusplus */
 
+/* -Wpedantic nameless union/struct silencing */
+#ifndef SDLGPUNAMELESS
+#ifdef __GNUC__
+#define SDLGPUNAMELESS __extension__
+#else
+#define SDLGPUNAMELESS
+#endif /* __GNUC__ */
+#endif /* SDLGPUNAMELESS */
+
 /* Type Declarations */
 
 typedef struct SDL_GpuDevice SDL_GpuDevice;
@@ -581,17 +590,26 @@ typedef struct SDL_GpuGraphicsPipelineAttachmentInfo
 	SDL_GpuTextureFormat depthStencilFormat;
 } SDL_GpuGraphicsPipelineAttachmentInfo;
 
-typedef struct SDL_GpuShaderResourceLayoutElementDescription
+/* A description of a resource that will be bound by a shader. */
+typedef struct SDL_GpuShaderResourceDescription
 {
 	SDL_GpuShaderResourceType resourceType;
 	SDL_GpuShaderStageFlags shaderStageFlags;
-} SDL_GpuShaderResourceLayoutElementDescription;
+} SDL_GpuShaderResourceDescription;
 
-typedef struct SDL_GpuShaderResourceLayoutInfo
+/* Defines the resource types that compose a shader resource set. */
+typedef struct SDL_GpuShaderResourceSetLayoutInfo
 {
-	SDL_GpuShaderResourceLayoutElementDescription *elementDescriptions;
+	SDL_GpuShaderResourceDescription *elementDescriptions;
 	Uint32 elementDescriptionCount;
-} SDL_GpuShaderResourceLayoutInfo;
+} SDL_GpuShaderResourceSetLayoutInfo;
+
+/* Defines the resource sets that will be used in a pipeline. */
+typedef struct SDL_GpuPipelineResourceLayoutInfo
+{
+	SDL_GpuShaderResourceSetLayoutInfo *setLayoutInfos;
+	Uint32 setLayoutInfoCount;
+} SDL_GpuPipelineResourceLayoutInfo;
 
 typedef struct SDL_GpuGraphicsPipelineCreateInfo
 {
@@ -603,14 +621,14 @@ typedef struct SDL_GpuGraphicsPipelineCreateInfo
 	SDL_GpuMultisampleState multisampleState;
 	SDL_GpuDepthStencilState depthStencilState;
 	SDL_GpuGraphicsPipelineAttachmentInfo attachmentInfo;
-	SDL_GpuShaderResourceLayoutInfo shaderResourceLayoutInfo;
+	SDL_GpuPipelineResourceLayoutInfo pipelineResourceLayoutInfo;
 	float blendConstants[4];
 } SDL_GpuGraphicsPipelineCreateInfo;
 
 typedef struct SDL_GpuComputePipelineCreateInfo
 {
 	SDL_GpuShader *computeShader;
-	SDL_GpuShaderResourceLayoutInfo shaderResourceLayoutInfo;
+	SDL_GpuPipelineResourceLayoutInfo pipelineResourceLayoutInfo;
 } SDL_GpuComputePipelineCreateInfo;
 
 typedef struct SDL_GpuColorAttachmentInfo
@@ -746,12 +764,14 @@ typedef struct SDL_GpuShaderResourceBinding
 {
 	SDL_GpuShaderResourceType resourceType;
 
-	/* uniform buffer not included, special case handling */
-	union {
-		SDL_GpuTextureSamplerBinding textureSamplerBinding; /* used by TEXTURE_SAMPLER */
-		SDL_GpuStorageBufferBinding storageBufferBinding; /* used by STORAGE_BUFFER both readonly and read-write */
-		SDL_GpuComputeTextureBinding storageTextureBinding; /* used by STORAGE_TEXTURE both readonly and read-write */
-	} resourceBinding;
+	SDLGPUNAMELESS union {
+		SDL_GpuTextureSamplerBinding textureSampler;
+		SDL_GpuBuffer *storageBufferReadOnly; /* FIXME: should this contain an offset/range? */
+		SDL_GpuStorageBufferBinding storageBufferReadWrite;
+		SDL_GpuTextureSlice storageTextureReadOnly;
+		SDL_GpuComputeTextureBinding storageTextureReadWrite;
+		SDL_GpuUniformBuffer *uniformBuffer;
+	};
 } SDL_GpuShaderResourceBinding;
 
 /* Functions */
@@ -952,7 +972,8 @@ extern DECLSPEC SDL_GpuBuffer *SDLCALL SDL_GpuCreateGpuBuffer(
  *
  * \sa SDL_GpuBindGraphicsResourceSet
  * \sa SDL_GpuBindComputeResourceSet
- * \sa SDL_GpuPushUniformBufferData
+ * \sa SDL_GpuPushGraphicsUniformData
+ * \sa SDL_GpuPushComputeUniformData
  * \sa SDL_GpuQueueDestroyUniformBuffer
  */
 extern DECLSPEC SDL_GpuBuffer *SDLCALL SDL_GpuCreateUniformBuffer(
@@ -1312,7 +1333,7 @@ extern DECLSPEC void SDLCALL SDL_GpuBindIndexBuffer(
  * \since This function is available since SDL 3.x.x
  */
 extern DECLSPEC void SDLCALL SDL_GpuBindGraphicsResourceSet(
-	SDL_GpuRenderPass renderPass,
+	SDL_GpuRenderPass *renderPass,
 	Uint32 setIndex,
 	SDL_GpuShaderResourceBinding *resourceBindings,
 	Uint32 resourceBindingCount
