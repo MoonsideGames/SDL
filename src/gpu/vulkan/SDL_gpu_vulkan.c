@@ -7638,7 +7638,7 @@ static void VULKAN_BeginRenderPass(
 
         resourceAccessInfo.stageMask = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
         resourceAccessInfo.accessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-        resourceAccessInfo.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
+        resourceAccessInfo.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
         textureContainer = (VulkanTextureContainer*) depthStencilAttachmentInfo->textureSlice.texture;
         textureSlice = VULKAN_INTERNAL_PrepareTextureSliceForWrite(
