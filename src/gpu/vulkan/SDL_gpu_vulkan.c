@@ -7220,10 +7220,10 @@ static void VULKAN_INTERNAL_BindResourceSet(
         switch (resourceBindings[i].resourceType)
         {
             case SDL_GPU_RESOURCETYPE_TEXTURE_SAMPLER:
-                textureContainer = (VulkanTextureContainer*) resourceBindings[i].textureSampler.texture;
+                textureContainer = (VulkanTextureContainer*) resourceBindings[i].resource.textureSampler.texture;
 
                 imageInfos[imageInfoCount].sampler =
-                    (VkSampler) ((VulkanSampler*) resourceBindings[i].textureSampler.sampler)->sampler;
+                    (VkSampler) ((VulkanSampler*) resourceBindings[i].resource.textureSampler.sampler)->sampler;
                 imageInfos[imageInfoCount].imageView =
                     textureContainer->activeTextureHandle->vulkanTexture->view;
                 imageInfos[imageInfoCount].imageLayout =
@@ -7243,14 +7243,14 @@ static void VULKAN_INTERNAL_BindResourceSet(
                 VULKAN_INTERNAL_TrackSampler(
                     renderer,
                     vulkanCommandBuffer,
-                    (VulkanSampler*) resourceBindings[i].textureSampler.sampler
+                    (VulkanSampler*) resourceBindings[i].resource.textureSampler.sampler
                 );
 
                 imageInfoCount += 1;
                 break;
 
             case SDL_GPU_RESOURCETYPE_STORAGE_BUFFER_READONLY:
-                bufferContainer = (VulkanBufferContainer*) resourceBindings[i].storageBufferReadOnly;
+                bufferContainer = (VulkanBufferContainer*) resourceBindings[i].resource.storageBufferReadOnly;
                 bufferInfos[bufferInfoCount].buffer =
                     bufferContainer->activeBufferHandle->vulkanBuffer->buffer;
                 bufferInfos[bufferInfoCount].offset = 0;
@@ -7268,12 +7268,12 @@ static void VULKAN_INTERNAL_BindResourceSet(
                 break;
 
             case SDL_GPU_RESOURCETYPE_STORAGE_BUFFER_READWRITE:
-                bufferContainer = (VulkanBufferContainer*) resourceBindings[i].storageBufferReadWrite.gpuBuffer;
+                bufferContainer = (VulkanBufferContainer*) resourceBindings[i].resource.storageBufferReadWrite.gpuBuffer;
 
                 if (pipelineBindPoint == VK_PIPELINE_BIND_POINT_GRAPHICS)
                 {
                     if (
-                        resourceBindings[i].storageBufferReadWrite.cycle &&
+                        resourceBindings[i].resource.storageBufferReadWrite.cycle &&
                         SDL_AtomicGet(&bufferContainer->activeBufferHandle->vulkanBuffer->referenceCount) > 0
                     ) {
                         VULKAN_INTERNAL_CycleActiveBuffer(
@@ -7292,7 +7292,7 @@ static void VULKAN_INTERNAL_BindResourceSet(
                         renderer,
                         vulkanCommandBuffer,
                         bufferContainer,
-                        resourceBindings[i].storageBufferReadWrite.cycle,
+                        resourceBindings[i].resource.storageBufferReadWrite.cycle,
                         &nextResourceAccessInfo
                     );
                 }
@@ -7313,11 +7313,11 @@ static void VULKAN_INTERNAL_BindResourceSet(
                 break;
 
             case SDL_GPU_RESOURCETYPE_STORAGE_TEXTURE_READONLY:
-                textureContainer = (VulkanTextureContainer*) resourceBindings[i].storageTextureReadOnly.texture;
+                textureContainer = (VulkanTextureContainer*) resourceBindings[i].resource.storageTextureReadOnly.texture;
                 textureSlice = VULKAN_INTERNAL_FetchTextureSlice(
                     textureContainer->activeTextureHandle->vulkanTexture,
-                    resourceBindings[i].storageTextureReadOnly.layer,
-                    resourceBindings[i].storageTextureReadOnly.mipLevel
+                    resourceBindings[i].resource.storageTextureReadOnly.layer,
+                    resourceBindings[i].resource.storageTextureReadOnly.mipLevel
                 );
 
                 imageInfos[imageInfoCount].sampler = VK_NULL_HANDLE;
@@ -7336,17 +7336,17 @@ static void VULKAN_INTERNAL_BindResourceSet(
                 break;
 
             case SDL_GPU_RESOURCETYPE_STORAGE_TEXTURE_READWRITE:
-                textureContainer = (VulkanTextureContainer*) resourceBindings[i].storageTextureReadWrite.textureSlice.texture;
+                textureContainer = (VulkanTextureContainer*) resourceBindings[i].resource.storageTextureReadWrite.textureSlice.texture;
                 textureSlice = VULKAN_INTERNAL_FetchTextureSlice(
                     textureContainer->activeTextureHandle->vulkanTexture,
-                    resourceBindings[i].storageTextureReadWrite.textureSlice.layer,
-                    resourceBindings[i].storageTextureReadWrite.textureSlice.mipLevel
+                    resourceBindings[i].resource.storageTextureReadWrite.textureSlice.layer,
+                    resourceBindings[i].resource.storageTextureReadWrite.textureSlice.mipLevel
                 );
 
                 if (pipelineBindPoint == VK_PIPELINE_BIND_POINT_GRAPHICS)
                 {
                     if (
-                        resourceBindings[i].storageTextureReadWrite.cycle &&
+                        resourceBindings[i].resource.storageTextureReadWrite.cycle &&
                         textureContainer->canBeCycled &&
                         !textureSlice->defragInProgress &&
                         SDL_AtomicGet(&textureSlice->referenceCount) > 0
@@ -7358,8 +7358,8 @@ static void VULKAN_INTERNAL_BindResourceSet(
 
                         textureSlice = VULKAN_INTERNAL_FetchTextureSlice(
                             textureContainer->activeTextureHandle->vulkanTexture,
-                            resourceBindings[i].storageTextureReadWrite.textureSlice.layer,
-                            resourceBindings[i].storageTextureReadWrite.textureSlice.mipLevel
+                            resourceBindings[i].resource.storageTextureReadWrite.textureSlice.layer,
+                            resourceBindings[i].resource.storageTextureReadWrite.textureSlice.mipLevel
                         );
                     }
                 }
@@ -7373,9 +7373,9 @@ static void VULKAN_INTERNAL_BindResourceSet(
                         renderer,
                         vulkanCommandBuffer,
                         textureContainer,
-                        resourceBindings[i].storageTextureReadWrite.textureSlice.layer,
-                        resourceBindings[i].storageTextureReadWrite.textureSlice.mipLevel,
-                        resourceBindings[i].storageTextureReadWrite.cycle,
+                        resourceBindings[i].resource.storageTextureReadWrite.textureSlice.layer,
+                        resourceBindings[i].resource.storageTextureReadWrite.textureSlice.mipLevel,
+                        resourceBindings[i].resource.storageTextureReadWrite.cycle,
                         &nextResourceAccessInfo
                     );
                 }
@@ -7397,14 +7397,14 @@ static void VULKAN_INTERNAL_BindResourceSet(
 
             case SDL_GPU_RESOURCETYPE_UNIFORM_BUFFER:
                 doBind = SDL_FALSE; /* PushUniformData functions bind the descriptor set */
-                uniformBuffer = (VulkanUniformBuffer*) resourceBindings[i].uniformBuffer.uniformBuffer;
+                uniformBuffer = (VulkanUniformBuffer*) resourceBindings[i].resource.uniformBuffer.uniformBuffer;
 
                 uniformBuffer->setIndex = setIndex;
                 uniformBuffer->descriptorSet = descriptorSet;
 
                 uniformBuffer->currentBlockSize =
                     VULKAN_INTERNAL_NextHighestAlignment32(
-                        resourceBindings[i].uniformBuffer.uniformDataSizeInBytes,
+                        resourceBindings[i].resource.uniformBuffer.uniformDataSizeInBytes,
                         renderer->minUBOAlignment
                     );
 
@@ -8719,6 +8719,12 @@ static VulkanCommandBuffer* VULKAN_INTERNAL_GetInactiveCommandBufferFromPool(
         VULKAN_INTERNAL_FetchCommandPool(renderer, threadID);
     VulkanCommandBuffer *commandBuffer;
 
+    if (commandPool == NULL)
+    {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to fetch command pool!");
+        return NULL;
+    }
+
     if (commandPool->inactiveCommandBufferCount == 0)
     {
         VULKAN_INTERNAL_AllocateCommandBuffers(
@@ -8748,6 +8754,12 @@ static SDL_GpuCommandBuffer* VULKAN_AcquireCommandBuffer(
         VULKAN_INTERNAL_GetInactiveCommandBufferFromPool(renderer, threadID);
 
     SDL_UnlockMutex(renderer->acquireCommandBufferLock);
+
+    if (commandBuffer == NULL)
+    {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to acquire command buffer!");
+        return NULL;
+    }
 
     /* Reset state */
 

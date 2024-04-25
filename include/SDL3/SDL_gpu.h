@@ -34,15 +34,6 @@
 extern "C" {
 #endif /* __cplusplus */
 
-/* -Wpedantic nameless union/struct silencing */
-#ifndef SDLGPUNAMELESS
-#ifdef __GNUC__
-#define SDLGPUNAMELESS __extension__
-#else
-#define SDLGPUNAMELESS
-#endif /* __GNUC__ */
-#endif /* SDLGPUNAMELESS */
-
 /* Type Declarations */
 
 typedef struct SDL_GpuDevice SDL_GpuDevice;
@@ -770,14 +761,14 @@ typedef struct SDL_GpuShaderResourceBinding
 {
 	SDL_GpuShaderResourceType resourceType;
 
-	SDLGPUNAMELESS union {
+	union {
 		SDL_GpuTextureSamplerBinding textureSampler;
 		SDL_GpuBuffer *storageBufferReadOnly; /* FIXME: should this contain an offset/range? */
 		SDL_GpuStorageBufferBinding storageBufferReadWrite;
 		SDL_GpuTextureSlice storageTextureReadOnly;
 		SDL_GpuStorageTextureBinding storageTextureReadWrite;
 		SDL_GpuUniformBufferBinding uniformBuffer;
-	};
+	} resource;
 } SDL_GpuShaderResourceBinding;
 
 /* Functions */

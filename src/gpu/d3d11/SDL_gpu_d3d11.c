@@ -3564,6 +3564,7 @@ static void D3D11_EndCopyPass(
 
 /* Uniforms */
 
+/* TODO: we could get a big performance boost by storing data and mapping right before submitting commands */
 static void D3D11_INTERNAL_SetUniformBufferData(
 	D3D11Renderer *renderer,
 	D3D11CommandBuffer *commandBuffer,
@@ -3799,7 +3800,7 @@ static void D3D11_INTERNAL_BindResourceSet(
         switch (resourceBindings[i].resourceType)
         {
             case SDL_GPU_RESOURCETYPE_TEXTURE_SAMPLER:
-                textureContainer = (D3D11TextureContainer*) resourceBindings[i].textureSampler.texture;
+                textureContainer = (D3D11TextureContainer*) resourceBindings[i].resource.textureSampler.texture;
 
                 for (j = 0; j < resourceLayout->resourceSets[setIndex].resourceInfos[i].bindSlotCount; j += 1)
                 {
@@ -3818,7 +3819,7 @@ static void D3D11_INTERNAL_BindResourceSet(
                             d3d11CommandBuffer->context,
                             bindSlot->slot,
                             1,
-                            &((D3D11Sampler*) resourceBindings[i].textureSampler.sampler)->handle
+                            &((D3D11Sampler*) resourceBindings[i].resource.textureSampler.sampler)->handle
                         );
                     }
                     else if (bindSlot->shaderStageFlag == SDL_GPU_SHADERSTAGE_FRAGMENT)
@@ -3834,7 +3835,7 @@ static void D3D11_INTERNAL_BindResourceSet(
                             d3d11CommandBuffer->context,
                             bindSlot->slot,
                             1,
-                            &((D3D11Sampler*) resourceBindings[i].textureSampler.sampler)->handle
+                            &((D3D11Sampler*) resourceBindings[i].resource.textureSampler.sampler)->handle
                         );
                     }
                     else /* compute */
@@ -3853,7 +3854,7 @@ static void D3D11_INTERNAL_BindResourceSet(
                 break;
 
             case SDL_GPU_RESOURCETYPE_STORAGE_BUFFER_READONLY:
-                bufferContainer = (D3D11BufferContainer*) resourceBindings[i].storageBufferReadOnly;
+                bufferContainer = (D3D11BufferContainer*) resourceBindings[i].resource.storageBufferReadOnly;
 
                 for (j = 0; j < resourceLayout->resourceSets[setIndex].resourceInfos[i].bindSlotCount; j += 1)
                 {
@@ -3901,12 +3902,12 @@ static void D3D11_INTERNAL_BindResourceSet(
                 }
                 else
                 {
-                    bufferContainer = (D3D11BufferContainer*) resourceBindings[i].storageBufferReadWrite.gpuBuffer;
+                    bufferContainer = (D3D11BufferContainer*) resourceBindings[i].resource.storageBufferReadWrite.gpuBuffer;
 
                     D3D11_INTERNAL_PrepareGpuBufferForWrite(
                         renderer,
                         bufferContainer,
-                        resourceBindings[i].storageBufferReadWrite.cycle
+                        resourceBindings[i].resource.storageBufferReadWrite.cycle
                     );
 
                     bindSlot = &resourceLayout->resourceSets[setIndex].resourceInfos[i].bindSlots[0];
@@ -3927,11 +3928,11 @@ static void D3D11_INTERNAL_BindResourceSet(
                 break;
 
             case SDL_GPU_RESOURCETYPE_STORAGE_TEXTURE_READONLY:
-                textureContainer = (D3D11TextureContainer*) resourceBindings[i].storageTextureReadOnly.texture;
+                textureContainer = (D3D11TextureContainer*) resourceBindings[i].resource.storageTextureReadOnly.texture;
                 textureSubresource = D3D11_INTERNAL_FetchTextureSubresource(
                     textureContainer->activeTexture,
-                    resourceBindings[i].storageTextureReadOnly.layer,
-                    resourceBindings[i].storageTextureReadOnly.mipLevel
+                    resourceBindings[i].resource.storageTextureReadOnly.layer,
+                    resourceBindings[i].resource.storageTextureReadOnly.mipLevel
                 );
 
                 for (j = 0; j < resourceLayout->resourceSets[setIndex].resourceInfos[i].bindSlotCount; j += 1)
@@ -3980,13 +3981,13 @@ static void D3D11_INTERNAL_BindResourceSet(
                 }
                 else
                 {
-                    textureContainer = (D3D11TextureContainer*) resourceBindings[i].storageTextureReadWrite.textureSlice.texture;
+                    textureContainer = (D3D11TextureContainer*) resourceBindings[i].resource.storageTextureReadWrite.textureSlice.texture;
                     textureSubresource = D3D11_INTERNAL_PrepareTextureSubresourceForWrite(
                         renderer,
                         textureContainer,
-                        resourceBindings[i].storageTextureReadWrite.textureSlice.layer,
-                        resourceBindings[i].storageTextureReadWrite.textureSlice.mipLevel,
-                        resourceBindings[i].storageTextureReadWrite.cycle
+                        resourceBindings[i].resource.storageTextureReadWrite.textureSlice.layer,
+                        resourceBindings[i].resource.storageTextureReadWrite.textureSlice.mipLevel,
+                        resourceBindings[i].resource.storageTextureReadWrite.cycle
                     );
 
                     bindSlot = &resourceLayout->resourceSets[setIndex].resourceInfos[i].bindSlots[0];
@@ -4008,7 +4009,7 @@ static void D3D11_INTERNAL_BindResourceSet(
 
             case SDL_GPU_RESOURCETYPE_UNIFORM_BUFFER:
                 /* Set up state to be used in PushUniformData functions */
-                uniformBuffer = (D3D11UniformBuffer*) resourceBindings[i].uniformBuffer.uniformBuffer;
+                uniformBuffer = (D3D11UniformBuffer*) resourceBindings[i].resource.uniformBuffer.uniformBuffer;
 
                 uniformBuffer->bindSlotCount = resourceLayout->resourceSets[setIndex].resourceInfos[i].bindSlotCount;
 
@@ -4022,7 +4023,7 @@ static void D3D11_INTERNAL_BindResourceSet(
 
                 uniformBuffer->currentBlockSize =
                     D3D11_INTERNAL_NextHighestAlignment(
-                        resourceBindings[i].uniformBuffer.uniformDataSizeInBytes,
+                        resourceBindings[i].resource.uniformBuffer.uniformDataSizeInBytes,
                         256
                     );
 
@@ -4729,8 +4730,8 @@ static void D3D11_Blit(
         );
 
         resourceBinding.resourceType = SDL_GPU_RESOURCETYPE_UNIFORM_BUFFER;
-        resourceBinding.uniformBuffer.uniformBuffer = renderer->blitUniformBuffer;
-        resourceBinding.uniformBuffer.uniformDataSizeInBytes = sizeof(Uint32);
+        resourceBinding.resource.uniformBuffer.uniformBuffer = renderer->blitUniformBuffer;
+        resourceBinding.resource.uniformBuffer.uniformDataSizeInBytes = sizeof(Uint32);
 
         D3D11_BindGraphicsResourceSet(
             commandBuffer,
@@ -4753,8 +4754,8 @@ static void D3D11_Blit(
     }
 
     resourceBinding.resourceType = SDL_GPU_RESOURCETYPE_TEXTURE_SAMPLER;
-    resourceBinding.textureSampler.texture = source->textureSlice.texture;
-    resourceBinding.textureSampler.sampler =
+    resourceBinding.resource.textureSampler.texture = source->textureSlice.texture;
+    resourceBinding.resource.textureSampler.sampler =
         filterMode == SDL_GPU_FILTER_NEAREST ?
         renderer->blitNearestSampler :
         renderer->blitLinearSampler;
