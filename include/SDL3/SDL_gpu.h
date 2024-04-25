@@ -1347,9 +1347,10 @@ extern DECLSPEC void SDLCALL SDL_GpuBindGraphicsResourceSet(
 
 /**
  * Pushes data to a bound uniform buffer.
+ * Subsequent draw calls will use this uniform data.
  * You must not call this function before calling
  * SDL_GpuBindGraphicsResourceSet using this uniform buffer.
- * Subsequent draw calls will use this uniform data.
+ * You must not bind the same uniform buffer to two command buffers simultaneously.
  *
  * \param renderPass a render pass handle
  * \param uniformBuffer a uniform buffer object
@@ -1488,9 +1489,10 @@ extern DECLSPEC void SDLCALL SDL_GpuBindComputeResourceSet(
 
 /**
  * Pushes data to a bound uniform buffer.
+ * Subsequent draw calls will use this uniform data.
  * You must not call this function before calling
  * SDL_GpuBindComputeResourceSet using this uniform buffer.
- * Subsequent draw calls will use this uniform data.
+ * You must not bind the same uniform buffer to two command buffers simultaneously.
  *
  * \param computePass a compute pass handle
  * \param uniformBuffer a uniform buffer object

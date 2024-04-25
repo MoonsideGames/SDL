@@ -3343,6 +3343,8 @@ static void VULKAN_INTERNAL_DestroyGraphicsPipeline(
     (void)SDL_AtomicDecRef(&graphicsPipeline->vertexShader->referenceCount);
     (void)SDL_AtomicDecRef(&graphicsPipeline->fragmentShader->referenceCount);
 
+    /* TODO: teardown resource layout structure */
+
     SDL_free(graphicsPipeline);
 }
 
@@ -3357,6 +3359,8 @@ static void VULKAN_INTERNAL_DestroyComputePipeline(
     );
 
     (void)SDL_AtomicDecRef(&computePipeline->computeShader->referenceCount);
+
+    /* TODO: teardown resource layout structure */
 
     SDL_free(computePipeline);
 }
