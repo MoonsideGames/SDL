@@ -4028,7 +4028,7 @@ static void D3D11_INTERNAL_BindResourceSet(
 
                 for (j = 0; j < d3d11CommandBuffer->usedBufferCount; j += 1)
                 {
-                    if (d3d11CommandBuffer->usedBuffers[i] == uniformBuffer->bufferContainer->activeBuffer)
+                    if (d3d11CommandBuffer->usedBuffers[j] == uniformBuffer->bufferContainer->activeBuffer)
                     {
                         uniformBufferAlreadyBound = SDL_TRUE;
                         break;
