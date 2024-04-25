@@ -5373,6 +5373,12 @@ static VulkanBuffer* VULKAN_INTERNAL_PrepareBufferForWrite(
             renderer,
             bufferContainer
         );
+
+        VULKAN_INTERNAL_TrackBuffer(
+            renderer,
+            commandBuffer,
+            bufferContainer->activeBufferHandle->vulkanBuffer
+        );
     }
     else
     {
