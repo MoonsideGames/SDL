@@ -1647,7 +1647,7 @@ static SDL_GpuGraphicsPipeline* D3D11_CreateGraphicsPipeline(
 	);
 
 	pipeline->numColorAttachments = pipelineCreateInfo->attachmentInfo.colorAttachmentCount;
-	for (Sint32 i = 0; i < pipeline->numColorAttachments; i += 1)
+	for (i = 0; i < pipeline->numColorAttachments; i += 1)
 	{
 		pipeline->colorAttachmentFormats[i] = SDLToD3D11_TextureFormat[
 			pipelineCreateInfo->attachmentInfo.colorAttachmentDescriptions[i].format
@@ -1705,7 +1705,7 @@ static SDL_GpuGraphicsPipeline* D3D11_CreateGraphicsPipeline(
 			pipelineCreateInfo->vertexInputState.vertexBindingCount
 		);
 
-		for (Uint32 i = 0; i < pipelineCreateInfo->vertexInputState.vertexBindingCount; i += 1)
+		for (i = 0; i < pipelineCreateInfo->vertexInputState.vertexBindingCount; i += 1)
 		{
 			pipeline->vertexStrides[i] = pipelineCreateInfo->vertexInputState.vertexBindings[i].stride;
 		}
