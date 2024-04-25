@@ -2853,6 +2853,12 @@ static void VULKAN_INTERNAL_BufferMemoryBarrier(
             prevAccessInfo->accessMask = 0;
             prevAccessInfo->imageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
         }
+
+        SDL_InsertIntoHashTable(
+            commandBuffer->bufferSyncInfo,
+            buffer,
+            (const void*) prevAccessInfo
+        );
     }
 
     srcStages |= prevAccessInfo->stageMask;
