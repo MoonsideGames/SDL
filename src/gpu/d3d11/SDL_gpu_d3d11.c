@@ -4365,7 +4365,6 @@ static void D3D11_BindGraphicsPipeline(
 	SDL_GpuGraphicsPipeline *graphicsPipeline
 ) {
 	D3D11CommandBuffer *d3d11CommandBuffer = (D3D11CommandBuffer*) commandBuffer;
-    D3D11Renderer *renderer = (D3D11Renderer*) d3d11CommandBuffer->renderer;
 	D3D11GraphicsPipeline *pipeline = (D3D11GraphicsPipeline*) graphicsPipeline;
 
 	d3d11CommandBuffer->graphicsPipeline = pipeline;
@@ -4789,7 +4788,6 @@ static void D3D11_BindComputePipeline(
 	SDL_GpuComputePipeline *computePipeline
 ) {
 	D3D11CommandBuffer *d3d11CommandBuffer = (D3D11CommandBuffer*) commandBuffer;
-    D3D11Renderer *renderer = (D3D11Renderer*) d3d11CommandBuffer->renderer;
 	D3D11ComputePipeline *pipeline = (D3D11ComputePipeline*) computePipeline;
 
 	d3d11CommandBuffer->computePipeline = pipeline;
