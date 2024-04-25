@@ -3485,7 +3485,7 @@ static SDL_bool VULKAN_INTERNAL_CreateDescriptorPool(
     descriptorPoolInfo.pNext = NULL;
     descriptorPoolInfo.flags = 0;
     descriptorPoolInfo.maxSets = descriptorSetPoolSize;
-    descriptorPoolInfo.poolSizeCount = 1;
+    descriptorPoolInfo.poolSizeCount = descriptorInfoCount;
     descriptorPoolInfo.pPoolSizes = descriptorPoolSizes;
 
     vulkanResult = renderer->vkCreateDescriptorPool(
@@ -3615,6 +3615,9 @@ static SDL_bool VULKAN_INTERNAL_InitializePipelineResourceLayout(
         descriptorSetLayoutCreateInfo.bindingCount = resourceLayoutInfo->setLayoutInfos[i].elementDescriptionCount;
 
         descriptorSetLayoutBindings = SDL_stack_alloc(VkDescriptorSetLayoutBinding, descriptorSetLayoutCreateInfo.bindingCount);
+        pipelineResourceLayout->descriptorSetPools[i].descriptorInfos = SDL_malloc(
+            descriptorSetLayoutCreateInfo.bindingCount * sizeof(VulkanDescriptorInfo)
+        );
 
         for (j = 0; j < descriptorSetLayoutCreateInfo.bindingCount; j += 1)
         {
@@ -3634,7 +3637,6 @@ static SDL_bool VULKAN_INTERNAL_InitializePipelineResourceLayout(
                 }
             }
 
-            pipelineResourceLayout->descriptorSetPools[i].descriptorInfos = SDL_malloc(sizeof(VulkanDescriptorInfo));
             pipelineResourceLayout->descriptorSetPools[i].descriptorInfos[j].descriptorType = descriptorSetLayoutBindings[j].descriptorType;
             pipelineResourceLayout->descriptorSetPools[i].descriptorInfos[j].stageFlags = descriptorSetLayoutBindings[j].stageFlags;
         }
@@ -7411,8 +7413,6 @@ static void VULKAN_INTERNAL_BindResourceSet(
         }
     }
 
-    SDL_stack_free(writeDescriptorSets);
-
     renderer->vkUpdateDescriptorSets(
         renderer->logicalDevice,
         resourceBindingCount,
@@ -7420,6 +7420,8 @@ static void VULKAN_INTERNAL_BindResourceSet(
         0,
         NULL
     );
+
+    SDL_stack_free(writeDescriptorSets);
 
     if (doBind)
     {
@@ -7465,6 +7467,12 @@ static void VULKAN_INTERNAL_PushUniformData(
         );
 
         uniformBuffer->offset = 0;
+
+        VULKAN_INTERNAL_TrackBuffer(
+            renderer,
+            commandBuffer,
+            uniformBuffer->bufferContainer->activeBufferHandle->vulkanBuffer
+        );
     }
 
     drawOffset = uniformBuffer->offset;
