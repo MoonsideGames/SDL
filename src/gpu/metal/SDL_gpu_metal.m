@@ -411,10 +411,11 @@ typedef struct MetalWindowData
     MetalTextureContainer textureContainer;
 } MetalWindowData;
 
-typedef struct MetalShaderModule
+typedef struct MetalShader
 {
     id<MTLLibrary> library;
-} MetalShaderModule;
+    id<MTLFunction> function;
+} MetalShader;
 
 typedef struct MetalGraphicsPipeline
 {
@@ -640,7 +641,7 @@ static void METAL_INTERNAL_TrackTexture(
 
 static SDL_GpuComputePipeline* METAL_CreateComputePipeline(
 	SDL_GpuRenderer *driverData,
-	SDL_GpuComputeShaderInfo *computeShaderInfo
+	SDL_GpuComputePipelineCreateInfo *pipelineCreateInfo
 ) {
     NOT_IMPLEMENTED
     return NULL;
@@ -656,16 +657,12 @@ static SDL_GpuGraphicsPipeline* METAL_CreateGraphicsPipeline(
 	SDL_GpuGraphicsPipelineCreateInfo *pipelineCreateInfo
 ) {
     MetalRenderer *renderer = (MetalRenderer*) driverData;
-    MetalShaderModule *vertexShaderModule = (MetalShaderModule*) pipelineCreateInfo->vertexShaderInfo.shaderModule;
-    MetalShaderModule *fragmentShaderModule = (MetalShaderModule*) pipelineCreateInfo->fragmentShaderInfo.shaderModule;
+    MetalShader *vertexShader = (MetalShader*) pipelineCreateInfo->vertexShader;
+    MetalShader *fragmentShader = (MetalShader*) pipelineCreateInfo->fragmentShader;
     MTLRenderPipelineDescriptor *pipelineDescriptor;
     SDL_GpuColorAttachmentBlendState *blendState;
     MTLVertexDescriptor *vertexDescriptor;
     Uint32 binding;
-    NSString *vertMainfn = [NSString stringWithCString:pipelineCreateInfo->vertexShaderInfo.entryPointName
-                                              encoding:[NSString defaultCStringEncoding]];
-    NSString *fragMainfn = [NSString stringWithCString:pipelineCreateInfo->fragmentShaderInfo.entryPointName
-                                              encoding:[NSString defaultCStringEncoding]];
     MTLDepthStencilDescriptor *depthStencilDescriptor;
     MTLStencilDescriptor *frontStencilDescriptor = NULL;
     MTLStencilDescriptor *backStencilDescriptor = NULL;
@@ -731,7 +728,7 @@ static SDL_GpuGraphicsPipeline* METAL_CreateGraphicsPipeline(
     }
 
     /* Vertex Shader */
-    pipelineDescriptor.vertexFunction = [vertexShaderModule->library newFunctionWithName:vertMainfn];
+    pipelineDescriptor.vertexFunction = vertexShader->function;
 
     /* Vertex Descriptor */
     if (pipelineCreateInfo->vertexInputState.vertexBindingCount > 0)
@@ -757,7 +754,7 @@ static SDL_GpuGraphicsPipeline* METAL_CreateGraphicsPipeline(
     }
 
     /* Fragment Shader */
-    pipelineDescriptor.fragmentFunction = [fragmentShaderModule->library newFunctionWithName:fragMainfn];
+    pipelineDescriptor.fragmentFunction = fragmentShader->function;
 
     /* Create the graphics pipeline */
     pipelineState = [renderer->device newRenderPipelineStateWithDescriptor:pipelineDescriptor error:&error];
@@ -778,10 +775,7 @@ static SDL_GpuGraphicsPipeline* METAL_CreateGraphicsPipeline(
     result->rasterizerState = pipelineCreateInfo->rasterizerState;
     result->depthStencilState = depthStencilState;
     result->stencilReference = pipelineCreateInfo->depthStencilState.reference;
-    result->numVertexSamplers = pipelineCreateInfo->vertexShaderInfo.samplerBindingCount;
-    result->vertexUniformBlockSize = pipelineCreateInfo->vertexShaderInfo.uniformBufferSize;
-    result->numFragmentSamplers = pipelineCreateInfo->fragmentShaderInfo.samplerBindingCount;
-    result->fragmentUniformBlockSize = pipelineCreateInfo->fragmentShaderInfo.uniformBufferSize;
+    /* FIXME: binding! */
 	return (SDL_GpuGraphicsPipeline*) result;
 }
 
@@ -818,28 +812,29 @@ static SDL_GpuSampler* METAL_CreateSampler(
     return (SDL_GpuSampler*) metalSampler;
 }
 
-static SDL_GpuShaderModule* METAL_CreateShaderModule(
+static SDL_GpuShader* METAL_CreateShader(
     SDL_GpuRenderer *driverData,
-    SDL_GpuShaderModuleCreateInfo *shaderModuleCreateInfo
+    SDL_GpuShaderCreateInfo *shaderCreateInfo
 ) {
     MetalRenderer *renderer = (MetalRenderer*) driverData;;
     id<MTLLibrary> library;
     NSError *error;
     dispatch_data_t data;
-    MetalShaderModule *result;
+    id<MTLFunction> function;
+    MetalShader *result;
 
-	if (shaderModuleCreateInfo->format == SDL_GPU_SHADERFORMAT_MSL)
+	if (shaderCreateInfo->format == SDL_GPU_SHADERFORMAT_MSL)
 	{
 		library = [renderer->device
-            newLibraryWithSource:@((const char*) shaderModuleCreateInfo->code)
+            newLibraryWithSource:@((const char*) shaderCreateInfo->code)
             options:nil /* FIXME: Do we need any compile options? */
             error:&error];
 	}
-    else if (shaderModuleCreateInfo->format == SDL_GPU_SHADERFORMAT_METALLIB)
+    else if (shaderCreateInfo->format == SDL_GPU_SHADERFORMAT_METALLIB)
     {
         data = dispatch_data_create(
-            shaderModuleCreateInfo->code,
-            shaderModuleCreateInfo->codeSize,
+            shaderCreateInfo->code,
+            shaderCreateInfo->codeSize,
             dispatch_get_global_queue(0, 0),
             ^{} /* FIXME: is this right? */
         );
@@ -855,14 +850,26 @@ static SDL_GpuShaderModule* METAL_CreateShaderModule(
     {
         SDL_LogError(
             SDL_LOG_CATEGORY_APPLICATION,
-            "Creating library failed: %s",
-                [[error description] cStringUsingEncoding:[NSString defaultCStringEncoding]]);
+            "Creating MTLLibrary failed: %s",
+                [[error description] cStringUsingEncoding:[NSString defaultCStringEncoding]]
+        );
         return NULL;
     }
 
-    result = SDL_malloc(sizeof(MetalShaderModule));
+    function = [library newFunctionWithName:@(shaderCreateInfo->entryPointName)];
+    if (function == nil)
+    {
+        SDL_LogError(
+            SDL_LOG_CATEGORY_APPLICATION,
+            "Creating MTLFunction failed"
+        );
+        return NULL;
+    }
+
+    result = SDL_malloc(sizeof(MetalShader));
     result->library = library;
-    return (SDL_GpuShaderModule*) result;
+    result->function = function;
+    return (SDL_GpuShader*) result;
 }
 
 static MetalTexture* METAL_INTERNAL_CreateTexture(
@@ -906,10 +913,11 @@ static MetalTexture* METAL_INTERNAL_CreateTexture(
     {
         textureDescriptor.usage |= MTLTextureUsageShaderRead;
     }
-    if (textureCreateInfo->usageFlags & SDL_GPU_TEXTUREUSAGE_COMPUTE_BIT)
+    if (textureCreateInfo->usageFlags & SDL_GPU_TEXTUREUSAGE_COMPUTE_STORAGE_WRITE_BIT)
     {
         textureDescriptor.usage |= MTLTextureUsageShaderRead | MTLTextureUsageShaderWrite;
     }
+    /* FIXME: Other usages! */
 
     texture = [renderer->device newTextureWithDescriptor:textureDescriptor];
     if (texture == NULL)
@@ -997,6 +1005,14 @@ static SDL_GpuBuffer* METAL_CreateGpuBuffer(
     container->activeBuffer = container->buffers[0];
 
     return (SDL_GpuBuffer*) container;
+}
+
+SDL_GpuUniformBuffer* METAL_CreateUniformBuffer(
+    SDL_GpuRenderer *driverData,
+    Uint32 sizeInBytes
+) {
+    NOT_IMPLEMENTED
+    return NULL;
 }
 
 static MetalTransferBuffer* METAL_INTERNAL_CreateTransferBuffer(
@@ -1139,6 +1155,13 @@ static void METAL_QueueDestroyGpuBuffer(
     SDL_UnlockMutex(renderer->disposeLock);
 }
 
+static void METAL_QueueDestroyUniformBuffer(
+    SDL_GpuRenderer *driverData,
+    SDL_GpuUniformBuffer *uniformBuffer
+) {
+    NOT_IMPLEMENTED
+}
+
 static void METAL_INTERNAL_DestroyBufferContainer(
     MetalBufferContainer *container
 ) {
@@ -1188,13 +1211,14 @@ static void METAL_INTERNAL_DestroyTransferBufferContainer(
 	SDL_free(transferBufferContainer->buffers);
 }
 
-static void METAL_QueueDestroyShaderModule(
+static void METAL_QueueDestroyShader(
 	SDL_GpuRenderer *driverData,
-	SDL_GpuShaderModule *shaderModule
+	SDL_GpuShader *shader
 ) {
-    MetalShaderModule *metalShaderModule = (MetalShaderModule*) shaderModule;
-    metalShaderModule->library = nil;
-    SDL_free(metalShaderModule);
+    MetalShader *metalShader = (MetalShader*) shader;
+    metalShader->library = nil;
+    metalShader->function = nil;
+    SDL_free(metalShader);
 }
 
 static void METAL_QueueDestroyComputePipeline(
@@ -1319,8 +1343,10 @@ static void METAL_INTERNAL_SetUniformBufferData(
     );
 }
 
-static void METAL_PushVertexShaderUniforms(
+/* FIXME: Rework this! */
+static void METAL_PushGraphicsUniformData(
     SDL_GpuCommandBuffer *commandBuffer,
+    SDL_GpuUniformBuffer *uniformBuffer,
     void *data,
     Uint32 dataLengthInBytes
 ) {
@@ -1348,38 +1374,6 @@ static void METAL_PushVertexShaderUniforms(
     );
 
     metalCommandBuffer->vertexUniformBuffer->offset += metalCommandBuffer->graphicsPipeline->vertexUniformBlockSize;
-    /* FIXME: On Intel Macs (Mac2 family), align to 256 bytes! */
-}
-
-static void METAL_PushFragmentShaderUniforms(
-    SDL_GpuCommandBuffer *commandBuffer,
-    void *data,
-    Uint32 dataLengthInBytes
-) {
-    MetalCommandBuffer *metalCommandBuffer = (MetalCommandBuffer*) commandBuffer;
-    MetalRenderer *renderer = metalCommandBuffer->renderer;
-
-    if (metalCommandBuffer->fragmentUniformBuffer->offset + metalCommandBuffer->graphicsPipeline->fragmentUniformBlockSize >= UBO_BUFFER_SIZE)
-    {
-        /* Out of space! Get a new uniform buffer. */
-        METAL_INTERNAL_AcquireUniformBuffer(
-            renderer,
-            metalCommandBuffer,
-            &metalCommandBuffer->fragmentUniformBuffer
-        );
-    }
-
-    metalCommandBuffer->fragmentUniformBuffer->drawOffset = metalCommandBuffer->fragmentUniformBuffer->offset;
-
-    METAL_INTERNAL_SetUniformBufferData(
-        renderer,
-        metalCommandBuffer,
-        metalCommandBuffer->fragmentUniformBuffer,
-        data,
-        dataLengthInBytes
-    );
-
-    metalCommandBuffer->fragmentUniformBuffer->offset += metalCommandBuffer->graphicsPipeline->fragmentUniformBlockSize;
     /* FIXME: On Intel Macs (Mac2 family), align to 256 bytes! */
 }
 
@@ -1619,6 +1613,16 @@ static void METAL_BindIndexBuffer(
     METAL_INTERNAL_TrackGpuBuffer(metalCommandBuffer, metalCommandBuffer->indexBuffer);
 }
 
+static void METAL_BindGraphicsResourceSet(
+   SDL_GpuCommandBuffer *commandBuffer,
+   Uint32 setIndex,
+   SDL_GpuShaderResourceBinding *resourceBindings,
+   Uint32 resourceBindingCount
+) {
+    NOT_IMPLEMENTED
+}
+
+#if 0
 static void METAL_BindVertexSamplers(
 	SDL_GpuCommandBuffer *commandBuffer,
 	SDL_GpuTextureSamplerBinding *pBindings
@@ -1667,6 +1671,9 @@ static void METAL_BindFragmentSamplers(
     [metalCommandBuffer->renderEncoder setFragmentSamplerStates:metalSamplers withRange:range];
 }
 
+#endif
+
+/* FIXME: Remove this! */
 static void METAL_SetGraphicsUniformBuffers(
     MetalCommandBuffer *commandBuffer
 ) {
@@ -1767,24 +1774,20 @@ static void METAL_BindComputePipeline(
 	NOT_IMPLEMENTED
 }
 
-static void METAL_BindComputeBuffers(
-	SDL_GpuCommandBuffer *commandBuffer,
-	SDL_GpuComputeBufferBinding *pBindings
+void METAL_BindComputeResourceSet(
+    SDL_GpuCommandBuffer *commandBuffer,
+    Uint32 setIndex,
+    SDL_GpuShaderResourceBinding *resourceBinding,
+    Uint32 resourceBindingCount
 ) {
-	NOT_IMPLEMENTED
+    NOT_IMPLEMENTED
 }
 
-static void METAL_BindComputeTextures(
-	SDL_GpuCommandBuffer *commandBuffer,
-	SDL_GpuComputeTextureBinding *pBindings
-) {
-	NOT_IMPLEMENTED
-}
-
-static void METAL_PushComputeShaderUniforms(
-	SDL_GpuCommandBuffer *commandBuffer,
-	void *data,
-	Uint32 dataLengthInBytes
+static void METAL_PushComputeUniformData(
+   SDL_GpuCommandBuffer *commandBuffer,
+   SDL_GpuUniformBuffer *uniformBuffer,
+   void *data,
+   Uint32 dataLengthInBytes
 ) {
 	NOT_IMPLEMENTED
 }
@@ -2178,7 +2181,7 @@ static Uint8 METAL_INTERNAL_CreateSwapchain(
     windowData->textureContainer.createInfo.depth = 1;
     windowData->textureContainer.createInfo.isCube = 0;
     windowData->textureContainer.createInfo.usageFlags =
-        SDL_GPU_TEXTUREUSAGE_COLOR_TARGET_BIT | SDL_GPU_TEXTUREUSAGE_SAMPLER_BIT | SDL_GPU_TEXTUREUSAGE_COMPUTE_BIT;
+        SDL_GPU_TEXTUREUSAGE_COLOR_TARGET_BIT | SDL_GPU_TEXTUREUSAGE_SAMPLER_BIT | SDL_GPU_TEXTUREUSAGE_COMPUTE_STORAGE_WRITE_BIT; /* FIXME: Other bits? */
 
     drawableSize = windowData->layer.drawableSize;
     windowData->textureContainer.createInfo.width = (Uint32) drawableSize.width;
