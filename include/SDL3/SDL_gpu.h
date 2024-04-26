@@ -22,7 +22,7 @@
 /**
  * \file SDL_gpu.h
  *
- * Include file for GPU SDL API functions
+ * Include file for SDL GPU API functions
 */
 
 #ifndef SDL_GPU_H
@@ -38,10 +38,11 @@ extern "C" {
 
 typedef struct SDL_GpuDevice SDL_GpuDevice;
 typedef struct SDL_GpuBuffer SDL_GpuBuffer;
+typedef struct SDL_GpuUniformBuffer SDL_GpuUniformBuffer;
 typedef struct SDL_GpuTransferBuffer SDL_GpuTransferBuffer;
 typedef struct SDL_GpuTexture SDL_GpuTexture;
 typedef struct SDL_GpuSampler SDL_GpuSampler;
-typedef struct SDL_GpuShaderModule SDL_GpuShaderModule;
+typedef struct SDL_GpuShader SDL_GpuShader;
 typedef struct SDL_GpuComputePipeline SDL_GpuComputePipeline;
 typedef struct SDL_GpuGraphicsPipeline SDL_GpuGraphicsPipeline;
 typedef struct SDL_GpuCommandBuffer SDL_GpuCommandBuffer;
@@ -138,10 +139,13 @@ typedef enum SDL_GpuTextureFormat
 
 typedef enum SDL_GpuTextureUsageFlagBits
 {
-	SDL_GPU_TEXTUREUSAGE_SAMPLER_BIT              = 0x00000001,
-	SDL_GPU_TEXTUREUSAGE_COLOR_TARGET_BIT         = 0x00000002,
-	SDL_GPU_TEXTUREUSAGE_DEPTH_STENCIL_TARGET_BIT = 0x00000004,
-	SDL_GPU_TEXTUREUSAGE_COMPUTE_BIT              = 0X00000008
+	SDL_GPU_TEXTUREUSAGE_SAMPLER_BIT                = 0x00000001,
+	SDL_GPU_TEXTUREUSAGE_COLOR_TARGET_BIT           = 0x00000002,
+	SDL_GPU_TEXTUREUSAGE_DEPTH_STENCIL_TARGET_BIT   = 0x00000004,
+	SDL_GPU_TEXTUREUSAGE_GRAPHICS_STORAGE_READ_BIT  = 0x00000008,
+	SDL_GPU_TEXTUREUSAGE_GRAPHICS_STORAGE_WRITE_BIT = 0x00000010,
+	SDL_GPU_TEXTUREUSAGE_COMPUTE_STORAGE_READ_BIT   = 0x00000020,
+	SDL_GPU_TEXTUREUSAGE_COMPUTE_STORAGE_WRITE_BIT  = 0x00000040
 } SDL_GpuTextureUsageFlagBits;
 
 typedef Uint32 SDL_GpuTextureUsageFlags;
@@ -182,18 +186,33 @@ typedef enum SDL_GpuBufferUsageFlagBits
 {
 	SDL_GPU_BUFFERUSAGE_VERTEX_BIT 	 = 0x00000001,
 	SDL_GPU_BUFFERUSAGE_INDEX_BIT  	 = 0x00000002,
-	SDL_GPU_BUFFERUSAGE_COMPUTE_BIT  = 0x00000004,
-	SDL_GPU_BUFFERUSAGE_INDIRECT_BIT = 0x00000008
+	SDL_GPU_BUFFERUSAGE_INDIRECT_BIT = 0x00000004,
+	SDL_GPU_BUFFERUSAGE_GRAPHICS_STORAGE_READ_BIT  = 0x00000008,
+	SDL_GPU_BUFFERUSAGE_GRAPHICS_STORAGE_WRITE_BIT = 0x00000010,
+	SDL_GPU_BUFFERUSAGE_COMPUTE_STORAGE_READ_BIT   = 0x00000020,
+	SDL_GPU_BUFFERUSAGE_COMPUTE_STORAGE_WRITE_BIT  = 0x00000040
 } SDL_GpuBufferUsageFlagBits;
 
 typedef Uint32 SDL_GpuBufferUsageFlags;
 
-typedef enum SDL_GpuShaderStage
+typedef enum SDL_GpuShaderResourceType
 {
-	SDL_GPU_SHADERSTAGE_VERTEX,
-	SDL_GPU_SHADERSTAGE_FRAGMENT,
-	SDL_GPU_SHADERSTAGE_COMPUTE
-} SDL_GpuShaderStage;
+	SDL_GPU_RESOURCETYPE_TEXTURE_SAMPLER,
+	SDL_GPU_RESOURCETYPE_STORAGE_BUFFER_READONLY,
+	SDL_GPU_RESOURCETYPE_STORAGE_BUFFER_READWRITE,
+	SDL_GPU_RESOURCETYPE_STORAGE_TEXTURE_READONLY,
+	SDL_GPU_RESOURCETYPE_STORAGE_TEXTURE_READWRITE,
+	SDL_GPU_RESOURCETYPE_UNIFORM_BUFFER
+} SDL_GpuShaderResourceType;
+
+typedef enum SDL_GpuShaderStageFlagBits
+{
+	SDL_GPU_SHADERSTAGE_VERTEX    = 0x00000001,
+	SDL_GPU_SHADERSTAGE_FRAGMENT  = 0x00000002,
+	SDL_GPU_SHADERSTAGE_COMPUTE   = 0x00000004
+} SDL_GpuShaderStageFlagBits;
+
+typedef Uint32 SDL_GpuShaderStageFlags;
 
 typedef enum SDL_GpuShaderFormat
 {
@@ -494,13 +513,14 @@ typedef struct SDL_GpuColorAttachmentBlendState
 	SDL_GpuColorComponentFlags colorWriteMask;
 } SDL_GpuColorAttachmentBlendState;
 
-typedef struct SDL_GpuShaderModuleCreateInfo
+typedef struct SDL_GpuShaderCreateInfo
 {
 	size_t codeSize;
 	const Uint8 *code;
-	SDL_GpuShaderStage stage;
+	const char* entryPointName;
+	SDL_GpuShaderStageFlagBits stage;
 	SDL_GpuShaderFormat format;
-} SDL_GpuShaderModuleCreateInfo;
+} SDL_GpuShaderCreateInfo;
 
 typedef struct SDL_GpuTextureCreateInfo
 {
@@ -516,23 +536,6 @@ typedef struct SDL_GpuTextureCreateInfo
 } SDL_GpuTextureCreateInfo;
 
 /* Pipeline state structures */
-
-typedef struct SDL_GpuGraphicsShaderInfo
-{
-	SDL_GpuShaderModule *shaderModule;
-	const char* entryPointName;
-	Uint32 uniformBufferSize;
-	Uint32 samplerBindingCount;
-} SDL_GpuGraphicsShaderInfo;
-
-typedef struct SDL_GpuComputeShaderInfo
-{
-	SDL_GpuShaderModule* shaderModule;
-	const char* entryPointName;
-	Uint32 uniformBufferSize;
-	Uint32 bufferBindingCount;
-	Uint32 imageBindingCount;
-} SDL_GpuComputeShaderInfo;
 
 typedef struct SDL_GpuRasterizerState
 {
@@ -581,18 +584,46 @@ typedef struct SDL_GpuGraphicsPipelineAttachmentInfo
 	SDL_GpuTextureFormat depthStencilFormat;
 } SDL_GpuGraphicsPipelineAttachmentInfo;
 
+/* A description of a resource that will be bound by a shader. */
+typedef struct SDL_GpuShaderResourceDescription
+{
+	SDL_GpuShaderResourceType resourceType;
+	SDL_GpuShaderStageFlags shaderStageFlags;
+} SDL_GpuShaderResourceDescription;
+
+/* Defines the resource types that compose a shader resource set. */
+typedef struct SDL_GpuShaderResourceSetLayoutInfo
+{
+	SDL_GpuShaderResourceDescription *elementDescriptions;
+	Uint32 elementDescriptionCount;
+} SDL_GpuShaderResourceSetLayoutInfo;
+
+/* Defines the resource sets that will be used in a pipeline. */
+typedef struct SDL_GpuPipelineResourceLayoutInfo
+{
+	SDL_GpuShaderResourceSetLayoutInfo *setLayoutInfos;
+	Uint32 setLayoutInfoCount;
+} SDL_GpuPipelineResourceLayoutInfo;
+
 typedef struct SDL_GpuGraphicsPipelineCreateInfo
 {
-	SDL_GpuGraphicsShaderInfo vertexShaderInfo;
-	SDL_GpuGraphicsShaderInfo fragmentShaderInfo;
+	SDL_GpuShader *vertexShader;
+	SDL_GpuShader *fragmentShader;
 	SDL_GpuVertexInputState vertexInputState;
 	SDL_GpuPrimitiveType primitiveType;
 	SDL_GpuRasterizerState rasterizerState;
 	SDL_GpuMultisampleState multisampleState;
 	SDL_GpuDepthStencilState depthStencilState;
 	SDL_GpuGraphicsPipelineAttachmentInfo attachmentInfo;
+	SDL_GpuPipelineResourceLayoutInfo pipelineResourceLayoutInfo;
 	float blendConstants[4];
 } SDL_GpuGraphicsPipelineCreateInfo;
+
+typedef struct SDL_GpuComputePipelineCreateInfo
+{
+	SDL_GpuShader *computeShader;
+	SDL_GpuPipelineResourceLayoutInfo pipelineResourceLayoutInfo;
+} SDL_GpuComputePipelineCreateInfo;
 
 typedef struct SDL_GpuColorAttachmentInfo
 {
@@ -707,21 +738,41 @@ typedef struct SDL_GpuTextureSamplerBinding
 	SDL_GpuSampler *sampler;
 } SDL_GpuTextureSamplerBinding;
 
-typedef struct SDL_GpuComputeBufferBinding
+typedef struct SDL_GpuStorageBufferBinding
 {
 	SDL_GpuBuffer *gpuBuffer;
 
     /* if SDL_TRUE, cycles the buffer if it is bound. */
 	SDL_bool cycle;
-} SDL_GpuComputeBufferBinding;
+} SDL_GpuStorageBufferBinding;
 
-typedef struct SDL_GpuComputeTextureBinding
+typedef struct SDL_GpuStorageTextureBinding
 {
 	SDL_GpuTextureSlice textureSlice;
 
     /* if SDL_TRUE, cycles the texture if the texture slice is bound. */
 	SDL_bool cycle;
-} SDL_GpuComputeTextureBinding;
+} SDL_GpuStorageTextureBinding;
+
+typedef struct SDL_GpuUniformBufferBinding
+{
+	SDL_GpuUniformBuffer *uniformBuffer;
+	Uint32 uniformDataSizeInBytes;
+} SDL_GpuUniformBufferBinding;
+
+typedef struct SDL_GpuShaderResourceBinding
+{
+	SDL_GpuShaderResourceType resourceType;
+
+	union {
+		SDL_GpuTextureSamplerBinding textureSampler;
+		SDL_GpuBuffer *storageBufferReadOnly; /* FIXME: should this contain an offset/range? */
+		SDL_GpuStorageBufferBinding storageBufferReadWrite;
+		SDL_GpuTextureSlice storageTextureReadOnly;
+		SDL_GpuStorageTextureBinding storageTextureReadWrite;
+		SDL_GpuUniformBufferBinding uniformBuffer;
+	} resource;
+} SDL_GpuShaderResourceBinding;
 
 /* Functions */
 
@@ -777,18 +828,18 @@ extern DECLSPEC SDL_GpuBackend SDLCALL SDL_GpuGetBackend(SDL_GpuDevice *device);
  * Creates a pipeline object to be used in a compute workflow.
  *
  * \param device a GPU Context
- * \param computeShaderInfo a struct describing the state of the desired compute pipeline
+ * \param computePipelineCreateInfo a struct describing the state of the requested compute pipeline
  * \returns a compute pipeline object on success, or NULL on failure
  *
  * \since This function is available since SDL 3.x.x
  *
- * \sa SDL_GpuCreateShaderModule
+ * \sa SDL_GpuCreateShader
  * \sa SDL_GpuBindComputePipeline
  * \sa SDL_GpuQueueDestroyComputePipeline
  */
 extern DECLSPEC SDL_GpuComputePipeline *SDLCALL SDL_GpuCreateComputePipeline(
 	SDL_GpuDevice *device,
-	SDL_GpuComputeShaderInfo *computeShaderInfo
+	SDL_GpuComputePipelineCreateInfo *computePipelineCreateInfo
 );
 
 /**
@@ -800,7 +851,7 @@ extern DECLSPEC SDL_GpuComputePipeline *SDLCALL SDL_GpuCreateComputePipeline(
  *
  * \since This function is available since SDL 3.x.x
  *
- * \sa SDL_GpuCreateShaderModule
+ * \sa SDL_GpuCreateShader
  * \sa SDL_GpuBindGraphicsPipeline
  * \sa SDL_GpuQueueDestroyGraphicsPipeline
  */
@@ -828,21 +879,21 @@ extern DECLSPEC SDL_GpuSampler *SDLCALL SDL_GpuCreateSampler(
 );
 
 /**
- * Creates a shader module to be used when creating a graphics or compute pipeline.
+ * Creates a shader to be used when creating a graphics or compute pipeline.
  *
  * \param device a GPU Context
- * \param shaderModuleCreateInfo a struct describing the state of the desired shader module
- * \returns a shader module object on success, or NULL on failure
+ * \param shaderCreateInfo a struct describing the state of the desired shader
+ * \returns a shader object on success, or NULL on failure
  *
  * \since This function is available since SDL 3.x.x
  *
  * \sa SDL_GpuCreateGraphicsPipeline
  * \sa SDL_GpuCreateComputePipeline
- * \sa SDL_GpuQueueDestroyShaderModule
+ * \sa SDL_GpuQueueDestroyShader
  */
-extern DECLSPEC SDL_GpuShaderModule *SDLCALL SDL_GpuCreateShaderModule(
+extern DECLSPEC SDL_GpuShader *SDLCALL SDL_GpuCreateShader(
 	SDL_GpuDevice *device,
-	SDL_GpuShaderModuleCreateInfo *shaderModuleCreateInfo
+	SDL_GpuShaderCreateInfo *shaderCreateInfo
 );
 
 /**
@@ -850,7 +901,7 @@ extern DECLSPEC SDL_GpuShaderModule *SDLCALL SDL_GpuCreateShaderModule(
  * The contents of this texture are undefined until data is written to the texture.
  *
  * \param device a GPU Context
- * \param textureCreateInfo a struct describing the state of the desired texture
+ * \param textureCreateInfo a struct describing the state of the texture to create
  * \returns a texture object on success, or NULL on failure
  *
  * \since This function is available since SDL 3.x.x
@@ -882,12 +933,32 @@ extern DECLSPEC SDL_GpuTexture *SDLCALL SDL_GpuCreateTexture(
  * \sa SDL_GpuUploadToBuffer
  * \sa SDL_GpuBindVertexBuffers
  * \sa SDL_GpuBindIndexBuffer
- * \sa SDL_GpuBindComputeBuffers
+ * \sa SDL_GpuBindComputeStorageBuffers
  * \sa SDL_GpuQueueDestroyGpuBuffer
  */
 extern DECLSPEC SDL_GpuBuffer *SDLCALL SDL_GpuCreateGpuBuffer(
 	SDL_GpuDevice *device,
 	SDL_GpuBufferUsageFlags usageFlags,
+	Uint32 sizeInBytes
+);
+
+/**
+ * Creates a uniform buffer object to be used in shader workflows.
+ *
+ * \param device a GPU context
+ * \param sizeInBytes the size of the uniform buffer
+ * \returns a uniform buffer object on success, or NULL on failure
+ *
+ * \since This function is available since SDL 3.x.x
+ *
+ * \sa SDL_GpuBindGraphicsResourceSet
+ * \sa SDL_GpuBindComputeResourceSet
+ * \sa SDL_GpuPushGraphicsUniformData
+ * \sa SDL_GpuPushComputeUniformData
+ * \sa SDL_GpuQueueDestroyUniformBuffer
+ */
+extern DECLSPEC SDL_GpuUniformBuffer *SDLCALL SDL_GpuCreateUniformBuffer(
+	SDL_GpuDevice *device,
 	Uint32 sizeInBytes
 );
 
@@ -1017,7 +1088,20 @@ extern DECLSPEC void SDLCALL SDL_GpuQueueDestroyGpuBuffer(
 );
 
 /**
- * Specifies that the given transfer buffer should be destroyed once it is no longer referenced.
+ * Specifies that the given uniform buffer should be destroyed once it is no longer bound.
+ *
+ * \param device a GPU context
+ * \param uniformBuffer a uniform buffer to be destroyed
+ *
+ * \since This function is available since SDL 3.x.x
+ */
+extern DECLSPEC void SDLCALL SDL_GpuQueueDestroyUniformBuffer(
+	SDL_GpuDevice *device,
+	SDL_GpuUniformBuffer *uniformBuffer
+);
+
+/**
+ * Specifies that the given transfer buffer should be destroyed once it is no longer bound.
  *
  * \param device a GPU context
  * \param transferBuffer a transfer buffer to be destroyed
@@ -1030,16 +1114,16 @@ extern DECLSPEC void SDLCALL SDL_GpuQueueDestroyTransferBuffer(
 );
 
 /**
- * Specifies that the given shader module should be destroyed once it is no longer referenced.
+ * Specifies that the given shader should be destroyed once it is no longer referenced.
  *
  * \param device a GPU context
- * \param shaderModule a shader module to be destroyed
+ * \param shader a shader to be destroyed
  *
  * \since This function is available since SDL 3.x.x
  */
-extern DECLSPEC void SDLCALL SDL_GpuQueueDestroyShaderModule(
+extern DECLSPEC void SDLCALL SDL_GpuQueueDestroyShader(
 	SDL_GpuDevice *device,
-	SDL_GpuShaderModule *shaderModule
+	SDL_GpuShader *shader
 );
 
 /**
@@ -1220,61 +1304,39 @@ extern DECLSPEC void SDLCALL SDL_GpuBindIndexBuffer(
 );
 
 /**
- * Sets texture-sampler pairs on a command buffer for use with the currently bound vertex shader.
+ * Binds a resource set on the currently bound graphics pipeline.
  *
  * \param renderPass a render pass handle
- * \param pBindings an array of structs containing texture-sampler pairs.
- *                  Must be at least as long as the number of sampler bindings specified in the pipeline.
+ * \param setIndex the resource set index
+ * \param resourceBindings an array of resource bindings
+ * \param resourceBindingCount the number of resource bindings provided
  *
  * \since This function is available since SDL 3.x.x
  */
-extern DECLSPEC void SDLCALL SDL_GpuBindVertexSamplers(
-    SDL_GpuRenderPass *renderPass,
-	SDL_GpuTextureSamplerBinding *pBindings
-);
-
-/**
- * Sets texture-sampler pairs on a command buffer for use with the currently bound fragment shader.
- *
- * \param renderPass a render pass handle
- * \param pBindings an array of structs containing texture-sampler pairs.
- *                  Must be at least as long as the number of sampler bindings specified in the pipeline.
- *
- * \since This function is available since SDL 3.x.x
- */
-extern DECLSPEC void SDLCALL SDL_GpuBindFragmentSamplers(
+extern DECLSPEC void SDLCALL SDL_GpuBindGraphicsResourceSet(
 	SDL_GpuRenderPass *renderPass,
-	SDL_GpuTextureSamplerBinding *pBindings
+	Uint32 setIndex,
+	SDL_GpuShaderResourceBinding *resourceBindings,
+	Uint32 resourceBindingCount
 );
 
 /**
- * Pushes vertex shader uniforms to the bound graphics pipeline.
- * You must not call this function before binding a graphics pipeline.
+ * Pushes data to a bound uniform buffer.
+ * Subsequent draw calls will use this uniform data.
+ * You must not call this function before calling
+ * SDL_GpuBindGraphicsResourceSet using this uniform buffer.
+ * You must not bind the same uniform buffer to two command buffers simultaneously.
  *
  * \param renderPass a render pass handle
+ * \param uniformBuffer a uniform buffer object
  * \param data client data to write into the uniform buffer
  * \param dataLengthInBytes the length of the data to write
  *
  * \since This function is available since SDL 3.x.x
  */
-extern DECLSPEC void SDLCALL SDL_GpuPushVertexShaderUniforms(
+extern DECLSPEC void SDLCALL SDL_GpuPushGraphicsUniformData(
 	SDL_GpuRenderPass *renderPass,
-	void *data,
-	Uint32 dataLengthInBytes
-);
-
-/**
- * Pushes fragment shader uniforms to the bound graphics pipeline.
- * You must not call this function before binding a graphics pipeline.
- *
- * \param renderPass a render pass handle
- * \param data client data to write into the uniform buffer
- * \param dataLengthInBytes the length of the data to write
- *
- * \since This function is available since SDL 3.x.x
- */
-extern DECLSPEC void SDLCALL SDL_GpuPushFragmentShaderUniforms(
-    SDL_GpuRenderPass *renderPass,
+	SDL_GpuUniformBuffer *uniformBuffer,
 	void *data,
 	Uint32 dataLengthInBytes
 );
@@ -1384,45 +1446,39 @@ extern DECLSPEC void SDLCALL SDL_GpuBindComputePipeline(
 );
 
 /**
- * Binds buffers for use with the bound compute pipeline.
+ * Binds a resource set on the currently bound compute pipeline.
  *
  * \param computePass a compute pass handle
- * \param pBindings an array of structs each containing a buffer and cycle option.
- *                  Must be at least as long as the number of buffer bindings specified in the pipeline.
+ * \param setIndex the resource set index
+ * \param resourceBindings an array of resource bindings
+ * \param resourceBindingCount the number of resource bindings provided
  *
  * \since This function is available since SDL 3.x.x
  */
-extern DECLSPEC void SDLCALL SDL_GpuBindComputeBuffers(
+extern DECLSPEC void SDLCALL SDL_GpuBindComputeResourceSet(
 	SDL_GpuComputePass *computePass,
-	SDL_GpuComputeBufferBinding *pBindings
+	Uint32 setIndex,
+	SDL_GpuShaderResourceBinding *resourceBindings,
+	Uint32 resourceBindingCount
 );
 
 /**
- * Binds textures for use with the bound compute pipeline.
+ * Pushes data to a bound uniform buffer.
+ * Subsequent draw calls will use this uniform data.
+ * You must not call this function before calling
+ * SDL_GpuBindComputeResourceSet using this uniform buffer.
+ * You must not bind the same uniform buffer to two command buffers simultaneously.
  *
  * \param computePass a compute pass handle
- * \param pBindings an array of structs each containing a texture and cycle option.
- *                  Must be at least as long as the number of texture bindings specified in the pipeline.
- *
- * \since This function is available since SDL 3.x.x
- */
-extern DECLSPEC void SDLCALL SDL_GpuBindComputeTextures(
-	SDL_GpuComputePass *computePass,
-	SDL_GpuComputeTextureBinding *pBindings
-);
-
-/**
- * Pushes compute shader uniforms to the bound compute pipeline.
- * You must not call this function before binding a compute pipeline.
- *
- * \param computePass a compute pass handle
+ * \param uniformBuffer a uniform buffer object
  * \param data client data to write into the uniform buffer
  * \param dataLengthInBytes the length of the data to write
  *
  * \since This function is available since SDL 3.x.x
  */
-extern DECLSPEC void SDLCALL SDL_GpuPushComputeShaderUniforms(
+extern DECLSPEC void SDLCALL SDL_GpuPushComputeUniformData(
 	SDL_GpuComputePass *computePass,
+	SDL_GpuUniformBuffer *uniformBuffer,
 	void *data,
 	Uint32 dataLengthInBytes
 );

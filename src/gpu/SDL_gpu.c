@@ -283,23 +283,23 @@ SDL_GpuSampleCount SDL_GpuGetBestSampleCount(
 
 SDL_GpuComputePipeline* SDL_GpuCreateComputePipeline(
 	SDL_GpuDevice *device,
-	SDL_GpuComputeShaderInfo *computeShaderInfo
+	SDL_GpuComputePipelineCreateInfo *computePipelineCreateInfo
 ) {
 	NULL_RETURN_NULL(device)
 	return device->CreateComputePipeline(
 		device->driverData,
-		computeShaderInfo
+		computePipelineCreateInfo
 	);
 }
 
 SDL_GpuGraphicsPipeline* SDL_GpuCreateGraphicsPipeline(
 	SDL_GpuDevice *device,
-	SDL_GpuGraphicsPipelineCreateInfo *pipelineCreateInfo
+	SDL_GpuGraphicsPipelineCreateInfo *graphicsPipelineCreateInfo
 ) {
 	NULL_RETURN_NULL(device)
 	return device->CreateGraphicsPipeline(
 		device->driverData,
-		pipelineCreateInfo
+		graphicsPipelineCreateInfo
 	);
 }
 
@@ -314,13 +314,13 @@ SDL_GpuSampler* SDL_GpuCreateSampler(
 	);
 }
 
-SDL_GpuShaderModule* SDL_GpuCreateShaderModule(
+SDL_GpuShader* SDL_GpuCreateShader(
     SDL_GpuDevice *device,
-    SDL_GpuShaderModuleCreateInfo *shaderModuleCreateInfo
+    SDL_GpuShaderCreateInfo *shaderCreateInfo
 ) {
-    return device->CreateShaderModule(
+    return device->CreateShader(
         device->driverData,
-        shaderModuleCreateInfo
+        shaderCreateInfo
     );
 }
 
@@ -392,6 +392,17 @@ SDL_GpuBuffer* SDL_GpuCreateGpuBuffer(
 	return device->CreateGpuBuffer(
 		device->driverData,
 		usageFlags,
+		sizeInBytes
+	);
+}
+
+SDL_GpuUniformBuffer* SDL_GpuCreateUniformBuffer(
+	SDL_GpuDevice *device,
+	Uint32 sizeInBytes
+) {
+	NULL_RETURN_NULL(device)
+	return device->CreateUniformBuffer(
+		device->driverData,
 		sizeInBytes
 	);
 }
@@ -496,6 +507,17 @@ void SDL_GpuQueueDestroyGpuBuffer(
 	);
 }
 
+void SDL_GpuQueueDestroyUniformBuffer(
+	SDL_GpuDevice *device,
+	SDL_GpuUniformBuffer *uniformBuffer
+) {
+	NULL_RETURN(device);
+	device->QueueDestroyUniformBuffer(
+		device->driverData,
+		uniformBuffer
+	);
+}
+
 void SDL_GpuQueueDestroyTransferBuffer(
 	SDL_GpuDevice *device,
 	SDL_GpuTransferBuffer *transferBuffer
@@ -507,14 +529,14 @@ void SDL_GpuQueueDestroyTransferBuffer(
 	);
 }
 
-void SDL_GpuQueueDestroyShaderModule(
+void SDL_GpuQueueDestroyShader(
 	SDL_GpuDevice *device,
-	SDL_GpuShaderModule *shaderModule
+	SDL_GpuShader *shader
 ) {
 	NULL_RETURN(device);
-	device->QueueDestroyShaderModule(
+	device->QueueDestroyShader(
 		device->driverData,
-		shaderModule
+		shader
 	);
 }
 
@@ -640,53 +662,33 @@ void SDL_GpuBindIndexBuffer(
 	);
 }
 
-void SDL_GpuBindVertexSamplers(
-    SDL_GpuRenderPass *renderPass,
-	SDL_GpuTextureSamplerBinding *pBindings
+void SDL_GpuBindGraphicsResourceSet(
+	SDL_GpuRenderPass *renderPass,
+	Uint32 setIndex,
+	SDL_GpuShaderResourceBinding *resourceBindings,
+	Uint32 resourceBindingCount
 ) {
 	NULL_RETURN(renderPass)
-    CHECK_RENDERPASS
-	RENDERPASS_DEVICE->BindVertexSamplers(
+	CHECK_RENDERPASS
+	RENDERPASS_DEVICE->BindGraphicsResourceSet(
 		RENDERPASS_COMMAND_BUFFER,
-		pBindings
+		setIndex,
+		resourceBindings,
+		resourceBindingCount
 	);
 }
 
-void SDL_GpuBindFragmentSamplers(
-    SDL_GpuRenderPass *renderPass,
-	SDL_GpuTextureSamplerBinding *pBindings
-) {
-	NULL_RETURN(renderPass)
-    CHECK_RENDERPASS
-	RENDERPASS_DEVICE->BindFragmentSamplers(
-		RENDERPASS_COMMAND_BUFFER,
-		pBindings
-	);
-}
-
-void SDL_GpuPushVertexShaderUniforms(
-    SDL_GpuRenderPass *renderPass,
+void SDL_GpuPushGraphicsUniformData(
+	SDL_GpuRenderPass *renderPass,
+	SDL_GpuUniformBuffer *uniformBuffer,
 	void *data,
 	Uint32 dataLengthInBytes
 ) {
-	NULL_RETURN(renderPass)
-    CHECK_RENDERPASS
-	RENDERPASS_DEVICE->PushVertexShaderUniforms(
+	NULL_RETURN(uniformBuffer)
+	CHECK_RENDERPASS
+	RENDERPASS_DEVICE->PushGraphicsUniformData(
 		RENDERPASS_COMMAND_BUFFER,
-		data,
-		dataLengthInBytes
-	);
-}
-
-void SDL_GpuPushFragmentShaderUniforms(
-    SDL_GpuRenderPass *renderPass,
-	void *data,
-	Uint32 dataLengthInBytes
-) {
-	NULL_RETURN(renderPass)
-    CHECK_RENDERPASS
-	RENDERPASS_DEVICE->PushFragmentShaderUniforms(
-		RENDERPASS_COMMAND_BUFFER,
+		uniformBuffer,
 		data,
 		dataLengthInBytes
 	);
@@ -784,39 +786,33 @@ void SDL_GpuBindComputePipeline(
 	);
 }
 
-void SDL_GpuBindComputeBuffers(
+void SDL_GpuBindComputeResourceSet(
 	SDL_GpuComputePass *computePass,
-	SDL_GpuComputeBufferBinding *pBindings
+	Uint32 setIndex,
+	SDL_GpuShaderResourceBinding *resourceBindings,
+	Uint32 resourceBindingCount
 ) {
 	NULL_RETURN(computePass)
-    CHECK_COMPUTEPASS
-	COMPUTEPASS_DEVICE->BindComputeBuffers(
+	CHECK_COMPUTEPASS
+	COMPUTEPASS_DEVICE->BindComputeResourceSet(
 		COMPUTEPASS_COMMAND_BUFFER,
-		pBindings
+		setIndex,
+		resourceBindings,
+		resourceBindingCount
 	);
 }
 
-void SDL_GpuBindComputeTextures(
+void SDL_GpuPushComputeUniformData(
 	SDL_GpuComputePass *computePass,
-	SDL_GpuComputeTextureBinding *pBindings
-) {
-	NULL_RETURN(computePass)
-    CHECK_COMPUTEPASS
-	COMPUTEPASS_DEVICE->BindComputeTextures(
-		COMPUTEPASS_COMMAND_BUFFER,
-		pBindings
-	);
-}
-
-void SDL_GpuPushComputeShaderUniforms(
-	SDL_GpuComputePass *computePass,
+	SDL_GpuUniformBuffer *uniformBuffer,
 	void *data,
 	Uint32 dataLengthInBytes
 ) {
 	NULL_RETURN(computePass)
-    CHECK_COMPUTEPASS
-	COMPUTEPASS_DEVICE->PushComputeShaderUniforms(
+	CHECK_COMPUTEPASS
+	COMPUTEPASS_DEVICE->PushComputeUniformData(
 		COMPUTEPASS_COMMAND_BUFFER,
+		uniformBuffer,
 		data,
 		dataLengthInBytes
 	);
