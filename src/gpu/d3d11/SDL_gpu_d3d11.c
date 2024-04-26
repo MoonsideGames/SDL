@@ -1738,7 +1738,7 @@ static SDL_GpuGraphicsPipeline* D3D11_CreateGraphicsPipeline(
 
             pipeline->resourceLayout.resourceSets[i].resourceInfos[j].resourceType = resourceType;
 
-            if (shaderStageFlags & (SDL_GPU_SHADERSTAGE_VERTEX | SDL_GPU_SHADERSTAGE_FRAGMENT))
+            if (shaderStageFlags & SDL_GPU_SHADERSTAGE_VERTEX & SDL_GPU_SHADERSTAGE_FRAGMENT)
             {
                 pipeline->resourceLayout.resourceSets[i].resourceInfos[j].bindSlotCount = 2;
             }
@@ -2785,40 +2785,6 @@ static SDL_GpuBuffer* D3D11_CreateGpuBuffer(
 	return (SDL_GpuBuffer*) container;
 }
 
-static D3D11Buffer* D3D11_INTERNAL_CreateUniformBuffer(
-	D3D11Renderer *renderer,
-    Uint32 sizeInBytes
-) {
-	D3D11_BUFFER_DESC bufferDesc;
-	ID3D11Buffer *bufferHandle;
-	D3D11Buffer *d3d11Buffer;
-	HRESULT res;
-
-	bufferDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
-	bufferDesc.ByteWidth = sizeInBytes;
-	bufferDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
-	bufferDesc.MiscFlags = 0;
-	bufferDesc.StructureByteStride = 0;
-	bufferDesc.Usage = D3D11_USAGE_DYNAMIC;
-
-	res = ID3D11Device_CreateBuffer(
-		renderer->device,
-		&bufferDesc,
-		NULL,
-		&bufferHandle
-	);
-	ERROR_CHECK_RETURN("Failed to create uniform buffer", 0);
-
-    d3d11Buffer = SDL_malloc(sizeof(D3D11Buffer));
-    d3d11Buffer->handle = bufferHandle;
-    d3d11Buffer->size = sizeInBytes;
-    d3d11Buffer->srv = NULL;
-    d3d11Buffer->uav = NULL;
-    SDL_AtomicSet(&d3d11Buffer->referenceCount, 0);
-
-	return d3d11Buffer;
-}
-
 static SDL_GpuUniformBuffer *D3D11_CreateUniformBuffer(
     SDL_GpuRenderer *driverData,
     Uint32 sizeInBytes
@@ -2841,8 +2807,6 @@ static SDL_GpuUniformBuffer *D3D11_CreateUniformBuffer(
         &bufferDesc,
         sizeInBytes
     );
-
-    buffer = D3D11_INTERNAL_CreateUniformBuffer(renderer, sizeInBytes);
 
     if (buffer == NULL)
     {
