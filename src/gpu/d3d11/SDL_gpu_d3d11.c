@@ -1738,7 +1738,7 @@ static SDL_GpuGraphicsPipeline* D3D11_CreateGraphicsPipeline(
 
             pipeline->resourceLayout.resourceSets[i].resourceInfos[j].resourceType = resourceType;
 
-            if (shaderStageFlags & SDL_GPU_SHADERSTAGE_VERTEX & SDL_GPU_SHADERSTAGE_FRAGMENT)
+            if (shaderStageFlags & (SDL_GPU_SHADERSTAGE_VERTEX | SDL_GPU_SHADERSTAGE_FRAGMENT))
             {
                 pipeline->resourceLayout.resourceSets[i].resourceInfos[j].bindSlotCount = 2;
             }
