@@ -20,6 +20,7 @@
 */
 #include "SDL_internal.h"
 #include "SDL_gpu_driver.h"
+#include "SDL_gpu_spirv_c.h"
 
 #define NULL_RETURN(name) if (name == NULL) { return; }
 #define NULL_RETURN_NULL(name) if (name == NULL) { return NULL; }
@@ -318,6 +319,10 @@ SDL_GpuShader* SDL_GpuCreateShader(
     SDL_GpuDevice *device,
     SDL_GpuShaderCreateInfo *shaderCreateInfo
 ) {
+    if (shaderCreateInfo->format == SDL_GPU_SHADERFORMAT_SPIRV &&
+        device->backend != SDL_GPU_BACKEND_VULKAN) {
+        return SDL_CreateShaderFromSPIRV(device, shaderCreateInfo);
+    }
     return device->CreateShader(
         device->driverData,
         shaderCreateInfo

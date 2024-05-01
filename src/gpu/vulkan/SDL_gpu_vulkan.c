@@ -10390,6 +10390,18 @@ static SDL_GpuSampleCount VULKAN_GetBestSampleCount(
     return (SDL_GpuSampleCount) SDL_min(maxSupported, desiredSampleCount);
 }
 
+/* SPIR-V Cross Interop */
+
+static SDL_GpuShader* VULKAN_CompileFromSPIRVCross(
+    SDL_GpuRenderer *driverData,
+    SDL_GpuShaderStageFlagBits shader_stage,
+    const char *entryPointName,
+    const char *source
+) {
+    SDL_assert(!"You should not have gotten here!!!");
+    return NULL;
+}
+
 /* Device instantiation */
 
 static inline Uint8 CheckDeviceExtensions(

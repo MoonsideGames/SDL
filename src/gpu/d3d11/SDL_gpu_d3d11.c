@@ -2039,7 +2039,7 @@ static SDL_GpuSampler* D3D11_CreateSampler(
 	return (SDL_GpuSampler*) d3d11Sampler;
 }
 
-static SDL_GpuShader* D3D11_CreateShader(
+SDL_GpuShader* D3D11_CreateShader(
 	SDL_GpuRenderer *driverData,
 	SDL_GpuShaderCreateInfo *shaderCreateInfo
 ) {
@@ -6004,6 +6004,15 @@ static SDL_GpuSampleCount D3D11_GetBestSampleCount(
 
     return (SDL_GpuSampleCount) SDL_min(maxSupported, desiredSampleCount);
 }
+
+/* SPIR-V Cross Interop */
+
+extern SDL_GpuShader* D3D11_CompileFromSPIRVCross(
+    SDL_GpuRenderer *driverData,
+    SDL_GpuShaderStageFlagBits shader_stage,
+    const char *entryPointName,
+    const char *source
+);
 
 /* Device Creation */
 
