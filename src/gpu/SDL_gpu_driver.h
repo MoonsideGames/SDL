@@ -631,6 +631,15 @@ struct SDL_GpuDevice
         SDL_GpuSampleCount desiredSampleCount
     );
 
+    /* SPIR-V Cross Interop */
+
+    SDL_GpuShader* (*CompileFromSPIRVCross)(
+        SDL_GpuRenderer *driverData,
+        SDL_GpuShaderStageFlagBits shader_stage,
+        const char *entryPointName,
+        const char *source
+    );
+
 	/* Opaque pointer for the Driver */
 	SDL_GpuRenderer *driverData;
 
@@ -710,7 +719,8 @@ struct SDL_GpuDevice
     ASSIGN_DRIVER_FUNC(OcclusionQueryEnd, name) \
     ASSIGN_DRIVER_FUNC(OcclusionQueryPixelCount, name) \
     ASSIGN_DRIVER_FUNC(IsTextureFormatSupported, name) \
-    ASSIGN_DRIVER_FUNC(GetBestSampleCount, name)
+    ASSIGN_DRIVER_FUNC(GetBestSampleCount, name) \
+	ASSIGN_DRIVER_FUNC(CompileFromSPIRVCross, name)
 
 typedef struct SDL_GpuDriver
 {

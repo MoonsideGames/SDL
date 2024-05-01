@@ -2923,6 +2923,23 @@ static SDL_GpuSampleCount METAL_GetBestSampleCount(
     return highestSupported;
 }
 
+/* SPIR-V Cross Interop */
+
+static SDL_GpuShader* METAL_CompileFromSPIRVCross(
+    SDL_GpuRenderer *driverData,
+    SDL_GpuShaderStageFlagBits shader_stage,
+    const char *entryPointName,
+    const char *source
+) {
+    SDL_GpuShaderCreateInfo createInfo;
+    createInfo.code = (const Uint8*) source;
+    createInfo.codeSize = SDL_strlen(source);
+    createInfo.format = SDL_GPU_SHADERFORMAT_MSL;
+    createInfo.stage = shader_stage;
+    createInfo.entryPointName = entryPointName;
+    return METAL_CreateShader(driverData, &createInfo);
+}
+
 /* Device Creation */
 
 static Uint8 METAL_PrepareDriver(SDL_VideoDevice *_this)

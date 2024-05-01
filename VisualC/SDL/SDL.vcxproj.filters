@@ -1497,10 +1497,16 @@
     <ClCompile Include="..\..\src\gpu\SDL_gpu.c">
       <Filter>gpu</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\src\gpu\SDL_gpu_spirv.c">
+      <Filter>gpu</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\src\gpu\vulkan\SDL_gpu_vulkan.c">
       <Filter>gpu</Filter>
     </ClCompile>
     <ClCompile Include="..\..\src\gpu\d3d11\SDL_gpu_d3d11.c">
+      <Filter>gpu</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\gpu\d3d11\SDL_gpu_d3d11_d3dcompiler.c">
       <Filter>gpu</Filter>
     </ClCompile>
   </ItemGroup>
