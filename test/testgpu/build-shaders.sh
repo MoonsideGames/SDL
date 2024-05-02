@@ -13,12 +13,72 @@ xxd -i cube.frag.spv | perl -w -p -e 's/\Aunsigned /const unsigned /;' > cube_fr
 cat cube_vert.h cube_frag.h > testgpu_spirv.h
 
 # Platform-specific compilation
-if [ "$OSTYPE" == "darwin"* ]; then
+if [[ "$OSTYPE" == "darwin"* ]]; then
 
     # MSL
     spirv-cross cube.vert.spv --msl --output cube.vert.metal
     spirv-cross cube.frag.spv --msl --output cube.frag.metal
-    # FIXME
+
+    # Xcode
+    generate_shaders()
+    {
+        fileplatform=$1
+        compileplatform=$2
+        sdkplatform=$3
+        minversion=$4
+
+        xcrun -sdk $sdkplatform metal -c -std=$compileplatform-metal1.1 -m$sdkplatform-version-min=$minversion -Wall -O3 -o ./cube.vert.air ./cube.vert.metal || exit $?
+        xcrun -sdk $sdkplatform metal -c -std=$compileplatform-metal1.1 -m$sdkplatform-version-min=$minversion -Wall -O3 -o ./cube.frag.air ./cube.frag.metal || exit $?
+
+        xcrun -sdk $sdkplatform metal-ar rc cube.vert.metalar cube.vert.air || exit $?
+        xcrun -sdk $sdkplatform metal-ar rc cube.frag.metalar cube.frag.air || exit $?
+
+        xcrun -sdk $sdkplatform metallib -o cube.vert.metallib cube.vert.metalar || exit $?
+        xcrun -sdk $sdkplatform metallib -o cube.frag.metallib cube.frag.metalar || exit $?
+
+        xxd -i cube.vert.metallib | perl -w -p -e 's/\Aunsigned /const unsigned /;' >./cube.vert_$fileplatform.h
+        xxd -i cube.frag.metallib | perl -w -p -e 's/\Aunsigned /const unsigned /;' >./cube.frag_$fileplatform.h
+
+        rm -f cube.vert.air cube.vert.metalar cube.vert.metallib
+        rm -f cube.frag.air cube.frag.metalar cube.frag.metallib
+    }
+
+    generate_shaders macos macos macosx 10.11
+    generate_shaders ios ios iphoneos 8.0
+    generate_shaders iphonesimulator ios iphonesimulator 8.0
+    generate_shaders tvos ios appletvos 9.0
+    generate_shaders tvsimulator ios appletvsimulator 9.0
+
+    # Bundle together one mega-header
+    rm -f testgpu_metallib.h
+    echo "#if defined(SDL_PLATFORM_IOS)" >> testgpu_metallib.h
+        echo "#if TARGET_OS_SIMULATOR" >> testgpu_metallib.h
+            cat cube.vert_iphonesimulator.h >> testgpu_metallib.h
+            cat cube.frag_iphonesimulator.h >> testgpu_metallib.h
+        echo "#else" >> testgpu_metallib.h
+            cat cube.vert_ios.h >> testgpu_metallib.h
+            cat cube.frag_ios.h >> testgpu_metallib.h
+        echo "#endif" >> testgpu_metallib.h
+    echo "#elif defined(SDL_PLATFORM_TVOS)" >> testgpu_metallib.h
+        echo "#if TARGET_OS_SIMULATOR" >> testgpu_metallib.h
+            cat cube.vert_tvsimulator.h >> testgpu_metallib.h
+            cat cube.frag_tvsimulator.h >> testgpu_metallib.h
+        echo "#else" >> testgpu_metallib.h
+            cat cube.vert_tvos.h >> testgpu_metallib.h
+            cat cube.frag_tvos.h >> testgpu_metallib.h
+        echo "#endif" >> testgpu_metallib.h
+    echo "#else" >> testgpu_metallib.h
+        cat cube.vert_macos.h >> testgpu_metallib.h
+        cat cube.frag_macos.h >> testgpu_metallib.h
+    echo "#endif" >> testgpu_metallib.h
+
+    # Clean up
+    rm -f cube.vert.metal cube.frag.metal
+    rm -f cube.vert_macos.h cube.frag_macos.h
+    rm -f cube.vert_iphonesimulator.h cube.frag_iphonesimulator.h
+    rm -f cube.vert_tvsimulator.h cube.frag_tvsimulator.h
+    rm -f cube.vert_ios.h cube.frag_ios.h
+    rm -f cube.vert_tvos.h cube.frag_tvos.h
 
 elif [[ "$OSTYPE" == "cygwin"* ]] || [[ "$OSTYPE" == "msys"* ]]; then
 

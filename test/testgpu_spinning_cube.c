@@ -23,23 +23,7 @@
 /* Regenerate these with testgpu/build-shaders.sh */
 #include "testgpu/testgpu_spirv.h"
 #include "testgpu/testgpu_dxbc.h"
-#if 0 /* FIXME */
-#if defined(SDL_PLATFORM_TVOS)
-#if TARGET_OS_SIMULATOR
-#include "testgpu/metal/testgpu_metallib_tvsimulator.h"
-#else
-#include "testgpu/metal/testgpu_metallib_tvos.h"
-#endif
-#elif defined(SDL_PLATFORM_IOS)
-#if TARGET_OS_SIMULATOR
-#include "testgpu/metal/testgpu_metallib_iphonesimulator.h"
-#else
-#include "testgpu/metal/testgpu_metallib_ios.h"
-#endif
-#else
-#include "testgpu/metal/testgpu_metallib_macos.h"
-#endif
-#endif
+#include "testgpu/testgpu_metallib.h"
 
 #define CHECK_CREATE(var, thing) { if (!(var)) { SDL_Log("Failed to create %s: %s\n", thing, SDL_GetError()); quit(2); } }
 
@@ -406,11 +390,9 @@ load_shader(SDL_bool is_vertex)
     }
     else if (backend == SDL_GPU_BACKEND_METAL) {
         createinfo.format = SDL_GPU_SHADERFORMAT_METALLIB;
-#if 0 /* FIXME */
-        createinfo.code = is_vertex ? testgpu_vert_metallib : testgpu_frag_metallib;
-        createinfo.codeSize = is_vertex ? testgpu_vert_metallib_len : testgpu_frag_metallib_len;
-        createinfo.entryPointName = is_vertex ? "vertex_main" : "fragment_main";
-#endif
+        createinfo.code = is_vertex ? cube_vert_metallib : cube_frag_metallib;
+        createinfo.codeSize = is_vertex ? cube_vert_metallib_len : cube_frag_metallib_len;
+        createinfo.entryPointName = is_vertex ? "main0" : "main0";
     }
     else
 #endif
