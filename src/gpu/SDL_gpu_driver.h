@@ -496,6 +496,20 @@ struct SDL_GpuDevice
 		SDL_GpuTexture *texture
 	);
 
+	void (*DownloadFromTexture)(
+		SDL_GpuCommandBuffer *commandBuffer,
+		SDL_GpuTextureRegion *textureSlice,
+		SDL_GpuTransferBuffer *transferBuffer,
+		SDL_GpuBufferImageCopy *copyParams
+	);
+
+	void (*DownloadFromBuffer)(
+		SDL_GpuCommandBuffer *commandBuffer,
+		SDL_GpuBuffer *gpuBuffer,
+		SDL_GpuTransferBuffer *transferBuffer,
+		SDL_GpuBufferCopy *copyParams
+	);
+
 	void (*EndCopyPass)(
 		SDL_GpuCommandBuffer *commandBuffer
 	);
@@ -579,23 +593,6 @@ struct SDL_GpuDevice
 	void (*ReleaseFence)(
 		SDL_GpuRenderer *driverData,
 		SDL_GpuFence *fence
-	);
-
-    /* Resource Download */
-	void (*DownloadFromTexture)(
-		SDL_GpuRenderer *driverData,
-		SDL_GpuTextureRegion *textureSlice,
-		SDL_GpuTransferBuffer *transferBuffer,
-		SDL_GpuBufferImageCopy *copyParams,
-		SDL_bool cycle
-	);
-
-	void (*DownloadFromBuffer)(
-		SDL_GpuRenderer *driverData,
-		SDL_GpuBuffer *gpuBuffer,
-		SDL_GpuTransferBuffer *transferBuffer,
-		SDL_GpuBufferCopy *copyParams,
-		SDL_bool cycle
 	);
 
     /* Queries */

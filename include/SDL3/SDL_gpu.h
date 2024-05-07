@@ -1672,6 +1672,42 @@ extern DECLSPEC void SDLCALL SDL_GpuGenerateMipmaps(
 );
 
 /**
+ * Copies data from a texture to a transfer buffer on the GPU timeline.
+ * This data is not guaranteed to be copied until the command buffer fence is signaled.
+ *
+ * \param copyPass a copy pass handle
+ * \param textureRegion the texture region to download
+ * \param transferBuffer the transfer buffer to download into
+ * \param copyParams a struct containing parameters specifying buffer offset, stride, and height
+ *
+ * \since This function is available since SDL 3.x.x
+ */
+extern DECLSPEC void SDLCALL SDL_GpuDownloadFromTexture(
+	SDL_GpuCopyPass *copyPass,
+	SDL_GpuTextureRegion *textureRegion,
+	SDL_GpuTransferBuffer *transferBuffer,
+	SDL_GpuBufferImageCopy *copyParams
+);
+
+/**
+ * Copies data from a texture to a transfer buffer on the GPU timeline.
+ * This data is not guaranteed to be copied until the command buffer fence is signaled.
+ *
+ * \param copyPass a copy pass handle
+ * \param gpuBuffer the buffer to download
+ * \param transferBuffer the transfer buffer to download into
+ * \param copyParams a struct containing offsets and length
+ *
+ * \since This function is available since SDL 3.x.x
+ */
+extern DECLSPEC void SDLCALL SDL_GpuDownloadFromBuffer(
+	SDL_GpuCopyPass *copyPass,
+	SDL_GpuBuffer *gpuBuffer,
+	SDL_GpuTransferBuffer *transferBuffer,
+	SDL_GpuBufferCopy *copyParams
+);
+
+/**
  * Ends the current copy pass.
  *
  * \param copyPass a copy pass handle
@@ -1938,56 +1974,6 @@ extern DECLSPEC SDL_bool SDLCALL SDL_GpuQueryFence(
 extern DECLSPEC void SDLCALL SDL_GpuReleaseFence(
 	SDL_GpuDevice *device,
 	SDL_GpuFence *fence
-);
-
-/* Readback */
-
-/**
- * Immediately downloads data from a texture to a transfer buffer.
- * This function forces a sync point and is generally a bad thing to do.
- * Only use this function if you have exhausted all other options.
- *
- * If you modify data on the downloaded resource and then call this function without calling
- * Wait or WaitForFences first, the data will not be what you expect.
- *
- * \param device a GPU context
- * \param textureRegion the texture region to download
- * \param transferBuffer the transfer buffer to download into
- * \param copyParams a struct containing parameters specifying buffer offset, stride, and height
- * \param cycle if SDL_TRUE, cycles the transfer buffer if it is bound, otherwise overwrites the data.
- *
- * \since This function is available since SDL 3.x.x
- */
-extern DECLSPEC void SDLCALL SDL_GpuDownloadFromTexture(
-	SDL_GpuDevice *device,
-	SDL_GpuTextureRegion *textureRegion,
-	SDL_GpuTransferBuffer *transferBuffer,
-	SDL_GpuBufferImageCopy *copyParams,
-	SDL_bool cycle
-);
-
-/**
- * Immediately downloads data from a texture to a transfer buffer.
- * This function forces a sync point and is generally a bad thing to do.
- * Only use this function if you have exhausted all other options.
- *
- * If you modify data on the downloaded resource and then call this function without calling
- * Wait or WaitForFences first, the data will not be what you expect.
- *
- * \param device a GPU context
- * \param gpuBuffer the buffer to download
- * \param transferBuffer the transfer buffer to download into
- * \param copyParams a struct containing offsets and length
- * \param cycle if SDL_TRUE, cycles the transfer buffer if it is bound, otherwise overwrites the data.
- *
- * \since This function is available since SDL 3.x.x
- */
-extern DECLSPEC void SDLCALL SDL_GpuDownloadFromBuffer(
-	SDL_GpuDevice *device,
-	SDL_GpuBuffer *gpuBuffer,
-	SDL_GpuTransferBuffer *transferBuffer,
-	SDL_GpuBufferCopy *copyParams,
-	SDL_bool cycle
 );
 
 /* Format Info */

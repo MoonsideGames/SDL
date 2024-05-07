@@ -586,26 +586,12 @@ typedef struct D3D11BufferContainer
 	char *debugName;
 } D3D11BufferContainer;
 
-typedef struct D3D11BufferTransfer
-{
-	ID3D11Buffer *stagingBuffer;
-} D3D11BufferTransfer;
-
-typedef struct D3D11TextureTransfer
-{
-	Uint8 *data;
-} D3D11TextureTransfer;
-
 typedef struct D3D11TransferBuffer
 {
 	Uint32 size;
-	SDL_AtomicInt referenceCount;
+	ID3D11Buffer *stagingBuffer;
 
-	union
-	{
-		D3D11BufferTransfer bufferTransfer;
-		D3D11TextureTransfer textureTransfer;
-	};
+	SDL_AtomicInt referenceCount;
 } D3D11TransferBuffer;
 
 typedef struct D3D11TransferBufferContainer
@@ -2913,30 +2899,23 @@ static D3D11TransferBuffer* D3D11_INTERNAL_CreateTransferBuffer(
 	transferBuffer->size = sizeInBytes;
 	SDL_AtomicSet(&transferBuffer->referenceCount, 0);
 
-	if (usage == SDL_GPU_TRANSFERUSAGE_BUFFER)
-	{
-		D3D11_BUFFER_DESC stagingBufferDesc;
-		HRESULT res;
+	D3D11_BUFFER_DESC stagingBufferDesc;
+	HRESULT res;
 
-		stagingBufferDesc.ByteWidth = sizeInBytes;
-		stagingBufferDesc.Usage = D3D11_USAGE_STAGING;
-		stagingBufferDesc.BindFlags = 0;
-		stagingBufferDesc.CPUAccessFlags = D3D11_CPU_ACCESS_READ|D3D11_CPU_ACCESS_WRITE;
-		stagingBufferDesc.MiscFlags = 0;
-		stagingBufferDesc.StructureByteStride = 0;
+	stagingBufferDesc.ByteWidth = sizeInBytes;
+	stagingBufferDesc.Usage = D3D11_USAGE_STAGING;
+	stagingBufferDesc.BindFlags = 0;
+	stagingBufferDesc.CPUAccessFlags = D3D11_CPU_ACCESS_READ|D3D11_CPU_ACCESS_WRITE;
+	stagingBufferDesc.MiscFlags = 0;
+	stagingBufferDesc.StructureByteStride = 0;
 
-		res = ID3D11Device_CreateBuffer(
-			renderer->device,
-			&stagingBufferDesc,
-			NULL,
-			&transferBuffer->bufferTransfer.stagingBuffer
-		);
-		ERROR_CHECK_RETURN("Could not create staging buffer", NULL);
-	}
-	else /* TRANSFERUSAGE_TEXTURE */
-	{
-		transferBuffer->textureTransfer.data = (Uint8*) SDL_malloc(sizeInBytes);
-	}
+	res = ID3D11Device_CreateBuffer(
+		renderer->device,
+		&stagingBufferDesc,
+		NULL,
+		&transferBuffer->stagingBuffer
+	);
+	ERROR_CHECK_RETURN("Could not create staging buffer", NULL);
 
 	return transferBuffer;
 }
@@ -3027,42 +3006,32 @@ static void D3D11_SetTransferData(
 		buffer = container->activeBuffer;
 	}
 
-	if (container->usage == SDL_GPU_TRANSFERUSAGE_BUFFER)
-	{
-		D3D11_MAPPED_SUBRESOURCE mappedSubresource;
+	D3D11_MAPPED_SUBRESOURCE mappedSubresource;
 
-		SDL_LockMutex(renderer->contextLock);
-		res = ID3D11DeviceContext_Map(
-			renderer->immediateContext,
-			(ID3D11Resource*) buffer->bufferTransfer.stagingBuffer,
-			0,
-			D3D11_MAP_WRITE,
-			0,
-			&mappedSubresource
-		);
-		ERROR_CHECK_RETURN("Failed to map staging buffer", );
+	SDL_LockMutex(renderer->contextLock);
+	res = ID3D11DeviceContext_Map(
+		renderer->immediateContext,
+		(ID3D11Resource*) buffer->stagingBuffer,
+		0,
+		D3D11_MAP_WRITE,
+		0,
+		&mappedSubresource
+	);
+	ERROR_CHECK_RETURN("Failed to map staging buffer", );
 
-		SDL_memcpy(
-			((Uint8*) mappedSubresource.pData) + copyParams->dstOffset,
-			((Uint8*) data) + copyParams->srcOffset,
-			copyParams->size
-		);
+	SDL_memcpy(
+		((Uint8*) mappedSubresource.pData) + copyParams->dstOffset,
+		((Uint8*) data) + copyParams->srcOffset,
+		copyParams->size
+	);
 
-		ID3D11DeviceContext_Unmap(
-			renderer->immediateContext,
-			(ID3D11Resource*) buffer->bufferTransfer.stagingBuffer,
-			0
-		);
-		SDL_UnlockMutex(renderer->contextLock);
-	}
-	else /* TEXTURE */
-	{
-		SDL_memcpy(
-			buffer->textureTransfer.data + copyParams->dstOffset,
-			((Uint8*) data) + copyParams->srcOffset,
-			copyParams->size
-		);
-	}
+	ID3D11DeviceContext_Unmap(
+		renderer->immediateContext,
+		(ID3D11Resource*) buffer->stagingBuffer,
+		0
+	);
+	SDL_UnlockMutex(renderer->contextLock);
+
 }
 
 static void D3D11_GetTransferData(
@@ -3074,6 +3043,7 @@ static void D3D11_GetTransferData(
 	D3D11Renderer *renderer = (D3D11Renderer*) driverData;
 	D3D11TransferBufferContainer *container = (D3D11TransferBufferContainer*) transferBuffer;
 	D3D11TransferBuffer *buffer = container->activeBuffer;
+	D3D11_TEXTURE2D_DESC stagingDesc;
 	HRESULT res;
 
 	if (container->usage == SDL_GPU_TRANSFERUSAGE_BUFFER)
@@ -3274,14 +3244,15 @@ static void D3D11_UploadToBuffer(
 	D3D11_INTERNAL_TrackTransferBuffer(d3d11CommandBuffer, d3d11TransferBuffer);
 }
 
+
 static void D3D11_DownloadFromTexture(
-	SDL_GpuRenderer *driverData,
+	SDL_GpuCommandBuffer *commandBuffer,
 	SDL_GpuTextureRegion *textureRegion,
 	SDL_GpuTransferBuffer *transferBuffer,
-	SDL_GpuBufferImageCopy *copyParams,
-	SDL_bool cycle
+	SDL_GpuBufferImageCopy *copyParams
 ) {
-	D3D11Renderer *renderer = (D3D11Renderer*) driverData;
+	D3D11CommandBuffer *d3d11CommandBuffer = (D3D11CommandBuffer*) commandBuffer;
+	D3D11Renderer *renderer = d3d11CommandBuffer->renderer;
 	D3D11TransferBufferContainer *container = (D3D11TransferBufferContainer*) transferBuffer;
 	D3D11TransferBuffer *d3d11TransferBuffer = container->activeBuffer;
 	D3D11TextureContainer *d3d11TextureContainer = (D3D11TextureContainer*) textureRegion->textureSlice.texture;
@@ -3295,27 +3266,71 @@ static void D3D11_DownloadFromTexture(
 	Sint32 formatSize = SDL_GpuTextureFormatTexelBlockSize(textureSubresource->parent->format);
 	Uint32 bufferStride = copyParams->bufferStride;
 	Uint32 bufferImageHeight = copyParams->bufferImageHeight;
+	Uint32 bytesPerRow = BytesPerRow(textureRegion->w, textureSubresource->parent->format);
+	Uint32 row;
 	D3D11_BOX srcBox = {textureRegion->x, textureRegion->y, textureRegion->z, textureRegion->x + textureRegion->w, textureRegion->y + textureRegion->h, 1};
 	D3D11_MAPPED_SUBRESOURCE subresource;
 	HRESULT res;
 
-	/* Rotate the transfer buffer if necessary */
-	if (
-		cycle &&
-		SDL_AtomicGet(&container->activeBuffer->referenceCount) > 0
-	) {
-		D3D11_INTERNAL_CycleActiveTransferBuffer(
-			renderer,
-			container
-		);
-		d3d11TransferBuffer = container->activeBuffer;
-	}
-
 	if (bufferStride == 0 || bufferImageHeight == 0)
 	{
-		bufferStride = BytesPerRow(textureRegion->w, textureSubresource->parent->format);
+		bufferStride = bytesPerRow;
 		bufferImageHeight = textureRegion->h * SDL_GpuTextureFormatTexelBlockSize(textureSubresource->parent->format);
 	}
+
+	if (bufferStride == bytesPerRow)
+	{
+		ID3D11DeviceContext1_CopySubresourceRegion1(
+			d3d11CommandBuffer->context,
+			d3d11TransferBuffer->stagingBuffer,
+			0,
+			0,
+			0,
+			0,
+			textureSubresource->parent->handle,
+			textureSubresource->index,
+			&srcBox,
+			D3D11_COPY_NO_OVERWRITE
+		);
+	}
+	else
+	{
+		for (row = textureRegion->y; row < textureRegion->y + textureRegion->h; row += 1)
+		{
+			srcBox.left = textureRegion->x;
+			srcBox.top = row;
+			srcBox.front = textureRegion->z;
+			srcBox.right = textureRegion->x + textureRegion->w;
+			srcBox.bottom = 1;
+			srcBox.back = 1;
+
+			ID3D11DeviceContext1_CopySubresourceRegion1(
+				d3d11CommandBuffer->context,
+				d3d11TransferBuffer->stagingBuffer,
+				0,
+				bufferStride * row,
+				0,
+				0,
+				textureSubresource->parent->handle,
+				textureSubresource->index,
+				&srcBox,
+				D3D11_COPY_NO_OVERWRITE
+			);
+		}
+	}
+
+	ID3D11DeviceContext1_CopySubresourceRegion1(
+		d3d11CommandBuffer->context,
+		d3d11TransferBuffer->stagingBuffer,
+		0,
+		0,
+		0,
+		0,
+		textureSubresource->parent->handle,
+		textureSubresource->index,
+		&srcBox,
+		D3D11_COPY_NO_OVERWRITE
+	);
 
 	stagingDesc.Width = textureRegion->w;
 	stagingDesc.Height = textureRegion->h;
@@ -3387,44 +3402,30 @@ static void D3D11_DownloadFromTexture(
 }
 
 static void D3D11_DownloadFromBuffer(
-	SDL_GpuRenderer *driverData,
+	SDL_GpuCommandBuffer *commandBuffer,
 	SDL_GpuBuffer *gpuBuffer,
 	SDL_GpuTransferBuffer *transferBuffer,
-	SDL_GpuBufferCopy *copyParams,
-	SDL_bool cycle
+	SDL_GpuBufferCopy *copyParams
 ) {
-	D3D11Renderer *renderer = (D3D11Renderer*) driverData;
+	D3D11CommandBuffer *d3d11CommandBuffer = (D3D11CommandBuffer*) commandBuffer;
+	D3D11Renderer *renderer = d3d11CommandBuffer->renderer;
 	D3D11TransferBufferContainer *container = (D3D11TransferBufferContainer*) transferBuffer;
 	D3D11TransferBuffer *d3d11TransferBuffer = container->activeBuffer;
 	D3D11BufferContainer *d3d11BufferContainer = (D3D11BufferContainer*) gpuBuffer;
 	D3D11_BOX srcBox = { copyParams->srcOffset, 0, 0, copyParams->size, 1, 1 };
 
-	/* Rotate the transfer buffer if necessary */
-	if (
-		cycle &&
-		SDL_AtomicGet(&container->activeBuffer->referenceCount) > 0
-	) {
-		D3D11_INTERNAL_CycleActiveTransferBuffer(
-			renderer,
-			container
-		);
-		d3d11TransferBuffer = container->activeBuffer;
-	}
-
-	/* Readback is only possible on CPU timeline in D3D11 */
-	SDL_LockMutex(renderer->contextLock);
-	ID3D11DeviceContext_CopySubresourceRegion(
-		renderer->immediateContext,
-		(ID3D11Resource*) d3d11TransferBuffer->bufferTransfer.stagingBuffer,
+	ID3D11DeviceContext1_CopySubresourceRegion1(
+		d3d11CommandBuffer->context,
+		(ID3D11Resource*) d3d11TransferBuffer->stagingBuffer,
 		0,
 		copyParams->dstOffset,
 		0,
 		0,
 		(ID3D11Resource*) d3d11BufferContainer->activeBuffer->handle,
 		0,
-		&srcBox
+		&srcBox,
+		D3D11_COPY_NO_OVERWRITE
 	);
-	SDL_UnlockMutex(renderer->contextLock);
 }
 
 static void D3D11_CopyTextureToTexture(

@@ -981,6 +981,36 @@ void SDL_GpuGenerateMipmaps(
 	);
 }
 
+void SDL_GpuDownloadFromTexture(
+	SDL_GpuCopyPass *copyPass,
+	SDL_GpuTextureRegion *textureRegion,
+	SDL_GpuTransferBuffer *transferBuffer,
+	SDL_GpuBufferImageCopy *copyParams
+) {
+	NULL_RETURN(copyPass);
+	COPYPASS_DEVICE->DownloadFromTexture(
+		COPYPASS_COMMAND_BUFFER,
+		textureRegion,
+		transferBuffer,
+		copyParams
+	);
+}
+
+void SDL_GpuDownloadFromBuffer(
+	SDL_GpuCopyPass *copyPass,
+	SDL_GpuBuffer *gpuBuffer,
+	SDL_GpuTransferBuffer *transferBuffer,
+	SDL_GpuBufferCopy *copyParams
+) {
+	NULL_RETURN(copyPass);
+	COPYPASS_DEVICE->DownloadFromBuffer(
+		COPYPASS_COMMAND_BUFFER,
+		gpuBuffer,
+		transferBuffer,
+		copyParams
+	);
+}
+
 void SDL_GpuEndCopyPass(
 	SDL_GpuCopyPass *copyPass
 ) {
@@ -1211,40 +1241,6 @@ void SDL_GpuReleaseFence(
 	device->ReleaseFence(
 		device->driverData,
 		fence
-	);
-}
-
-void SDL_GpuDownloadFromTexture(
-	SDL_GpuDevice *device,
-	SDL_GpuTextureRegion *textureRegion,
-	SDL_GpuTransferBuffer *transferBuffer,
-	SDL_GpuBufferImageCopy *copyParams,
-	SDL_bool cycle
-) {
-	NULL_RETURN(device);
-	device->DownloadFromTexture(
-		device->driverData,
-		textureRegion,
-		transferBuffer,
-		copyParams,
-		cycle
-	);
-}
-
-void SDL_GpuDownloadFromBuffer(
-	SDL_GpuDevice *device,
-	SDL_GpuBuffer *gpuBuffer,
-	SDL_GpuTransferBuffer *transferBuffer,
-	SDL_GpuBufferCopy *copyParams,
-	SDL_bool cycle
-) {
-	NULL_RETURN(device);
-	device->DownloadFromBuffer(
-		device->driverData,
-		gpuBuffer,
-		transferBuffer,
-		copyParams,
-		cycle
 	);
 }
 
