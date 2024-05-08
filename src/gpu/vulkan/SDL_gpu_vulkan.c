@@ -8267,7 +8267,7 @@ static void VULKAN_DownloadFromBuffer(
     VulkanResourceAccessInfo resourceAccessInfo;
 
     resourceAccessInfo.stageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
-    resourceAccessInfo.accessMask = VK_ACCESS_SHADER_WRITE_BIT;
+    resourceAccessInfo.accessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
     resourceAccessInfo.imageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 
     VULKAN_INTERNAL_BufferMemoryBarrier(
@@ -8278,7 +8278,7 @@ static void VULKAN_DownloadFromBuffer(
         transferBufferContainer->activeBufferHandle->vulkanBuffer
     );
 
-    resourceAccessInfo.accessMask = VK_ACCESS_SHADER_READ_BIT;
+    resourceAccessInfo.accessMask = VK_ACCESS_TRANSFER_READ_BIT;
 
     VULKAN_INTERNAL_BufferMemoryBarrier(
         renderer,

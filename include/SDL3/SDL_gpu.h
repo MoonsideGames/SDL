@@ -1690,7 +1690,7 @@ extern DECLSPEC void SDLCALL SDL_GpuDownloadFromTexture(
 );
 
 /**
- * Copies data from a texture to a transfer buffer on the GPU timeline.
+ * Copies data from a buffer to a transfer buffer on the GPU timeline.
  * This data is not guaranteed to be copied until the command buffer fence is signaled.
  *
  * \param copyPass a copy pass handle
