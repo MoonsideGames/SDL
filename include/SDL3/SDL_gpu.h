@@ -430,8 +430,8 @@ typedef struct SDL_GpuTextureRegion
 typedef struct SDL_GpuBufferImageCopy
 {
 	Uint32 bufferOffset;
-	Uint32 bufferStride;
-	Uint32 bufferImageHeight;
+	Uint32 bufferStride; /* number of pixels from one row to the next */
+	Uint32 bufferImageHeight; /* number of rows from one layer/depth-slice to the next */
 } SDL_GpuBufferImageCopy;
 
 typedef struct SDL_GpuBufferCopy

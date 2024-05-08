@@ -1065,6 +1065,8 @@ SDL3_0.0.0 {
     SDL_GpuCopyTextureToTexture;
     SDL_GpuCopyBufferToBuffer;
     SDL_GpuGenerateMipmaps;
+    SDL_GpuDownloadFromTexture;
+    SDL_GpuDownloadFromBuffer;
     SDL_GpuEndCopyPass;
     SDL_GpuBlit;
     SDL_GpuClaimWindow;
@@ -1080,8 +1082,6 @@ SDL3_0.0.0 {
     SDL_GpuWaitForFences;
     SDL_GpuQueryFence;
     SDL_GpuReleaseFence;
-    SDL_GpuDownloadFromTexture;
-    SDL_GpuDownloadFromBuffer;
     SDL_GpuTextureFormatTexelBlockSize;
     SDL_GpuIsTextureFormatSupported;
     SDL_GpuGetBestSampleCount;

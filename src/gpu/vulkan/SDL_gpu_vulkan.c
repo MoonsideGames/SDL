@@ -8186,6 +8186,126 @@ static void VULKAN_UploadToBuffer(
     VULKAN_INTERNAL_TrackBuffer(renderer, vulkanCommandBuffer, vulkanBuffer);
 }
 
+/* Readback */
+
+static void VULKAN_DownloadFromTexture(
+    SDL_GpuCommandBuffer *commandBuffer,
+    SDL_GpuTextureRegion *textureRegion,
+    SDL_GpuTransferBuffer *transferBuffer,
+    SDL_GpuBufferImageCopy *copyParams
+) {
+    VulkanCommandBuffer *vulkanCommandBuffer = (VulkanCommandBuffer*) commandBuffer;
+    VulkanRenderer *renderer = vulkanCommandBuffer->renderer;
+    VulkanTextureSlice *vulkanTextureSlice;
+    VulkanBufferContainer *transferBufferContainer = (VulkanBufferContainer*) transferBuffer;
+    VkBufferImageCopy imageCopy;
+    vulkanTextureSlice = VULKAN_INTERNAL_SDLToVulkanTextureSlice(&textureRegion->textureSlice);
+    SDL_GpuFence *fence;
+    VulkanResourceAccessInfo resourceAccessInfo;
+
+    resourceAccessInfo.stageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
+    resourceAccessInfo.accessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    resourceAccessInfo.imageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+
+    VULKAN_INTERNAL_BufferMemoryBarrier(
+        renderer,
+        vulkanCommandBuffer,
+        &resourceAccessInfo,
+        SDL_TRUE,
+        transferBufferContainer->activeBufferHandle->vulkanBuffer
+    );
+
+    resourceAccessInfo.stageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
+    resourceAccessInfo.accessMask = VK_ACCESS_TRANSFER_READ_BIT;
+    resourceAccessInfo.imageLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+
+    VULKAN_INTERNAL_ImageMemoryBarrier(
+        renderer,
+        vulkanCommandBuffer,
+        &resourceAccessInfo,
+        SDL_TRUE,
+        vulkanTextureSlice
+    );
+
+    imageCopy.imageExtent.width = textureRegion->w;
+    imageCopy.imageExtent.height = textureRegion->h;
+    imageCopy.imageExtent.depth = textureRegion->d;
+    imageCopy.imageOffset.x = textureRegion->x;
+    imageCopy.imageOffset.y = textureRegion->y;
+    imageCopy.imageOffset.z = textureRegion->z;
+    imageCopy.imageSubresource.aspectMask = vulkanTextureSlice->parent->aspectFlags;
+    imageCopy.imageSubresource.baseArrayLayer = textureRegion->textureSlice.layer;
+    imageCopy.imageSubresource.layerCount = 1;
+    imageCopy.imageSubresource.mipLevel = textureRegion->textureSlice.mipLevel;
+    imageCopy.bufferOffset = copyParams->bufferOffset;
+    imageCopy.bufferRowLength = copyParams->bufferStride;
+    imageCopy.bufferImageHeight = copyParams->bufferImageHeight;
+
+    renderer->vkCmdCopyImageToBuffer(
+        vulkanCommandBuffer->commandBuffer,
+        vulkanTextureSlice->parent->image,
+        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+        transferBufferContainer->activeBufferHandle->vulkanBuffer->buffer,
+        1,
+        &imageCopy
+    );
+
+    VULKAN_INTERNAL_TrackBuffer(renderer, vulkanCommandBuffer, transferBufferContainer->activeBufferHandle->vulkanBuffer);
+    VULKAN_INTERNAL_TrackTextureSlice(renderer, vulkanCommandBuffer, vulkanTextureSlice);
+}
+
+static void VULKAN_DownloadFromBuffer(
+    SDL_GpuCommandBuffer *commandBuffer,
+    SDL_GpuBuffer *gpuBuffer,
+    SDL_GpuTransferBuffer *transferBuffer,
+    SDL_GpuBufferCopy *copyParams
+) {
+    VulkanCommandBuffer *vulkanCommandBuffer = (VulkanCommandBuffer*) commandBuffer;
+    VulkanRenderer *renderer = vulkanCommandBuffer->renderer;
+    VulkanBufferContainer *gpuBufferContainer = (VulkanBufferContainer*) gpuBuffer;
+    VulkanBufferContainer *transferBufferContainer = (VulkanBufferContainer*) transferBuffer;
+    VkBufferCopy bufferCopy;
+    SDL_GpuFence *fence;
+    VulkanResourceAccessInfo resourceAccessInfo;
+
+    resourceAccessInfo.stageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
+    resourceAccessInfo.accessMask = VK_ACCESS_SHADER_WRITE_BIT;
+    resourceAccessInfo.imageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+
+    VULKAN_INTERNAL_BufferMemoryBarrier(
+        renderer,
+        vulkanCommandBuffer,
+        &resourceAccessInfo,
+        SDL_TRUE,
+        transferBufferContainer->activeBufferHandle->vulkanBuffer
+    );
+
+    resourceAccessInfo.accessMask = VK_ACCESS_SHADER_READ_BIT;
+
+    VULKAN_INTERNAL_BufferMemoryBarrier(
+        renderer,
+        vulkanCommandBuffer,
+        &resourceAccessInfo,
+        SDL_TRUE,
+        gpuBufferContainer->activeBufferHandle->vulkanBuffer
+    );
+
+    bufferCopy.srcOffset = copyParams->srcOffset;
+    bufferCopy.dstOffset = copyParams->dstOffset;
+    bufferCopy.size = copyParams->size;
+
+    renderer->vkCmdCopyBuffer(
+        vulkanCommandBuffer->commandBuffer,
+        gpuBufferContainer->activeBufferHandle->vulkanBuffer->buffer,
+        transferBufferContainer->activeBufferHandle->vulkanBuffer->buffer,
+        1,
+        &bufferCopy
+    );
+
+    VULKAN_INTERNAL_TrackBuffer(renderer, vulkanCommandBuffer, transferBufferContainer->activeBufferHandle->vulkanBuffer);
+    VULKAN_INTERNAL_TrackBuffer(renderer, vulkanCommandBuffer, gpuBufferContainer->activeBufferHandle->vulkanBuffer);
+}
+
 static void VULKAN_CopyTextureToTexture(
     SDL_GpuCommandBuffer *commandBuffer,
     SDL_GpuTextureRegion *source,
@@ -10046,168 +10166,6 @@ static Uint8 VULKAN_INTERNAL_DefragmentMemory(
     );
 
     return 1;
-}
-
-/* Readback */
-
-static void VULKAN_DownloadFromTexture(
-    SDL_GpuRenderer *driverData,
-    SDL_GpuTextureRegion *textureRegion,
-    SDL_GpuTransferBuffer *transferBuffer,
-    SDL_GpuBufferImageCopy *copyParams,
-	SDL_bool cycle
-) {
-    VulkanRenderer *renderer = (VulkanRenderer*) driverData;
-    VulkanTextureSlice *vulkanTextureSlice;
-    VulkanBufferContainer *transferBufferContainer = (VulkanBufferContainer*) transferBuffer;
-    VkBufferImageCopy imageCopy;
-    vulkanTextureSlice = VULKAN_INTERNAL_SDLToVulkanTextureSlice(&textureRegion->textureSlice);
-    SDL_GpuFence *fence;
-    VulkanResourceAccessInfo resourceAccessInfo;
-
-    VulkanCommandBuffer *vulkanCommandBuffer = (VulkanCommandBuffer*) VULKAN_AcquireCommandBuffer(driverData);
-
-    if (
-        cycle &&
-        SDL_AtomicGet(&transferBufferContainer->activeBufferHandle->vulkanBuffer->referenceCount) > 0
-    ) {
-        VULKAN_INTERNAL_CycleActiveBuffer(
-            renderer,
-            transferBufferContainer
-        );
-        vulkanTextureSlice = VULKAN_INTERNAL_SDLToVulkanTextureSlice(&textureRegion->textureSlice);
-    }
-
-    resourceAccessInfo.stageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
-    resourceAccessInfo.accessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-    resourceAccessInfo.imageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-
-    VULKAN_INTERNAL_BufferMemoryBarrier(
-        renderer,
-        vulkanCommandBuffer,
-        &resourceAccessInfo,
-        SDL_TRUE,
-        transferBufferContainer->activeBufferHandle->vulkanBuffer
-    );
-
-    resourceAccessInfo.stageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
-    resourceAccessInfo.accessMask = VK_ACCESS_TRANSFER_READ_BIT;
-    resourceAccessInfo.imageLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-
-    VULKAN_INTERNAL_ImageMemoryBarrier(
-        renderer,
-        vulkanCommandBuffer,
-        &resourceAccessInfo,
-        SDL_TRUE,
-        vulkanTextureSlice
-    );
-
-    imageCopy.imageExtent.width = textureRegion->w;
-    imageCopy.imageExtent.height = textureRegion->h;
-    imageCopy.imageExtent.depth = textureRegion->d;
-    imageCopy.imageOffset.x = textureRegion->x;
-    imageCopy.imageOffset.y = textureRegion->y;
-    imageCopy.imageOffset.z = textureRegion->z;
-    imageCopy.imageSubresource.aspectMask = vulkanTextureSlice->parent->aspectFlags;
-    imageCopy.imageSubresource.baseArrayLayer = textureRegion->textureSlice.layer;
-    imageCopy.imageSubresource.layerCount = 1;
-    imageCopy.imageSubresource.mipLevel = textureRegion->textureSlice.mipLevel;
-    imageCopy.bufferOffset = copyParams->bufferOffset;
-    imageCopy.bufferRowLength = copyParams->bufferStride;
-    imageCopy.bufferImageHeight = copyParams->bufferImageHeight;
-
-    renderer->vkCmdCopyImageToBuffer(
-        vulkanCommandBuffer->commandBuffer,
-        vulkanTextureSlice->parent->image,
-        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-        transferBufferContainer->activeBufferHandle->vulkanBuffer->buffer,
-        1,
-        &imageCopy
-    );
-
-    VULKAN_INTERNAL_PostPassBarriers(
-        renderer,
-        vulkanCommandBuffer
-    );
-
-    VULKAN_INTERNAL_TrackBuffer(renderer, vulkanCommandBuffer, transferBufferContainer->activeBufferHandle->vulkanBuffer);
-    VULKAN_INTERNAL_TrackTextureSlice(renderer, vulkanCommandBuffer, vulkanTextureSlice);
-
-    fence = VULKAN_SubmitAndAcquireFence((SDL_GpuCommandBuffer*) vulkanCommandBuffer);
-    VULKAN_WaitForFences(driverData, 1, 1, &fence);
-    VULKAN_ReleaseFence(driverData, fence);
-}
-
-static void VULKAN_DownloadFromBuffer(
-    SDL_GpuRenderer *driverData,
-    SDL_GpuBuffer *gpuBuffer,
-    SDL_GpuTransferBuffer *transferBuffer,
-    SDL_GpuBufferCopy *copyParams,
-	SDL_bool cycle
-) {
-    VulkanRenderer *renderer = (VulkanRenderer*) driverData;
-    VulkanBufferContainer *gpuBufferContainer = (VulkanBufferContainer*) gpuBuffer;
-    VulkanBufferContainer *transferBufferContainer = (VulkanBufferContainer*) transferBuffer;
-    VkBufferCopy bufferCopy;
-    SDL_GpuFence *fence;
-    VulkanCommandBuffer *vulkanCommandBuffer = (VulkanCommandBuffer*) VULKAN_AcquireCommandBuffer(driverData);
-    VulkanResourceAccessInfo resourceAccessInfo;
-
-    if (
-        cycle &&
-        SDL_AtomicGet(&transferBufferContainer->activeBufferHandle->vulkanBuffer->referenceCount) > 0
-    ) {
-        VULKAN_INTERNAL_CycleActiveBuffer(
-            renderer,
-            transferBufferContainer
-        );
-    }
-
-    resourceAccessInfo.stageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
-    resourceAccessInfo.accessMask = VK_ACCESS_SHADER_WRITE_BIT;
-    resourceAccessInfo.imageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-
-    VULKAN_INTERNAL_BufferMemoryBarrier(
-        renderer,
-        vulkanCommandBuffer,
-        &resourceAccessInfo,
-        SDL_TRUE,
-        transferBufferContainer->activeBufferHandle->vulkanBuffer
-    );
-
-    resourceAccessInfo.accessMask = VK_ACCESS_SHADER_READ_BIT;
-
-    VULKAN_INTERNAL_BufferMemoryBarrier(
-        renderer,
-        vulkanCommandBuffer,
-        &resourceAccessInfo,
-        SDL_TRUE,
-        gpuBufferContainer->activeBufferHandle->vulkanBuffer
-    );
-
-    bufferCopy.srcOffset = copyParams->srcOffset;
-    bufferCopy.dstOffset = copyParams->dstOffset;
-    bufferCopy.size = copyParams->size;
-
-    renderer->vkCmdCopyBuffer(
-        vulkanCommandBuffer->commandBuffer,
-        gpuBufferContainer->activeBufferHandle->vulkanBuffer->buffer,
-        transferBufferContainer->activeBufferHandle->vulkanBuffer->buffer,
-        1,
-        &bufferCopy
-    );
-
-    VULKAN_INTERNAL_PostPassBarriers(
-        renderer,
-        vulkanCommandBuffer
-    );
-
-    VULKAN_INTERNAL_TrackBuffer(renderer, vulkanCommandBuffer, transferBufferContainer->activeBufferHandle->vulkanBuffer);
-    VULKAN_INTERNAL_TrackBuffer(renderer, vulkanCommandBuffer, gpuBufferContainer->activeBufferHandle->vulkanBuffer);
-
-    fence = VULKAN_SubmitAndAcquireFence((SDL_GpuCommandBuffer*) vulkanCommandBuffer);
-    VULKAN_WaitForFences(driverData, 1, 1, &fence);
-    VULKAN_ReleaseFence(driverData, fence);
 }
 
 /* Queries */

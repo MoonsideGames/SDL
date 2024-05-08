@@ -1089,6 +1089,8 @@
 #define SDL_GpuCopyTextureToTexture SDL_GpuCopyTextureToTexture_REAL
 #define SDL_GpuCopyBufferToBuffer SDL_GpuCopyBufferToBuffer_REAL
 #define SDL_GpuGenerateMipmaps SDL_GpuGenerateMipmaps_REAL
+#define SDL_GpuDownloadFromTexture SDL_GpuDownloadFromTexture_REAL
+#define SDL_GpuDownloadFromBuffer SDL_GpuDownloadFromBuffer_REAL
 #define SDL_GpuEndCopyPass SDL_GpuEndCopyPass_REAL
 #define SDL_GpuBlit SDL_GpuBlit_REAL
 #define SDL_GpuClaimWindow SDL_GpuClaimWindow_REAL
@@ -1104,8 +1106,6 @@
 #define SDL_GpuWaitForFences SDL_GpuWaitForFences_REAL
 #define SDL_GpuQueryFence SDL_GpuQueryFence_REAL
 #define SDL_GpuReleaseFence SDL_GpuReleaseFence_REAL
-#define SDL_GpuDownloadFromTexture SDL_GpuDownloadFromTexture_REAL
-#define SDL_GpuDownloadFromBuffer SDL_GpuDownloadFromBuffer_REAL
 #define SDL_GpuTextureFormatTexelBlockSize SDL_GpuTextureFormatTexelBlockSize_REAL
 #define SDL_GpuIsTextureFormatSupported SDL_GpuIsTextureFormatSupported_REAL
 #define SDL_GpuGetBestSampleCount SDL_GpuGetBestSampleCount_REAL
