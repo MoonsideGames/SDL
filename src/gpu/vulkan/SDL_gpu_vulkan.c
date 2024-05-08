@@ -8200,7 +8200,6 @@ static void VULKAN_DownloadFromTexture(
     VulkanBufferContainer *transferBufferContainer = (VulkanBufferContainer*) transferBuffer;
     VkBufferImageCopy imageCopy;
     vulkanTextureSlice = VULKAN_INTERNAL_SDLToVulkanTextureSlice(&textureRegion->textureSlice);
-    SDL_GpuFence *fence;
     VulkanResourceAccessInfo resourceAccessInfo;
 
     resourceAccessInfo.stageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
@@ -8265,7 +8264,6 @@ static void VULKAN_DownloadFromBuffer(
     VulkanBufferContainer *gpuBufferContainer = (VulkanBufferContainer*) gpuBuffer;
     VulkanBufferContainer *transferBufferContainer = (VulkanBufferContainer*) transferBuffer;
     VkBufferCopy bufferCopy;
-    SDL_GpuFence *fence;
     VulkanResourceAccessInfo resourceAccessInfo;
 
     resourceAccessInfo.stageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
