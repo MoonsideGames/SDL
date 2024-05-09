@@ -3345,12 +3345,10 @@ static void D3D11_DownloadFromTexture(
 		textureRegion->textureSlice.layer,
 		textureRegion->textureSlice.mipLevel
 	);
-	Sint32 formatSize = SDL_GpuTextureFormatTexelBlockSize(textureSubresource->parent->format);
 	Uint32 bufferStride = copyParams->bufferStride;
 	Uint32 bufferImageHeight = copyParams->bufferImageHeight;
     Uint32 bytesPerRow, bytesPerDepthSlice;
 	D3D11_BOX srcBox = {textureRegion->x, textureRegion->y, textureRegion->z, textureRegion->x + textureRegion->w, textureRegion->y + textureRegion->h, 1};
-	D3D11_MAPPED_SUBRESOURCE subresource;
 	HRESULT res;
 
 	if (bufferStride == 0 || bufferImageHeight == 0)
@@ -3437,7 +3435,6 @@ static void D3D11_DownloadFromBuffer(
 	SDL_GpuBufferCopy *copyParams
 ) {
     D3D11CommandBuffer *d3d11CommandBuffer = (D3D11CommandBuffer*) commandBuffer;
-	D3D11Renderer *renderer = d3d11CommandBuffer->renderer;
 	D3D11TransferBufferContainer *container = (D3D11TransferBufferContainer*) transferBuffer;
 	D3D11TransferBuffer *d3d11TransferBuffer = container->activeBuffer;
 	D3D11BufferContainer *d3d11BufferContainer = (D3D11BufferContainer*) gpuBuffer;
