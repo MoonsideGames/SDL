@@ -1606,26 +1606,6 @@ static void METAL_UploadToBuffer(
     METAL_INTERNAL_TrackTransferBuffer(metalCommandBuffer, metalTransferContainer->activeBuffer);
 }
 
-static void METAL_DownloadFromTexture(
-    SDL_GpuRenderer *driverData,
-    SDL_GpuTextureRegion *textureRegion,
-    SDL_GpuTransferBuffer *transferBuffer,
-    SDL_GpuBufferImageCopy *copyParams,
-    SDL_bool cycle
-) {
-    NOT_IMPLEMENTED
-}
-
-static void METAL_DownloadFromBuffer(
-    SDL_GpuRenderer *driverData,
-    SDL_GpuBuffer *gpuBuffer,
-    SDL_GpuTransferBuffer *transferBuffer,
-    SDL_GpuBufferCopy *copyParams,
-    SDL_bool cycle
-) {
-    NOT_IMPLEMENTED
-}
-
 static void METAL_CopyTextureToTexture(
     SDL_GpuCommandBuffer *commandBuffer,
     SDL_GpuTextureRegion *source,
@@ -1672,6 +1652,24 @@ static void METAL_CopyBufferToBuffer(
 static void METAL_GenerateMipmaps(
     SDL_GpuCommandBuffer *commandBuffer,
     SDL_GpuTexture *texture
+) {
+    NOT_IMPLEMENTED
+}
+
+static void METAL_DownloadFromTexture(
+    SDL_GpuCommandBuffer *commandBuffer,
+    SDL_GpuTextureRegion *textureSlice,
+    SDL_GpuTransferBuffer *transferBuffer,
+    SDL_GpuBufferImageCopy *copyParams
+) {
+    NOT_IMPLEMENTED
+}
+
+static void METAL_DownloadFromBuffer(
+    SDL_GpuCommandBuffer *commandBuffer,
+    SDL_GpuBuffer *gpuBuffer,
+    SDL_GpuTransferBuffer *transferBuffer,
+    SDL_GpuBufferCopy *copyParams
 ) {
     NOT_IMPLEMENTED
 }
