@@ -3148,9 +3148,9 @@ static void D3D11_GetTransferData(
         }
         else
         {
-            for (Uint32 depth = 0; depth < buffer->textureTransfer.downloadDepth; depth += 1)
+            for (depth = 0; depth < buffer->textureTransfer.downloadDepth; depth += 1)
             {
-                for (Uint32 row = 0; row < buffer->textureTransfer.downloadHeight; row += 1)
+                for (row = 0; row < buffer->textureTransfer.downloadHeight; row += 1)
                 {
                     copySize = SDL_min(copyParams->size - dataPtrOffset, buffer->textureTransfer.downloadBytesPerRow);
 
