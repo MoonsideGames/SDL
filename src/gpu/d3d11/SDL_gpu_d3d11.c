@@ -594,6 +594,8 @@ typedef struct D3D11BufferTransfer
 typedef struct D3D11TextureTransfer
 {
 	Uint8 *data;
+
+    /* TODO: can get rid of all of this by using a compute shader for texture-to-buffer copy */
     ID3D11Resource *downloadTexture;
     Uint32 downloadWidth;
     Uint32 downloadHeight;
@@ -3088,6 +3090,8 @@ static void D3D11_GetTransferData(
 	D3D11TransferBuffer *buffer = container->activeBuffer;
     D3D11_MAPPED_SUBRESOURCE subresource;
     Uint8* dataPtr;
+    Uint32 dataPtrOffset;
+    Uint32 depth, row, copySize;
 	HRESULT res;
 
 	if (container->usage == SDL_GPU_TRANSFERUSAGE_BUFFER)
@@ -3131,14 +3135,15 @@ static void D3D11_GetTransferData(
         );
         ERROR_CHECK_RETURN("Could not map texture for reading",)
 
-        dataPtr = (Uint8*) data + copyParams->dstOffset;
+        dataPtr = (Uint8*) data;
+        dataPtrOffset = copyParams->dstOffset;
 
         if (buffer->textureTransfer.downloadTightlyPacked)
         {
             SDL_memcpy(
-                dataPtr,
+                dataPtr + dataPtrOffset,
                 (Uint8*) subresource.pData + copyParams->srcOffset,
-                buffer->textureTransfer.downloadDepth * buffer->textureTransfer.downloadHeight * buffer->textureTransfer.downloadBytesPerRow
+                SDL_min(copyParams->size, buffer->textureTransfer.downloadDepth * buffer->textureTransfer.downloadHeight * buffer->textureTransfer.downloadBytesPerRow)
             );
         }
         else
@@ -3147,16 +3152,24 @@ static void D3D11_GetTransferData(
             {
                 for (Uint32 row = 0; row < buffer->textureTransfer.downloadHeight; row += 1)
                 {
+                    copySize = SDL_min(copyParams->size - dataPtrOffset, buffer->textureTransfer.downloadBytesPerRow);
+
+                    if (copySize == 0)
+                    {
+                        goto unmap;
+                    }
+
                     SDL_memcpy(
-                        dataPtr,
+                        dataPtr + dataPtrOffset,
                         (Uint8*) subresource.pData + copyParams->srcOffset + (depth * buffer->textureTransfer.downloadBytesPerDepthSlice) + (row * buffer->textureTransfer.downloadBytesPerRow),
-                        buffer->textureTransfer.downloadBytesPerRow
+                        copySize
                     );
-                    dataPtr += buffer->textureTransfer.downloadBytesPerRow;
+                    dataPtrOffset += copySize;
                 }
             }
         }
 
+        unmap:
         ID3D11DeviceContext1_Unmap(
             renderer->immediateContext,
             buffer->textureTransfer.downloadTexture,
