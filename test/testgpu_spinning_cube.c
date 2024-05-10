@@ -90,7 +90,7 @@ quit(int rc)
 
 /*
  * Simulates desktop's glRotatef. The matrix is returned in column-major
- * order. 
+ * order.
  */
 static void
 rotate_matrix(float angle, float x, float y, float z, float *r)
@@ -129,10 +129,10 @@ rotate_matrix(float angle, float x, float y, float z, float *r)
     }
 }
 
-/* 
- * Simulates gluPerspectiveMatrix 
+/*
+ * Simulates gluPerspectiveMatrix
  */
-static void 
+static void
 perspective_matrix(float fovy, float aspect, float znear, float zfar, float *r)
 {
     int i;
@@ -152,7 +152,7 @@ perspective_matrix(float fovy, float aspect, float znear, float zfar, float *r)
     r[15] = 0.0f;
 }
 
-/* 
+/*
  * Multiplies lhs by rhs and writes out to r. All matrices are 4x4 and column
  * major. In-place multiplication is supported.
  */
@@ -298,9 +298,9 @@ Render(SDL_Window *window, const int windownum)
         return;
     }
 
-    /* 
+    /*
     * Do some rotation with Euler angles. It is not a fixed axis as
-    * quaterions would be, but the effect is cool. 
+    * quaterions would be, but the effect is cool.
     */
     rotate_matrix((float)winstate->angle_x, 1.0f, 0.0f, 0.0f, matrix_modelview);
     rotate_matrix((float)winstate->angle_y, 0.0f, 1.0f, 0.0f, matrix_rotate);
@@ -460,6 +460,7 @@ init_render_state(void)
     buf_transfer = SDL_GpuCreateTransferBuffer(
         gpu_device,
         SDL_GPU_TRANSFERUSAGE_BUFFER,
+        SDL_GPU_TRANSFER_MAP_WRITE,
         sizeof(vertex_data)
     );
     CHECK_CREATE(buf_transfer, "Vertex transfer buffer")

@@ -251,6 +251,7 @@ struct SDL_GpuDevice
 	SDL_GpuTransferBuffer* (*CreateTransferBuffer)(
 		SDL_GpuRenderer *driverData,
 		SDL_GpuTransferUsage usage,
+        SDL_GpuTransferBufferMapFlags mapFlags,
 		Uint32 sizeInBytes
 	);
 
@@ -437,7 +438,19 @@ struct SDL_GpuDevice
 		SDL_GpuCommandBuffer *commandBuffer
 	);
 
-	/* TransferBuffer Set/Get */
+	/* TransferBuffer Data */
+
+    void (*MapTransferBuffer)(
+        SDL_GpuRenderer *device,
+        SDL_GpuTransferBuffer *transferBuffer,
+        SDL_bool cycle,
+        void **ppData
+    );
+
+    void (*UnmapTransferBuffer)(
+        SDL_GpuRenderer *device,
+        SDL_GpuTransferBuffer *transferBuffer
+    );
 
 	void (*SetTransferData)(
 		SDL_GpuRenderer *driverData,
@@ -687,6 +700,8 @@ struct SDL_GpuDevice
 	ASSIGN_DRIVER_FUNC(PushComputeUniformData, name) \
 	ASSIGN_DRIVER_FUNC(DispatchCompute, name) \
 	ASSIGN_DRIVER_FUNC(EndComputePass, name) \
+    ASSIGN_DRIVER_FUNC(MapTransferBuffer, name) \
+    ASSIGN_DRIVER_FUNC(UnmapTransferBuffer, name) \
 	ASSIGN_DRIVER_FUNC(SetTransferData, name) \
 	ASSIGN_DRIVER_FUNC(GetTransferData, name) \
 	ASSIGN_DRIVER_FUNC(BeginCopyPass, name) \

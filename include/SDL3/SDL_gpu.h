@@ -195,6 +195,14 @@ typedef enum SDL_GpuBufferUsageFlagBits
 
 typedef Uint32 SDL_GpuBufferUsageFlags;
 
+typedef enum SDL_GpuTransferBufferMapFlagBits
+{
+    SDL_GPU_TRANSFER_MAP_READ  = 0x00000001,
+    SDL_GPU_TRANSFER_MAP_WRITE = 0x00000002
+} SDL_GpuTransferBufferMapFlagBits;
+
+typedef Uint32 SDL_GpuTransferBufferMapFlags;
+
 typedef enum SDL_GpuShaderResourceType
 {
 	SDL_GPU_RESOURCETYPE_TEXTURE_SAMPLER,
@@ -967,6 +975,7 @@ extern DECLSPEC SDL_GpuUniformBuffer *SDLCALL SDL_GpuCreateUniformBuffer(
  *
  * \param device a GPU Context
  * \param usage specifies whether the transfer buffer will transfer buffers or textures
+ * \param mapFlags specify read-write options for the transfer buffer
  * \param sizeInBytes the size of the transfer buffer
  * \returns a transfer buffer on success, or NULL on failure
  *
@@ -981,6 +990,7 @@ extern DECLSPEC SDL_GpuUniformBuffer *SDLCALL SDL_GpuCreateUniformBuffer(
 extern DECLSPEC SDL_GpuTransferBuffer *SDLCALL SDL_GpuCreateTransferBuffer(
 	SDL_GpuDevice *device,
 	SDL_GpuTransferUsage usage,
+    SDL_GpuTransferBufferMapFlags mapFlags,
 	Uint32 sizeInBytes
 );
 
@@ -1514,7 +1524,38 @@ extern DECLSPEC void SDLCALL SDL_GpuEndComputePass(
 	SDL_GpuComputePass *computePass
 );
 
-/* TransferBuffer Set/Get */
+/* TransferBuffer Data */
+
+/**
+ * Maps a transfer buffer into application address space.
+ * You must unmap the transfer buffer before encoding upload commands.
+ *
+ * \param device a GPU context
+ * \param transferBuffer a transfer buffer
+ * \param cycle if SDL_TRUE, cycles the transfer buffer if it is bound
+ * \param ppData where to store the address of the mapped transfer buffer memory
+ *
+ * \since This function is available since SDL 3.x.x
+ */
+extern DECLSPEC void SDLCALL SDL_GpuMapTransferBuffer(
+    SDL_GpuDevice *device,
+    SDL_GpuTransferBuffer *transferBuffer,
+    SDL_bool cycle,
+    void **ppData
+);
+
+/**
+ * Unmaps a previously mapped transfer buffer.
+ *
+ * \param device a GPU context
+ * \param transferBuffer a previously mapped transfer buffer
+ *
+ * \since This function is available since SDL 3.x.x
+ */
+extern DECLSPEC void SDLCALL SDL_GpuUnmapTransferBuffer(
+    SDL_GpuDevice *device,
+    SDL_GpuTransferBuffer *transferBuffer
+);
 
 /**
  * Immediately copies data from a pointer to a transfer buffer.

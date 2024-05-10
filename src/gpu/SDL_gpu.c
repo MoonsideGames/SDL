@@ -414,12 +414,14 @@ SDL_GpuUniformBuffer* SDL_GpuCreateUniformBuffer(
 SDL_GpuTransferBuffer* SDL_GpuCreateTransferBuffer(
 	SDL_GpuDevice *device,
 	SDL_GpuTransferUsage usage,
+    SDL_GpuTransferBufferMapFlags mapFlags,
 	Uint32 sizeInBytes
 ) {
 	NULL_ASSERT(device)
 	return device->CreateTransferBuffer(
 		device->driverData,
 		usage,
+        mapFlags,
 		sizeInBytes
 	);
 }
@@ -850,7 +852,35 @@ void SDL_GpuEndComputePass(
     ((CommandBufferCommonHeader*) COMPUTEPASS_COMMAND_BUFFER)->computePass.inProgress = SDL_FALSE;
 }
 
-/* TransferBuffer Set/Get */
+/* TransferBuffer Data */
+
+void SDL_GpuMapTransferBuffer(
+    SDL_GpuDevice *device,
+    SDL_GpuTransferBuffer *transferBuffer,
+    SDL_bool cycle,
+    void **ppData
+) {
+    NULL_ASSERT(device)
+    NULL_ASSERT(transferBuffer)
+    device->MapTransferBuffer(
+        device->driverData,
+        transferBuffer,
+        cycle,
+        ppData
+    );
+}
+
+void SDL_GpuUnmapTransferBuffer(
+    SDL_GpuDevice *device,
+    SDL_GpuTransferBuffer *transferBuffer
+) {
+    NULL_ASSERT(device)
+    NULL_ASSERT(transferBuffer)
+    device->UnmapTransferBuffer(
+        device->driverData,
+        transferBuffer
+    );
+}
 
 void SDL_GpuSetTransferData(
 	SDL_GpuDevice *device,

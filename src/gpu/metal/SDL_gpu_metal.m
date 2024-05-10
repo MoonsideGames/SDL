@@ -451,6 +451,7 @@ typedef struct MetalTransferBuffer
 typedef struct MetalTransferBufferContainer
 {
     SDL_GpuTransferUsage usage;
+    SDL_GpuTransferBufferMapFlags mapFlags;
     MetalTransferBuffer *activeBuffer;
 
     /* These are all the buffers that have been used by this container.
@@ -1415,12 +1416,20 @@ static MetalBuffer* METAL_INTERNAL_PrepareBufferForWrite(
 
 static MetalTransferBuffer* METAL_INTERNAL_CreateTransferBuffer(
     MetalRenderer *renderer,
-    Uint32 sizeInBytes
+    Uint32 sizeInBytes,
+    int writeOnly
 ) {
     id<MTLBuffer> stagingBuffer = nil;
     MetalTransferBuffer *transferBuffer;
 
-    stagingBuffer = [renderer->device newBufferWithLength:sizeInBytes options:MTLResourceCPUCacheModeDefaultCache];
+    if (writeOnly)
+    {
+        stagingBuffer = [renderer->device newBufferWithLength:sizeInBytes options:MTLResourceCPUCacheModeWriteCombined];
+    }
+    else
+    {
+        stagingBuffer = [renderer->device newBufferWithLength:sizeInBytes options:MTLResourceCPUCacheModeDefaultCache];
+    }
     if (stagingBuffer == nil)
     {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Could not create transfer buffer");
@@ -1439,12 +1448,14 @@ static MetalTransferBuffer* METAL_INTERNAL_CreateTransferBuffer(
 static SDL_GpuTransferBuffer* METAL_CreateTransferBuffer(
     SDL_GpuRenderer *driverData,
     SDL_GpuTransferUsage usage,
+    SDL_GpuTransferBufferMapFlags mapFlags,
     Uint32 sizeInBytes
 ) {
     MetalRenderer *renderer = (MetalRenderer*) driverData;
     MetalTransferBufferContainer *container = SDL_malloc(sizeof(MetalTransferBufferContainer));
 
     container->usage = usage;
+    container->mapFlags = mapFlags;
     container->bufferCapacity = 1;
     container->bufferCount = 1;
     container->buffers = SDL_malloc(
@@ -1453,7 +1464,8 @@ static SDL_GpuTransferBuffer* METAL_CreateTransferBuffer(
 
     container->buffers[0] = METAL_INTERNAL_CreateTransferBuffer(
         renderer,
-        sizeInBytes
+        sizeInBytes,
+        (mapFlags & SDL_GPU_TRANSFER_MAP_WRITE) && !(mapFlags & SDL_GPU_TRANSFER_MAP_READ)
     );
 
     container->activeBuffer = container->buffers[0];
@@ -1486,7 +1498,8 @@ static void METAL_INTERNAL_CycleActiveTransferBuffer(
 
     container->buffers[container->bufferCount] = METAL_INTERNAL_CreateTransferBuffer(
         renderer,
-        size
+        size,
+        (container->mapFlags & SDL_GPU_TRANSFER_MAP_WRITE) && !(container->mapFlags & SDL_GPU_TRANSFER_MAP_READ)
     );
     container->bufferCount += 1;
 
@@ -1494,6 +1507,22 @@ static void METAL_INTERNAL_CycleActiveTransferBuffer(
 }
 
 /* TransferBuffer Data */
+
+static void METAL_MapTransferBuffer(
+    SDL_GpuRenderer *driverData,
+    SDL_GpuTransferBuffer *transferBuffer,
+    SDL_bool cycle,
+    void **ppData
+) {
+    NOT_IMPLEMENTED
+}
+
+static void METAL_UnmapTransferBuffer(
+    SDL_GpuRenderer *driverData,
+    SDL_GpuTransferBuffer *transferBuffer
+) {
+    NOT_IMPLEMENTED
+}
 
 static void METAL_SetTransferData(
     SDL_GpuRenderer *driverData,
