@@ -483,6 +483,13 @@ typedef struct VulkanBufferHandle
     VulkanBufferContainer *container;
 } VulkanBufferHandle;
 
+typedef enum VulkanBufferType
+{
+    VULKAN_BUFFER_TYPE_GPU,
+    VULKAN_BUFFER_TYPE_UNIFORM,
+    VULKAN_BUFFER_TYPE_TRANSFER
+} VulkanBufferType;
+
 struct VulkanBuffer
 {
     VkBuffer buffer;
@@ -491,10 +498,7 @@ struct VulkanBuffer
     SDL_GpuBufferUsageFlags usage;
     SDL_bool transitioned;
 
-    Uint8 requireHostVisible;
-    Uint8 preferDeviceLocal;
-    Uint8 preferHostLocal;
-    Uint8 preserveContentsOnDefrag;
+    VulkanBufferType type;
 
     SDL_AtomicInt referenceCount; /* Tracks command buffer usage */
 
@@ -2445,9 +2449,7 @@ static Uint8 VULKAN_INTERNAL_BindMemoryForBuffer(
     VulkanRenderer* renderer,
     VkBuffer buffer,
     VkDeviceSize size,
-    Uint8 requireHostVisible,
-    Uint8 preferHostLocal,
-    Uint8 preferDeviceLocal,
+    VulkanBufferType type,
     VulkanMemoryUsedRegion** usedRegion
 ) {
     Uint8 bindResult = 0;
@@ -2460,21 +2462,30 @@ static Uint8 VULKAN_INTERNAL_BindMemoryForBuffer(
         NULL
     };
 
-    if (requireHostVisible)
-    {
-        requiredMemoryPropertyFlags =
-            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
-            VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
-    }
-
-    if (preferHostLocal)
-    {
-        ignoredMemoryPropertyFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
-    }
-    else if (preferDeviceLocal)
+    if (type == VULKAN_BUFFER_TYPE_GPU)
     {
         requiredMemoryPropertyFlags |=
             VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+    }
+    else if (type == VULKAN_BUFFER_TYPE_UNIFORM)
+    {
+        requiredMemoryPropertyFlags |=
+            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT |
+            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+            VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+    }
+    else if (type == VULKAN_BUFFER_TYPE_TRANSFER)
+    {
+        requiredMemoryPropertyFlags |=
+            VK_MEMORY_PROPERTY_HOST_CACHED_BIT;
+
+        ignoredMemoryPropertyFlags |=
+            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+    }
+    else
+    {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Unrecognized buffer type!");
+        return 0;
     }
 
     while (VULKAN_INTERNAL_FindBufferMemoryRequirements(
@@ -2512,23 +2523,27 @@ static Uint8 VULKAN_INTERNAL_BindMemoryForBuffer(
         requiredMemoryPropertyFlags = 0;
         ignoredMemoryPropertyFlags = 0;
 
-        if (requireHostVisible)
+        if (type == VULKAN_BUFFER_TYPE_GPU)
+        {
+            if (!renderer->outOfDeviceLocalMemoryWarning)
+            {
+                SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "Out of device-local memory, allocating GpuBuffers on host-local memory, expect degraded performance!");
+                renderer->outOfDeviceLocalMemoryWarning = 1;
+            }
+        }
+        else if (type == VULKAN_BUFFER_TYPE_UNIFORM)
         {
             requiredMemoryPropertyFlags =
                 VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
                 VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
         }
-
-        if (preferHostLocal && !renderer->integratedMemoryNotification)
+        else if (type == VULKAN_BUFFER_TYPE_TRANSFER)
         {
-            SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "Integrated memory detected, allocating TransferBuffers on device-local memory!");
-            renderer->integratedMemoryNotification = 1;
-        }
-
-        if (preferDeviceLocal && !renderer->outOfDeviceLocalMemoryWarning)
-        {
-            SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "Out of device-local memory, allocating GpuBuffers on host-local memory, expect degraded performance!");
-            renderer->outOfDeviceLocalMemoryWarning = 1;
+            if (!renderer->integratedMemoryNotification)
+            {
+                SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "Integrated memory detected, allocating TransferBuffers on device-local memory!");
+                renderer->integratedMemoryNotification = 1;
+            }
         }
 
         while (VULKAN_INTERNAL_FindBufferMemoryRequirements(
@@ -3711,10 +3726,7 @@ static VulkanBuffer* VULKAN_INTERNAL_CreateBuffer(
     VulkanRenderer *renderer,
     VkDeviceSize size,
     VkBufferUsageFlags usage,
-    Uint8 requireHostVisible,
-    Uint8 preferHostLocal,
-    Uint8 preferDeviceLocal,
-    Uint8 preserveContentsOnDefrag
+    VulkanBufferType type
 ) {
     VulkanBuffer* buffer;
     VkResult vulkanResult;
@@ -3725,10 +3737,7 @@ static VulkanBuffer* VULKAN_INTERNAL_CreateBuffer(
 
     buffer->size = size;
     buffer->usage = usage;
-    buffer->requireHostVisible = requireHostVisible;
-    buffer->preferHostLocal = preferHostLocal;
-    buffer->preferDeviceLocal = preferDeviceLocal;
-    buffer->preserveContentsOnDefrag = preserveContentsOnDefrag;
+    buffer->type = type;
     buffer->defragInProgress = 0;
     buffer->markedForDestroy = 0;
     buffer->transitioned = SDL_FALSE;
@@ -3743,10 +3752,7 @@ static VulkanBuffer* VULKAN_INTERNAL_CreateBuffer(
     bufferCreateInfo.pQueueFamilyIndices = &renderer->queueFamilyIndex;
 
     /* Set transfer bits so we can defrag */
-    if (preserveContentsOnDefrag)
-    {
-        bufferCreateInfo.usage |= VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-    }
+    bufferCreateInfo.usage |= VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
 
     vulkanResult = renderer->vkCreateBuffer(
         renderer->logicalDevice,
@@ -3760,9 +3766,7 @@ static VulkanBuffer* VULKAN_INTERNAL_CreateBuffer(
         renderer,
         buffer->buffer,
         buffer->size,
-        buffer->requireHostVisible,
-        buffer->preferHostLocal,
-        buffer->preferDeviceLocal,
+        buffer->type,
         &buffer->usedRegion
     );
 
@@ -3789,10 +3793,7 @@ static VulkanBufferHandle* VULKAN_INTERNAL_CreateBufferHandle(
     VulkanRenderer *renderer,
     Uint32 sizeInBytes,
     VkBufferUsageFlags usageFlags,
-    Uint8 requireHostVisible,
-    Uint8 preferHostLocal,
-    Uint8 preferDeviceLocal,
-    Uint8 preserveContentsOnDefrag
+    VulkanBufferType type
 ) {
     VulkanBufferHandle* bufferHandle;
     VulkanBuffer* buffer;
@@ -3801,10 +3802,7 @@ static VulkanBufferHandle* VULKAN_INTERNAL_CreateBufferHandle(
         renderer,
         sizeInBytes,
         usageFlags,
-        requireHostVisible,
-        preferHostLocal,
-        preferDeviceLocal,
-        preserveContentsOnDefrag
+        type
     );
 
     if (buffer == NULL)
@@ -3826,9 +3824,7 @@ static VulkanBufferContainer* VULKAN_INTERNAL_CreateBufferContainer(
     VulkanRenderer *renderer,
     Uint32 sizeInBytes,
     VkBufferUsageFlags usageFlags,
-    Uint8 requireHostVisible,
-    Uint8 preferHostLocal,
-    Uint8 preferDeviceLocal
+    VulkanBufferType type
 ) {
     VulkanBufferContainer *bufferContainer;
     VulkanBufferHandle *bufferHandle;
@@ -3837,10 +3833,7 @@ static VulkanBufferContainer* VULKAN_INTERNAL_CreateBufferContainer(
         renderer,
         sizeInBytes,
         usageFlags,
-        requireHostVisible,
-        preferHostLocal,
-        preferDeviceLocal,
-        1
+        type
     );
 
     if (bufferHandle == NULL)
@@ -5259,10 +5252,7 @@ static void VULKAN_INTERNAL_CycleActiveBuffer(
         renderer,
         bufferContainer->activeBufferHandle->vulkanBuffer->size,
         bufferContainer->activeBufferHandle->vulkanBuffer->usage,
-        bufferContainer->activeBufferHandle->vulkanBuffer->requireHostVisible,
-        bufferContainer->activeBufferHandle->vulkanBuffer->preferHostLocal,
-        bufferContainer->activeBufferHandle->vulkanBuffer->preferDeviceLocal,
-        bufferContainer->activeBufferHandle->vulkanBuffer->preserveContentsOnDefrag
+        bufferContainer->activeBufferHandle->vulkanBuffer->type
     );
 
     bufferContainer->activeBufferHandle->container = bufferContainer;
@@ -6479,9 +6469,7 @@ static SDL_GpuBuffer* VULKAN_CreateGpuBuffer(
         (VulkanRenderer*) driverData,
         sizeInBytes,
         vulkanUsageFlags,
-        0,
-        0,
-        1
+        VULKAN_BUFFER_TYPE_GPU
     );
 }
 
@@ -6496,9 +6484,7 @@ static SDL_GpuUniformBuffer* VULKAN_CreateUniformBuffer(
         (VulkanRenderer*) driverData,
         sizeInBytes,
         usageFlags,
-        1,
-        0,
-        1
+        VULKAN_BUFFER_TYPE_UNIFORM
     );
 
     uniformBuffer->size = sizeInBytes;
@@ -6519,9 +6505,7 @@ static SDL_GpuTransferBuffer* VULKAN_CreateTransferBuffer(
         (VulkanRenderer*) driverData,
         sizeInBytes,
         VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-        1,
-        1,
-        0
+        VULKAN_BUFFER_TYPE_TRANSFER
     );
 }
 
@@ -10034,10 +10018,7 @@ static Uint8 VULKAN_INTERNAL_DefragmentMemory(
                 renderer,
                 currentRegion->vulkanBuffer->size,
                 currentRegion->vulkanBuffer->usage,
-                currentRegion->vulkanBuffer->requireHostVisible,
-                currentRegion->vulkanBuffer->preferHostLocal,
-                currentRegion->vulkanBuffer->preferDeviceLocal,
-                currentRegion->vulkanBuffer->preserveContentsOnDefrag
+                currentRegion->vulkanBuffer->type
             );
 
             if (newBuffer == NULL)
@@ -10062,7 +10043,6 @@ static Uint8 VULKAN_INTERNAL_DefragmentMemory(
 
             /* Copy buffer contents if necessary */
             if (
-                currentRegion->vulkanBuffer->preserveContentsOnDefrag &&
                 currentRegion->vulkanBuffer->transitioned
             ) {
                 resourceAccessInfo.stageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
