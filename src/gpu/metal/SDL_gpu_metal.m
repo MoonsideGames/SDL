@@ -1439,6 +1439,7 @@ static MetalTransferBuffer* METAL_INTERNAL_CreateTransferBuffer(
 static SDL_GpuTransferBuffer* METAL_CreateTransferBuffer(
     SDL_GpuRenderer *driverData,
     SDL_GpuTransferUsage usage,
+    SDL_GpuTransferBufferMapFlags mapFlags,
     Uint32 sizeInBytes
 ) {
     MetalRenderer *renderer = (MetalRenderer*) driverData;
@@ -1498,8 +1499,6 @@ static void METAL_INTERNAL_CycleActiveTransferBuffer(
 static void METAL_MapTransferBuffer(
     SDL_GpuRenderer *driverData,
     SDL_GpuTransferBuffer *transferBuffer,
-    Uint32 offsetInBytes,
-    Uint32 sizeInBytes,
     SDL_bool cycle,
     void **ppData
 ) {

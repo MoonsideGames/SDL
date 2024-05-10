@@ -251,6 +251,7 @@ struct SDL_GpuDevice
 	SDL_GpuTransferBuffer* (*CreateTransferBuffer)(
 		SDL_GpuRenderer *driverData,
 		SDL_GpuTransferUsage usage,
+        SDL_GpuTransferBufferMapFlags mapFlags,
 		Uint32 sizeInBytes
 	);
 
@@ -442,8 +443,6 @@ struct SDL_GpuDevice
     void (*MapTransferBuffer)(
         SDL_GpuRenderer *device,
         SDL_GpuTransferBuffer *transferBuffer,
-        Uint32 offsetInBytes,
-        Uint32 sizeInBytes,
         SDL_bool cycle,
         void **ppData
     );

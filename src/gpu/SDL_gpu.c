@@ -414,12 +414,14 @@ SDL_GpuUniformBuffer* SDL_GpuCreateUniformBuffer(
 SDL_GpuTransferBuffer* SDL_GpuCreateTransferBuffer(
 	SDL_GpuDevice *device,
 	SDL_GpuTransferUsage usage,
+    SDL_GpuTransferBufferMapFlags mapFlags,
 	Uint32 sizeInBytes
 ) {
 	NULL_ASSERT(device)
 	return device->CreateTransferBuffer(
 		device->driverData,
 		usage,
+        mapFlags,
 		sizeInBytes
 	);
 }
@@ -855,8 +857,6 @@ void SDL_GpuEndComputePass(
 void SDL_GpuMapTransferBuffer(
     SDL_GpuDevice *device,
     SDL_GpuTransferBuffer *transferBuffer,
-    Uint32 offsetInBytes,
-    Uint32 sizeInBytes,
     SDL_bool cycle,
     void **ppData
 ) {
@@ -865,8 +865,6 @@ void SDL_GpuMapTransferBuffer(
     device->MapTransferBuffer(
         device->driverData,
         transferBuffer,
-        offsetInBytes,
-        sizeInBytes,
         cycle,
         ppData
     );
