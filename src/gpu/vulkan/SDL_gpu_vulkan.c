@@ -2525,9 +2525,11 @@ static Uint8 VULKAN_INTERNAL_BindMemoryForBuffer(
 
         if (type == VULKAN_BUFFER_TYPE_GPU)
         {
-            SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "Out of device-local memory, allocating GpuBuffers on host-local memory, expect degraded performance!");
-            renderer->outOfDeviceLocalMemoryWarning = 1;
-
+            if (!renderer->outOfDeviceLocalMemoryWarning)
+            {
+                SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "Out of device-local memory, allocating GpuBuffers on host-local memory, expect degraded performance!");
+                renderer->outOfDeviceLocalMemoryWarning = 1;
+            }
         }
         else if (type == VULKAN_BUFFER_TYPE_UNIFORM)
         {
@@ -2537,8 +2539,11 @@ static Uint8 VULKAN_INTERNAL_BindMemoryForBuffer(
         }
         else if (type == VULKAN_BUFFER_TYPE_TRANSFER)
         {
-            SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "Integrated memory detected, allocating TransferBuffers on device-local memory!");
-            renderer->integratedMemoryNotification = 1;
+            if (!renderer->integratedMemoryNotification)
+            {
+                SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "Integrated memory detected, allocating TransferBuffers on device-local memory!");
+                renderer->integratedMemoryNotification = 1;
+            }
         }
 
         while (VULKAN_INTERNAL_FindBufferMemoryRequirements(
