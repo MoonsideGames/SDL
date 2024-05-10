@@ -1533,7 +1533,7 @@ extern DECLSPEC void SDLCALL SDL_GpuEndComputePass(
  * \param device a GPU context
  * \param transferBuffer a transfer buffer
  * \param cycle if SDL_TRUE, cycles the transfer buffer if it is bound
- * \param ppData a pointer to an application-accessible pointer
+ * \param ppData where to store the address of the mapped transfer buffer memory
  *
  * \since This function is available since SDL 3.x.x
  */
