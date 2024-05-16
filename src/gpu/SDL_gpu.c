@@ -937,7 +937,7 @@ void SDL_GpuBindComputeRWStorageTextures(
 }
 
 void SDL_GpuBindComputeStorageBuffers(
-    SDL_GpuRenderPass *computePass,
+    SDL_GpuComputePass *computePass,
     Uint32 firstSlot,
     SDL_GpuBuffer **storageBuffers,
     Uint32 bindingCount
