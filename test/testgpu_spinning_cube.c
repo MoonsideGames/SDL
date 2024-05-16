@@ -285,7 +285,7 @@ Render(SDL_Window *window, const int windownum)
     SDL_GpuCommandBuffer *cmd;
     SDL_GpuRenderPass *pass;
     SDL_GpuBufferBinding vertex_binding;
-    SDL_GpuShaderResourceBinding resource_binding;
+    SDL_GpuUniformBufferBinding uniform_binding;
 
     /* Acquire the swapchain texture */
 
@@ -357,16 +357,15 @@ Render(SDL_Window *window, const int windownum)
     vertex_binding.gpuBuffer = render_state.buf_vertex;
     vertex_binding.offset = 0;
 
-    resource_binding.resource.uniformBuffer.uniformBuffer = render_state.buf_uniform;
-    resource_binding.resource.uniformBuffer.uniformDataSizeInBytes = sizeof(matrix_final);
-    resource_binding.resourceType = SDL_GPU_RESOURCETYPE_UNIFORM_BUFFER;
+    uniform_binding.uniformBuffer = render_state.buf_uniform;
+    uniform_binding.uniformDataSizeInBytes = sizeof(matrix_final);
 
     /* Draw the cube! */
 
     pass = SDL_GpuBeginRenderPass(cmd, &color_attachment, 1, &depth_attachment);
     SDL_GpuBindGraphicsPipeline(pass, render_state.pipeline);
     SDL_GpuBindVertexBuffers(pass, 0, 1, &vertex_binding);
-    SDL_GpuBindGraphicsResourceSet(pass, 0, &resource_binding, 1);
+    SDL_GpuBindVertexUniformBuffers(pass, 0, &uniform_binding, 1);
     SDL_GpuPushGraphicsUniformData(pass, render_state.buf_uniform, matrix_final, sizeof(matrix_final));
     SDL_GpuDrawPrimitives(pass, 0, 12);
     SDL_GpuEndRenderPass(pass);
@@ -421,8 +420,6 @@ init_render_state(void)
     SDL_GpuVertexBinding vertex_binding;
     SDL_GpuShader *vertex_shader;
     SDL_GpuShader *fragment_shader;
-    SDL_GpuShaderResourceSetLayoutInfo layout_info;
-    SDL_GpuShaderResourceDescription resource_description;
     int i;
 
     gpu_device = SDL_GpuCreateDevice(SDL_GPU_BACKEND_ALL, 1);
@@ -508,15 +505,6 @@ init_render_state(void)
     pipelinedesc.vertexShader = vertex_shader;
     pipelinedesc.fragmentShader = fragment_shader;
 
-    resource_description.resourceType = SDL_GPU_RESOURCETYPE_UNIFORM_BUFFER; /* API FIXME: Enum does not match type name */
-    resource_description.shaderStageFlags = SDL_GPU_SHADERSTAGE_VERTEX;
-
-    layout_info.elementDescriptionCount = 1; /* API FIXME: 'resourceDescription' instead of 'elementDescription'? */
-    layout_info.elementDescriptions = &resource_description;
-
-    pipelinedesc.pipelineResourceLayoutInfo.setLayoutInfoCount = 1;
-    pipelinedesc.pipelineResourceLayoutInfo.setLayoutInfos = &layout_info;
-
     vertex_binding.binding = 0;
     vertex_binding.inputRate = SDL_GPU_VERTEXINPUTRATE_VERTEX;
     vertex_binding.stepRate = 0;
@@ -536,6 +524,16 @@ init_render_state(void)
     pipelinedesc.vertexInputState.vertexBindings = &vertex_binding;
     pipelinedesc.vertexInputState.vertexAttributeCount = 2;
     pipelinedesc.vertexInputState.vertexAttributes = (SDL_GpuVertexAttribute*) &vertex_attributes;
+
+    pipelinedesc.vertexResourceLayoutInfo.samplerCount = 0;
+    pipelinedesc.vertexResourceLayoutInfo.storageTextureCount = 0;
+    pipelinedesc.vertexResourceLayoutInfo.storageBufferCount = 0;
+    pipelinedesc.vertexResourceLayoutInfo.uniformBufferCount = 1;
+
+    pipelinedesc.fragmentResourceLayoutInfo.samplerCount = 0;
+    pipelinedesc.fragmentResourceLayoutInfo.storageTextureCount = 0;
+    pipelinedesc.fragmentResourceLayoutInfo.storageBufferCount = 0;
+    pipelinedesc.fragmentResourceLayoutInfo.uniformBufferCount = 0;
 
     render_state.pipeline = SDL_GpuCreateGraphicsPipeline(gpu_device, &pipelinedesc);
     CHECK_CREATE(render_state.pipeline, "Render Pipeline")
