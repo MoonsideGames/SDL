@@ -357,16 +357,6 @@ static VkPresentModeKHR SDLToVK_PresentMode[] =
     VK_PRESENT_MODE_FIFO_RELAXED_KHR
 };
 
-static VkDescriptorType SDLToVK_DescriptorType[] =
-{
-    VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-    VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-    VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-    VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-    VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-    VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC
-};
-
 static inline VkShaderStageFlags SDLToVK_ShaderStageFlags(SDL_GpuShaderStageFlags flags)
 {
     VkShaderStageFlags result = 0;
