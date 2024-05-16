@@ -188,17 +188,15 @@ static inline Sint32 BytesPerImage(
 }
 
 /* GraphicsDevice Limits */
-/* TODO: can these be adjusted for modern low-end? */
 
-#define MAX_TEXTURE_SAMPLERS		16
-#define MAX_VERTEXTEXTURE_SAMPLERS	4
-#define MAX_TOTAL_SAMPLERS		(MAX_TEXTURE_SAMPLERS + MAX_VERTEXTEXTURE_SAMPLERS)
-
-#define MAX_BUFFER_BINDINGS			16
-
-#define MAX_COLOR_TARGET_BINDINGS	4
-#define MAX_PRESENT_COUNT           16
-#define MAX_FRAMES_IN_FLIGHT        3
+#define MAX_TEXTURE_SAMPLERS_PER_STAGE  16
+#define MAX_STORAGE_TEXTURES_PER_STAGE  8
+#define MAX_STORAGE_BUFFERS_PER_STAGE   8
+#define MAX_UNIFORM_BUFFERS_PER_STAGE   14
+#define MAX_BUFFER_BINDINGS			    16
+#define MAX_COLOR_TARGET_BINDINGS	    4
+#define MAX_PRESENT_COUNT               16
+#define MAX_FRAMES_IN_FLIGHT            3
 
 /* SDL_GpuDevice Definition */
 
@@ -362,12 +360,61 @@ struct SDL_GpuDevice
 		SDL_GpuIndexElementSize indexElementSize
 	);
 
-	void (*BindGraphicsResourceSet)(
-		SDL_GpuCommandBuffer *commandBuffer,
-		Uint32 setIndex,
-		SDL_GpuShaderResourceBinding *resourceBindings,
-		Uint32 resourceBindingCount
-	);
+    void (*BindVertexSamplers)(
+        SDL_GpuCommandBuffer *commandBuffer,
+        Uint32 firstSlot,
+        SDL_GpuTextureSamplerBinding *textureSamplerBindings,
+        Uint32 bindingCount
+    );
+
+    void (*BindVertexStorageTextures)(
+        SDL_GpuCommandBuffer *commandBuffer,
+        Uint32 firstSlot,
+        SDL_GpuTextureSlice *storageTextureSlices,
+        Uint32 bindingCount
+    );
+
+    void (*BindVertexStorageBuffers)(
+        SDL_GpuCommandBuffer *commandBuffer,
+        Uint32 firstSlot,
+        SDL_GpuBuffer **storageBuffers,
+        Uint32 bindingCount
+    );
+
+    void (*BindVertexUniformBuffers)(
+        SDL_GpuCommandBuffer *renderPass,
+        Uint32 firstSlot,
+        SDL_GpuUniformBufferBinding *uniformBufferBindings,
+        Uint32 bindingCount
+    );
+
+    void (*BindFragmentSamplers)(
+        SDL_GpuCommandBuffer *commandBuffer,
+        Uint32 firstSlot,
+        SDL_GpuTextureSamplerBinding *textureSamplerBindings,
+        Uint32 bindingCount
+    );
+
+    void (*BindFragmentStorageTextures)(
+        SDL_GpuCommandBuffer *commandBuffer,
+        Uint32 firstSlot,
+        SDL_GpuTextureSlice *storageTextureSlices,
+        Uint32 bindingCount
+    );
+
+    void (*BindFragmentStorageBuffers)(
+        SDL_GpuCommandBuffer *commandBuffer,
+        Uint32 firstSlot,
+        SDL_GpuBuffer **storageBuffers,
+        Uint32 bindingCount
+    );
+
+    void (*BindFragmentUniformBuffers)(
+        SDL_GpuCommandBuffer *renderPass,
+        Uint32 firstSlot,
+        SDL_GpuUniformBufferBinding *uniformBufferBindings,
+        Uint32 bindingCount
+    );
 
 	void (*PushGraphicsUniformData)(
 		SDL_GpuCommandBuffer *commandBuffer,
@@ -413,12 +460,40 @@ struct SDL_GpuDevice
 		SDL_GpuComputePipeline *computePipeline
 	);
 
-	void (*BindComputeResourceSet)(
-		SDL_GpuCommandBuffer *commandBuffer,
-		Uint32 setIndex,
-		SDL_GpuShaderResourceBinding *resourceBinding,
-		Uint32 resourceBindingCount
-	);
+    void (*BindComputeStorageTextures)(
+        SDL_GpuCommandBuffer *commandBuffer,
+        Uint32 firstSlot,
+        SDL_GpuTextureSlice *storageTextureSlices,
+        Uint32 bindingCount
+    );
+
+    void (*BindComputeRWStorageTextures)(
+        SDL_GpuCommandBuffer *commandBuffer,
+        Uint32 firstSlot,
+        SDL_GpuStorageTextureReadWriteBinding *storageTextureBindings,
+        Uint32 bindingCount
+    );
+
+    void (*BindComputeStorageBuffers)(
+        SDL_GpuCommandBuffer *commandBuffer,
+        Uint32 firstSlot,
+        SDL_GpuBuffer **storageBuffers,
+        Uint32 bindingCount
+    );
+
+    void (*BindComputeRWStorageBuffers)(
+        SDL_GpuCommandBuffer *commandBuffer,
+        Uint32 firstSlot,
+        SDL_GpuStorageBufferReadWriteBinding *storageBufferBindings,
+        Uint32 bindingCount
+    );
+
+    void (*BindComputeUniformBuffers)(
+        SDL_GpuCommandBuffer *renderPass,
+        Uint32 firstSlot,
+        SDL_GpuUniformBufferBinding *uniformBufferBindings,
+        Uint32 bindingCount
+    );
 
 	void (*PushComputeUniformData)(
 		SDL_GpuCommandBuffer *commandBuffer,
@@ -688,15 +763,26 @@ struct SDL_GpuDevice
 	ASSIGN_DRIVER_FUNC(SetScissor, name) \
 	ASSIGN_DRIVER_FUNC(BindVertexBuffers, name) \
 	ASSIGN_DRIVER_FUNC(BindIndexBuffer, name) \
-	ASSIGN_DRIVER_FUNC(BindGraphicsResourceSet, name) \
+    ASSIGN_DRIVER_FUNC(BindVertexSamplers, name) \
+    ASSIGN_DRIVER_FUNC(BindVertexStorageTextures, name) \
+    ASSIGN_DRIVER_FUNC(BindVertexStorageBuffers, name) \
+    ASSIGN_DRIVER_FUNC(BindVertexUniformBuffers, name) \
+    ASSIGN_DRIVER_FUNC(BindFragmentSamplers, name) \
+    ASSIGN_DRIVER_FUNC(BindFragmentStorageTextures, name) \
+    ASSIGN_DRIVER_FUNC(BindFragmentStorageBuffers, name) \
+    ASSIGN_DRIVER_FUNC(BindFragmentUniformBuffers, name) \
 	ASSIGN_DRIVER_FUNC(PushGraphicsUniformData, name) \
 	ASSIGN_DRIVER_FUNC(DrawInstancedPrimitives, name) \
 	ASSIGN_DRIVER_FUNC(DrawPrimitives, name) \
 	ASSIGN_DRIVER_FUNC(DrawPrimitivesIndirect, name) \
 	ASSIGN_DRIVER_FUNC(EndRenderPass, name) \
 	ASSIGN_DRIVER_FUNC(BeginComputePass, name) \
-	ASSIGN_DRIVER_FUNC(BindComputePipeline, name) \
-	ASSIGN_DRIVER_FUNC(BindComputeResourceSet, name) \
+    ASSIGN_DRIVER_FUNC(BindComputePipeline, name) \
+    ASSIGN_DRIVER_FUNC(BindComputeStorageTextures, name) \
+    ASSIGN_DRIVER_FUNC(BindComputeRWStorageTextures, name) \
+    ASSIGN_DRIVER_FUNC(BindComputeStorageBuffers, name) \
+    ASSIGN_DRIVER_FUNC(BindComputeRWStorageBuffers, name) \
+    ASSIGN_DRIVER_FUNC(BindComputeUniformBuffers, name) \
 	ASSIGN_DRIVER_FUNC(PushComputeUniformData, name) \
 	ASSIGN_DRIVER_FUNC(DispatchCompute, name) \
 	ASSIGN_DRIVER_FUNC(EndComputePass, name) \

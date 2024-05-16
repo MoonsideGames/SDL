@@ -668,20 +668,132 @@ void SDL_GpuBindIndexBuffer(
 	);
 }
 
-void SDL_GpuBindGraphicsResourceSet(
-	SDL_GpuRenderPass *renderPass,
-	Uint32 setIndex,
-	SDL_GpuShaderResourceBinding *resourceBindings,
-	Uint32 resourceBindingCount
+void SDL_GpuBindVertexSamplers(
+    SDL_GpuRenderPass *renderPass,
+    Uint32 firstSlot,
+    SDL_GpuTextureSamplerBinding *textureSamplerBindings,
+    Uint32 bindingCount
 ) {
-	NULL_ASSERT(renderPass)
-	CHECK_RENDERPASS
-	RENDERPASS_DEVICE->BindGraphicsResourceSet(
-		RENDERPASS_COMMAND_BUFFER,
-		setIndex,
-		resourceBindings,
-		resourceBindingCount
-	);
+    NULL_ASSERT(renderPass)
+    CHECK_RENDERPASS
+    RENDERPASS_DEVICE->BindVertexSamplers(
+        RENDERPASS_COMMAND_BUFFER,
+        firstSlot,
+        textureSamplerBindings,
+        bindingCount
+    );
+}
+
+void SDL_GpuBindVertexStorageTextures(
+    SDL_GpuRenderPass *renderPass,
+    Uint32 firstSlot,
+    SDL_GpuTextureSlice *storageTextureSlices,
+    Uint32 bindingCount
+) {
+    NULL_ASSERT(renderPass)
+    CHECK_RENDERPASS
+    RENDERPASS_DEVICE->BindVertexStorageTextures(
+        RENDERPASS_COMMAND_BUFFER,
+        firstSlot,
+        storageTextureSlices,
+        bindingCount
+    );
+}
+
+void SDL_GpuBindVertexStorageBuffers(
+    SDL_GpuRenderPass *renderPass,
+    Uint32 firstSlot,
+    SDL_GpuBuffer **storageBuffers,
+    Uint32 bindingCount
+) {
+    NULL_ASSERT(renderPass)
+    CHECK_RENDERPASS
+    RENDERPASS_DEVICE->BindVertexStorageBuffers(
+        RENDERPASS_COMMAND_BUFFER,
+        firstSlot,
+        storageBuffers,
+        bindingCount
+    );
+}
+
+void SDL_GpuBindVertexUniformBuffers(
+    SDL_GpuRenderPass *renderPass,
+    Uint32 firstSlot,
+    SDL_GpuUniformBufferBinding *uniformBufferBindings,
+    Uint32 bindingCount
+) {
+    NULL_ASSERT(renderPass)
+    CHECK_RENDERPASS
+    RENDERPASS_DEVICE->BindVertexUniformBuffers(
+        RENDERPASS_COMMAND_BUFFER,
+        firstSlot,
+        uniformBufferBindings,
+        bindingCount
+    );
+}
+
+void SDL_GpuBindFragmentSamplers(
+    SDL_GpuRenderPass *renderPass,
+    Uint32 firstSlot,
+    SDL_GpuTextureSamplerBinding *textureSamplerBindings,
+    Uint32 bindingCount
+) {
+    NULL_ASSERT(renderPass)
+    CHECK_RENDERPASS
+    RENDERPASS_DEVICE->BindFragmentSamplers(
+        RENDERPASS_COMMAND_BUFFER,
+        firstSlot,
+        textureSamplerBindings,
+        bindingCount
+    );
+}
+
+void SDL_GpuBindFragmentStorageTextures(
+    SDL_GpuRenderPass *renderPass,
+    Uint32 firstSlot,
+    SDL_GpuTextureSlice *storageTextureSlices,
+    Uint32 bindingCount
+) {
+    NULL_ASSERT(renderPass)
+    CHECK_RENDERPASS
+    RENDERPASS_DEVICE->BindFragmentStorageTextures(
+        RENDERPASS_COMMAND_BUFFER,
+        firstSlot,
+        storageTextureSlices,
+        bindingCount
+    );
+}
+
+void SDL_GpuBindFragmentStorageBuffers(
+    SDL_GpuRenderPass *renderPass,
+    Uint32 firstSlot,
+    SDL_GpuBuffer **storageBuffers,
+    Uint32 bindingCount
+) {
+    NULL_ASSERT(renderPass)
+    CHECK_RENDERPASS
+    RENDERPASS_DEVICE->BindFragmentStorageBuffers(
+        RENDERPASS_COMMAND_BUFFER,
+        firstSlot,
+        storageBuffers,
+        bindingCount
+    );
+}
+
+void SDL_GpuBindFragmentUniformBuffers(
+    SDL_GpuRenderPass *renderPass,
+    Uint32 firstSlot,
+    SDL_GpuUniformBufferBinding *uniformBufferBindings,
+    Uint32 bindingCount
+) {
+    NULL_ASSERT(renderPass)
+    CHECK_RENDERPASS
+    RENDERPASS_DEVICE->BindFragmentUniformBuffers(
+        RENDERPASS_COMMAND_BUFFER,
+        firstSlot,
+        uniformBufferBindings,
+        bindingCount
+    );
 }
 
 void SDL_GpuPushGraphicsUniformData(
@@ -792,20 +904,84 @@ void SDL_GpuBindComputePipeline(
 	);
 }
 
-void SDL_GpuBindComputeResourceSet(
-	SDL_GpuComputePass *computePass,
-	Uint32 setIndex,
-	SDL_GpuShaderResourceBinding *resourceBindings,
-	Uint32 resourceBindingCount
+void SDL_GpuBindComputeStorageTextures(
+    SDL_GpuComputePass *computePass,
+    Uint32 firstSlot,
+    SDL_GpuTextureSlice *storageTextureSlices,
+    Uint32 bindingCount
 ) {
-	NULL_ASSERT(computePass)
-	CHECK_COMPUTEPASS
-	COMPUTEPASS_DEVICE->BindComputeResourceSet(
-		COMPUTEPASS_COMMAND_BUFFER,
-		setIndex,
-		resourceBindings,
-		resourceBindingCount
-	);
+    NULL_ASSERT(computePass)
+    CHECK_COMPUTEPASS
+    COMPUTEPASS_DEVICE->BindComputeStorageTextures(
+        COMPUTEPASS_COMMAND_BUFFER,
+        firstSlot,
+        storageTextureSlices,
+        bindingCount
+    );
+}
+
+void SDL_GpuBindComputeRWStorageTextures(
+    SDL_GpuComputePass *computePass,
+    Uint32 firstSlot,
+    SDL_GpuStorageTextureReadWriteBinding *storageTextureBindings,
+    Uint32 bindingCount
+) {
+    NULL_ASSERT(computePass)
+    CHECK_COMPUTEPASS
+    COMPUTEPASS_DEVICE->BindComputeRWStorageTextures(
+        COMPUTEPASS_COMMAND_BUFFER,
+        firstSlot,
+        storageTextureBindings,
+        bindingCount
+    );
+}
+
+void SDL_GpuBindComputeStorageBuffers(
+    SDL_GpuRenderPass *computePass,
+    Uint32 firstSlot,
+    SDL_GpuBuffer **storageBuffers,
+    Uint32 bindingCount
+) {
+    NULL_ASSERT(computePass)
+    CHECK_COMPUTEPASS
+    COMPUTEPASS_DEVICE->BindComputeStorageBuffers(
+        COMPUTEPASS_COMMAND_BUFFER,
+        firstSlot,
+        storageBuffers,
+        bindingCount
+    );
+}
+
+void SDL_GpuBindComputeRWStorageBuffers(
+    SDL_GpuComputePass *computePass,
+    Uint32 firstSlot,
+    SDL_GpuStorageBufferReadWriteBinding *storageBufferBindings,
+    Uint32 bindingCount
+) {
+    NULL_ASSERT(computePass)
+    CHECK_COMPUTEPASS
+    COMPUTEPASS_DEVICE->BindComputeRWStorageBuffers(
+        COMPUTEPASS_COMMAND_BUFFER,
+        firstSlot,
+        storageBufferBindings,
+        bindingCount
+    );
+}
+
+void SDL_GpuBindComputeUniformBuffers(
+    SDL_GpuComputePass *computePass,
+    Uint32 firstSlot,
+    SDL_GpuUniformBufferBinding *uniformBufferBindings,
+    Uint32 bindingCount
+) {
+    NULL_ASSERT(computePass)
+    CHECK_COMPUTEPASS
+    COMPUTEPASS_DEVICE->BindComputeUniformBuffers(
+        COMPUTEPASS_COMMAND_BUFFER,
+        firstSlot,
+        uniformBufferBindings,
+        bindingCount
+    );
 }
 
 void SDL_GpuPushComputeUniformData(
