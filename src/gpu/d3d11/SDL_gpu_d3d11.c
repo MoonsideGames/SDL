@@ -3677,7 +3677,6 @@ static void D3D11_INTERNAL_PushUniformData(
     ID3D11Buffer *nullBuf = NULL;
     Uint32 offsetInConstants, blockSizeInConstants;
     Uint32 drawOffset;
-    Uint32 i;
 
     if (d3d11UniformBuffer->offset + d3d11UniformBuffer->currentBlockSize >= d3d11UniformBuffer->bufferContainer->activeBuffer->size)
     {

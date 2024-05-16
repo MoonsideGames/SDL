@@ -357,28 +357,6 @@ static VkPresentModeKHR SDLToVK_PresentMode[] =
     VK_PRESENT_MODE_FIFO_RELAXED_KHR
 };
 
-static inline VkShaderStageFlags SDLToVK_ShaderStageFlags(SDL_GpuShaderStageFlags flags)
-{
-    VkShaderStageFlags result = 0;
-
-    if (flags & SDL_GPU_SHADERSTAGE_VERTEX)
-    {
-        result |= VK_SHADER_STAGE_VERTEX_BIT;
-    }
-
-    if (flags & SDL_GPU_SHADERSTAGE_FRAGMENT)
-    {
-        result |= VK_SHADER_STAGE_FRAGMENT_BIT;
-    }
-
-    if (flags & SDL_GPU_SHADERSTAGE_COMPUTE)
-    {
-        result |= VK_SHADER_STAGE_COMPUTE_BIT;
-    }
-
-    return result;
-}
-
 /* Structures */
 
 typedef struct VulkanMemoryAllocation VulkanMemoryAllocation;
