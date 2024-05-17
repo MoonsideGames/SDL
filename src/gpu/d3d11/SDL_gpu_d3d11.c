@@ -3120,13 +3120,6 @@ static void D3D11_UploadToTexture(
 	}
 
 	D3D11_BOX stagingTextureBox;
-	stagingTextureBox.left = textureRegion->x;
-	stagingTextureBox.top = textureRegion->y;
-	stagingTextureBox.front = textureRegion->z;
-	stagingTextureBox.right = textureRegion->x + w;
-	stagingTextureBox.bottom = textureRegion->y + h;
-	stagingTextureBox.back = textureRegion->z + textureRegion->d;
-
     stagingTextureBox.left = 0;
     stagingTextureBox.top = 0;
     stagingTextureBox.front = 0;
