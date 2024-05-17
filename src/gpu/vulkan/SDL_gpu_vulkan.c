@@ -3330,7 +3330,7 @@ static void VULKAN_INTERNAL_DestroyCommandPool(
     VulkanRenderer *renderer,
     VulkanCommandPool *commandPool
 ) {
-    Uint32 i, j, k;
+    Uint32 i, j;
     VulkanCommandBuffer* commandBuffer;
 
     renderer->vkDestroyCommandPool(
