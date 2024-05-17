@@ -3705,7 +3705,7 @@ static SDL_bool VULKAN_INTERNAL_InitializeGraphicsPipelineResourceLayout(
     SDL_GpuGraphicsPipelineResourceLayoutInfo *fragmentResourceLayoutInfo,
     VulkanGraphicsPipelineResourceLayout *pipelineResourceLayout
 ) {
-    VkDescriptorSetLayoutBinding *descriptorSetLayoutBindings;
+    VkDescriptorSetLayoutBinding descriptorSetLayoutBindings[MAX_TEXTURE_SAMPLERS_PER_STAGE + MAX_STORAGE_TEXTURES_PER_STAGE + MAX_STORAGE_BUFFERS_PER_STAGE];
     VkDescriptorSetLayoutCreateInfo descriptorSetLayoutCreateInfo;
     VkDescriptorSetLayout descriptorSetLayouts[4];
     VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo;
@@ -3744,8 +3744,6 @@ static SDL_bool VULKAN_INTERNAL_InitializeGraphicsPipelineResourceLayout(
         descriptorSetPool->descriptorInfos = SDL_malloc(
             descriptorSetPool->descriptorInfoCount * sizeof(VulkanDescriptorInfo)
         );
-
-        descriptorSetLayoutBindings = SDL_stack_alloc(VkDescriptorSetLayoutBinding, descriptorSetLayoutCreateInfo.bindingCount);
 
         for (i = 0; i < vertexResourceLayoutInfo->samplerCount; i += 1)
         {
@@ -3795,11 +3793,6 @@ static SDL_bool VULKAN_INTERNAL_InitializeGraphicsPipelineResourceLayout(
 
     descriptorSetLayouts[0] = descriptorSetPool->descriptorSetLayout;
 
-    if (descriptorSetLayoutCreateInfo.bindingCount > 0)
-    {
-        SDL_stack_free(descriptorSetLayoutBindings);
-    }
-
     if (vulkanResult != VK_SUCCESS)
     {
         LogVulkanResultAsError("vkCreateDescriptorSetLayout", vulkanResult);
@@ -3821,8 +3814,6 @@ static SDL_bool VULKAN_INTERNAL_InitializeGraphicsPipelineResourceLayout(
         descriptorSetPool->descriptorInfos = SDL_malloc(
             descriptorSetPool->descriptorInfoCount * sizeof(VulkanDescriptorInfo)
         );
-
-        descriptorSetLayoutBindings = SDL_stack_alloc(VkDescriptorSetLayoutBinding, descriptorSetLayoutCreateInfo.bindingCount);
 
         for (i = 0; i < vertexResourceLayoutInfo->uniformBufferCount; i += 1)
         {
@@ -3847,11 +3838,6 @@ static SDL_bool VULKAN_INTERNAL_InitializeGraphicsPipelineResourceLayout(
     );
 
     descriptorSetLayouts[1] = descriptorSetPool->descriptorSetLayout;
-
-    if (descriptorSetLayoutCreateInfo.bindingCount > 0)
-    {
-        SDL_stack_free(descriptorSetLayoutBindings);
-    }
 
     if (vulkanResult != VK_SUCCESS)
     {
@@ -3878,8 +3864,6 @@ static SDL_bool VULKAN_INTERNAL_InitializeGraphicsPipelineResourceLayout(
         descriptorSetPool->descriptorInfos = SDL_malloc(
             descriptorSetPool->descriptorInfoCount * sizeof(VulkanDescriptorInfo)
         );
-
-        descriptorSetLayoutBindings = SDL_stack_alloc(VkDescriptorSetLayoutBinding, descriptorSetLayoutCreateInfo.bindingCount);
 
         for (i = 0; i < fragmentResourceLayoutInfo->samplerCount; i += 1)
         {
@@ -3929,11 +3913,6 @@ static SDL_bool VULKAN_INTERNAL_InitializeGraphicsPipelineResourceLayout(
 
     descriptorSetLayouts[2] = descriptorSetPool->descriptorSetLayout;
 
-    if (descriptorSetLayoutCreateInfo.bindingCount > 0)
-    {
-        SDL_stack_free(descriptorSetLayoutBindings);
-    }
-
     if (vulkanResult != VK_SUCCESS)
     {
         LogVulkanResultAsError("vkCreateDescriptorSetLayout", vulkanResult);
@@ -3958,8 +3937,6 @@ static SDL_bool VULKAN_INTERNAL_InitializeGraphicsPipelineResourceLayout(
             descriptorSetPool->descriptorInfoCount * sizeof(VulkanDescriptorInfo)
         );
 
-        descriptorSetLayoutBindings = SDL_stack_alloc(VkDescriptorSetLayoutBinding, descriptorSetLayoutCreateInfo.bindingCount);
-
         for (i = 0; i < fragmentResourceLayoutInfo->uniformBufferCount; i += 1)
         {
             descriptorSetLayoutBindings[i].binding = i;
@@ -3983,11 +3960,6 @@ static SDL_bool VULKAN_INTERNAL_InitializeGraphicsPipelineResourceLayout(
     );
 
     descriptorSetLayouts[3] = descriptorSetPool->descriptorSetLayout;
-
-    if (descriptorSetLayoutCreateInfo.bindingCount > 0)
-    {
-        SDL_stack_free(descriptorSetLayoutBindings);
-    }
 
     if (vulkanResult != VK_SUCCESS)
     {
