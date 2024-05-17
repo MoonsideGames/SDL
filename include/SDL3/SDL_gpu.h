@@ -38,7 +38,6 @@ extern "C" {
 
 typedef struct SDL_GpuDevice SDL_GpuDevice;
 typedef struct SDL_GpuBuffer SDL_GpuBuffer;
-typedef struct SDL_GpuUniformBuffer SDL_GpuUniformBuffer;
 typedef struct SDL_GpuTransferBuffer SDL_GpuTransferBuffer;
 typedef struct SDL_GpuTexture SDL_GpuTexture;
 typedef struct SDL_GpuSampler SDL_GpuSampler;
@@ -749,12 +748,6 @@ typedef struct SDL_GpuStorageTextureReadWriteBinding
 	SDL_bool cycle;
 } SDL_GpuStorageTextureReadWriteBinding;
 
-typedef struct SDL_GpuUniformBufferBinding
-{
-	SDL_GpuUniformBuffer *uniformBuffer;
-	Uint32 uniformDataSizeInBytes;
-} SDL_GpuUniformBufferBinding;
-
 /* Functions */
 
 /* Device */
@@ -928,27 +921,6 @@ extern DECLSPEC SDL_GpuBuffer *SDLCALL SDL_GpuCreateGpuBuffer(
 );
 
 /**
- * Creates a uniform buffer object to be used in shader workflows.
- *
- * \param device a GPU context
- * \param sizeInBytes the size of the uniform buffer
- * \returns a uniform buffer object on success, or NULL on failure
- *
- * \since This function is available since SDL 3.x.x
- *
- * \sa SDL_GpuBindVertexUniformBuffers
- * \sa SDL_GpuBindFragmentUniformBuffers
- * \sa SDL_GpuBindComputeUniformBuffers
- * \sa SDL_GpuPushGraphicsUniformData
- * \sa SDL_GpuPushComputeUniformData
- * \sa SDL_GpuQueueDestroyUniformBuffer
- */
-extern DECLSPEC SDL_GpuUniformBuffer *SDLCALL SDL_GpuCreateUniformBuffer(
-	SDL_GpuDevice *device,
-	Uint32 sizeInBytes
-);
-
-/**
  * Creates a transfer buffer to be used when uploading to or downloading from graphics resources.
  *
  * \param device a GPU Context
@@ -1073,19 +1045,6 @@ extern DECLSPEC void SDLCALL SDL_GpuQueueDestroySampler(
 extern DECLSPEC void SDLCALL SDL_GpuQueueDestroyGpuBuffer(
 	SDL_GpuDevice *device,
 	SDL_GpuBuffer *gpuBuffer
-);
-
-/**
- * Specifies that the given uniform buffer should be destroyed once it is no longer bound.
- *
- * \param device a GPU context
- * \param uniformBuffer a uniform buffer to be destroyed
- *
- * \since This function is available since SDL 3.x.x
- */
-extern DECLSPEC void SDLCALL SDL_GpuQueueDestroyUniformBuffer(
-	SDL_GpuDevice *device,
-	SDL_GpuUniformBuffer *uniformBuffer
 );
 
 /**
@@ -1346,23 +1305,6 @@ extern DECLSPEC void SDLCALL SDL_GpuBindVertexStorageBuffers(
 );
 
 /**
- * Binds uniform buffers for use on the vertex shader.
- *
- * \param renderPass a render pass handle
- * \param firstSlot the vertex uniform buffer slot to begin binding from
- * \param uniformBufferBindings an array of uniform buffer binding structs
- * \param bindingCount the number of uniform buffers to bind from the array
- *
- * \since This function is available since SDL 3.x.x
- */
-extern DECLSPEC void SDLCALL SDL_GpuBindVertexUniformBuffers(
-    SDL_GpuRenderPass *renderPass,
-    Uint32 firstSlot,
-    SDL_GpuUniformBufferBinding *uniformBufferBindings,
-    Uint32 bindingCount
-);
-
-/**
  * Binds texture-sampler pairs for use on the fragment shader.
  * The textures must have been created with SDL_GPU_TEXTUREUSAGE_SAMPLER_BIT.
  *
@@ -1417,39 +1359,37 @@ extern DECLSPEC void SDLCALL SDL_GpuBindFragmentStorageBuffers(
 );
 
 /**
- * Binds uniform buffers for use on the fragment shader.
- *
- * \param renderPass a render pass handle
- * \param firstSlot the fragment uniform buffer slot to begin binding from
- * \param uniformBufferBindings an array of uniform buffer binding structs
- * \param bindingCount the number of uniform buffers to bind from the array
- *
- * \since This function is available since SDL 3.x.x
- */
-extern DECLSPEC void SDLCALL SDL_GpuBindFragmentUniformBuffers(
-    SDL_GpuRenderPass *renderPass,
-    Uint32 firstSlot,
-    SDL_GpuUniformBufferBinding *uniformBufferBindings,
-    Uint32 bindingCount
-);
-
-/**
- * Pushes data to a bound uniform buffer.
+ * Pushes data to a vertex uniform slot on the bound graphics pipeline.
  * Subsequent draw calls will use this uniform data.
- * You must not call this function before binding this uniform buffer.
- * You must not bind the same uniform buffer to the vertex stage and fragment stage simultaneously.
- * You must not bind the same uniform buffer to two command buffer simultaneously
  *
  * \param renderPass a render pass handle
- * \param uniformBuffer a uniform buffer object
- * \param data client data to write into the uniform buffer
+ * \param slotIndex the vertex uniform slot to push data to
+ * \param data client data to write
  * \param dataLengthInBytes the length of the data to write
  *
  * \since This function is available since SDL 3.x.x
  */
-extern DECLSPEC void SDLCALL SDL_GpuPushGraphicsUniformData(
+extern DECLSPEC void SDLCALL SDL_GpuPushVertexUniformData(
 	SDL_GpuRenderPass *renderPass,
-	SDL_GpuUniformBuffer *uniformBuffer,
+    Uint32 slotIndex,
+	void *data,
+	Uint32 dataLengthInBytes
+);
+
+/**
+ * Pushes data to a fragment uniform slot on the bound graphics pipeline.
+ * Subsequent draw calls will use this uniform data.
+ *
+ * \param renderPass a render pass handle
+ * \param slotIndex the fragment uniform slot to push data to
+ * \param data client data to write
+ * \param dataLengthInBytes the length of the data to write
+ *
+ * \since This function is available since SDL 3.x.x
+ */
+extern DECLSPEC void SDLCALL SDL_GpuPushFragmentUniformData(
+	SDL_GpuRenderPass *renderPass,
+    Uint32 slotIndex,
 	void *data,
 	Uint32 dataLengthInBytes
 );
@@ -1633,38 +1573,19 @@ extern DECLSPEC void SDLCALL SDL_GpuBindComputeRWStorageBuffers(
 );
 
 /**
- * Binds uniform buffers for use on the compute shader.
- *
- * \param computePass a compute pass handle
- * \param firstSlot the compute uniform buffer slot to begin binding from
- * \param uniformBufferBindings an array of uniform buffer binding structs
- * \param bindingCount the number of uniform buffers to bind from the array
- *
- * \since This function is available since SDL 3.x.x
- */
-extern DECLSPEC void SDLCALL SDL_GpuBindComputeUniformBuffers(
-    SDL_GpuComputePass *computePass,
-    Uint32 firstSlot,
-    SDL_GpuUniformBufferBinding *uniformBufferBindings,
-    Uint32 bindingCount
-);
-
-/**
- * Pushes data to a bound uniform buffer.
+ * Pushes data to a uniform slot on the bound compute pipeline.
  * Subsequent draw calls will use this uniform data.
- * You must not call this function before binding this uniform buffer.
- * You must not bind the same uniform buffer to two command buffers simultaneously.
  *
  * \param computePass a compute pass handle
- * \param uniformBuffer a uniform buffer object
- * \param data client data to write into the uniform buffer
+ * \param slotIndex the uniform slot to push data to
+ * \param data client data to write
  * \param dataLengthInBytes the length of the data to write
  *
  * \since This function is available since SDL 3.x.x
  */
 extern DECLSPEC void SDLCALL SDL_GpuPushComputeUniformData(
 	SDL_GpuComputePass *computePass,
-	SDL_GpuUniformBuffer *uniformBuffer,
+	Uint32 slotIndex,
 	void *data,
 	Uint32 dataLengthInBytes
 );

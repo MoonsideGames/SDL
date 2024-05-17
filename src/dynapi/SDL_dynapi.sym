@@ -1024,7 +1024,6 @@ SDL3_0.0.0 {
     SDL_GpuCreateShader;
     SDL_GpuCreateTexture;
     SDL_GpuCreateGpuBuffer;
-    SDL_GpuCreateUniformBuffer;
     SDL_GpuCreateTransferBuffer;
     SDL_GpuCreateOcclusionQuery;
     SDL_GpuSetGpuBufferName;
@@ -1033,7 +1032,6 @@ SDL3_0.0.0 {
     SDL_GpuQueueDestroyTexture;
     SDL_GpuQueueDestroySampler;
     SDL_GpuQueueDestroyGpuBuffer;
-    SDL_GpuQueueDestroyUniformBuffer;
     SDL_GpuQueueDestroyTransferBuffer;
     SDL_GpuQueueDestroyShader;
     SDL_GpuQueueDestroyComputePipeline;
@@ -1048,12 +1046,11 @@ SDL3_0.0.0 {
     SDL_GpuBindVertexSamplers;
     SDL_GpuBindVertexStorageTextures;
     SDL_GpuBindVertexStorageBuffers;
-    SDL_GpuBindVertexUniformBuffers;
     SDL_GpuBindFragmentSamplers;
     SDL_GpuBindFragmentStorageTextures;
     SDL_GpuBindFragmentStorageBuffers;
-    SDL_GpuBindFragmentUniformBuffers;
-    SDL_GpuPushGraphicsUniformData;
+    SDL_GpuPushVertexUniformData;
+    SDL_GpuPushFragmentUniformData;
     SDL_GpuDrawInstancedPrimitives;
     SDL_GpuDrawPrimitives;
     SDL_GpuDrawPrimitivesIndirect;

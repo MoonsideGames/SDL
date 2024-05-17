@@ -82,7 +82,8 @@ static const GUID D3D_IID_DXGI_DEBUG_ALL = { 0xe48ae283,0xda80,0x490b,{0x87,0xe6
 #define CREATE_DXGI_FACTORY1_FUNC "CreateDXGIFactory1"
 #define DXGI_GET_DEBUG_INTERFACE_FUNC "DXGIGetDebugInterface"
 #define WINDOW_PROPERTY_DATA "SDL_GpuD3D11WindowPropertyData"
-#define UBO_BUFFER_SIZE 1048576 /* 1 MiB */
+
+#define UNIFORM_BUFFER_SIZE 1048576 /* 1 MiB */
 
 #ifdef _WIN32
 #define HRESULT_FMT "(0x%08lX)"
@@ -620,6 +621,15 @@ typedef struct D3D11TransferBufferContainer
 	D3D11TransferBuffer **buffers;
 } D3D11TransferBufferContainer;
 
+typedef struct D3D11UniformBuffer
+{
+    D3D11BufferContainer *bufferContainer;
+
+    Uint32 drawOffset;
+	Uint32 offset;
+    Uint32 currentBlockSize;
+} D3D11UniformBuffer;
+
 typedef struct D3D11Renderer D3D11Renderer;
 
 typedef struct D3D11CommandBuffer
@@ -644,6 +654,19 @@ typedef struct D3D11CommandBuffer
 	/* Compute Pass */
 	D3D11ComputePipeline *computePipeline;
 
+    /* Uniform buffers */
+    D3D11UniformBuffer *vertexUniformBuffers[MAX_UNIFORM_BUFFERS_PER_STAGE];
+    D3D11UniformBuffer *fragmentUniformBuffers[MAX_UNIFORM_BUFFERS_PER_STAGE];
+    D3D11UniformBuffer *computeUniformBuffers[MAX_UNIFORM_BUFFERS_PER_STAGE];
+
+    SDL_bool vertexUniformBufferNeedsReset[MAX_UNIFORM_BUFFERS_PER_STAGE];
+    SDL_bool fragmentUniformBufferNeedsReset[MAX_UNIFORM_BUFFERS_PER_STAGE];
+    SDL_bool computeUniformBufferNeedsReset[MAX_UNIFORM_BUFFERS_PER_STAGE];
+
+    Uint32 initializedVertexUniformBufferCount;
+    Uint32 initializedFragmentUniformBufferCount;
+    Uint32 initializedComputeUniformBufferCount;
+
 	/* Fences */
 	D3D11Fence *fence;
 	Uint8 autoReleaseFence;
@@ -661,17 +684,6 @@ typedef struct D3D11CommandBuffer
 	Uint32 usedTextureSubresourceCount;
 	Uint32 usedTextureSubresourceCapacity;
 } D3D11CommandBuffer;
-
-typedef struct D3D11UniformBuffer
-{
-    D3D11BufferContainer *bufferContainer;
-
-    SDL_GpuShaderStageFlagBits shaderStage;
-    Uint32 bindSlot;
-
-	Uint32 offset; /* number of bytes written */
-    Uint32 currentBlockSize;
-} D3D11UniformBuffer;
 
 typedef struct D3D11Sampler
 {
@@ -712,7 +724,6 @@ struct D3D11Renderer
     SDL_GpuGraphicsPipeline *blitFrom2DArrayPipeline; /* also cube */
     SDL_GpuSampler *blitNearestSampler;
     SDL_GpuSampler *blitLinearSampler;
-    SDL_GpuUniformBuffer *blitUniformBuffer;
 
     /* Resource Tracking */
 	D3D11WindowData **claimedWindows;
@@ -884,6 +895,32 @@ static DXGI_FORMAT D3D11_INTERNAL_GetSampleableFormat(
 
 /* Quit */
 
+static void D3D11_INTERNAL_DestroyBufferContainer(
+    D3D11BufferContainer *container
+) {
+    for (Uint32 i = 0; i < container->bufferCount; i += 1)
+	{
+		D3D11Buffer *d3d11Buffer = container->buffers[i];
+
+		if (d3d11Buffer->uav != NULL)
+		{
+			ID3D11UnorderedAccessView_Release(d3d11Buffer->uav);
+		}
+
+        if (d3d11Buffer->srv != NULL)
+        {
+            ID3D11ShaderResourceView_Release(d3d11Buffer->srv);
+        }
+
+		ID3D11Buffer_Release(d3d11Buffer->handle);
+
+		SDL_free(d3d11Buffer);
+	}
+
+	SDL_free(container->buffers);
+	SDL_free(container);
+}
+
 static void D3D11_DestroyDevice(
 	SDL_GpuDevice *device
 ) {
@@ -909,6 +946,31 @@ static void D3D11_DestroyDevice(
 		ID3D11DeviceContext_Release(commandBuffer->context);
 		SDL_free(commandBuffer->usedBuffers);
 		SDL_free(commandBuffer->usedTransferBuffers);
+
+        for (Uint32 j = 0; j < commandBuffer->initializedVertexUniformBufferCount; j += 1)
+        {
+            D3D11_INTERNAL_DestroyBufferContainer(
+                commandBuffer->vertexUniformBuffers[j]->bufferContainer
+            );
+            SDL_free(commandBuffer->vertexUniformBuffers[j]);
+        }
+
+        for (Uint32 j = 0; j < commandBuffer->initializedFragmentUniformBufferCount; j += 1)
+        {
+            D3D11_INTERNAL_DestroyBufferContainer(
+                commandBuffer->fragmentUniformBuffers[j]->bufferContainer
+            );
+            SDL_free(commandBuffer->fragmentUniformBuffers[j]);
+        }
+
+        for (Uint32 j = 0; j < commandBuffer->initializedComputeUniformBufferCount; j += 1)
+        {
+            D3D11_INTERNAL_DestroyBufferContainer(
+                commandBuffer->computeUniformBuffers[j]->bufferContainer
+            );
+            SDL_free(commandBuffer->computeUniformBuffers[j]);
+        }
+
 		SDL_free(commandBuffer);
 	}
 	SDL_free(renderer->availableCommandBuffers);
@@ -1107,32 +1169,6 @@ static void D3D11_QueueDestroySampler(
 	SDL_free(d3d11Sampler);
 }
 
-static void D3D11_INTERNAL_DestroyBufferContainer(
-    D3D11BufferContainer *container
-) {
-    for (Uint32 i = 0; i < container->bufferCount; i += 1)
-	{
-		D3D11Buffer *d3d11Buffer = container->buffers[i];
-
-		if (d3d11Buffer->uav != NULL)
-		{
-			ID3D11UnorderedAccessView_Release(d3d11Buffer->uav);
-		}
-
-        if (d3d11Buffer->srv != NULL)
-        {
-            ID3D11ShaderResourceView_Release(d3d11Buffer->srv);
-        }
-
-		ID3D11Buffer_Release(d3d11Buffer->handle);
-
-		SDL_free(d3d11Buffer);
-	}
-
-	SDL_free(container->buffers);
-	SDL_free(container);
-}
-
 static void D3D11_QueueDestroyGpuBuffer(
 	SDL_GpuRenderer *driverData,
 	SDL_GpuBuffer *gpuBuffer
@@ -1156,33 +1192,6 @@ static void D3D11_QueueDestroyGpuBuffer(
     renderer->bufferContainersToDestroyCount += 1;
 
     SDL_UnlockMutex(renderer->contextLock);
-}
-
-static void D3D11_QueueDestroyUniformBuffer(
-    SDL_GpuRenderer *driverData,
-    SDL_GpuUniformBuffer *uniformBuffer
-) {
-    D3D11Renderer *renderer = (D3D11Renderer*) driverData;
-	D3D11UniformBuffer *d3d11UniformBuffer = (D3D11UniformBuffer*) uniformBuffer;
-
-    SDL_LockMutex(renderer->contextLock);
-
-    EXPAND_ARRAY_IF_NEEDED(
-        renderer->bufferContainersToDestroy,
-        D3D11BufferContainer*,
-        renderer->bufferContainersToDestroyCount + 1,
-        renderer->bufferContainersToDestroyCapacity,
-        renderer->bufferContainersToDestroyCapacity + 1
-    );
-
-    renderer->bufferContainersToDestroy[
-        renderer->bufferContainersToDestroyCount
-    ] = d3d11UniformBuffer->bufferContainer;
-    renderer->bufferContainersToDestroyCount += 1;
-
-    SDL_UnlockMutex(renderer->contextLock);
-
-    SDL_free(d3d11UniformBuffer);
 }
 
 static void D3D11_QueueDestroyTransferBuffer(
@@ -2608,7 +2617,7 @@ static SDL_GpuBuffer* D3D11_CreateGpuBuffer(
 	return (SDL_GpuBuffer*) container;
 }
 
-static SDL_GpuUniformBuffer *D3D11_CreateUniformBuffer(
+static D3D11CommandBuffer *D3D11_INTERNAL_CreateUniformBuffer(
     SDL_GpuRenderer *driverData,
     Uint32 sizeInBytes
 ) {
@@ -2653,7 +2662,7 @@ static SDL_GpuUniformBuffer *D3D11_CreateUniformBuffer(
     uniformBuffer->offset = 0;
     uniformBuffer->currentBlockSize = 0;
 
-    return (SDL_GpuUniformBuffer*) uniformBuffer;
+    return uniformBuffer;
 }
 
 static void D3D11_INTERNAL_CycleActiveBuffer(
@@ -3525,6 +3534,10 @@ static void D3D11_INTERNAL_AllocateCommandBuffers(
 		);
 		ERROR_CHECK("Could not create deferred context");
 
+        commandBuffer->initializedVertexUniformBufferCount = 0;
+        commandBuffer->initializedFragmentUniformBufferCount = 0;
+        commandBuffer->initializedComputeUniformBufferCount = 0;
+
 		/* Reference Counting */
 		commandBuffer->usedBufferCapacity = 4;
 		commandBuffer->usedBufferCount = 0;
@@ -3643,6 +3656,7 @@ static SDL_GpuCommandBuffer* D3D11_AcquireCommandBuffer(
 ) {
 	D3D11Renderer *renderer = (D3D11Renderer*) driverData;
 	D3D11CommandBuffer *commandBuffer;
+    Uint32 i;
 
 	SDL_LockMutex(renderer->acquireCommandBufferLock);
 
@@ -3650,12 +3664,19 @@ static SDL_GpuCommandBuffer* D3D11_AcquireCommandBuffer(
 	commandBuffer->windowData = NULL;
 	commandBuffer->graphicsPipeline = NULL;
 	commandBuffer->computePipeline = NULL;
-	for (Uint32 i = 0; i < MAX_COLOR_TARGET_BINDINGS; i += 1)
+	for ( i = 0; i < MAX_COLOR_TARGET_BINDINGS; i += 1)
 	{
 		commandBuffer->colorTargetResolveTexture[i] = NULL;
 		commandBuffer->colorTargetResolveSubresourceIndex[i] = 0;
 		commandBuffer->colorTargetMsaaHandle[i] = NULL;
 	}
+
+    for (i = 0; i < MAX_UNIFORM_BUFFERS_PER_STAGE; i += 1)
+    {
+        commandBuffer->vertexUniformBufferNeedsReset[i] = SDL_TRUE;
+        commandBuffer->fragmentUniformBufferNeedsReset[i] = SDL_TRUE;
+        commandBuffer->computeUniformBufferNeedsReset[i] = SDL_TRUE;
+    }
 
 	D3D11_INTERNAL_AcquireFence(commandBuffer);
 	commandBuffer->autoReleaseFence = 1;
@@ -3666,17 +3687,41 @@ static SDL_GpuCommandBuffer* D3D11_AcquireCommandBuffer(
 }
 
 static void D3D11_INTERNAL_PushUniformData(
-    SDL_GpuCommandBuffer *commandBuffer,
-    SDL_GpuUniformBuffer *uniformBuffer,
+    D3D11CommandBuffer *d3d11CommandBuffer,
+    SDL_GpuShaderStageFlagBits shaderStage,
+    Uint32 slotIndex,
     void *data,
     Uint32 dataLengthInBytes
 ) {
-    D3D11CommandBuffer *d3d11CommandBuffer = (D3D11CommandBuffer*) commandBuffer;
     D3D11Renderer *renderer = d3d11CommandBuffer->renderer;
-    D3D11UniformBuffer *d3d11UniformBuffer = (D3D11UniformBuffer*) uniformBuffer;
+    D3D11UniformBuffer *d3d11UniformBuffer;
     ID3D11Buffer *nullBuf = NULL;
     Uint32 offsetInConstants, blockSizeInConstants;
     Uint32 drawOffset;
+
+    if (shaderStage == SDL_GPU_SHADERSTAGE_VERTEX)
+    {
+        d3d11UniformBuffer = d3d11CommandBuffer->vertexUniformBuffers[slotIndex];
+    }
+    else if (shaderStage == SDL_GPU_SHADERSTAGE_FRAGMENT)
+    {
+        d3d11UniformBuffer = d3d11CommandBuffer->fragmentUniformBuffers[slotIndex];
+    }
+    else if (shaderStage == SDL_GPU_SHADERSTAGE_COMPUTE)
+    {
+        d3d11UniformBuffer = d3d11CommandBuffer->computeUniformBuffers[slotIndex];
+    }
+    else
+    {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Unrecognized shader stage!");
+        return;
+    }
+
+    d3d11UniformBuffer->currentBlockSize =
+        D3D11_INTERNAL_NextHighestAlignment(
+            dataLengthInBytes,
+            256
+        );
 
     if (d3d11UniformBuffer->offset + d3d11UniformBuffer->currentBlockSize >= d3d11UniformBuffer->bufferContainer->activeBuffer->size)
     {
@@ -3709,63 +3754,63 @@ static void D3D11_INTERNAL_PushUniformData(
     offsetInConstants = drawOffset / 16;
     blockSizeInConstants = d3d11UniformBuffer->currentBlockSize / 16;
 
-    if (d3d11UniformBuffer->shaderStage == SDL_GPU_SHADERSTAGE_VERTEX)
+    if (shaderStage == SDL_GPU_SHADERSTAGE_VERTEX)
     {
         /* stupid workaround for god awful D3D11 drivers
          * see: https://learn.microsoft.com/en-us/windows/win32/api/d3d11_1/nf-d3d11_1-id3d11devicecontext1-vssetconstantbuffers1#calling-vssetconstantbuffers1-with-command-list-emulation
          */
         ID3D11DeviceContext1_VSSetConstantBuffers(
             d3d11CommandBuffer->context,
-            d3d11UniformBuffer->bindSlot,
+            slotIndex,
             1,
             &nullBuf
         );
 
         ID3D11DeviceContext1_VSSetConstantBuffers1(
             d3d11CommandBuffer->context,
-            d3d11UniformBuffer->bindSlot,
+            slotIndex,
             1,
             &d3d11UniformBuffer->bufferContainer->activeBuffer->handle,
             &offsetInConstants,
             &blockSizeInConstants
         );
     }
-    else if (d3d11UniformBuffer->shaderStage == SDL_GPU_SHADERSTAGE_FRAGMENT)
+    else if (shaderStage == SDL_GPU_SHADERSTAGE_FRAGMENT)
     {
         /* stupid workaround for god awful D3D11 drivers
          * see: https://learn.microsoft.com/en-us/windows/win32/api/d3d11_1/nf-d3d11_1-id3d11devicecontext1-vssetconstantbuffers1#calling-vssetconstantbuffers1-with-command-list-emulation
          */
         ID3D11DeviceContext1_PSSetConstantBuffers(
             d3d11CommandBuffer->context,
-            d3d11UniformBuffer->bindSlot,
+            slotIndex,
             1,
             &nullBuf
         );
 
         ID3D11DeviceContext1_PSSetConstantBuffers1(
             d3d11CommandBuffer->context,
-            d3d11UniformBuffer->bindSlot,
+            slotIndex,
             1,
             &d3d11UniformBuffer->bufferContainer->activeBuffer->handle,
             &offsetInConstants,
             &blockSizeInConstants
         );
     }
-    else if (d3d11UniformBuffer->shaderStage == SDL_GPU_SHADERSTAGE_COMPUTE)
+    else if (shaderStage == SDL_GPU_SHADERSTAGE_COMPUTE)
     {
         /* stupid workaround for god awful D3D11 drivers
          * see: https://learn.microsoft.com/en-us/windows/win32/api/d3d11_1/nf-d3d11_1-id3d11devicecontext1-vssetconstantbuffers1#calling-vssetconstantbuffers1-with-command-list-emulation
          */
         ID3D11DeviceContext1_CSSetConstantBuffers(
             d3d11CommandBuffer->context,
-            d3d11UniformBuffer->bindSlot,
+            slotIndex,
             1,
             &nullBuf
         );
 
         ID3D11DeviceContext1_CSSetConstantBuffers1(
             d3d11CommandBuffer->context,
-            d3d11UniformBuffer->bindSlot,
+            slotIndex,
             1,
             &d3d11UniformBuffer->bufferContainer->activeBuffer->handle,
             &offsetInConstants,
@@ -3971,6 +4016,8 @@ static void D3D11_BindGraphicsPipeline(
 ) {
 	D3D11CommandBuffer *d3d11CommandBuffer = (D3D11CommandBuffer*) commandBuffer;
 	D3D11GraphicsPipeline *pipeline = (D3D11GraphicsPipeline*) graphicsPipeline;
+    Uint32 offsetInConstants, blockSizeInConstants;
+    Uint32 i;
 
 	d3d11CommandBuffer->graphicsPipeline = pipeline;
 
@@ -4015,6 +4062,102 @@ static void D3D11_BindGraphicsPipeline(
 		NULL,
 		0
 	);
+
+    for (i = d3d11CommandBuffer->initializedVertexUniformBufferCount; i < pipeline->vertexUniformBufferCount; i += 1)
+    {
+        d3d11CommandBuffer->vertexUniformBuffers[i] = D3D11_INTERNAL_CreateUniformBuffer(d3d11CommandBuffer->renderer, UNIFORM_BUFFER_SIZE);
+        d3d11CommandBuffer->initializedVertexUniformBufferCount += 1;
+    }
+
+    for (i = d3d11CommandBuffer->initializedFragmentUniformBufferCount; i < pipeline->fragmentUniformBufferCount; i += 1)
+    {
+        d3d11CommandBuffer->fragmentUniformBuffers[i] = D3D11_INTERNAL_CreateUniformBuffer(d3d11CommandBuffer->renderer, UNIFORM_BUFFER_SIZE);
+        d3d11CommandBuffer->initializedFragmentUniformBufferCount += 1;
+    }
+
+    for (i = 0; i < pipeline->vertexUniformBufferCount; i += 1)
+    {
+        /* The first map call on a deferred context must be DISCARD so we reset here */
+        if (d3d11CommandBuffer->vertexUniformBufferNeedsReset[i])
+        {
+            D3D11_INTERNAL_CycleActiveBuffer(
+                d3d11CommandBuffer->renderer,
+                d3d11CommandBuffer->vertexUniformBuffers[i]->bufferContainer
+            );
+
+            d3d11CommandBuffer->vertexUniformBuffers[i]->offset = 0;
+            d3d11CommandBuffer->vertexUniformBuffers[i]->drawOffset = 0;
+        }
+
+        /* stupid workaround for god awful D3D11 drivers
+         * see: https://learn.microsoft.com/en-us/windows/win32/api/d3d11_1/nf-d3d11_1-id3d11devicecontext1-vssetconstantbuffers1#calling-vssetconstantbuffers1-with-command-list-emulation
+         */
+        ID3D11DeviceContext1_VSSetConstantBuffers(
+            d3d11CommandBuffer->context,
+            i,
+            1,
+            &d3d11CommandBuffer->vertexUniformBuffers[i]->bufferContainer->activeBuffer->handle
+        );
+
+        offsetInConstants = d3d11CommandBuffer->vertexUniformBuffers[i]->drawOffset / 16;
+        blockSizeInConstants = d3d11CommandBuffer->vertexUniformBuffers[i]->currentBlockSize / 16;
+
+        ID3D11DeviceContext1_VSSetConstantBuffers1(
+            d3d11CommandBuffer->context,
+            i,
+            1,
+            &d3d11CommandBuffer->vertexUniformBuffers[i]->bufferContainer->activeBuffer->handle,
+            &offsetInConstants,
+            &blockSizeInConstants
+        );
+
+        D3D11_INTERNAL_TrackBuffer(
+            d3d11CommandBuffer,
+            d3d11CommandBuffer->vertexUniformBuffers[i]->bufferContainer->activeBuffer
+        );
+    }
+
+    for (i = 0; i < pipeline->fragmentUniformBufferCount; i += 1)
+    {
+        /* The first map call on a deferred context must be DISCARD so we reset here */
+        if (d3d11CommandBuffer->fragmentUniformBufferNeedsReset[i])
+        {
+            D3D11_INTERNAL_CycleActiveBuffer(
+                d3d11CommandBuffer->renderer,
+                d3d11CommandBuffer->fragmentUniformBuffers[i]->bufferContainer
+            );
+
+            d3d11CommandBuffer->fragmentUniformBuffers[i]->offset = 0;
+            d3d11CommandBuffer->fragmentUniformBuffers[i]->drawOffset = 0;
+        }
+
+        /* stupid workaround for god awful D3D11 drivers
+         * see: https://learn.microsoft.com/en-us/windows/win32/api/d3d11_1/nf-d3d11_1-id3d11devicecontext1-pssetconstantbuffers1#calling-pssetconstantbuffers1-with-command-list-emulation
+         */
+        ID3D11DeviceContext1_PSSetConstantBuffers(
+            d3d11CommandBuffer->context,
+            i,
+            1,
+            &d3d11CommandBuffer->fragmentUniformBuffers[i]->bufferContainer->activeBuffer->handle
+        );
+
+        offsetInConstants = d3d11CommandBuffer->fragmentUniformBuffers[i]->drawOffset / 16;
+        blockSizeInConstants = d3d11CommandBuffer->fragmentUniformBuffers[i]->currentBlockSize / 16;
+
+        ID3D11DeviceContext1_PSSetConstantBuffers1(
+            d3d11CommandBuffer->context,
+            i,
+            1,
+            &d3d11CommandBuffer->fragmentUniformBuffers[i]->bufferContainer->activeBuffer->handle,
+            &offsetInConstants,
+            &blockSizeInConstants
+        );
+
+        D3D11_INTERNAL_TrackBuffer(
+            d3d11CommandBuffer,
+            d3d11CommandBuffer->fragmentUniformBuffers[i]->bufferContainer->activeBuffer
+        );
+    }
 }
 
 static void D3D11_SetViewport(
@@ -4349,94 +4492,6 @@ static void D3D11_BindFragmentStorageBuffers(
     SDL_stack_free(views);
 }
 
-static void D3D11_INTERNAL_BindUniformBuffer(
-    D3D11CommandBuffer *commandBuffer,
-    D3D11UniformBuffer *uniformBuffer,
-    SDL_GpuShaderStageFlagBits shaderStage,
-    Uint32 bindSlot,
-    Uint32 dataBlockSize
-) {
-    SDL_bool uniformBufferAlreadyBound;
-    Uint32 i;
-
-    uniformBuffer->bindSlot = bindSlot;
-    uniformBuffer->shaderStage = shaderStage;
-    uniformBuffer->currentBlockSize =
-        D3D11_INTERNAL_NextHighestAlignment(
-            dataBlockSize,
-            256
-        );
-
-    uniformBufferAlreadyBound = SDL_FALSE;
-    for (i = 0; i < commandBuffer->usedBufferCount; i += 1)
-    {
-        if (commandBuffer->usedBuffers[i] == uniformBuffer->bufferContainer->activeBuffer)
-        {
-            uniformBufferAlreadyBound = SDL_TRUE;
-            break;
-        }
-    }
-
-    /* If not already bound by this command buffer, cycle and reset offset */
-    /* This is because the first map call on a deferred context must be DISCARD */
-    if (!uniformBufferAlreadyBound)
-    {
-        D3D11_INTERNAL_CycleActiveBuffer(
-            commandBuffer->renderer,
-            uniformBuffer->bufferContainer
-        );
-
-        D3D11_INTERNAL_TrackBuffer(
-            commandBuffer,
-            uniformBuffer->bufferContainer->activeBuffer
-        );
-
-        uniformBuffer->offset = 0;
-    }
-}
-
-static void D3D11_BindVertexUniformBuffers(
-    SDL_GpuCommandBuffer *commandBuffer,
-    Uint32 firstSlot,
-    SDL_GpuUniformBufferBinding *uniformBufferBindings,
-    Uint32 bindingCount
-) {
-    D3D11CommandBuffer *d3d11CommandBuffer = (D3D11CommandBuffer*) commandBuffer;
-    Uint32 i;
-
-    for (i = 0; i < bindingCount; i += 1)
-    {
-        D3D11_INTERNAL_BindUniformBuffer(
-            d3d11CommandBuffer,
-            (D3D11UniformBuffer*) uniformBufferBindings[i].uniformBuffer,
-            SDL_GPU_SHADERSTAGE_VERTEX,
-            firstSlot + i,
-            uniformBufferBindings[i].uniformDataSizeInBytes
-        );
-    }
-}
-
-static void D3D11_BindFragmentUniformBuffers(
-    SDL_GpuCommandBuffer *commandBuffer,
-    Uint32 firstSlot,
-    SDL_GpuUniformBufferBinding *uniformBufferBindings,
-    Uint32 bindingCount
-) {
-    D3D11CommandBuffer *d3d11CommandBuffer = (D3D11CommandBuffer*) commandBuffer;
-    Uint32 i;
-
-    for (i = 0; i < bindingCount; i += 1)
-    {
-        D3D11_INTERNAL_BindUniformBuffer(
-            d3d11CommandBuffer,
-            (D3D11UniformBuffer*) uniformBufferBindings[i].uniformBuffer,
-            SDL_GPU_SHADERSTAGE_FRAGMENT,
-            firstSlot + i,
-            uniformBufferBindings[i].uniformDataSizeInBytes
-        );
-    }
-}
-
 static void D3D11_DrawInstancedPrimitives(
 	SDL_GpuCommandBuffer *commandBuffer,
 	Uint32 baseVertex,
@@ -4547,15 +4602,47 @@ static void D3D11_EndRenderPass(
     );
 }
 
-static void D3D11_PushGraphicsUniformData(
+static void D3D11_PushVertexUniformData(
     SDL_GpuCommandBuffer *commandBuffer,
-	SDL_GpuUniformBuffer *uniformBuffer,
-	void *data,
-	Uint32 dataLengthInBytes
+    Uint32 slotIndex,
+    void *data,
+    Uint32 dataLengthInBytes
 ) {
+    D3D11CommandBuffer *d3d11CommandBuffer = (D3D11CommandBuffer*) commandBuffer;
+
+    if (slotIndex >= d3d11CommandBuffer->graphicsPipeline->vertexUniformBufferCount)
+    {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "No vertex uniforms exist on slot %i for this pipeline", slotIndex);
+        return;
+    }
+
     D3D11_INTERNAL_PushUniformData(
-        commandBuffer,
-        uniformBuffer,
+        d3d11CommandBuffer,
+        SDL_GPU_SHADERSTAGE_VERTEX,
+        slotIndex,
+        data,
+        dataLengthInBytes
+    );
+}
+
+static void D3D11_PushFragmentUniformData(
+    SDL_GpuCommandBuffer *commandBuffer,
+    Uint32 slotIndex,
+    void *data,
+    Uint32 dataLengthInBytes
+) {
+    D3D11CommandBuffer *d3d11CommandBuffer = (D3D11CommandBuffer*) commandBuffer;
+
+    if (slotIndex >= d3d11CommandBuffer->graphicsPipeline->fragmentUniformBufferCount)
+    {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "No fragment uniforms exist on slot %i for this pipeline", slotIndex);
+        return;
+    }
+
+    D3D11_INTERNAL_PushUniformData(
+        d3d11CommandBuffer,
+        SDL_GPU_SHADERSTAGE_FRAGMENT,
+        slotIndex,
         data,
         dataLengthInBytes
     );
@@ -4577,7 +4664,6 @@ static void D3D11_Blit(
     SDL_GpuColorAttachmentInfo colorAttachmentInfo;
     SDL_GpuViewport viewport;
     SDL_GpuTextureSamplerBinding textureSamplerBinding;
-    SDL_GpuUniformBufferBinding uniformBufferBinding;
 
     if (destinationTextureContainer->activeTexture->depth > 1)
     {
@@ -4649,21 +4735,9 @@ static void D3D11_Blit(
             renderer->blitFrom2DArrayPipeline
         );
 
-        /* FIXME: this will break if two command buffers blit simultaneously */
-        /* Need a uniform buffer per command buffer */
-        uniformBufferBinding.uniformBuffer = renderer->blitUniformBuffer;
-        uniformBufferBinding.uniformDataSizeInBytes = sizeof(Uint32);
-
-        D3D11_BindFragmentUniformBuffers(
+        D3D11_PushFragmentUniformData(
             commandBuffer,
             0,
-            &uniformBufferBinding,
-            1
-        );
-
-        D3D11_PushGraphicsUniformData(
-            commandBuffer,
-            renderer->blitUniformBuffer,
             &source->textureSlice.layer,
             sizeof(Uint32)
         );
@@ -4710,6 +4784,8 @@ static void D3D11_BindComputePipeline(
 ) {
 	D3D11CommandBuffer *d3d11CommandBuffer = (D3D11CommandBuffer*) commandBuffer;
 	D3D11ComputePipeline *pipeline = (D3D11ComputePipeline*) computePipeline;
+    Uint32 offsetInConstants, blockSizeInConstants;
+    Uint32 i;
 
 	d3d11CommandBuffer->computePipeline = pipeline;
 
@@ -4719,6 +4795,54 @@ static void D3D11_BindComputePipeline(
 		NULL,
 		0
 	);
+
+    for (i = d3d11CommandBuffer->initializedComputeUniformBufferCount; i < pipeline->uniformBufferCount; i += 1)
+    {
+        d3d11CommandBuffer->computeUniformBuffers[i] = D3D11_INTERNAL_CreateUniformBuffer(d3d11CommandBuffer->renderer, UNIFORM_BUFFER_SIZE);
+        d3d11CommandBuffer->initializedComputeUniformBufferCount += 1;
+    }
+
+    for (i = 0; i < pipeline->uniformBufferCount; i += 1)
+    {
+        /* The first map call on a deferred context must be DISCARD so we reset here */
+        if (d3d11CommandBuffer->computeUniformBufferNeedsReset[i])
+        {
+            D3D11_INTERNAL_CycleActiveBuffer(
+                d3d11CommandBuffer->renderer,
+                d3d11CommandBuffer->computeUniformBuffers[i]->bufferContainer
+            );
+
+            d3d11CommandBuffer->computeUniformBuffers[i]->offset = 0;
+            d3d11CommandBuffer->computeUniformBuffers[i]->drawOffset = 0;
+        }
+
+        /* stupid workaround for god awful D3D11 drivers
+         * see: https://learn.microsoft.com/en-us/windows/win32/api/d3d11_1/nf-d3d11_1-id3d11devicecontext1-vssetconstantbuffers1#calling-vssetconstantbuffers1-with-command-list-emulation
+         */
+        ID3D11DeviceContext1_CSSetConstantBuffers(
+            d3d11CommandBuffer->context,
+            i,
+            1,
+            &d3d11CommandBuffer->computeUniformBuffers[i]->bufferContainer->activeBuffer->handle
+        );
+
+        offsetInConstants = d3d11CommandBuffer->computeUniformBuffers[i]->drawOffset / 16;
+        blockSizeInConstants = d3d11CommandBuffer->computeUniformBuffers[i]->currentBlockSize / 16;
+
+        ID3D11DeviceContext1_CSSetConstantBuffers1(
+            d3d11CommandBuffer->context,
+            i,
+            1,
+            &d3d11CommandBuffer->computeUniformBuffers[i]->bufferContainer->activeBuffer->handle,
+            &offsetInConstants,
+            &blockSizeInConstants
+        );
+
+        D3D11_INTERNAL_TrackBuffer(
+            d3d11CommandBuffer,
+            d3d11CommandBuffer->computeUniformBuffers[i]->bufferContainer->activeBuffer
+        );
+    }
 }
 
 static void D3D11_BindComputeStorageTextures(
@@ -4878,36 +5002,24 @@ static void D3D11_BindComputeRWStorageBuffers(
     );
 }
 
-static void D3D11_BindComputeUniformBuffers(
-    SDL_GpuCommandBuffer *commandBuffer,
-    Uint32 firstSlot,
-    SDL_GpuUniformBufferBinding *uniformBufferBindings,
-    Uint32 bindingCount
-) {
-    D3D11CommandBuffer *d3d11CommandBuffer = (D3D11CommandBuffer*) commandBuffer;
-    Uint32 i;
-
-    for (i = 0; i < bindingCount; i += 1)
-    {
-        D3D11_INTERNAL_BindUniformBuffer(
-            d3d11CommandBuffer,
-            (D3D11UniformBuffer*) uniformBufferBindings[i].uniformBuffer,
-            SDL_GPU_SHADERSTAGE_COMPUTE,
-            firstSlot + i,
-            uniformBufferBindings[i].uniformDataSizeInBytes
-        );
-    }
-}
-
 static void D3D11_PushComputeUniformData(
     SDL_GpuCommandBuffer *commandBuffer,
-    SDL_GpuUniformBuffer *uniformBuffer,
+    Uint32 slotIndex,
     void *data,
     Uint32 dataLengthInBytes
 ) {
+    D3D11CommandBuffer *d3d11CommandBuffer = (D3D11CommandBuffer*) commandBuffer;
+
+    if (slotIndex >= d3d11CommandBuffer->computePipeline->uniformBufferCount)
+    {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "No compute uniforms exist on slot %i for this pipeline", slotIndex);
+        return;
+    }
+
     D3D11_INTERNAL_PushUniformData(
-        commandBuffer,
-        uniformBuffer,
+        d3d11CommandBuffer,
+        SDL_GPU_SHADERSTAGE_COMPUTE,
+        slotIndex,
         data,
         dataLengthInBytes
     );
@@ -6435,16 +6547,6 @@ static void D3D11_INTERNAL_InitBlitPipelines(
     {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to create blit linear sampler!");
     }
-
-    renderer->blitUniformBuffer = D3D11_CreateUniformBuffer(
-        (SDL_GpuRenderer*) renderer,
-        1024
-    );
-
-    if (renderer->blitUniformBuffer == NULL)
-    {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to create blit uniform buffer!");
-    }
 }
 
 static void D3D11_INTERNAL_DestroyBlitPipelines(
@@ -6461,8 +6563,6 @@ static void D3D11_INTERNAL_DestroyBlitPipelines(
 	D3D11_QueueDestroyShader(driverData, renderer->fullscreenVertexShader);
 	D3D11_QueueDestroyShader(driverData, renderer->blitFrom2DPixelShader);
 	D3D11_QueueDestroyShader(driverData, renderer->blitFrom2DArrayPixelShader);
-
-    D3D11_QueueDestroyUniformBuffer(driverData, renderer->blitUniformBuffer);
 }
 
 static SDL_GpuDevice* D3D11_CreateDevice(SDL_bool debugMode)

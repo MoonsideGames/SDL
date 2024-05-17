@@ -36,7 +36,9 @@ typedef struct CommandBufferCommonHeader
 {
     SDL_GpuDevice *device;
     Pass renderPass;
+    SDL_bool graphicsPipelineBound;
     Pass computePass;
+    SDL_bool computePipelineBound;
     Pass copyPass;
     SDL_bool submitted;
 } CommandBufferCommonHeader;
@@ -241,11 +243,6 @@ struct SDL_GpuDevice
 		Uint32 sizeInBytes
 	);
 
-	SDL_GpuUniformBuffer* (*CreateUniformBuffer)(
-		SDL_GpuRenderer *driverData,
-		Uint32 sizeInBytes
-	);
-
 	SDL_GpuTransferBuffer* (*CreateTransferBuffer)(
 		SDL_GpuRenderer *driverData,
 		SDL_GpuTransferUsage usage,
@@ -291,11 +288,6 @@ struct SDL_GpuDevice
 	void (*QueueDestroyGpuBuffer)(
 		SDL_GpuRenderer *driverData,
 		SDL_GpuBuffer *gpuBuffer
-	);
-
-	void (*QueueDestroyUniformBuffer)(
-		SDL_GpuRenderer *driverData,
-		SDL_GpuUniformBuffer *uniformBuffer
 	);
 
 	void (*QueueDestroyTransferBuffer)(
@@ -381,13 +373,6 @@ struct SDL_GpuDevice
         Uint32 bindingCount
     );
 
-    void (*BindVertexUniformBuffers)(
-        SDL_GpuCommandBuffer *renderPass,
-        Uint32 firstSlot,
-        SDL_GpuUniformBufferBinding *uniformBufferBindings,
-        Uint32 bindingCount
-    );
-
     void (*BindFragmentSamplers)(
         SDL_GpuCommandBuffer *commandBuffer,
         Uint32 firstSlot,
@@ -409,19 +394,19 @@ struct SDL_GpuDevice
         Uint32 bindingCount
     );
 
-    void (*BindFragmentUniformBuffers)(
-        SDL_GpuCommandBuffer *renderPass,
-        Uint32 firstSlot,
-        SDL_GpuUniformBufferBinding *uniformBufferBindings,
-        Uint32 bindingCount
-    );
-
-	void (*PushGraphicsUniformData)(
+	void (*PushVertexUniformData)(
 		SDL_GpuCommandBuffer *commandBuffer,
-		SDL_GpuUniformBuffer *uniformBuffer,
+        Uint32 slotIndex,
 		void *data,
 		Uint32 dataLengthInBytes
 	);
+
+    void (*PushFragmentUniformData)(
+        SDL_GpuCommandBuffer *commandBuffer,
+        Uint32 slotIndex,
+        void *data,
+        Uint32 dataLengthInBytes
+    );
 
 	void (*DrawInstancedPrimitives)(
 		SDL_GpuCommandBuffer *commandBuffer,
@@ -488,16 +473,9 @@ struct SDL_GpuDevice
         Uint32 bindingCount
     );
 
-    void (*BindComputeUniformBuffers)(
-        SDL_GpuCommandBuffer *renderPass,
-        Uint32 firstSlot,
-        SDL_GpuUniformBufferBinding *uniformBufferBindings,
-        Uint32 bindingCount
-    );
-
 	void (*PushComputeUniformData)(
 		SDL_GpuCommandBuffer *commandBuffer,
-		SDL_GpuUniformBuffer *uniformBuffer,
+		Uint32 slotIndex,
 		void *data,
 		Uint32 dataLengthInBytes
 	);
@@ -742,7 +720,6 @@ struct SDL_GpuDevice
 	ASSIGN_DRIVER_FUNC(CreateShader, name) \
 	ASSIGN_DRIVER_FUNC(CreateTexture, name) \
 	ASSIGN_DRIVER_FUNC(CreateGpuBuffer, name) \
-	ASSIGN_DRIVER_FUNC(CreateUniformBuffer, name) \
 	ASSIGN_DRIVER_FUNC(CreateTransferBuffer, name) \
     ASSIGN_DRIVER_FUNC(CreateOcclusionQuery, name) \
 	ASSIGN_DRIVER_FUNC(SetGpuBufferName, name) \
@@ -751,7 +728,6 @@ struct SDL_GpuDevice
 	ASSIGN_DRIVER_FUNC(QueueDestroyTexture, name) \
 	ASSIGN_DRIVER_FUNC(QueueDestroySampler, name) \
 	ASSIGN_DRIVER_FUNC(QueueDestroyGpuBuffer, name) \
-	ASSIGN_DRIVER_FUNC(QueueDestroyUniformBuffer, name) \
 	ASSIGN_DRIVER_FUNC(QueueDestroyTransferBuffer, name) \
 	ASSIGN_DRIVER_FUNC(QueueDestroyShader, name) \
 	ASSIGN_DRIVER_FUNC(QueueDestroyComputePipeline, name) \
@@ -766,12 +742,11 @@ struct SDL_GpuDevice
     ASSIGN_DRIVER_FUNC(BindVertexSamplers, name) \
     ASSIGN_DRIVER_FUNC(BindVertexStorageTextures, name) \
     ASSIGN_DRIVER_FUNC(BindVertexStorageBuffers, name) \
-    ASSIGN_DRIVER_FUNC(BindVertexUniformBuffers, name) \
     ASSIGN_DRIVER_FUNC(BindFragmentSamplers, name) \
     ASSIGN_DRIVER_FUNC(BindFragmentStorageTextures, name) \
     ASSIGN_DRIVER_FUNC(BindFragmentStorageBuffers, name) \
-    ASSIGN_DRIVER_FUNC(BindFragmentUniformBuffers, name) \
-	ASSIGN_DRIVER_FUNC(PushGraphicsUniformData, name) \
+	ASSIGN_DRIVER_FUNC(PushVertexUniformData, name) \
+    ASSIGN_DRIVER_FUNC(PushFragmentUniformData, name) \
 	ASSIGN_DRIVER_FUNC(DrawInstancedPrimitives, name) \
 	ASSIGN_DRIVER_FUNC(DrawPrimitives, name) \
 	ASSIGN_DRIVER_FUNC(DrawPrimitivesIndirect, name) \
@@ -782,7 +757,6 @@ struct SDL_GpuDevice
     ASSIGN_DRIVER_FUNC(BindComputeRWStorageTextures, name) \
     ASSIGN_DRIVER_FUNC(BindComputeStorageBuffers, name) \
     ASSIGN_DRIVER_FUNC(BindComputeRWStorageBuffers, name) \
-    ASSIGN_DRIVER_FUNC(BindComputeUniformBuffers, name) \
 	ASSIGN_DRIVER_FUNC(PushComputeUniformData, name) \
 	ASSIGN_DRIVER_FUNC(DispatchCompute, name) \
 	ASSIGN_DRIVER_FUNC(EndComputePass, name) \

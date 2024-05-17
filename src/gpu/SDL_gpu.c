@@ -56,9 +56,21 @@
         return; \
     }
 
+#define CHECK_GRAPHICS_PIPELINE_BOUND \
+    if (!((CommandBufferCommonHeader*) RENDERPASS_COMMAND_BUFFER)->graphicsPipelineBound) { \
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Graphics pipeline not bound!"); \
+        return; \
+    }
+
 #define CHECK_COMPUTEPASS \
     if (!((Pass*) computePass)->inProgress) { \
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Compute pass not in progress!"); \
+        return; \
+    }
+
+#define CHECK_COMPUTE_PIPELINE_BOUND \
+    if (!((CommandBufferCommonHeader*) COMPUTEPASS_COMMAND_BUFFER)->computePipelineBound) { \
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Compute pipeline not bound!"); \
         return; \
     }
 
@@ -400,17 +412,6 @@ SDL_GpuBuffer* SDL_GpuCreateGpuBuffer(
 	);
 }
 
-SDL_GpuUniformBuffer* SDL_GpuCreateUniformBuffer(
-	SDL_GpuDevice *device,
-	Uint32 sizeInBytes
-) {
-	NULL_ASSERT(device)
-	return device->CreateUniformBuffer(
-		device->driverData,
-		sizeInBytes
-	);
-}
-
 SDL_GpuTransferBuffer* SDL_GpuCreateTransferBuffer(
 	SDL_GpuDevice *device,
 	SDL_GpuTransferUsage usage,
@@ -513,17 +514,6 @@ void SDL_GpuQueueDestroyGpuBuffer(
 	);
 }
 
-void SDL_GpuQueueDestroyUniformBuffer(
-	SDL_GpuDevice *device,
-	SDL_GpuUniformBuffer *uniformBuffer
-) {
-	NULL_ASSERT(device);
-	device->QueueDestroyUniformBuffer(
-		device->driverData,
-		uniformBuffer
-	);
-}
-
 void SDL_GpuQueueDestroyTransferBuffer(
 	SDL_GpuDevice *device,
 	SDL_GpuTransferBuffer *transferBuffer
@@ -607,11 +597,16 @@ void SDL_GpuBindGraphicsPipeline(
 	SDL_GpuRenderPass *renderPass,
 	SDL_GpuGraphicsPipeline *graphicsPipeline
 ) {
+    CommandBufferCommonHeader *commandBufferHeader;
+
     NULL_ASSERT(renderPass)
 	RENDERPASS_DEVICE->BindGraphicsPipeline(
 		RENDERPASS_COMMAND_BUFFER,
 		graphicsPipeline
 	);
+
+    commandBufferHeader = (CommandBufferCommonHeader*) RENDERPASS_COMMAND_BUFFER;
+    commandBufferHeader->graphicsPipelineBound = SDL_TRUE;
 }
 
 void SDL_GpuSetViewport(
@@ -646,6 +641,7 @@ void SDL_GpuBindVertexBuffers(
 ) {
 	NULL_ASSERT(renderPass)
     CHECK_RENDERPASS
+    CHECK_GRAPHICS_PIPELINE_BOUND
 	RENDERPASS_DEVICE->BindVertexBuffers(
 		RENDERPASS_COMMAND_BUFFER,
 		firstBinding,
@@ -661,6 +657,7 @@ void SDL_GpuBindIndexBuffer(
 ) {
 	NULL_ASSERT(renderPass)
     CHECK_RENDERPASS
+    CHECK_GRAPHICS_PIPELINE_BOUND
 	RENDERPASS_DEVICE->BindIndexBuffer(
 		RENDERPASS_COMMAND_BUFFER,
 		pBinding,
@@ -676,6 +673,7 @@ void SDL_GpuBindVertexSamplers(
 ) {
     NULL_ASSERT(renderPass)
     CHECK_RENDERPASS
+    CHECK_GRAPHICS_PIPELINE_BOUND
     RENDERPASS_DEVICE->BindVertexSamplers(
         RENDERPASS_COMMAND_BUFFER,
         firstSlot,
@@ -692,6 +690,7 @@ void SDL_GpuBindVertexStorageTextures(
 ) {
     NULL_ASSERT(renderPass)
     CHECK_RENDERPASS
+    CHECK_GRAPHICS_PIPELINE_BOUND
     RENDERPASS_DEVICE->BindVertexStorageTextures(
         RENDERPASS_COMMAND_BUFFER,
         firstSlot,
@@ -708,26 +707,11 @@ void SDL_GpuBindVertexStorageBuffers(
 ) {
     NULL_ASSERT(renderPass)
     CHECK_RENDERPASS
+    CHECK_GRAPHICS_PIPELINE_BOUND
     RENDERPASS_DEVICE->BindVertexStorageBuffers(
         RENDERPASS_COMMAND_BUFFER,
         firstSlot,
         storageBuffers,
-        bindingCount
-    );
-}
-
-void SDL_GpuBindVertexUniformBuffers(
-    SDL_GpuRenderPass *renderPass,
-    Uint32 firstSlot,
-    SDL_GpuUniformBufferBinding *uniformBufferBindings,
-    Uint32 bindingCount
-) {
-    NULL_ASSERT(renderPass)
-    CHECK_RENDERPASS
-    RENDERPASS_DEVICE->BindVertexUniformBuffers(
-        RENDERPASS_COMMAND_BUFFER,
-        firstSlot,
-        uniformBufferBindings,
         bindingCount
     );
 }
@@ -740,6 +724,7 @@ void SDL_GpuBindFragmentSamplers(
 ) {
     NULL_ASSERT(renderPass)
     CHECK_RENDERPASS
+    CHECK_GRAPHICS_PIPELINE_BOUND
     RENDERPASS_DEVICE->BindFragmentSamplers(
         RENDERPASS_COMMAND_BUFFER,
         firstSlot,
@@ -756,6 +741,7 @@ void SDL_GpuBindFragmentStorageTextures(
 ) {
     NULL_ASSERT(renderPass)
     CHECK_RENDERPASS
+    CHECK_GRAPHICS_PIPELINE_BOUND
     RENDERPASS_DEVICE->BindFragmentStorageTextures(
         RENDERPASS_COMMAND_BUFFER,
         firstSlot,
@@ -772,6 +758,7 @@ void SDL_GpuBindFragmentStorageBuffers(
 ) {
     NULL_ASSERT(renderPass)
     CHECK_RENDERPASS
+    CHECK_GRAPHICS_PIPELINE_BOUND
     RENDERPASS_DEVICE->BindFragmentStorageBuffers(
         RENDERPASS_COMMAND_BUFFER,
         firstSlot,
@@ -780,36 +767,38 @@ void SDL_GpuBindFragmentStorageBuffers(
     );
 }
 
-void SDL_GpuBindFragmentUniformBuffers(
-    SDL_GpuRenderPass *renderPass,
-    Uint32 firstSlot,
-    SDL_GpuUniformBufferBinding *uniformBufferBindings,
-    Uint32 bindingCount
-) {
-    NULL_ASSERT(renderPass)
-    CHECK_RENDERPASS
-    RENDERPASS_DEVICE->BindFragmentUniformBuffers(
-        RENDERPASS_COMMAND_BUFFER,
-        firstSlot,
-        uniformBufferBindings,
-        bindingCount
-    );
-}
-
-void SDL_GpuPushGraphicsUniformData(
+void SDL_GpuPushVertexUniformData(
 	SDL_GpuRenderPass *renderPass,
-	SDL_GpuUniformBuffer *uniformBuffer,
+	Uint32 slotIndex,
 	void *data,
 	Uint32 dataLengthInBytes
 ) {
-	NULL_ASSERT(uniformBuffer)
+	NULL_ASSERT(renderPass)
 	CHECK_RENDERPASS
-	RENDERPASS_DEVICE->PushGraphicsUniformData(
+    CHECK_GRAPHICS_PIPELINE_BOUND
+	RENDERPASS_DEVICE->PushVertexUniformData(
 		RENDERPASS_COMMAND_BUFFER,
-		uniformBuffer,
+		slotIndex,
 		data,
 		dataLengthInBytes
 	);
+}
+
+void SDL_GpuPushFragmentUniformData(
+    SDL_GpuRenderPass *renderPass,
+	Uint32 slotIndex,
+	void *data,
+	Uint32 dataLengthInBytes
+) {
+    NULL_ASSERT(renderPass)
+    CHECK_RENDERPASS
+    CHECK_GRAPHICS_PIPELINE_BOUND
+    RENDERPASS_DEVICE->PushFragmentUniformData(
+        RENDERPASS_COMMAND_BUFFER,
+        slotIndex,
+        data,
+        dataLengthInBytes
+    );
 }
 
 void SDL_GpuDrawInstancedPrimitives(
@@ -821,6 +810,7 @@ void SDL_GpuDrawInstancedPrimitives(
 ) {
 	NULL_ASSERT(renderPass)
     CHECK_RENDERPASS
+    CHECK_GRAPHICS_PIPELINE_BOUND
 	RENDERPASS_DEVICE->DrawInstancedPrimitives(
 		RENDERPASS_COMMAND_BUFFER,
 		baseVertex,
@@ -837,6 +827,7 @@ void SDL_GpuDrawPrimitives(
 ) {
 	NULL_ASSERT(renderPass)
     CHECK_RENDERPASS
+    CHECK_GRAPHICS_PIPELINE_BOUND
 	RENDERPASS_DEVICE->DrawPrimitives(
 		RENDERPASS_COMMAND_BUFFER,
 		vertexStart,
@@ -853,6 +844,7 @@ void SDL_GpuDrawPrimitivesIndirect(
 ) {
 	NULL_ASSERT(renderPass)
     CHECK_RENDERPASS
+    CHECK_GRAPHICS_PIPELINE_BOUND
 	RENDERPASS_DEVICE->DrawPrimitivesIndirect(
 		RENDERPASS_COMMAND_BUFFER,
 		gpuBuffer,
@@ -865,13 +857,17 @@ void SDL_GpuDrawPrimitivesIndirect(
 void SDL_GpuEndRenderPass(
     SDL_GpuRenderPass *renderPass
 ) {
+    CommandBufferCommonHeader *commandBufferCommonHeader;
+
 	NULL_ASSERT(renderPass)
     CHECK_RENDERPASS
 	RENDERPASS_DEVICE->EndRenderPass(
 		RENDERPASS_COMMAND_BUFFER
 	);
 
-    ((CommandBufferCommonHeader*) RENDERPASS_COMMAND_BUFFER)->renderPass.inProgress = SDL_FALSE;
+    commandBufferCommonHeader = (CommandBufferCommonHeader*) RENDERPASS_COMMAND_BUFFER;
+    commandBufferCommonHeader->renderPass.inProgress = SDL_FALSE;
+    commandBufferCommonHeader->graphicsPipelineBound = SDL_FALSE;
 }
 
 /* Compute Pass */
@@ -896,12 +892,18 @@ void SDL_GpuBindComputePipeline(
 	SDL_GpuComputePass *computePass,
 	SDL_GpuComputePipeline *computePipeline
 ) {
+    CommandBufferCommonHeader* commandBufferHeader;
+
 	NULL_ASSERT(computePass)
     CHECK_COMPUTEPASS
 	COMPUTEPASS_DEVICE->BindComputePipeline(
 		COMPUTEPASS_COMMAND_BUFFER,
 		computePipeline
 	);
+
+    commandBufferHeader = (CommandBufferCommonHeader*) COMPUTEPASS_COMMAND_BUFFER;
+    commandBufferHeader->computePipelineBound = SDL_TRUE;
+
 }
 
 void SDL_GpuBindComputeStorageTextures(
@@ -912,6 +914,7 @@ void SDL_GpuBindComputeStorageTextures(
 ) {
     NULL_ASSERT(computePass)
     CHECK_COMPUTEPASS
+    CHECK_COMPUTE_PIPELINE_BOUND
     COMPUTEPASS_DEVICE->BindComputeStorageTextures(
         COMPUTEPASS_COMMAND_BUFFER,
         firstSlot,
@@ -928,6 +931,7 @@ void SDL_GpuBindComputeRWStorageTextures(
 ) {
     NULL_ASSERT(computePass)
     CHECK_COMPUTEPASS
+    CHECK_COMPUTE_PIPELINE_BOUND
     COMPUTEPASS_DEVICE->BindComputeRWStorageTextures(
         COMPUTEPASS_COMMAND_BUFFER,
         firstSlot,
@@ -944,6 +948,7 @@ void SDL_GpuBindComputeStorageBuffers(
 ) {
     NULL_ASSERT(computePass)
     CHECK_COMPUTEPASS
+    CHECK_COMPUTE_PIPELINE_BOUND
     COMPUTEPASS_DEVICE->BindComputeStorageBuffers(
         COMPUTEPASS_COMMAND_BUFFER,
         firstSlot,
@@ -960,6 +965,7 @@ void SDL_GpuBindComputeRWStorageBuffers(
 ) {
     NULL_ASSERT(computePass)
     CHECK_COMPUTEPASS
+    CHECK_COMPUTE_PIPELINE_BOUND
     COMPUTEPASS_DEVICE->BindComputeRWStorageBuffers(
         COMPUTEPASS_COMMAND_BUFFER,
         firstSlot,
@@ -968,33 +974,18 @@ void SDL_GpuBindComputeRWStorageBuffers(
     );
 }
 
-void SDL_GpuBindComputeUniformBuffers(
-    SDL_GpuComputePass *computePass,
-    Uint32 firstSlot,
-    SDL_GpuUniformBufferBinding *uniformBufferBindings,
-    Uint32 bindingCount
-) {
-    NULL_ASSERT(computePass)
-    CHECK_COMPUTEPASS
-    COMPUTEPASS_DEVICE->BindComputeUniformBuffers(
-        COMPUTEPASS_COMMAND_BUFFER,
-        firstSlot,
-        uniformBufferBindings,
-        bindingCount
-    );
-}
-
 void SDL_GpuPushComputeUniformData(
 	SDL_GpuComputePass *computePass,
-	SDL_GpuUniformBuffer *uniformBuffer,
+	Uint32 slotIndex,
 	void *data,
 	Uint32 dataLengthInBytes
 ) {
 	NULL_ASSERT(computePass)
 	CHECK_COMPUTEPASS
+    CHECK_COMPUTE_PIPELINE_BOUND
 	COMPUTEPASS_DEVICE->PushComputeUniformData(
 		COMPUTEPASS_COMMAND_BUFFER,
-		uniformBuffer,
+		slotIndex,
 		data,
 		dataLengthInBytes
 	);
@@ -1008,6 +999,7 @@ void SDL_GpuDispatchCompute(
 ) {
 	NULL_ASSERT(computePass)
     CHECK_COMPUTEPASS
+    CHECK_COMPUTE_PIPELINE_BOUND
 	COMPUTEPASS_DEVICE->DispatchCompute(
 		COMPUTEPASS_COMMAND_BUFFER,
 		groupCountX,
@@ -1019,13 +1011,17 @@ void SDL_GpuDispatchCompute(
 void SDL_GpuEndComputePass(
 	SDL_GpuComputePass *computePass
 ) {
+    CommandBufferCommonHeader* commandBufferCommonHeader;
+
 	NULL_ASSERT(computePass)
     CHECK_COMPUTEPASS
 	COMPUTEPASS_DEVICE->EndComputePass(
         COMPUTEPASS_COMMAND_BUFFER
 	);
 
-    ((CommandBufferCommonHeader*) COMPUTEPASS_COMMAND_BUFFER)->computePass.inProgress = SDL_FALSE;
+    commandBufferCommonHeader = (CommandBufferCommonHeader*) COMPUTEPASS_COMMAND_BUFFER;
+    commandBufferCommonHeader->computePass.inProgress = SDL_FALSE;
+    commandBufferCommonHeader->computePipelineBound = SDL_FALSE;
 }
 
 /* TransferBuffer Data */
@@ -1334,8 +1330,10 @@ SDL_GpuCommandBuffer* SDL_GpuAcquireCommandBuffer(
     commandBufferHeader->device = device;
     commandBufferHeader->renderPass.commandBuffer = commandBuffer;
     commandBufferHeader->renderPass.inProgress = SDL_FALSE;
+    commandBufferHeader->graphicsPipelineBound = SDL_FALSE;
     commandBufferHeader->computePass.commandBuffer = commandBuffer;
     commandBufferHeader->computePass.inProgress = SDL_FALSE;
+    commandBufferHeader->computePipelineBound = SDL_FALSE;
     commandBufferHeader->copyPass.commandBuffer = commandBuffer;
     commandBufferHeader->copyPass.inProgress = SDL_FALSE;
     commandBufferHeader->submitted = SDL_FALSE;
