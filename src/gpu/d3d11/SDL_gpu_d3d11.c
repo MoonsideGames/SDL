@@ -3119,21 +3119,20 @@ static void D3D11_UploadToTexture(
 		bufferImageHeight = h * SDL_GpuTextureFormatTexelBlockSize(textureSubresource->parent->format);
 	}
 
-	D3D11_BOX dstBox;
-	dstBox.left = textureRegion->x;
-	dstBox.top = textureRegion->y;
-	dstBox.front = textureRegion->z;
-	dstBox.right = textureRegion->x + w;
-	dstBox.bottom = textureRegion->y + h;
-	dstBox.back = textureRegion->z + textureRegion->d;
+	D3D11_BOX stagingTextureBox;
+	stagingTextureBox.left = textureRegion->x;
+	stagingTextureBox.top = textureRegion->y;
+	stagingTextureBox.front = textureRegion->z;
+	stagingTextureBox.right = textureRegion->x + w;
+	stagingTextureBox.bottom = textureRegion->y + h;
+	stagingTextureBox.back = textureRegion->z + textureRegion->d;
 
-    D3D11_BOX srcBox;
-    srcBox.left = 0;
-    srcBox.top = 0;
-    srcBox.front = 0;
-    srcBox.right = w;
-    srcBox.bottom = h;
-    srcBox.back = textureRegion->d;
+    stagingTextureBox.left = 0;
+    stagingTextureBox.top = 0;
+    stagingTextureBox.front = 0;
+    stagingTextureBox.right = w;
+    stagingTextureBox.bottom = h;
+    stagingTextureBox.back = textureRegion->d;
 
     /* UpdateSubresource1 is completely busted on AMD, it truncates after X bytes.
      * So we get to do this Fun (Tm) workaround where we create a staging texture
@@ -3165,7 +3164,7 @@ static void D3D11_UploadToTexture(
         renderer->immediateContext,
         stagingTexture->activeTexture->handle,
         0,
-        &dstBox,
+        &stagingTextureBox,
         (Uint8*) d3d11TransferBuffer->textureTransfer.data + copyParams->bufferOffset,
         bufferStride,
         bufferStride * bufferImageHeight
@@ -3176,12 +3175,12 @@ static void D3D11_UploadToTexture(
         d3d11CommandBuffer->context,
         textureSubresource->parent->handle,
         textureSubresource->index,
-        0,
-        0,
-        0,
+        textureRegion->x,
+        textureRegion->y,
+        textureRegion->z,
         stagingTexture->activeTexture->handle,
         0,
-        &srcBox,
+        &stagingTextureBox,
         D3D11_COPY_NO_OVERWRITE
     );
 
