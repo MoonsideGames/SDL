@@ -2617,11 +2617,10 @@ static SDL_GpuBuffer* D3D11_CreateGpuBuffer(
 	return (SDL_GpuBuffer*) container;
 }
 
-static D3D11CommandBuffer *D3D11_INTERNAL_CreateUniformBuffer(
-    SDL_GpuRenderer *driverData,
+static D3D11UniformBuffer *D3D11_INTERNAL_CreateUniformBuffer(
+    D3D11Renderer *renderer,
     Uint32 sizeInBytes
 ) {
-    D3D11Renderer *renderer = (D3D11Renderer*) driverData;
     D3D11UniformBuffer *uniformBuffer;
 	D3D11BufferContainer *container;
 	D3D11Buffer *buffer;
