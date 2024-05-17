@@ -33,7 +33,6 @@
 typedef struct RenderState
 {
     SDL_GpuBuffer *buf_vertex;
-    SDL_GpuUniformBuffer *buf_uniform;
     SDL_GpuGraphicsPipeline *pipeline;
 } RenderState;
 
@@ -65,9 +64,6 @@ static void shutdownGpu(void)
     /* API FIXME: Should we gracefully handle NULL pointers being passed to these functions? */
     if (render_state.buf_vertex) {
         SDL_GpuQueueDestroyGpuBuffer(gpu_device, render_state.buf_vertex);
-    }
-    if (render_state.buf_uniform) {
-        SDL_GpuQueueDestroyUniformBuffer(gpu_device, render_state.buf_uniform);
     }
     if (render_state.pipeline) {
         SDL_GpuQueueDestroyGraphicsPipeline(gpu_device, render_state.pipeline);
@@ -285,7 +281,6 @@ Render(SDL_Window *window, const int windownum)
     SDL_GpuCommandBuffer *cmd;
     SDL_GpuRenderPass *pass;
     SDL_GpuBufferBinding vertex_binding;
-    SDL_GpuUniformBufferBinding uniform_binding;
 
     /* Acquire the swapchain texture */
 
@@ -357,16 +352,12 @@ Render(SDL_Window *window, const int windownum)
     vertex_binding.gpuBuffer = render_state.buf_vertex;
     vertex_binding.offset = 0;
 
-    uniform_binding.uniformBuffer = render_state.buf_uniform;
-    uniform_binding.uniformDataSizeInBytes = sizeof(matrix_final);
-
     /* Draw the cube! */
 
     pass = SDL_GpuBeginRenderPass(cmd, &color_attachment, 1, &depth_attachment);
     SDL_GpuBindGraphicsPipeline(pass, render_state.pipeline);
     SDL_GpuBindVertexBuffers(pass, 0, 1, &vertex_binding);
-    SDL_GpuBindVertexUniformBuffers(pass, 0, &uniform_binding, 1);
-    SDL_GpuPushGraphicsUniformData(pass, render_state.buf_uniform, matrix_final, sizeof(matrix_final));
+    SDL_GpuPushVertexUniformData(pass, 0, matrix_final, sizeof(matrix_final));
     SDL_GpuDrawPrimitives(pass, 0, 12);
     SDL_GpuEndRenderPass(pass);
 
@@ -447,12 +438,6 @@ init_render_state(void)
         sizeof(vertex_data)
     );
     CHECK_CREATE(render_state.buf_vertex, "Static vertex buffer")
-
-    render_state.buf_uniform = SDL_GpuCreateUniformBuffer(
-        gpu_device,
-        1024 * 1024 /* FIXME: What's a reasonable size for this? */
-    );
-    CHECK_CREATE(render_state.buf_uniform, "Uniform buffer");
 
     buf_transfer = SDL_GpuCreateTransferBuffer(
         gpu_device,
