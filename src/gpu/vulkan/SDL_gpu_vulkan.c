@@ -5525,7 +5525,7 @@ static void VULKAN_INTERNAL_BindGraphicsDescriptorSets(
 
             bufferInfos[bufferInfoCount].buffer = commandBuffer->vertexUniformBuffers[i]->bufferContainer->activeBufferHandle->vulkanBuffer->buffer;
             bufferInfos[bufferInfoCount].offset = 0;
-            bufferInfos[bufferInfoCount].range = VK_WHOLE_SIZE;
+            bufferInfos[bufferInfoCount].range = MAX_UBO_SECTION_SIZE;
 
             currentWriteDescriptorSet->pBufferInfo = &bufferInfos[bufferInfoCount];
 
@@ -5711,7 +5711,7 @@ static void VULKAN_INTERNAL_BindGraphicsDescriptorSets(
 
             bufferInfos[bufferInfoCount].buffer = commandBuffer->fragmentUniformBuffers[i]->bufferContainer->activeBufferHandle->vulkanBuffer->buffer;
             bufferInfos[bufferInfoCount].offset = 0;
-            bufferInfos[bufferInfoCount].range = VK_WHOLE_SIZE;
+            bufferInfos[bufferInfoCount].range = MAX_UBO_SECTION_SIZE;
 
             currentWriteDescriptorSet->pBufferInfo = &bufferInfos[bufferInfoCount];
 
@@ -8247,6 +8247,9 @@ static void VULKAN_INTERNAL_PushUniformData(
             uniformBuffer->bufferContainer
         );
 
+        uniformBuffer->drawOffset = 0;
+        uniformBuffer->offset = 0;
+
         VULKAN_INTERNAL_TrackBuffer(
             renderer,
             commandBuffer,
@@ -9200,7 +9203,7 @@ static void VULKAN_INTERNAL_BindComputeDescriptorSets(
 
             bufferInfos[bufferInfoCount].buffer = commandBuffer->computeUniformBuffers[i]->bufferContainer->activeBufferHandle->vulkanBuffer->buffer;
             bufferInfos[bufferInfoCount].offset = 0;
-            bufferInfos[bufferInfoCount].range = VK_WHOLE_SIZE;
+            bufferInfos[bufferInfoCount].range = MAX_UBO_SECTION_SIZE;
 
             currentWriteDescriptorSet->pBufferInfo = &bufferInfos[bufferInfoCount];
 
@@ -10247,19 +10250,16 @@ static SDL_GpuCommandBuffer* VULKAN_AcquireCommandBuffer(
     SDL_memset(commandBuffer->vertexSamplers, 0, MAX_TEXTURE_SAMPLERS_PER_STAGE * sizeof(VulkanSampler*));
     SDL_memset(commandBuffer->vertexStorageTextureSlices, 0, MAX_STORAGE_TEXTURES_PER_STAGE * sizeof(VulkanTextureSlice*));
     SDL_memset(commandBuffer->vertexStorageBuffers, 0, MAX_STORAGE_BUFFERS_PER_STAGE * sizeof(VulkanBuffer*));
-    SDL_memset(commandBuffer->vertexUniformBuffers, 0, MAX_UNIFORM_BUFFERS_PER_STAGE * sizeof(VulkanUniformBuffer*));
 
     SDL_memset(commandBuffer->fragmentSamplerTextures, 0, MAX_TEXTURE_SAMPLERS_PER_STAGE * sizeof(VulkanTexture*));
     SDL_memset(commandBuffer->fragmentSamplers, 0, MAX_TEXTURE_SAMPLERS_PER_STAGE * sizeof(VulkanSampler*));
     SDL_memset(commandBuffer->fragmentStorageTextureSlices, 0, MAX_STORAGE_TEXTURES_PER_STAGE * sizeof(VulkanTextureSlice*));
     SDL_memset(commandBuffer->fragmentStorageBuffers, 0, MAX_STORAGE_BUFFERS_PER_STAGE * sizeof(VulkanBuffer*));
-    SDL_memset(commandBuffer->fragmentUniformBuffers, 0, MAX_UNIFORM_BUFFERS_PER_STAGE * sizeof(VulkanUniformBuffer*));
 
     SDL_memset(commandBuffer->readOnlyComputeStorageTextureSlices, 0, MAX_STORAGE_TEXTURES_PER_STAGE * sizeof(VulkanTextureSlice*));
     SDL_memset(commandBuffer->readWriteComputeStorageTextureSlices, 0, MAX_STORAGE_TEXTURES_PER_STAGE * sizeof(VulkanTextureSlice*));
     SDL_memset(commandBuffer->readOnlyComputeStorageBuffers, 0, MAX_STORAGE_BUFFERS_PER_STAGE * sizeof(VulkanBuffer*));
     SDL_memset(commandBuffer->readWriteComputeStorageBuffers, 0, MAX_STORAGE_BUFFERS_PER_STAGE * sizeof(VulkanBuffer*));
-    SDL_memset(commandBuffer->computeUniformBuffers, 0, MAX_UNIFORM_BUFFERS_PER_STAGE * sizeof(VulkanUniformBuffer*));
 
     commandBuffer->autoReleaseFence = 1;
 
