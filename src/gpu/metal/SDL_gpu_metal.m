@@ -377,33 +377,6 @@ typedef struct MetalShader
     id<MTLFunction> function;
 } MetalShader;
 
-typedef struct MetalShaderResourceBindSlot
-{
-    SDL_GpuShaderStageFlagBits shaderStageFlag;
-    Uint32 slot;
-} MetalShaderResourceBindSlot;
-
-typedef struct MetalShaderResourceInfo
-{
-    SDL_GpuShaderResourceType resourceType;
-
-    /* Covers case where the same resource can bind to vertex and fragment */
-    MetalShaderResourceBindSlot bindSlots[2];
-    Uint32 bindSlotCount;
-} MetalShaderResourceInfo;
-
-typedef struct MetalShaderResourceSet
-{
-    MetalShaderResourceInfo *resourceInfos;
-    Uint32 resourceInfoCount;
-} MetalShaderResourceSet;
-
-typedef struct MetalShaderResourceLayout
-{
-    MetalShaderResourceSet *resourceSets;
-    Uint32 resourceSetCount;
-} MetalShaderResourceLayout;
-
 typedef struct MetalGraphicsPipeline
 {
     id<MTLRenderPipelineState> handle;
@@ -419,8 +392,6 @@ typedef struct MetalGraphicsPipeline
 
     MetalShader *vertexShader;
     MetalShader *fragmentShader;
-
-    MetalShaderResourceLayout resourceLayout;
 } MetalGraphicsPipeline;
 
 typedef struct MetalBuffer
@@ -504,18 +475,6 @@ typedef struct MetalCommandBuffer
     Uint32 usedTextureCount;
     Uint32 usedTextureCapacity;
 } MetalCommandBuffer;
-
-typedef struct MetalUniformBuffer
-{
-    MetalBufferContainer *bufferContainer;
-
-    /* Covers case where the same uniform buffer can bind to vertex and fragment */
-    MetalShaderResourceBindSlot bindSlots[2];
-    Uint32 bindSlotCount;
-
-    Uint32 offset; /* number of bytes written */
-    Uint32 currentBlockSize;
-} MetalUniformBuffer;
 
 typedef struct MetalSampler
 {
@@ -750,16 +709,6 @@ static void METAL_QueueDestroyGpuBuffer(
     renderer->bufferContainersToDestroyCount += 1;
 
     SDL_UnlockMutex(renderer->disposeLock);
-}
-
-static void METAL_QueueDestroyUniformBuffer(
-    SDL_GpuRenderer *driverData,
-    SDL_GpuUniformBuffer *uniformBuffer
-) {
-    (void) driverData; /* used by other backends */
-    MetalUniformBuffer *metalUniformBuffer = (MetalUniformBuffer*) uniformBuffer;
-    METAL_QueueDestroyGpuBuffer(driverData, (SDL_GpuBuffer*) metalUniformBuffer->bufferContainer);
-    SDL_free(metalUniformBuffer);
 }
 
 static void METAL_QueueDestroyTransferBuffer(
@@ -1318,45 +1267,6 @@ static SDL_GpuBuffer* METAL_CreateGpuBuffer(
     return (SDL_GpuBuffer*) container;
 }
 
-SDL_GpuUniformBuffer* METAL_CreateUniformBuffer(
-    SDL_GpuRenderer *driverData,
-    Uint32 sizeInBytes
-) {
-    MetalRenderer *renderer = (MetalRenderer*) driverData;
-    MetalUniformBuffer *uniformBuffer;
-    MetalBufferContainer *container;
-    MetalBuffer *buffer;
-
-    buffer = METAL_INTERNAL_CreateBuffer(
-        renderer,
-        sizeInBytes
-    );
-
-    if (buffer == NULL)
-    {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to create UniformBuffer!");
-        return NULL;
-    }
-
-    container = SDL_malloc(sizeof(MetalBufferContainer));
-    container->activeBuffer = buffer;
-    container->bufferCapacity = 1;
-    container->bufferCount = 1;
-    container->buffers = SDL_malloc(
-        container->bufferCapacity * sizeof(MetalBuffer*)
-    );
-    container->buffers[0] = container->activeBuffer;
-    container->debugName = NULL;
-
-    uniformBuffer = SDL_malloc(sizeof(MetalUniformBuffer));
-    uniformBuffer->bufferContainer = container;
-    uniformBuffer->offset = 0;
-    uniformBuffer->currentBlockSize = 0;
-    uniformBuffer->bindSlotCount = 0;
-
-    return (SDL_GpuUniformBuffer*) uniformBuffer;
-}
-
 static void METAL_INTERNAL_CycleActiveBuffer(
     MetalRenderer *renderer,
     MetalBufferContainer *container
@@ -1853,52 +1763,6 @@ static SDL_GpuCommandBuffer* METAL_AcquireCommandBuffer(
     return (SDL_GpuCommandBuffer*) commandBuffer;
 }
 
-static void METAL_INTERNAL_BindResourceSet(
-    SDL_GpuCommandBuffer *commandBuffer,
-    SDL_bool graphics, /* if not graphics, it's compute! */
-    Uint32 setIndex,
-    SDL_GpuShaderResourceBinding *resourceBindings,
-    Uint32 resourceBindingCount
-) {
-    NOT_IMPLEMENTED
-}
-
-static void METAL_INTERNAL_PushUniformData(
-    SDL_GpuCommandBuffer *commandBuffer,
-    SDL_GpuUniformBuffer *uniformBuffer,
-    void *data,
-    Uint32 dataLengthInBytes
-) {
-    MetalCommandBuffer *metalCommandBuffer = (MetalCommandBuffer*) commandBuffer;
-    MetalUniformBuffer *metalUniformBuffer = (MetalUniformBuffer*) uniformBuffer;
-
-    /* Cycle if we're out of room */
-    if (metalUniformBuffer->offset + metalUniformBuffer->currentBlockSize >= metalUniformBuffer->bufferContainer->activeBuffer->size)
-    {
-        METAL_INTERNAL_CycleActiveBuffer(
-            metalCommandBuffer->renderer,
-            metalUniformBuffer->bufferContainer
-        );
-
-        metalUniformBuffer->offset = 0;
-
-        METAL_INTERNAL_TrackBuffer(
-            metalCommandBuffer,
-            metalUniformBuffer->bufferContainer->activeBuffer
-        );
-    }
-
-    SDL_memcpy(
-        (Uint8*) metalUniformBuffer->bufferContainer->activeBuffer->handle.contents + metalUniformBuffer->offset,
-        data,
-        dataLengthInBytes
-    );
-
-    metalUniformBuffer->offset += metalUniformBuffer->currentBlockSize;
-
-    /* FIXME: Actually bind the uniforms */
-}
-
 static void METAL_BeginRenderPass(
 	SDL_GpuCommandBuffer *commandBuffer,
 	SDL_GpuColorAttachmentInfo *colorAttachmentInfos,
@@ -2112,19 +1976,58 @@ static void METAL_BindIndexBuffer(
     METAL_INTERNAL_TrackBuffer(metalCommandBuffer, metalCommandBuffer->indexBuffer);
 }
 
-static void METAL_BindGraphicsResourceSet(
-   SDL_GpuCommandBuffer *commandBuffer,
-   Uint32 setIndex,
-   SDL_GpuShaderResourceBinding *resourceBindings,
-   Uint32 resourceBindingCount
+static void METAL_BindVertexSamplers(
+    SDL_GpuCommandBuffer *commandBuffer,
+    Uint32 firstSlot,
+    SDL_GpuTextureSamplerBinding *textureSamplerBindings,
+    Uint32 bindingCount
 ) {
-    METAL_INTERNAL_BindResourceSet(
-        commandBuffer,
-        SDL_TRUE,
-        setIndex,
-        resourceBindings,
-        resourceBindingCount
-    );
+    NOT_IMPLEMENTED
+}
+
+static void METAL_BindVertexStorageTextures(
+    SDL_GpuCommandBuffer *commandBuffer,
+    Uint32 firstSlot,
+    SDL_GpuTextureSlice *storageTextureSlices,
+    Uint32 bindingCount
+) {
+    NOT_IMPLEMENTED
+}
+
+static void METAL_BindVertexStorageBuffers(
+    SDL_GpuCommandBuffer *commandBuffer,
+    Uint32 firstSlot,
+    SDL_GpuBuffer **storageBuffers,
+    Uint32 bindingCount
+) {
+    NOT_IMPLEMENTED
+}
+
+static void METAL_BindFragmentSamplers(
+    SDL_GpuCommandBuffer *commandBuffer,
+    Uint32 firstSlot,
+    SDL_GpuTextureSamplerBinding *textureSamplerBindings,
+    Uint32 bindingCount
+) {
+    NOT_IMPLEMENTED
+}
+
+static void METAL_BindFragmentStorageTextures(
+    SDL_GpuCommandBuffer *commandBuffer,
+    Uint32 firstSlot,
+    SDL_GpuTextureSlice *storageTextureSlices,
+    Uint32 bindingCount
+) {
+    NOT_IMPLEMENTED
+}
+
+static void METAL_BindFragmentStorageBuffers(
+    SDL_GpuCommandBuffer *commandBuffer,
+    Uint32 firstSlot,
+    SDL_GpuBuffer **storageBuffers,
+    Uint32 bindingCount
+) {
+    NOT_IMPLEMENTED
 }
 
 static void METAL_DrawInstancedPrimitives(
@@ -2182,18 +2085,22 @@ static void METAL_EndRenderPass(
     /* FIXME: Anything else to do here? */
 }
 
-static void METAL_PushGraphicsUniformData(
+static void METAL_PushVertexUniformData(
     SDL_GpuCommandBuffer *commandBuffer,
-    SDL_GpuUniformBuffer *uniformBuffer,
+    Uint32 slotIndex,
     void *data,
     Uint32 dataLengthInBytes
 ) {
-    METAL_INTERNAL_PushUniformData(
-        commandBuffer,
-        uniformBuffer,
-        data,
-        dataLengthInBytes
-    );
+    NOT_IMPLEMENTED
+}
+
+static void METAL_PushFragmentUniformData(
+    SDL_GpuCommandBuffer *commandBuffer,
+    Uint32 slotIndex,
+    void *data,
+    Uint32 dataLengthInBytes
+) {
+    NOT_IMPLEMENTED
 }
 
 /* Blit */
@@ -2223,33 +2130,49 @@ static void METAL_BindComputePipeline(
 	NOT_IMPLEMENTED
 }
 
-void METAL_BindComputeResourceSet(
+static void METAL_BindComputeStorageTextures(
     SDL_GpuCommandBuffer *commandBuffer,
-    Uint32 setIndex,
-    SDL_GpuShaderResourceBinding *resourceBinding,
-    Uint32 resourceBindingCount
+    Uint32 firstSlot,
+    SDL_GpuTextureSlice *storageTextureSlices,
+    Uint32 bindingCount
 ) {
-    METAL_INTERNAL_BindResourceSet(
-        commandBuffer,
-        SDL_FALSE,
-        setIndex,
-        resourceBinding,
-        resourceBindingCount
-    );
+    NOT_IMPLEMENTED
+}
+
+static void METAL_BindComputeRWStorageTextures(
+    SDL_GpuCommandBuffer *commandBuffer,
+    Uint32 firstSlot,
+    SDL_GpuStorageTextureReadWriteBinding *storageTextureBindings,
+    Uint32 bindingCount
+) {
+    NOT_IMPLEMENTED
+}
+
+static void METAL_BindComputeStorageBuffers(
+    SDL_GpuCommandBuffer *commandBuffer,
+    Uint32 firstSlot,
+    SDL_GpuBuffer **storageBuffers,
+    Uint32 bindingCount
+) {
+    NOT_IMPLEMENTED
+}
+
+static void METAL_BindComputeRWStorageBuffers(
+    SDL_GpuCommandBuffer *commandBuffer,
+    Uint32 firstSlot,
+    SDL_GpuStorageBufferReadWriteBinding *storageBufferBindings,
+    Uint32 bindingCount
+) {
+    NOT_IMPLEMENTED
 }
 
 static void METAL_PushComputeUniformData(
-   SDL_GpuCommandBuffer *commandBuffer,
-   SDL_GpuUniformBuffer *uniformBuffer,
-   void *data,
-   Uint32 dataLengthInBytes
+    SDL_GpuCommandBuffer *commandBuffer,
+    Uint32 slotIndex,
+    void *data,
+    Uint32 dataLengthInBytes
 ) {
-    METAL_INTERNAL_PushUniformData(
-        commandBuffer,
-        uniformBuffer,
-        data,
-        dataLengthInBytes
-    );
+    NOT_IMPLEMENTED
 }
 
 static void METAL_DispatchCompute(
