@@ -11894,7 +11894,7 @@ static Uint8 VULKAN_INTERNAL_CreateInstance(
     appInfo.pApplicationName = NULL;
     appInfo.applicationVersion = 0;
     appInfo.pEngineName = "SDLGPU";
-    appInfo.engineVersion = SDL_COMPILEDVERSION;
+    appInfo.engineVersion = SDL_VERSION;
     appInfo.apiVersion = VK_MAKE_VERSION(1, 0, 0);
 
 
