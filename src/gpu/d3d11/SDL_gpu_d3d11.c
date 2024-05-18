@@ -4078,6 +4078,8 @@ static void D3D11_BindGraphicsPipeline(
 
             d3d11CommandBuffer->vertexUniformBuffers[i]->offset = 0;
             d3d11CommandBuffer->vertexUniformBuffers[i]->drawOffset = 0;
+
+            d3d11CommandBuffer->vertexUniformBufferNeedsReset[i] = SDL_FALSE;
         }
 
         /* stupid workaround for god awful D3D11 drivers
@@ -4120,6 +4122,8 @@ static void D3D11_BindGraphicsPipeline(
 
             d3d11CommandBuffer->fragmentUniformBuffers[i]->offset = 0;
             d3d11CommandBuffer->fragmentUniformBuffers[i]->drawOffset = 0;
+
+            d3d11CommandBuffer->fragmentUniformBufferNeedsReset[i] = SDL_FALSE;
         }
 
         /* stupid workaround for god awful D3D11 drivers
@@ -4805,6 +4809,8 @@ static void D3D11_BindComputePipeline(
 
             d3d11CommandBuffer->computeUniformBuffers[i]->offset = 0;
             d3d11CommandBuffer->computeUniformBuffers[i]->drawOffset = 0;
+
+            d3d11CommandBuffer->computeUniformBufferNeedsReset[i] = SDL_FALSE;
         }
 
         /* stupid workaround for god awful D3D11 drivers
