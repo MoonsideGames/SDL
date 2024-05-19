@@ -1327,6 +1327,7 @@ struct VulkanRenderer
     VkDevice logicalDevice;
     Uint8 integratedMemoryNotification;
     Uint8 outOfDeviceLocalMemoryWarning;
+    Uint8 outofBARMemoryWarning;
 
     Uint8 supportsDebugUtils;
     Uint8 debugMode;
@@ -2512,6 +2513,7 @@ static Uint8 VULKAN_INTERNAL_BindMemoryForBuffer(
     else if (type == VULKAN_BUFFER_TYPE_TRANSFER)
     {
         requiredMemoryPropertyFlags |=
+            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
             VK_MEMORY_PROPERTY_HOST_CACHED_BIT;
 
         ignoredMemoryPropertyFlags |=
@@ -2571,9 +2573,19 @@ static Uint8 VULKAN_INTERNAL_BindMemoryForBuffer(
             requiredMemoryPropertyFlags =
                 VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
                 VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+
+            if (!renderer->outofBARMemoryWarning)
+            {
+                SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "Out of BAR memory, allocating uniform buffers on host-local memory, expect degraded performance!");
+                renderer->outofBARMemoryWarning = 1;
+            }
         }
         else if (type == VULKAN_BUFFER_TYPE_TRANSFER)
         {
+            requiredMemoryPropertyFlags =
+                VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+                VK_MEMORY_PROPERTY_HOST_CACHED_BIT;
+
             if (!renderer->integratedMemoryNotification)
             {
                 SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "Integrated memory detected, allocating TransferBuffers on device-local memory!");
