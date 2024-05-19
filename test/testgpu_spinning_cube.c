@@ -30,6 +30,8 @@
 /* Toggle this to test spirv-cross translation instead of using precompiled shaders */
 #define FORCE_SPIRV_CROSS 0
 
+static Uint32 frames = 0;
+
 typedef struct RenderState
 {
     SDL_GpuBuffer *buf_vertex;
@@ -288,7 +290,7 @@ Render(SDL_Window *window, const int windownum)
     backbuffer = SDL_GpuAcquireSwapchainTexture(cmd, state->windows[windownum], &drawablew, &drawableh);
 
     if (!backbuffer) {
-        SDL_Log("Uhoh, no backbuffer for window #%d!\n", windownum);
+        /* No swapchain was acquired, probably too many frames in flight */
         SDL_GpuSubmit(cmd);
         return;
     }
@@ -363,6 +365,8 @@ Render(SDL_Window *window, const int windownum)
 
     /* Submit the command buffer! */
     SDL_GpuSubmit(cmd);
+
+    ++frames;
 }
 
 static SDL_GpuShader*
@@ -550,7 +554,6 @@ init_render_state(void)
 }
 
 static int done = 0;
-static Uint32 frames = 0;
 
 void loop()
 {
@@ -558,7 +561,6 @@ void loop()
     int i;
 
     /* Check for events */
-    ++frames;
     while (SDL_PollEvent(&event) && !done) {
         SDLTest_CommonEvent(state, &event, &done);
     }
