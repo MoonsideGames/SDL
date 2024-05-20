@@ -11895,6 +11895,7 @@ static Uint8 VULKAN_INTERNAL_CreateInstance(
 ) {
     VkResult vulkanResult;
     VkApplicationInfo appInfo;
+    VkInstanceCreateFlags createFlags;
     const char *const *originalInstanceExtensionNames;
     const char **instanceExtensionNames;
     Uint32 instanceExtensionCount;
@@ -11909,6 +11910,7 @@ static Uint8 VULKAN_INTERNAL_CreateInstance(
     appInfo.engineVersion = SDL_VERSION;
     appInfo.apiVersion = VK_MAKE_VERSION(1, 0, 0);
 
+    createFlags = 0;
 
     originalInstanceExtensionNames = SDL_Vulkan_GetInstanceExtensions(&instanceExtensionCount);
     if (!originalInstanceExtensionNames) {
@@ -11924,16 +11926,23 @@ static Uint8 VULKAN_INTERNAL_CreateInstance(
     /* Extra space for the following extensions:
      * VK_KHR_get_physical_device_properties2
      * VK_EXT_debug_utils
+     * VK_KHR_portability_enumeration
      */
     instanceExtensionNames = SDL_stack_alloc(
         const char*,
-        instanceExtensionCount + 2
+        instanceExtensionCount + 3
     );
     SDL_memcpy(instanceExtensionNames, originalInstanceExtensionNames, instanceExtensionCount * sizeof(const char*));
 
     /* Core since 1.1 */
     instanceExtensionNames[instanceExtensionCount++] =
         VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME;
+
+#ifdef SDL_PLATFORM_APPLE
+    instanceExtensionNames[instanceExtensionCount++] =
+        VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME;
+    createFlags |= VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
+#endif
 
     if (!VULKAN_INTERNAL_CheckInstanceExtensions(
         instanceExtensionNames,
@@ -11966,7 +11975,7 @@ static Uint8 VULKAN_INTERNAL_CreateInstance(
 
     createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
     createInfo.pNext = NULL;
-    createInfo.flags = 0;
+    createInfo.flags = createFlags;
     createInfo.pApplicationInfo = &appInfo;
     createInfo.ppEnabledLayerNames = layerNames;
     createInfo.enabledExtensionCount = instanceExtensionCount;
@@ -12471,7 +12480,6 @@ static Uint8 VULKAN_INTERNAL_PrepareVulkan(
     if (!VULKAN_INTERNAL_CreateInstance(renderer, dummyWindowHandle))
     {
         SDL_DestroyWindow(dummyWindowHandle);
-        SDL_free(renderer);
         SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Vulkan: Could not create Vulkan instance");
         return 0;
     }
@@ -12483,7 +12491,6 @@ static Uint8 VULKAN_INTERNAL_PrepareVulkan(
         &surface
     )) {
         SDL_DestroyWindow(dummyWindowHandle);
-        SDL_free(renderer);
         SDL_LogWarn(
             SDL_LOG_CATEGORY_APPLICATION,
             "SDL_Vulkan_CreateSurface failed: %s",
@@ -12498,6 +12505,7 @@ static Uint8 VULKAN_INTERNAL_PrepareVulkan(
 
     if (!VULKAN_INTERNAL_DeterminePhysicalDevice(renderer, surface))
     {
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Vulkan: Failed to determine a suitable physical device");
         return 0;
     }
 
@@ -12532,12 +12540,10 @@ static Uint8 VULKAN_PrepareDriver(SDL_VideoDevice *_this)
 
     result = VULKAN_INTERNAL_PrepareVulkan(renderer);
 
-    if (!result)
+    if (result)
     {
-        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Vulkan: Failed to determine a suitable physical device");
+        renderer->vkDestroyInstance(renderer->instance, NULL);
     }
-
-    renderer->vkDestroyInstance(renderer->instance, NULL);
     SDL_free(renderer);
     SDL_Vulkan_UnloadLibrary();
     return result;
