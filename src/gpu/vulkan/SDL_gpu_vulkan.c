@@ -10515,6 +10515,37 @@ static SDL_GpuTexture* VULKAN_AcquireSwapchainTexture(
 
     swapchainTextureContainer = &swapchainData->textureContainers[swapchainImageIndex];
 
+    /* We need a special execution dependency with pWaitDstStageMask or image transition can start before acquire finishes */
+
+    VkImageMemoryBarrier imageBarrier;
+    imageBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    imageBarrier.pNext = NULL;
+    imageBarrier.srcAccessMask = 0;
+    imageBarrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+    imageBarrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    imageBarrier.newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    imageBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    imageBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    imageBarrier.image = swapchainTextureContainer->activeTextureHandle->vulkanTexture->image;
+    imageBarrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    imageBarrier.subresourceRange.baseMipLevel = 0;
+    imageBarrier.subresourceRange.levelCount = 1;
+    imageBarrier.subresourceRange.baseArrayLayer = 0;
+    imageBarrier.subresourceRange.layerCount = 1;
+
+    renderer->vkCmdPipelineBarrier(
+        vulkanCommandBuffer->commandBuffer,
+        VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+        VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+        0,
+        0,
+        NULL,
+        0,
+        NULL,
+        1,
+        &imageBarrier
+    );
+
     /* Set up present struct */
 
     if (vulkanCommandBuffer->presentDataCount == vulkanCommandBuffer->presentDataCapacity)
