@@ -51,14 +51,6 @@ typedef struct SDL_GpuCopyPass SDL_GpuCopyPass;
 typedef struct SDL_GpuFence SDL_GpuFence;
 typedef struct SDL_GpuOcclusionQuery SDL_GpuOcclusionQuery;
 
-typedef enum SDL_GpuPresentMode
-{
-	SDL_GPU_PRESENTMODE_IMMEDIATE,
-	SDL_GPU_PRESENTMODE_MAILBOX,
-	SDL_GPU_PRESENTMODE_FIFO,
-	SDL_GPU_PRESENTMODE_FIFO_RELAXED
-} SDL_GpuPresentMode;
-
 typedef enum SDL_GpuPrimitiveType
 {
 	SDL_GPU_PRIMITIVETYPE_POINTLIST,
@@ -1883,15 +1875,10 @@ extern SDL_DECLSPEC void SDLCALL SDL_GpuBlit(
  * Claims a window, creating a swapchain structure for it.
  * This must be called before SDL_GpuAcquireSwapchainTexture is called using the window.
  *
- * Note that for performance reasons an operating system may swizzle the format internally
- * (for example, RGBA may be stored as BGRA) so be sure to render or blit to swapchain textures
- * to avoid format swizzling issues.
- *
  * \param device a GPU context
  * \param windowHandle an SDL_Window
- * \param presentMode the desired present mode for the swapchain
- * \param swapchainFormat the desired swapchain format, MUST be an RGBA-ordered format
  * \param colorSpace the desired color space for the swapchain
+ * \param preferVerticalSync if SDL_TRUE presentation waits for vblank, otherwise tries to not. Some drivers may force v-sync.
  *
  * \returns SDL_TRUE on success, otherwise SDL_FALSE.
  *
@@ -1903,9 +1890,8 @@ extern SDL_DECLSPEC void SDLCALL SDL_GpuBlit(
 extern SDL_DECLSPEC SDL_bool SDLCALL SDL_GpuClaimWindow(
 	SDL_GpuDevice *device,
 	SDL_Window *windowHandle,
-	SDL_GpuPresentMode presentMode,
-    SDL_GpuTextureFormat swapchainFormat,
-    SDL_GpuColorSpace colorSpace
+    SDL_GpuColorSpace colorSpace,
+    SDL_bool preferVerticalSync
 );
 
 /**
@@ -1928,18 +1914,16 @@ extern SDL_DECLSPEC void SDLCALL SDL_GpuUnclaimWindow(
  *
  * \param device a GPU context
  * \param windowHandle an SDL_Window that has been claimed
- * \param presentMode the desired present mode for the swapchain
- * \param swapchainFormat the desired swapchain format, MUST be an RGBA-ordered format
  * \param colorSpace the desired color space for the swapchain
- *
+ * \param preferVerticalSync if SDL_TRUE presentation waits for vblank, otherwise tries to not. Some drivers may force v-sync.
+
  * \since This function is available since SDL 3.x.x
  */
 extern SDL_DECLSPEC void SDLCALL SDL_GpuSetSwapchainParameters(
 	SDL_GpuDevice *device,
 	SDL_Window *windowHandle,
-	SDL_GpuPresentMode presentMode,
-    SDL_GpuTextureFormat swapchainFormat,
-    SDL_GpuColorSpace colorSpace
+    SDL_GpuColorSpace colorSpace,
+    SDL_bool preferVerticalSync
 );
 
 /**
@@ -1954,20 +1938,6 @@ extern SDL_DECLSPEC void SDLCALL SDL_GpuSetSwapchainParameters(
 extern SDL_DECLSPEC SDL_GpuTextureFormat SDLCALL SDL_GpuGetSwapchainFormat(
 	SDL_GpuDevice *device,
 	SDL_Window *windowHandle
-);
-
-/**
- * Obtains whether or not a presentation mode is supported by the GPU backend.
- *
- * \param device a GPU context
- * \param presentMode the presentation mode to check
- * \returns SDL_TRUE if supported, SDL_FALSE if unsupported (or on error)
- *
- * \since This function is available since SDL 3.x.x
- */
-extern SDL_DECLSPEC SDL_bool SDLCALL SDL_GpuSupportsPresentMode(
-	SDL_GpuDevice *device,
-	SDL_GpuPresentMode presentMode
 );
 
 /**

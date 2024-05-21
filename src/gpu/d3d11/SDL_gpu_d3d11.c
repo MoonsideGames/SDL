@@ -492,8 +492,8 @@ typedef struct D3D11WindowData
 	IDXGISwapChain *swapchain;
     D3D11Texture texture;
     D3D11TextureContainer textureContainer;
-	SDL_GpuPresentMode presentMode;
-    SDL_GpuTextureFormat swapchainFormat;
+    SDL_bool preferVerticalSync;
+    DXGI_FORMAT swapchainFormat;
     SDL_GpuColorSpace colorSpace;
     D3D11Fence *inFlightFences[MAX_FRAMES_IN_FLIGHT];
     Uint32 frameCounter;
@@ -5476,14 +5476,14 @@ static Uint8 D3D11_INTERNAL_InitializeSwapchainTexture(
 static Uint8 D3D11_INTERNAL_CreateSwapchain(
 	D3D11Renderer *renderer,
 	D3D11WindowData *windowData,
-	SDL_GpuPresentMode presentMode,
-    SDL_GpuTextureFormat swapchainFormat,
-    SDL_GpuColorSpace colorSpace
+    SDL_GpuColorSpace colorSpace,
+    SDL_bool preferVerticalSync
 ) {
 	HWND dxgiHandle;
 	int width, height;
     Uint32 i;
 	DXGI_SWAP_CHAIN_DESC swapchainDesc;
+    DXGI_FORMAT swapchainFormat;
 	IDXGIFactory1 *pParent;
 	IDXGISwapChain *swapchain;
     IDXGISwapChain3 *swapchain3;
@@ -5499,12 +5499,30 @@ static Uint8 D3D11_INTERNAL_CreateSwapchain(
 	/* Get the window size */
 	SDL_GetWindowSize(windowData->windowHandle, &width, &height);
 
+    if (colorSpace == SDL_GPU_COLORSPACE_NONLINEAR_SRGB)
+    {
+        swapchainFormat = DXGI_FORMAT_B8G8R8A8_UNORM;
+    }
+    else if (colorSpace == SDL_GPU_COLORSPACE_LINEAR_SRGB)
+    {
+        swapchainFormat = DXGI_FORMAT_B8G8R8A8_UNORM_SRGB;
+    }
+    else if (colorSpace == SDL_GPU_COLORSPACE_HDR10_ST2048)
+    {
+        swapchainFormat = DXGI_FORMAT_R10G10B10A2_UNORM;
+    }
+    else
+    {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Unrecognized color space!");
+        return 0;
+    }
+
 	/* Initialize the swapchain buffer descriptor */
 	swapchainDesc.BufferDesc.Width = 0;
 	swapchainDesc.BufferDesc.Height = 0;
 	swapchainDesc.BufferDesc.RefreshRate.Numerator = 0;
 	swapchainDesc.BufferDesc.RefreshRate.Denominator = 0;
-	swapchainDesc.BufferDesc.Format = SDLToD3D11_TextureFormat[swapchainFormat];
+	swapchainDesc.BufferDesc.Format = swapchainFormat;
 	swapchainDesc.BufferDesc.ScanlineOrdering = DXGI_MODE_SCANLINE_ORDER_UNSPECIFIED;
 	swapchainDesc.BufferDesc.Scaling = DXGI_MODE_SCALING_UNSPECIFIED;
 
@@ -5583,7 +5601,7 @@ static Uint8 D3D11_INTERNAL_CreateSwapchain(
 	}
     /* Initialize the swapchain data */
 	windowData->swapchain = swapchain;
-    windowData->presentMode = presentMode;
+    windowData->preferVerticalSync = preferVerticalSync;
     windowData->swapchainFormat = swapchainFormat;
     windowData->colorSpace = colorSpace;
     windowData->frameCounter = 0;
@@ -5605,7 +5623,7 @@ static Uint8 D3D11_INTERNAL_CreateSwapchain(
 	if (!D3D11_INTERNAL_InitializeSwapchainTexture(
 		renderer,
 		swapchain,
-        SDLToD3D11_TextureFormat[swapchainFormat],
+        swapchainFormat,
 		&windowData->texture
 	)) {
 		IDXGISwapChain_Release(swapchain);
@@ -5647,7 +5665,7 @@ static Uint8 D3D11_INTERNAL_ResizeSwapchain(
 	return D3D11_INTERNAL_InitializeSwapchainTexture(
 		renderer,
 		windowData->swapchain,
-        SDLToD3D11_TextureFormat[windowData->swapchainFormat],
+        windowData->swapchainFormat,
 		&windowData->texture
 	);
 }
@@ -5655,9 +5673,8 @@ static Uint8 D3D11_INTERNAL_ResizeSwapchain(
 static SDL_bool D3D11_ClaimWindow(
 	SDL_GpuRenderer *driverData,
 	SDL_Window *windowHandle,
-	SDL_GpuPresentMode presentMode,
-    SDL_GpuTextureFormat swapchainFormat,
-    SDL_GpuColorSpace colorSpace
+    SDL_GpuColorSpace colorSpace,
+    SDL_bool preferVerticalSync
 ) {
 	D3D11Renderer *renderer = (D3D11Renderer*) driverData;
 	D3D11WindowData *windowData = D3D11_INTERNAL_FetchWindowData(windowHandle);
@@ -5667,7 +5684,7 @@ static SDL_bool D3D11_ClaimWindow(
 		windowData = (D3D11WindowData*) SDL_malloc(sizeof(D3D11WindowData));
 		windowData->windowHandle = windowHandle;
 
-		if (D3D11_INTERNAL_CreateSwapchain(renderer, windowData, presentMode, swapchainFormat, colorSpace))
+		if (D3D11_INTERNAL_CreateSwapchain(renderer, windowData, colorSpace, preferVerticalSync))
 		{
             SDL_SetProperty(SDL_GetWindowProperties(windowHandle), WINDOW_PROPERTY_DATA, windowData);
 
@@ -5859,39 +5876,18 @@ static SDL_GpuTextureFormat D3D11_GetSwapchainFormat(
 	return SDL_GPU_TEXTUREFORMAT_R8G8B8A8;
 }
 
-static SDL_bool D3D11_SupportsPresentMode(
-	SDL_GpuRenderer *driverData,
-	SDL_GpuPresentMode presentMode
-) {
-	D3D11Renderer *renderer = (D3D11Renderer*) driverData;
-	switch (presentMode)
-	{
-	case SDL_GPU_PRESENTMODE_IMMEDIATE:
-	case SDL_GPU_PRESENTMODE_FIFO:
-		return SDL_TRUE;
-	case SDL_GPU_PRESENTMODE_FIFO_RELAXED:
-		return SDL_FALSE;
-	case SDL_GPU_PRESENTMODE_MAILBOX:
-		return renderer->supportsFlipDiscard;
-	}
-	SDL_assert(!"Unrecognized present mode");
-	return SDL_FALSE;
-}
-
 static void D3D11_SetSwapchainParameters(
 	SDL_GpuRenderer *driverData,
 	SDL_Window *windowHandle,
-	SDL_GpuPresentMode presentMode,
-    SDL_GpuTextureFormat swapchainFormat,
-    SDL_GpuColorSpace colorSpace
+    SDL_GpuColorSpace colorSpace,
+    SDL_bool preferVerticalSync
 ) {
     D3D11Renderer *renderer = (D3D11Renderer*) driverData;
 	D3D11WindowData *windowData = D3D11_INTERNAL_FetchWindowData(windowHandle);
 
     if (
-        swapchainFormat != windowData->swapchainFormat ||
         colorSpace != windowData->colorSpace ||
-        presentMode != windowData->presentMode
+        preferVerticalSync != windowData->preferVerticalSync
     ) {
         D3D11_Wait(driverData);
 
@@ -5904,9 +5900,8 @@ static void D3D11_SetSwapchainParameters(
         D3D11_INTERNAL_CreateSwapchain(
             renderer,
             windowData,
-            presentMode,
-            swapchainFormat,
-            colorSpace
+            colorSpace,
+            preferVerticalSync
         );
     }
 }
@@ -5962,18 +5957,14 @@ static void D3D11_Submit(
 	/* Present, if applicable */
 	if (d3d11CommandBuffer->windowData)
 	{
-		/* FIXME: Is there some way to emulate FIFO_RELAXED? */
-
 		Uint32 syncInterval = 1;
-		if (	d3d11CommandBuffer->windowData->presentMode == SDL_GPU_PRESENTMODE_IMMEDIATE ||
-			(renderer->supportsFlipDiscard && d3d11CommandBuffer->windowData->presentMode == SDL_GPU_PRESENTMODE_MAILBOX)
-		) {
+		if (!d3d11CommandBuffer->windowData->preferVerticalSync || renderer->supportsFlipDiscard)
+        {
 			syncInterval = 0;
 		}
 
 		Uint32 presentFlags = 0;
-		if (	renderer->supportsTearing &&
-			d3d11CommandBuffer->windowData->presentMode == SDL_GPU_PRESENTMODE_IMMEDIATE	)
+		if (renderer->supportsTearing && !d3d11CommandBuffer->windowData->preferVerticalSync)
 		{
 			presentFlags = DXGI_PRESENT_ALLOW_TEARING;
 		}

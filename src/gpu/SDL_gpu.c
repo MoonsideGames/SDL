@@ -1246,17 +1246,15 @@ void SDL_GpuBlit(
 SDL_bool SDL_GpuClaimWindow(
 	SDL_GpuDevice *device,
 	SDL_Window *windowHandle,
-	SDL_GpuPresentMode presentMode,
-    SDL_GpuTextureFormat swapchainFormat,
-    SDL_GpuColorSpace colorSpace
+    SDL_GpuColorSpace colorSpace,
+    SDL_bool preferVerticalSync
 ) {
 	if (device == NULL) { return 0; }
 	return device->ClaimWindow(
 		device->driverData,
 		windowHandle,
-		presentMode,
-        swapchainFormat,
-        colorSpace
+        colorSpace,
+        preferVerticalSync
 	);
 }
 
@@ -1274,17 +1272,15 @@ void SDL_GpuUnclaimWindow(
 void SDL_GpuSetSwapchainParameters(
 	SDL_GpuDevice *device,
 	SDL_Window *windowHandle,
-	SDL_GpuPresentMode presentMode,
-    SDL_GpuTextureFormat swapchainFormat,
-    SDL_GpuColorSpace colorSpace
+    SDL_GpuColorSpace colorSpace,
+    SDL_bool preferVerticalSync
 ) {
 	NULL_ASSERT(device);
 	device->SetSwapchainParameters(
 		device->driverData,
 		windowHandle,
-		presentMode,
-        swapchainFormat,
-        colorSpace
+        colorSpace,
+        preferVerticalSync
 	);
 }
 
@@ -1296,17 +1292,6 @@ SDL_GpuTextureFormat SDL_GpuGetSwapchainFormat(
 	return device->GetSwapchainFormat(
 		device->driverData,
 		windowHandle
-	);
-}
-
-SDL_bool SDL_GpuSupportsPresentMode(
-	SDL_GpuDevice *device,
-	SDL_GpuPresentMode presentMode
-) {
-	if (device == NULL) { return SDL_FALSE; }
-	return device->SupportsPresentMode(
-		device->driverData,
-		presentMode
 	);
 }
 

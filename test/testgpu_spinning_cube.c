@@ -423,8 +423,12 @@ init_render_state(void)
     /* Claim the windows */
 
     for (i = 0; i < state->num_windows; i++) {
-        SDL_GpuClaimWindow(gpu_device, state->windows[i], SDL_GPU_PRESENTMODE_FIFO,
-                            SDL_GPU_TEXTUREFORMAT_R8G8B8A8, SDL_GPU_COLORSPACE_NONLINEAR_SRGB);
+        SDL_GpuClaimWindow(
+            gpu_device,
+            state->windows[i],
+            SDL_GPU_COLORSPACE_NONLINEAR_SRGB,
+            SDL_TRUE
+        );
     }
 
     /* Create shaders */
@@ -469,7 +473,7 @@ init_render_state(void)
 
     SDL_zero(pipelinedesc);
 
-    color_attachment_desc.format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8;
+    color_attachment_desc.format = SDL_GpuGetSwapchainFormat(gpu_device, state->windows[0]);
     color_attachment_desc.blendState.blendEnable = 0;
     color_attachment_desc.blendState.alphaBlendOp = SDL_GPU_BLENDOP_ADD;
     color_attachment_desc.blendState.colorBlendOp = SDL_GPU_BLENDOP_ADD;

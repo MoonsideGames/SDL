@@ -593,9 +593,8 @@ struct SDL_GpuDevice
 	SDL_bool (*ClaimWindow)(
 		SDL_GpuRenderer *driverData,
 		SDL_Window *windowHandle,
-		SDL_GpuPresentMode presentMode,
-        SDL_GpuTextureFormat swapchainFormat,
-        SDL_GpuColorSpace colorSpace
+        SDL_GpuColorSpace colorSpace,
+        SDL_bool preferVerticalSync
 	);
 
 	void (*UnclaimWindow)(
@@ -606,19 +605,13 @@ struct SDL_GpuDevice
 	void (*SetSwapchainParameters)(
 		SDL_GpuRenderer *driverData,
 		SDL_Window *windowHandle,
-        SDL_GpuPresentMode presentMode,
-        SDL_GpuTextureFormat swapchainFormat,
-        SDL_GpuColorSpace colorSpace
+        SDL_GpuColorSpace colorSpace,
+        SDL_bool preferVerticalSync
 	);
 
 	SDL_GpuTextureFormat (*GetSwapchainFormat)(
 		SDL_GpuRenderer *driverData,
 		SDL_Window *windowHandle
-	);
-
-	SDL_bool (*SupportsPresentMode)(
-		SDL_GpuRenderer *driverData,
-		SDL_GpuPresentMode presentMode
 	);
 
 	SDL_GpuCommandBuffer* (*AcquireCommandBuffer)(
@@ -778,7 +771,6 @@ struct SDL_GpuDevice
 	ASSIGN_DRIVER_FUNC(UnclaimWindow, name) \
 	ASSIGN_DRIVER_FUNC(SetSwapchainParameters, name) \
 	ASSIGN_DRIVER_FUNC(GetSwapchainFormat, name) \
-	ASSIGN_DRIVER_FUNC(SupportsPresentMode, name) \
 	ASSIGN_DRIVER_FUNC(AcquireCommandBuffer, name) \
 	ASSIGN_DRIVER_FUNC(AcquireSwapchainTexture, name) \
 	ASSIGN_DRIVER_FUNC(Submit, name) \
