@@ -4578,7 +4578,7 @@ static void VULKAN_INTERNAL_ChooseSwapPresentMode(
             if (availablePresentModes[i] == m) \
             { \
                 *outputPresentMode = m; \
-                return 1; \
+                return; \
             } \
         } \
 
@@ -4608,7 +4608,6 @@ static Uint8 VULKAN_INTERNAL_CreateSwapchain(
     VkImage *swapchainImages;
     VkImageViewCreateInfo imageViewCreateInfo;
     VkSemaphoreCreateInfo semaphoreCreateInfo;
-    VkPresentModeKHR presentMode;
     SwapChainSupportDetails swapchainSupportDetails;
     Sint32 drawableWidth, drawableHeight;
     Uint32 i;
