@@ -2754,7 +2754,7 @@ static void VULKAN_INTERNAL_BufferMemoryBarrier(
     if (destinationUsageMode == VULKAN_BUFFER_USAGE_MODE_COPY_SOURCE)
     {
         dstStages = VK_PIPELINE_STAGE_TRANSFER_BIT;
-        memoryBarrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+        memoryBarrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
     }
     else if (destinationUsageMode == VULKAN_BUFFER_USAGE_MODE_COPY_DESTINATION)
     {
@@ -10065,6 +10065,7 @@ static SDL_GpuCommandBuffer* VULKAN_AcquireCommandBuffer(
 ) {
     VulkanRenderer *renderer = (VulkanRenderer*) driverData;
     VkResult result;
+    Uint32 i;
 
     SDL_ThreadID threadID = SDL_GetCurrentThreadID();
 
@@ -10085,6 +10086,13 @@ static SDL_GpuCommandBuffer* VULKAN_AcquireCommandBuffer(
 
     commandBuffer->currentComputePipeline = NULL;
     commandBuffer->currentGraphicsPipeline = NULL;
+
+    for (i = 0; i < MAX_COLOR_TARGET_BINDINGS; i += 1)
+    {
+        commandBuffer->colorAttachmentSlices[i] = NULL;
+    }
+
+    commandBuffer->depthStencilAttachmentSlice = NULL;
 
     commandBuffer->needNewVertexResourceDescriptorSet = SDL_TRUE;
     commandBuffer->needNewVertexUniformDescriptorSet = SDL_TRUE;
