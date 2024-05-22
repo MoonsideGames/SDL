@@ -447,7 +447,7 @@ struct VulkanBuffer
     VkBuffer buffer;
     VkDeviceSize size;
     VulkanMemoryUsedRegion *usedRegion;
-    SDL_GpuBufferUsageFlags usage;
+    VkBufferUsageFlags usage;
 
     VulkanBufferType type;
 
@@ -2974,37 +2974,34 @@ static void VULKAN_INTERNAL_ImageMemoryBarrier(
     textureSlice->transitioned = SDL_TRUE;
 }
 
-static VulkanBufferUsageMode VULKAN_INTERNAL_DefaultBufferUsageMode(
-    VulkanBuffer *buffer
+static SDL_bool VULKAN_INTERNAL_DefaultBufferUsageMode(
+    VulkanBuffer *buffer,
+    VulkanBufferUsageMode *usageMode
 ) {
-    if (buffer->usage & SDL_GPU_BUFFERUSAGE_VERTEX_BIT)
+    if (buffer->usage & VK_BUFFER_USAGE_VERTEX_BUFFER_BIT)
     {
-        return VULKAN_BUFFER_USAGE_MODE_VERTEX_READ;
+        *usageMode = VULKAN_BUFFER_USAGE_MODE_VERTEX_READ;
+        return SDL_TRUE;
     }
-    else if (buffer->usage & SDL_GPU_BUFFERUSAGE_INDEX_BIT)
+    else if (buffer->usage & VK_BUFFER_USAGE_INDEX_BUFFER_BIT)
     {
-        return VULKAN_BUFFER_USAGE_MODE_INDEX_READ;
+        *usageMode = VULKAN_BUFFER_USAGE_MODE_INDEX_READ;
+        return SDL_TRUE;
     }
-    else if (buffer->usage & SDL_GPU_BUFFERUSAGE_INDIRECT_BIT)
+    else if (buffer->usage & VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT)
     {
-        return VULKAN_BUFFER_USAGE_MODE_INDIRECT;
+        *usageMode = VULKAN_BUFFER_USAGE_MODE_INDIRECT;
+        return SDL_TRUE;
     }
-    else if (buffer->usage & SDL_GPU_BUFFERUSAGE_GRAPHICS_STORAGE_READ_BIT)
+    else if (buffer->usage & VK_BUFFER_USAGE_STORAGE_BUFFER_BIT)
     {
-        return VULKAN_BUFFER_USAGE_MODE_GRAPHICS_STORAGE_READ;
-    }
-    else if (buffer->usage & SDL_GPU_BUFFERUSAGE_COMPUTE_STORAGE_READ_BIT)
-    {
-        return VULKAN_BUFFER_USAGE_MODE_COMPUTE_STORAGE_READ;
-    }
-    else if (buffer->usage & SDL_GPU_BUFFERUSAGE_COMPUTE_STORAGE_WRITE_BIT)
-    {
-        return VULKAN_BUFFER_USAGE_MODE_COMPUTE_STORAGE_READ_WRITE;
+        *usageMode = VULKAN_BUFFER_USAGE_MODE_GRAPHICS_STORAGE_READ;
+        return SDL_TRUE;
     }
     else
     {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Texture has no usage flags!");
-        return VULKAN_BUFFER_USAGE_MODE_VERTEX_READ;
+        *usageMode = 0;
+        return SDL_FALSE;
     }
 }
 
@@ -3051,13 +3048,18 @@ static void VULKAN_INTERNAL_BufferTransitionFromDefaultUsage(
     VulkanBufferUsageMode destinationUsageMode,
     VulkanBuffer *buffer
 ) {
-    VULKAN_INTERNAL_BufferMemoryBarrier(
-        renderer,
-        commandBuffer,
-        VULKAN_INTERNAL_DefaultBufferUsageMode(buffer),
-        destinationUsageMode,
-        buffer
-    );
+    VulkanBufferUsageMode defaultUsageMode;
+
+    if (VULKAN_INTERNAL_DefaultBufferUsageMode(buffer, &defaultUsageMode))
+    {
+        VULKAN_INTERNAL_BufferMemoryBarrier(
+            renderer,
+            commandBuffer,
+            defaultUsageMode,
+            destinationUsageMode,
+            buffer
+        );
+    }
 }
 
 static void VULKAN_INTERNAL_BufferTransitionToDefaultUsage(
@@ -3066,13 +3068,18 @@ static void VULKAN_INTERNAL_BufferTransitionToDefaultUsage(
     VulkanBufferUsageMode sourceUsageMode,
     VulkanBuffer *buffer
 ) {
-    VULKAN_INTERNAL_BufferMemoryBarrier(
-        renderer,
-        commandBuffer,
-        sourceUsageMode,
-        VULKAN_INTERNAL_DefaultBufferUsageMode(buffer),
-        buffer
-    );
+    VulkanBufferUsageMode defaultUsageMode;
+
+    if (VULKAN_INTERNAL_DefaultBufferUsageMode(buffer, &defaultUsageMode))
+    {
+        VULKAN_INTERNAL_BufferMemoryBarrier(
+            renderer,
+            commandBuffer,
+            sourceUsageMode,
+            defaultUsageMode,
+            buffer
+        );
+    }
 }
 
 static void VULKAN_INTERNAL_TextureTransitionFromDefaultUsage(
@@ -11239,7 +11246,7 @@ static Uint8 VULKAN_INTERNAL_DefragmentMemory(
 
             /* Copy buffer contents if necessary */
             if (
-                currentRegion->vulkanBuffer->transitioned
+                currentRegion->vulkanBuffer->type == VULKAN_BUFFER_TYPE_GPU && currentRegion->vulkanBuffer->transitioned
             ) {
                 VULKAN_INTERNAL_BufferTransitionFromDefaultUsage(
                     renderer,
