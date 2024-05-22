@@ -457,7 +457,6 @@ struct VulkanBuffer
 
     SDL_bool transitioned;
     Uint8 markedForDestroy; /* so that defrag doesn't double-free */
-    Uint8 defragInProgress; /* FIXME: is this necessary? */
 };
 
 /* Buffer resources consist of multiple backing buffer handles so that data transfers
@@ -525,7 +524,6 @@ typedef struct VulkanTextureSlice
     VulkanTextureHandle *msaaTexHandle; /* NULL if parent sample count is 1 or is depth target */
 
     SDL_bool transitioned; /* used for layout tracking */
-    Uint8 defragInProgress; /* FIXME: is this necessary? */
 } VulkanTextureSlice;
 
 struct VulkanTexture
@@ -4168,7 +4166,6 @@ static VulkanBuffer* VULKAN_INTERNAL_CreateBuffer(
     buffer->size = size;
     buffer->usage = usage;
     buffer->type = type;
-    buffer->defragInProgress = 0;
     buffer->markedForDestroy = 0;
     buffer->transitioned = SDL_FALSE;
 
@@ -4928,7 +4925,6 @@ static Uint8 VULKAN_INTERNAL_CreateSwapchain(
         swapchainData->textureContainers[i].activeTextureHandle->vulkanTexture->slices[0].level = 0;
         swapchainData->textureContainers[i].activeTextureHandle->vulkanTexture->slices[0].transitioned = SDL_TRUE;
         swapchainData->textureContainers[i].activeTextureHandle->vulkanTexture->slices[0].msaaTexHandle = NULL;
-        swapchainData->textureContainers[i].activeTextureHandle->vulkanTexture->slices[0].defragInProgress = 0;
 
         VULKAN_INTERNAL_CreateSliceView(
             renderer,
@@ -6065,7 +6061,6 @@ static VulkanTexture* VULKAN_INTERNAL_CreateTexture(
             texture->slices[sliceIndex].level = j;
             texture->slices[sliceIndex].msaaTexHandle = NULL;
             texture->slices[sliceIndex].transitioned = SDL_FALSE;
-            texture->slices[sliceIndex].defragInProgress = 0;
             SDL_AtomicSet(&texture->slices[sliceIndex].referenceCount, 0);
 
             if (
@@ -6263,7 +6258,6 @@ static VulkanTextureSlice* VULKAN_INTERNAL_PrepareTextureSliceForWrite(
     if (
         cycle &&
         textureContainer->canBeCycled &&
-        !textureSlice->defragInProgress &&
         SDL_AtomicGet(&textureSlice->referenceCount) > 0
     ) {
         VULKAN_INTERNAL_CycleActiveTexture(
@@ -10807,20 +10801,12 @@ static void VULKAN_INTERNAL_CleanCommandBuffer(
     for (i = 0; i < commandBuffer->usedBufferCount; i += 1)
     {
         (void)SDL_AtomicDecRef(&commandBuffer->usedBuffers[i]->referenceCount);
-        if (commandBuffer->isDefrag)
-        {
-            commandBuffer->usedBuffers[i]->defragInProgress = 0;
-        }
     }
     commandBuffer->usedBufferCount = 0;
 
     for (i = 0; i < commandBuffer->usedTextureSliceCount; i += 1)
     {
         (void)SDL_AtomicDecRef(&commandBuffer->usedTextureSlices[i]->referenceCount);
-        if (commandBuffer->isDefrag)
-        {
-            commandBuffer->usedTextureSlices[i]->defragInProgress = 0;
-        }
     }
     commandBuffer->usedTextureSliceCount = 0;
 
@@ -11280,8 +11266,6 @@ static Uint8 VULKAN_INTERNAL_DefragmentMemory(
                     newBuffer
                 );
 
-                newBuffer->defragInProgress = 1;
-
                 VULKAN_INTERNAL_TrackBuffer(renderer, commandBuffer, currentRegion->vulkanBuffer);
                 VULKAN_INTERNAL_TrackBuffer(renderer, commandBuffer, newBuffer);
             }
@@ -11390,8 +11374,6 @@ static Uint8 VULKAN_INTERNAL_DefragmentMemory(
                         VULKAN_TEXTURE_USAGE_MODE_COPY_DESTINATION,
                         dstSlice
                     );
-
-                    dstSlice->defragInProgress = 1;
 
                     VULKAN_INTERNAL_TrackTextureSlice(renderer, commandBuffer, srcSlice);
                     VULKAN_INTERNAL_TrackTextureSlice(renderer, commandBuffer, dstSlice);
