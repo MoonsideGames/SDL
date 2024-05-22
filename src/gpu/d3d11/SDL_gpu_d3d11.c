@@ -1947,12 +1947,6 @@ Uint8 isColorTarget, isDepthStencil, isSampler, isStorage, isMultisample;
 	D3D11Texture *d3d11Texture;
 	HRESULT res;
 
-    if (textureCreateInfo->usageFlags & SDL_GPU_TEXTUREUSAGE_GRAPHICS_STORAGE_WRITE_BIT)
-    {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Graphics storage write bit unsupported on D3D11!");
-        return NULL;
-    }
-
 	isColorTarget = textureCreateInfo->usageFlags & SDL_GPU_TEXTUREUSAGE_COLOR_TARGET_BIT;
 	isDepthStencil = textureCreateInfo->usageFlags & SDL_GPU_TEXTUREUSAGE_DEPTH_STENCIL_TARGET_BIT;
 	isSampler = textureCreateInfo->usageFlags & SDL_GPU_TEXTUREUSAGE_SAMPLER_BIT;
@@ -2543,12 +2537,6 @@ static SDL_GpuBuffer* D3D11_CreateGpuBuffer(
 	D3D11BufferContainer *container;
 	D3D11Buffer *buffer;
     D3D11_BUFFER_DESC bufferDesc;
-
-    if (usageFlags & SDL_GPU_BUFFERUSAGE_GRAPHICS_STORAGE_WRITE_BIT)
-    {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Graphics storage write bit unsupported on D3D11!");
-        return NULL;
-    }
 
     bufferDesc.BindFlags = 0;
 	if (usageFlags & SDL_GPU_BUFFERUSAGE_VERTEX_BIT)
@@ -6188,7 +6176,7 @@ static SDL_bool D3D11_IsTextureFormatSupported(
     {
         return SDL_FALSE;
     }
-    if ((usage & (SDL_GPU_TEXTUREUSAGE_GRAPHICS_STORAGE_READ_BIT | SDL_GPU_TEXTUREUSAGE_GRAPHICS_STORAGE_WRITE_BIT | SDL_GPU_TEXTUREUSAGE_COMPUTE_STORAGE_READ_BIT | SDL_GPU_TEXTUREUSAGE_COMPUTE_STORAGE_WRITE_BIT)) && !(formatSupport & D3D11_FORMAT_SUPPORT_SHADER_LOAD))
+    if ((usage & (SDL_GPU_TEXTUREUSAGE_GRAPHICS_STORAGE_READ_BIT | SDL_GPU_TEXTUREUSAGE_COMPUTE_STORAGE_READ_BIT | SDL_GPU_TEXTUREUSAGE_COMPUTE_STORAGE_WRITE_BIT)) && !(formatSupport & D3D11_FORMAT_SUPPORT_SHADER_LOAD))
     {
         return SDL_FALSE;
     }
