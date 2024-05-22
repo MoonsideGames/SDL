@@ -424,15 +424,6 @@ typedef struct VulkanMemoryAllocator
     VulkanMemorySubAllocator subAllocators[VK_MAX_MEMORY_TYPES];
 } VulkanMemoryAllocator;
 
-/* Memory Barriers */
-
-typedef struct VulkanResourceAccessInfo
-{
-    VkPipelineStageFlags stageMask;
-    VkAccessFlags accessMask;
-    VkImageLayout imageLayout;
-} VulkanResourceAccessInfo;
-
 /* Memory structures */
 
 /* We use pointer indirection so that defrag can occur without objects
@@ -457,7 +448,6 @@ struct VulkanBuffer
     VkDeviceSize size;
     VulkanMemoryUsedRegion *usedRegion;
     SDL_GpuBufferUsageFlags usage;
-    SDL_bool transitioned;
 
     VulkanBufferType type;
 
@@ -589,6 +579,31 @@ struct VulkanTextureContainer
 
     char *debugName;
 };
+
+typedef enum VulkanBufferBarrierType
+{
+    VULKAN_BUFFER_BARRIER_TYPE_COPY_SOURCE,
+    VULKAN_BUFFER_BARRIER_TYPE_COPY_DESTINATION,
+    VULKAN_BUFFER_BARRIER_TYPE_VERTEX_READ,
+    VULKAN_BUFFER_BARRIER_TYPE_INDEX_READ,
+    VULKAN_BUFFER_BARRIER_TYPE_INDIRECT,
+    VULKAN_BUFFER_BARRIER_TYPE_GRAPHICS_STORAGE_READ,
+    VULKAN_BUFFER_BARRIER_TYPE_COMPUTE_STORAGE_READ,
+    VULKAN_BUFFER_BARRIER_TYPE_COMPUTE_STORAGE_READ_WRITE,
+} VulkanBufferBarrierType;
+
+typedef enum VulkanTextureBarrierType
+{
+    VULKAN_TEXTURE_BARRIER_TYPE_COPY_SOURCE,
+    VULKAN_TEXTURE_BARRIER_TYPE_COPY_DESTINATION,
+    VULKAN_TEXTURE_BARRIER_TYPE_SAMPLER,
+    VULKAN_TEXTURE_BARRIER_TYPE_GRAPHICS_STORAGE_READ,
+    VULKAN_TEXTURE_BARRIER_TYPE_COMPUTE_STORAGE_READ,
+    VULKAN_TEXTURE_BARRIER_TYPE_COMPUTE_STORAGE_READ_WRITE,
+    VULKAN_TEXTURE_BARRIER_TYPE_COLOR_ATTACHMENT,
+    VULKAN_TEXTURE_BARRIER_TYPE_DEPTH_STENCIL_ATTACHMENT,
+    VULKAN_TEXTURE_BARRIER_TYPE_PRESENT
+} VulkanTextureBarrierType;
 
 typedef struct VulkanFramebuffer
 {
@@ -1125,13 +1140,10 @@ typedef struct VulkanCommandBuffer
 
     /* Keep track of resources transitioned away from their default state to barrier them on pass end */
 
-    VulkanBuffer **barrieredBuffers;
-    Uint32 barrieredBufferCount;
-    Uint32 barrieredBufferCapacity;
+    VulkanTextureSlice *colorAttachmentSlices[MAX_COLOR_TARGET_BINDINGS];
+    Uint32 colorAttachmentSliceCount;
 
-    VulkanTextureSlice **barrieredTextureSlices;
-    Uint32 barrieredTextureSliceCount;
-    Uint32 barrieredTextureSliceCapacity;
+    VulkanTextureSlice *depthStencilAttachmentSlice; /* may be NULL */
 
     /* Viewport/scissor state */
 
@@ -1215,11 +1227,6 @@ typedef struct VulkanCommandBuffer
     VulkanFramebuffer **usedFramebuffers;
     Uint32 usedFramebufferCount;
     Uint32 usedFramebufferCapacity;
-
-    /* Track resource synchronization state */
-
-    SDL_HashTable *textureSliceSyncInfo;
-    SDL_HashTable *bufferSyncInfo;
 
     VulkanFenceHandle *inFlightFence;
     Uint8 autoReleaseFence;
@@ -2748,136 +2755,20 @@ static void VULKAN_INTERNAL_TrackFramebuffer(
     );
 }
 
-static void VULKAN_INTERNAL_TrackBarrieredBuffer(
-    VulkanRenderer *renderer,
-    VulkanCommandBuffer *commandBuffer,
-    VulkanBuffer *buffer
-) {
-    ADD_TO_ARRAY_UNIQUE(
-        buffer,
-        VulkanBuffer*,
-        barrieredBuffers,
-        barrieredBufferCount,
-        barrieredBufferCapacity
-    );
-}
-
-static void VULKAN_INTERNAL_TrackBarrieredTextureSlice(
-    VulkanRenderer *renderer,
-    VulkanCommandBuffer *commandBuffer,
-    VulkanTextureSlice *textureSlice
-) {
-    ADD_TO_ARRAY_UNIQUE(
-        textureSlice,
-        VulkanTextureSlice*,
-        barrieredTextureSlices,
-        barrieredTextureSliceCount,
-        barrieredTextureSliceCapacity
-    );
-}
-
 #undef TRACK_RESOURCE
 
-/* This is the access info state that a buffer is in at the end of a pass. */
-static SDL_bool VULKAN_INTERNAL_DefaultBufferAccessInfo(
-    SDL_GpuBufferUsageFlags usageFlags,
-    VulkanResourceAccessInfo *accessInfo
-) {
-    VkPipelineStageFlags stageMask = 0;
-    VkAccessFlags accessMask = 0;
+/* Memory Barriers */
 
-    if (usageFlags & SDL_GPU_BUFFERUSAGE_VERTEX_BIT)
-    {
-        stageMask |= VK_PIPELINE_STAGE_VERTEX_INPUT_BIT;
-        accessMask |= VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT;
-    }
-
-    if (usageFlags & SDL_GPU_BUFFERUSAGE_INDEX_BIT)
-    {
-        stageMask |= VK_PIPELINE_STAGE_VERTEX_INPUT_BIT;
-        accessMask |= VK_ACCESS_INDEX_READ_BIT;
-    }
-
-    if (usageFlags & SDL_GPU_BUFFERUSAGE_INDIRECT_BIT)
-    {
-        stageMask |= VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT;
-        accessMask |= VK_ACCESS_INDIRECT_COMMAND_READ_BIT;
-    }
-
-    if (usageFlags & SDL_GPU_BUFFERUSAGE_GRAPHICS_STORAGE_READ_BIT)
-    {
-        stageMask |= VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-        accessMask |= VK_ACCESS_SHADER_READ_BIT;
-    }
-
-    if (usageFlags & SDL_GPU_BUFFERUSAGE_GRAPHICS_STORAGE_WRITE_BIT)
-    {
-        stageMask |= VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-        accessMask |= VK_ACCESS_SHADER_WRITE_BIT;
-    }
-
-    /* Other flags are ignored because barriers occur outside of a render pass */
-
-    accessInfo->stageMask = stageMask;
-    accessInfo->accessMask = accessMask;
-    accessInfo->imageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-
-    return stageMask != 0;
-}
-
-/* This is the access info state that a texture slice is in at the end of a pass */
-static SDL_bool VULKAN_INTERNAL_DefaultTextureSliceAccessInfo(
-    SDL_GpuTextureUsageFlags usageFlags,
-    VulkanResourceAccessInfo *accessInfo
-) {
-    VkPipelineStageFlags stageMask = 0;
-    VkAccessFlags accessMask = 0;
-    VkImageLayout layout = VK_IMAGE_LAYOUT_UNDEFINED;
-
-    if (usageFlags & SDL_GPU_TEXTUREUSAGE_SAMPLER_BIT)
-    {
-        stageMask = VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-        accessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_INPUT_ATTACHMENT_READ_BIT;
-        layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-    }
-
-    /* NOTE: graphics storage bits and sampler bit are mutually exclusive */
-
-    if (usageFlags & SDL_GPU_TEXTUREUSAGE_GRAPHICS_STORAGE_READ_BIT)
-    {
-        stageMask |= VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-        accessMask |= VK_ACCESS_SHADER_READ_BIT;
-        layout = VK_IMAGE_LAYOUT_GENERAL;
-    }
-
-    if (usageFlags & SDL_GPU_TEXTUREUSAGE_GRAPHICS_STORAGE_WRITE_BIT)
-    {
-        stageMask |= VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-        accessMask |= VK_ACCESS_SHADER_WRITE_BIT;
-        layout = VK_IMAGE_LAYOUT_GENERAL;
-    }
-
-    /* Other flags can be ignored because barriers occur outside of a render pass */
-
-    accessInfo->stageMask = stageMask;
-    accessInfo->accessMask = accessMask;
-    accessInfo->imageLayout = layout;
-
-    return layout != VK_IMAGE_LAYOUT_UNDEFINED;
-}
-
-/* FIXME: should there be a separate buffer access struct so we dont have a nonsense layout field? */
 static void VULKAN_INTERNAL_BufferMemoryBarrier(
     VulkanRenderer *renderer,
     VulkanCommandBuffer *commandBuffer,
-    const VulkanResourceAccessInfo *nextAccessInfo,
-    SDL_bool track,
+    VulkanBufferBarrierType sourceBarrierType,
+    VulkanBufferBarrierType destinationBarrierType,
     VulkanBuffer *buffer
 ) {
     VkPipelineStageFlags srcStages = 0;
     VkPipelineStageFlags dstStages = 0;
     VkBufferMemoryBarrier memoryBarrier;
-    VulkanResourceAccessInfo *prevAccessInfo;
 
     memoryBarrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
     memoryBarrier.pNext = NULL;
@@ -2889,58 +2780,96 @@ static void VULKAN_INTERNAL_BufferMemoryBarrier(
     memoryBarrier.offset = 0;
     memoryBarrier.size = buffer->size;
 
-    if (!SDL_FindInHashTable(
-        commandBuffer->bufferSyncInfo,
-        buffer,
-        (const void**) &prevAccessInfo
-    )) {
-        /* FIXME: these could be pooled instead of malloc'd */
-        prevAccessInfo = SDL_malloc(sizeof(VulkanResourceAccessInfo));
-
-        if (buffer->transitioned)
-        {
-            VULKAN_INTERNAL_DefaultBufferAccessInfo(buffer->usage, prevAccessInfo);
-        }
-        else
-        {
-            prevAccessInfo->stageMask = 0;
-            prevAccessInfo->accessMask = 0;
-            prevAccessInfo->imageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-        }
-
-        SDL_InsertIntoHashTable(
-            commandBuffer->bufferSyncInfo,
-            buffer,
-            (const void*) prevAccessInfo
-        );
-    }
-
-    srcStages |= prevAccessInfo->stageMask;
-
-    /* Extra flags if previous access was write access */
-    if (
-        prevAccessInfo->accessMask & (
-            VK_ACCESS_SHADER_WRITE_BIT |
-            VK_ACCESS_TRANSFER_WRITE_BIT
-        )
-    ) {
-        memoryBarrier.srcAccessMask |= prevAccessInfo->accessMask;
-    }
-
-    dstStages |= nextAccessInfo->stageMask;
-
-    if (memoryBarrier.srcAccessMask != 0)
+    if (sourceBarrierType == VULKAN_BUFFER_BARRIER_TYPE_COPY_SOURCE)
     {
-        memoryBarrier.dstAccessMask |= nextAccessInfo->accessMask;
+        srcStages = VK_PIPELINE_STAGE_TRANSFER_BIT;
+        memoryBarrier.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+    }
+    else if (sourceBarrierType == VULKAN_BUFFER_BARRIER_TYPE_COPY_DESTINATION)
+    {
+        srcStages = VK_PIPELINE_STAGE_TRANSFER_BIT;
+        memoryBarrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    }
+    else if (sourceBarrierType == VULKAN_BUFFER_BARRIER_TYPE_VERTEX_READ)
+    {
+        srcStages = VK_PIPELINE_STAGE_VERTEX_INPUT_BIT;
+        memoryBarrier.srcAccessMask = VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT;
+    }
+    else if (sourceBarrierType == VULKAN_BUFFER_BARRIER_TYPE_INDEX_READ)
+    {
+        srcStages = VK_PIPELINE_STAGE_VERTEX_INPUT_BIT;
+        memoryBarrier.srcAccessMask = VK_ACCESS_INDEX_READ_BIT;
+    }
+    else if (sourceBarrierType == VULKAN_BUFFER_BARRIER_TYPE_INDIRECT)
+    {
+        srcStages = VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT;
+        memoryBarrier.srcAccessMask = VK_ACCESS_INDIRECT_COMMAND_READ_BIT;
+    }
+    else if (sourceBarrierType == VULKAN_BUFFER_BARRIER_TYPE_GRAPHICS_STORAGE_READ)
+    {
+        srcStages = VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+        memoryBarrier.srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
+    }
+    else if (sourceBarrierType == VULKAN_BUFFER_BARRIER_TYPE_COMPUTE_STORAGE_READ)
+    {
+        srcStages = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+        memoryBarrier.srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
+    }
+    else if (sourceBarrierType == VULKAN_BUFFER_BARRIER_TYPE_COMPUTE_STORAGE_READ_WRITE)
+    {
+        srcStages = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+        memoryBarrier.srcAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
+    }
+    else
+    {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Unrecognized buffer source barrier type!");
+        return;
     }
 
-    if (srcStages == 0)
+    if (destinationBarrierType == VULKAN_BUFFER_BARRIER_TYPE_COPY_SOURCE)
     {
-        srcStages = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+        dstStages = VK_PIPELINE_STAGE_TRANSFER_BIT;
+        memoryBarrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
     }
-    if (dstStages == 0)
+    else if (destinationBarrierType == VULKAN_BUFFER_BARRIER_TYPE_COPY_DESTINATION)
     {
-        dstStages = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+        dstStages = VK_PIPELINE_STAGE_TRANSFER_BIT;
+        memoryBarrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    }
+    else if (destinationBarrierType == VULKAN_BUFFER_BARRIER_TYPE_VERTEX_READ)
+    {
+        dstStages = VK_PIPELINE_STAGE_VERTEX_INPUT_BIT;
+        memoryBarrier.dstAccessMask = VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT;
+    }
+    else if (destinationBarrierType == VULKAN_BUFFER_BARRIER_TYPE_INDEX_READ)
+    {
+        dstStages = VK_PIPELINE_STAGE_VERTEX_INPUT_BIT;
+        memoryBarrier.dstAccessMask = VK_ACCESS_INDEX_READ_BIT;
+    }
+    else if (destinationBarrierType == VULKAN_BUFFER_BARRIER_TYPE_INDIRECT)
+    {
+        dstStages = VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT;
+        memoryBarrier.dstAccessMask = VK_ACCESS_INDIRECT_COMMAND_READ_BIT;
+    }
+    else if (destinationBarrierType == VULKAN_BUFFER_BARRIER_TYPE_GRAPHICS_STORAGE_READ)
+    {
+        dstStages = VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+        memoryBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+    }
+    else if (destinationBarrierType == VULKAN_BUFFER_BARRIER_TYPE_COMPUTE_STORAGE_READ)
+    {
+        dstStages = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+        memoryBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+    }
+    else if (destinationBarrierType == VULKAN_BUFFER_BARRIER_TYPE_COMPUTE_STORAGE_READ_WRITE)
+    {
+        dstStages = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+        memoryBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
+    }
+    else
+    {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Unrecognized buffer destination barrier type!");
+        return;
     }
 
     renderer->vkCmdPipelineBarrier(
@@ -2956,33 +2885,19 @@ static void VULKAN_INTERNAL_BufferMemoryBarrier(
         NULL
     );
 
-    prevAccessInfo->accessMask = nextAccessInfo->accessMask;
-    prevAccessInfo->stageMask = nextAccessInfo->stageMask;
-    prevAccessInfo->imageLayout = nextAccessInfo->imageLayout;
-
     buffer->transitioned = SDL_TRUE;
-
-    if (track)
-    {
-        VULKAN_INTERNAL_TrackBarrieredBuffer(
-            renderer,
-            commandBuffer,
-            buffer
-        );
-    }
 }
 
 static void VULKAN_INTERNAL_ImageMemoryBarrier(
     VulkanRenderer *renderer,
     VulkanCommandBuffer *commandBuffer,
-    const VulkanResourceAccessInfo *nextAccessInfo,
-    SDL_bool track,
+    VulkanTextureBarrierType sourceBarrierType,
+    VulkanTextureBarrierType destinationBarrierType,
     VulkanTextureSlice *textureSlice
 ) {
     VkPipelineStageFlags srcStages = 0;
     VkPipelineStageFlags dstStages = 0;
     VkImageMemoryBarrier memoryBarrier;
-    VulkanResourceAccessInfo *prevAccessInfo;
 
     memoryBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
     memoryBarrier.pNext = NULL;
@@ -2999,64 +2914,118 @@ static void VULKAN_INTERNAL_ImageMemoryBarrier(
     memoryBarrier.subresourceRange.baseMipLevel = textureSlice->level;
     memoryBarrier.subresourceRange.levelCount = 1;
 
-    if (!SDL_FindInHashTable(
-        commandBuffer->textureSliceSyncInfo,
-        textureSlice,
-        (const void**) &prevAccessInfo
-    )) {
-        /* FIXME: these should be pooled */
-        prevAccessInfo = SDL_malloc(sizeof(VulkanResourceAccessInfo));
-
-        if (textureSlice->transitioned)
-        {
-            VULKAN_INTERNAL_DefaultTextureSliceAccessInfo(
-                textureSlice->parent->usageFlags,
-                prevAccessInfo
-            );
-        }
-        else
-        {
-            prevAccessInfo->accessMask = 0;
-            prevAccessInfo->stageMask = 0;
-            prevAccessInfo->imageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-        }
-
-        SDL_InsertIntoHashTable(
-            commandBuffer->textureSliceSyncInfo,
-            textureSlice,
-            (const void*) prevAccessInfo
-        );
-    }
-
-    srcStages |= prevAccessInfo->stageMask;
-
-    /* Extra flags if previous access was write access */
-
-    if (
-        prevAccessInfo->accessMask & (
-            VK_ACCESS_SHADER_WRITE_BIT |
-            VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT |
-            VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT |
-            VK_ACCESS_TRANSFER_WRITE_BIT
-        )
-    ) {
-        memoryBarrier.srcAccessMask |= prevAccessInfo->accessMask;
-    }
-
-    memoryBarrier.oldLayout = prevAccessInfo->imageLayout;
-
-    dstStages |= nextAccessInfo->stageMask;
-
-    memoryBarrier.dstAccessMask |= nextAccessInfo->accessMask;
-    memoryBarrier.newLayout = nextAccessInfo->imageLayout;
-
-    if (srcStages == 0)
+    if (sourceBarrierType == VULKAN_TEXTURE_BARRIER_TYPE_COPY_SOURCE)
     {
-        srcStages = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+        srcStages = VK_PIPELINE_STAGE_TRANSFER_BIT;
+        memoryBarrier.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+        memoryBarrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
     }
-    if (dstStages == 0)
+    else if (sourceBarrierType == VULKAN_TEXTURE_BARRIER_TYPE_COPY_DESTINATION)
+    {
+        srcStages = VK_PIPELINE_STAGE_TRANSFER_BIT;
+        memoryBarrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+        memoryBarrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    }
+    else if (sourceBarrierType == VULKAN_TEXTURE_BARRIER_TYPE_SAMPLER)
+    {
+        srcStages = VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+        memoryBarrier.srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
+        memoryBarrier.oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    }
+    else if (sourceBarrierType == VULKAN_TEXTURE_BARRIER_TYPE_GRAPHICS_STORAGE_READ)
+    {
+        srcStages = VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+        memoryBarrier.srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
+        memoryBarrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
+    }
+    else if (sourceBarrierType == VULKAN_TEXTURE_BARRIER_TYPE_COMPUTE_STORAGE_READ)
+    {
+        srcStages = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+        memoryBarrier.srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
+        memoryBarrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
+    }
+    else if (sourceBarrierType == VULKAN_TEXTURE_BARRIER_TYPE_COMPUTE_STORAGE_READ_WRITE)
+    {
+        srcStages = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+        memoryBarrier.srcAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
+        memoryBarrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
+    }
+    else if (sourceBarrierType == VULKAN_TEXTURE_BARRIER_TYPE_COLOR_ATTACHMENT)
+    {
+        srcStages = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+        memoryBarrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+        memoryBarrier.oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    }
+    else if (sourceBarrierType == VULKAN_TEXTURE_BARRIER_TYPE_DEPTH_STENCIL_ATTACHMENT)
+    {
+        srcStages = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+        memoryBarrier.srcAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+        memoryBarrier.oldLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+    }
+    else
+    {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Unrecognized texture source barrier type!");
+        return;
+    }
+
+    if (destinationBarrierType == VULKAN_TEXTURE_BARRIER_TYPE_COPY_SOURCE)
+    {
+        dstStages = VK_PIPELINE_STAGE_TRANSFER_BIT;
+        memoryBarrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+        memoryBarrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+    }
+    else if (destinationBarrierType == VULKAN_TEXTURE_BARRIER_TYPE_COPY_DESTINATION)
+    {
+        dstStages = VK_PIPELINE_STAGE_TRANSFER_BIT;
+        memoryBarrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+        memoryBarrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    }
+    else if (destinationBarrierType == VULKAN_TEXTURE_BARRIER_TYPE_SAMPLER)
+    {
+        dstStages = VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+        memoryBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+        memoryBarrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
+    }
+    else if (destinationBarrierType == VULKAN_TEXTURE_BARRIER_TYPE_GRAPHICS_STORAGE_READ)
+    {
+        dstStages = VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+        memoryBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+        memoryBarrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
+    }
+    else if (destinationBarrierType == VULKAN_TEXTURE_BARRIER_TYPE_COMPUTE_STORAGE_READ)
+    {
+        dstStages = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+        memoryBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+        memoryBarrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
+    }
+    else if (destinationBarrierType == VULKAN_TEXTURE_BARRIER_TYPE_COMPUTE_STORAGE_READ_WRITE)
+    {
+        dstStages = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+        memoryBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
+        memoryBarrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
+    }
+    else if (destinationBarrierType == VULKAN_TEXTURE_BARRIER_TYPE_COLOR_ATTACHMENT)
+    {
+        dstStages = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+        memoryBarrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+        memoryBarrier.newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    }
+    else if (destinationBarrierType == VULKAN_TEXTURE_BARRIER_TYPE_DEPTH_STENCIL_ATTACHMENT)
+    {
+        dstStages = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+        memoryBarrier.dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+        memoryBarrier.newLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
+    }
+    else if (destinationBarrierType == VULKAN_TEXTURE_BARRIER_TYPE_PRESENT)
     {
         dstStages = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+        memoryBarrier.dstAccessMask = 0;
+        memoryBarrier.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+    }
+    else
+    {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Unrecognized texture destination barrier type!");
+        return;
     }
 
     renderer->vkCmdPipelineBarrier(
@@ -3072,91 +3041,108 @@ static void VULKAN_INTERNAL_ImageMemoryBarrier(
         &memoryBarrier
     );
 
-    prevAccessInfo->stageMask = nextAccessInfo->stageMask;
-    prevAccessInfo->accessMask = nextAccessInfo->accessMask;
-    prevAccessInfo->imageLayout = nextAccessInfo->imageLayout;
-
     textureSlice->transitioned = SDL_TRUE;
-
-    if (track)
-    {
-        VULKAN_INTERNAL_TrackBarrieredTextureSlice(
-            renderer,
-            commandBuffer,
-            textureSlice
-        );
-    }
 }
 
-/* Memory Barriers */
-
-static void VULKAN_INTERNAL_PostPassBufferBarrier(
-    VulkanRenderer *renderer,
-    VulkanCommandBuffer *commandBuffer,
+static VulkanBufferBarrierType VULKAN_INTERNAL_DefaultBufferBarrierType(
     VulkanBuffer *buffer
 ) {
-    VulkanResourceAccessInfo nextAccessInfo;
-
-    if (VULKAN_INTERNAL_DefaultBufferAccessInfo(
-        buffer->usage,
-        &nextAccessInfo
-    )) {
-        VULKAN_INTERNAL_BufferMemoryBarrier(
-            renderer,
-            commandBuffer,
-            &nextAccessInfo,
-            SDL_FALSE,
-            buffer
-        );
+    if (buffer->usage & SDL_GPU_BUFFERUSAGE_VERTEX_BIT)
+    {
+        return VULKAN_BUFFER_BARRIER_TYPE_VERTEX_READ;
+    }
+    else if (buffer->usage & SDL_GPU_BUFFERUSAGE_INDEX_BIT)
+    {
+        return VULKAN_BUFFER_BARRIER_TYPE_INDEX_READ;
+    }
+    else if (buffer->usage & SDL_GPU_BUFFERUSAGE_INDIRECT_BIT)
+    {
+        return VULKAN_BUFFER_BARRIER_TYPE_INDIRECT;
+    }
+    else if (buffer->usage & SDL_GPU_BUFFERUSAGE_GRAPHICS_STORAGE_READ_BIT)
+    {
+        return VULKAN_BUFFER_BARRIER_TYPE_GRAPHICS_STORAGE_READ;
+    }
+    else if (buffer->usage & SDL_GPU_BUFFERUSAGE_COMPUTE_STORAGE_READ_BIT)
+    {
+        return VULKAN_BUFFER_BARRIER_TYPE_COMPUTE_STORAGE_READ;
+    }
+    else if (buffer->usage & SDL_GPU_BUFFERUSAGE_COMPUTE_STORAGE_WRITE_BIT)
+    {
+        return VULKAN_BUFFER_BARRIER_TYPE_COMPUTE_STORAGE_READ_WRITE;
+    }
+    else
+    {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Texture has no usage flags!");
+        return VULKAN_BUFFER_BARRIER_TYPE_VERTEX_READ;
     }
 }
 
-static void VULKAN_INTERNAL_PostPassTextureSliceBarrier(
+static VulkanTextureBarrierType VULKAN_INTERNAL_DefaultTextureBarrierType(
+    VulkanTexture *texture
+) {
+    /* NOTE: order matters here! */
+    /* NOTE: graphics storage bits and sampler bit are mutually exclusive! */
+
+    if (texture->usageFlags & SDL_GPU_TEXTUREUSAGE_SAMPLER_BIT)
+    {
+        return VULKAN_TEXTURE_BARRIER_TYPE_SAMPLER;
+    }
+    else if (texture->usageFlags & SDL_GPU_TEXTUREUSAGE_GRAPHICS_STORAGE_READ_BIT)
+    {
+        return VULKAN_TEXTURE_BARRIER_TYPE_GRAPHICS_STORAGE_READ;
+    }
+    else if (texture->usageFlags & SDL_GPU_TEXTUREUSAGE_COLOR_TARGET_BIT)
+    {
+        return VULKAN_TEXTURE_BARRIER_TYPE_COLOR_ATTACHMENT;
+    }
+    else if (texture->usageFlags & SDL_GPU_TEXTUREUSAGE_DEPTH_STENCIL_TARGET_BIT)
+    {
+        return VULKAN_TEXTURE_BARRIER_TYPE_DEPTH_STENCIL_ATTACHMENT;
+    }
+    else if (texture->usageFlags & SDL_GPU_TEXTUREUSAGE_COMPUTE_STORAGE_READ_BIT)
+    {
+        return VULKAN_TEXTURE_BARRIER_TYPE_COMPUTE_STORAGE_READ;
+    }
+    else if (texture->usageFlags & SDL_GPU_TEXTUREUSAGE_COMPUTE_STORAGE_WRITE_BIT)
+    {
+        return VULKAN_TEXTURE_BARRIER_TYPE_COMPUTE_STORAGE_READ_WRITE;
+    }
+    else
+    {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Texture has no usage flags!");
+        return VULKAN_TEXTURE_BARRIER_TYPE_SAMPLER;
+    }
+}
+
+static void VULKAN_INTERNAL_ResetBufferMemoryBarrier(
     VulkanRenderer *renderer,
     VulkanCommandBuffer *commandBuffer,
-    VulkanTextureSlice *textureSlice
+    VulkanBufferBarrierType sourceBarrierType,
+    VulkanBuffer *buffer
 ) {
-    VulkanResourceAccessInfo nextAccessInfo;
-
-    if (VULKAN_INTERNAL_DefaultTextureSliceAccessInfo(
-        textureSlice->parent->usageFlags,
-        &nextAccessInfo
-    )) {
-        VULKAN_INTERNAL_ImageMemoryBarrier(
-            renderer,
-            commandBuffer,
-            &nextAccessInfo,
-            SDL_FALSE,
-            textureSlice
-        );
-    }
+    VULKAN_INTERNAL_BufferMemoryBarrier(
+        renderer,
+        commandBuffer,
+        sourceBarrierType,
+        VULKAN_INTERNAL_DefaultBufferBarrierType(buffer),
+        buffer
+    );
 }
 
-static void VULKAN_INTERNAL_PostPassBarriers(
+static void VULKAN_INTERNAL_ResetTextureMemoryBarrier(
     VulkanRenderer *renderer,
-    VulkanCommandBuffer *commandBuffer
+    VulkanCommandBuffer *commandBuffer,
+    VulkanTextureBarrierType sourceBarrierType,
+    VulkanTextureSlice *textureSlice
 ) {
-    Uint32 i;
-
-    for (i = 0; i < commandBuffer->barrieredBufferCount; i += 1)
-    {
-        VULKAN_INTERNAL_PostPassBufferBarrier(
-            renderer,
-            commandBuffer,
-            commandBuffer->barrieredBuffers[i]
-        );
-    }
-    commandBuffer->barrieredBufferCount = 0;
-
-    for (i = 0; i < commandBuffer->barrieredTextureSliceCount; i += 1)
-    {
-        VULKAN_INTERNAL_PostPassTextureSliceBarrier(
-            renderer,
-            commandBuffer,
-            commandBuffer->barrieredTextureSlices[i]
-        );
-    }
-    commandBuffer->barrieredTextureSliceCount = 0;
+    VULKAN_INTERNAL_ImageMemoryBarrier(
+        renderer,
+        commandBuffer,
+        sourceBarrierType,
+        VULKAN_INTERNAL_DefaultTextureBarrierType(textureSlice->parent),
+        textureSlice
+    );
 }
 
 /* Resource Disposal */
@@ -3379,8 +3365,6 @@ static void VULKAN_INTERNAL_DestroyCommandPool(
         SDL_free(commandBuffer->waitSemaphores);
         SDL_free(commandBuffer->signalSemaphores);
         SDL_free(commandBuffer->boundDescriptorSetDatas);
-        SDL_free(commandBuffer->barrieredBuffers);
-        SDL_free(commandBuffer->barrieredTextureSlices);
         SDL_free(commandBuffer->usedBuffers);
         SDL_free(commandBuffer->usedTextureSlices);
         SDL_free(commandBuffer->usedSamplers);
@@ -5981,7 +5965,6 @@ static VulkanTexture* VULKAN_INTERNAL_CreateTexture(
     }
     if (textureUsageFlags & (
         SDL_GPU_TEXTUREUSAGE_GRAPHICS_STORAGE_READ_BIT  |
-        SDL_GPU_TEXTUREUSAGE_GRAPHICS_STORAGE_WRITE_BIT |
         SDL_GPU_TEXTUREUSAGE_COMPUTE_STORAGE_READ_BIT   |
         SDL_GPU_TEXTUREUSAGE_COMPUTE_STORAGE_WRITE_BIT
     )) {
@@ -6278,7 +6261,7 @@ static VulkanBuffer* VULKAN_INTERNAL_PrepareBufferForWrite(
     VulkanCommandBuffer *commandBuffer,
     VulkanBufferContainer *bufferContainer,
     SDL_bool cycle,
-    VulkanResourceAccessInfo *nextResourceAccessInfo
+    VulkanBufferBarrierType destinationBarrierType
 ) {
     if (
         cycle &&
@@ -6289,16 +6272,14 @@ static VulkanBuffer* VULKAN_INTERNAL_PrepareBufferForWrite(
             bufferContainer
         );
     }
-    else
-    {
-        VULKAN_INTERNAL_BufferMemoryBarrier(
-            renderer,
-            commandBuffer,
-            nextResourceAccessInfo,
-            SDL_TRUE,
-            bufferContainer->activeBufferHandle->vulkanBuffer
-        );
-    }
+
+    VULKAN_INTERNAL_BufferMemoryBarrier(
+        renderer,
+        commandBuffer,
+        VULKAN_INTERNAL_DefaultBufferBarrierType(bufferContainer->activeBufferHandle->vulkanBuffer),
+        destinationBarrierType,
+        bufferContainer->activeBufferHandle->vulkanBuffer
+    );
 
     return bufferContainer->activeBufferHandle->vulkanBuffer;
 }
@@ -6310,7 +6291,7 @@ static VulkanTextureSlice* VULKAN_INTERNAL_PrepareTextureSliceForWrite(
     Uint32 layer,
     Uint32 level,
     SDL_bool cycle,
-    VulkanResourceAccessInfo *nextResourceAccessInfo
+    VulkanTextureBarrierType destinationBarrierType
 ) {
     VulkanTextureSlice *textureSlice = VULKAN_INTERNAL_FetchTextureSlice(
         textureContainer->activeTextureHandle->vulkanTexture,
@@ -6340,8 +6321,8 @@ static VulkanTextureSlice* VULKAN_INTERNAL_PrepareTextureSliceForWrite(
     VULKAN_INTERNAL_ImageMemoryBarrier(
         renderer,
         commandBuffer,
-        nextResourceAccessInfo,
-        SDL_TRUE,
+        VULKAN_INTERNAL_DefaultTextureBarrierType(textureSlice),
+        destinationBarrierType,
         textureSlice
     );
 
@@ -7374,7 +7355,6 @@ static SDL_GpuBuffer* VULKAN_CreateGpuBuffer(
 
     if (usageFlags & (
         SDL_GPU_BUFFERUSAGE_GRAPHICS_STORAGE_READ_BIT |
-        SDL_GPU_BUFFERUSAGE_GRAPHICS_STORAGE_WRITE_BIT |
         SDL_GPU_BUFFERUSAGE_COMPUTE_STORAGE_READ_BIT |
         SDL_GPU_BUFFERUSAGE_COMPUTE_STORAGE_WRITE_BIT
     )) {
@@ -8251,7 +8231,6 @@ static void VULKAN_BeginRenderPass(
     SDL_GpuRect defaultScissor;
     Uint32 framebufferWidth = UINT32_MAX;
     Uint32 framebufferHeight = UINT32_MAX;
-    VulkanResourceAccessInfo resourceAccessInfo;
 
     for (i = 0; i < colorAttachmentCount; i += 1)
     {
@@ -8319,10 +8298,6 @@ static void VULKAN_BeginRenderPass(
             cycle = colorAttachmentInfos[i].cycle;
         }
 
-        resourceAccessInfo.stageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-        resourceAccessInfo.accessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-        resourceAccessInfo.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-
         textureContainer = (VulkanTextureContainer*) colorAttachmentInfos[i].textureSlice.texture;
         textureSlice = VULKAN_INTERNAL_PrepareTextureSliceForWrite(
             renderer,
@@ -8331,19 +8306,17 @@ static void VULKAN_BeginRenderPass(
             colorAttachmentInfos[i].textureSlice.layer,
             colorAttachmentInfos[i].textureSlice.mipLevel,
             cycle,
-            &resourceAccessInfo
+            VULKAN_TEXTURE_BARRIER_TYPE_COLOR_ATTACHMENT
         );
 
         if (textureSlice->msaaTexHandle != NULL)
         {
-            resourceAccessInfo.accessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-
             /* Transition the multisample attachment */
             VULKAN_INTERNAL_ImageMemoryBarrier(
                 renderer,
                 vulkanCommandBuffer,
-                &resourceAccessInfo,
-                SDL_TRUE,
+                VULKAN_INTERNAL_DefaultTextureBarrierType(textureSlice->msaaTexHandle->vulkanTexture),
+                VULKAN_TEXTURE_BARRIER_TYPE_COLOR_ATTACHMENT,
                 &textureSlice->msaaTexHandle->vulkanTexture->slices[0]
             );
 
@@ -8351,9 +8324,13 @@ static void VULKAN_BeginRenderPass(
             multisampleAttachmentCount += 1;
         }
 
+        vulkanCommandBuffer->colorAttachmentSlices[i] = textureSlice;
+
         VULKAN_INTERNAL_TrackTextureSlice(renderer, vulkanCommandBuffer, textureSlice);
         /* TODO: do we need to track the msaa texture? or is it implicitly only used when the regular texture is used? */
     }
+
+    vulkanCommandBuffer->colorAttachmentSliceCount = colorAttachmentCount;
 
     if (depthStencilAttachmentInfo != NULL)
     {
@@ -8370,10 +8347,6 @@ static void VULKAN_BeginRenderPass(
             cycle = depthStencilAttachmentInfo->cycle;
         }
 
-        resourceAccessInfo.stageMask = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
-        resourceAccessInfo.accessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-        resourceAccessInfo.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-
         textureContainer = (VulkanTextureContainer*) depthStencilAttachmentInfo->textureSlice.texture;
         textureSlice = VULKAN_INTERNAL_PrepareTextureSliceForWrite(
             renderer,
@@ -8382,10 +8355,12 @@ static void VULKAN_BeginRenderPass(
             depthStencilAttachmentInfo->textureSlice.layer,
             depthStencilAttachmentInfo->textureSlice.mipLevel,
             cycle,
-            &resourceAccessInfo
+            VULKAN_TEXTURE_BARRIER_TYPE_DEPTH_STENCIL_ATTACHMENT
         );
 
         clearCount += 1;
+
+        vulkanCommandBuffer->depthStencilAttachmentSlice = textureSlice;
 
         VULKAN_INTERNAL_TrackTextureSlice(renderer, vulkanCommandBuffer, textureSlice);
     }
@@ -8666,15 +8641,33 @@ static void VULKAN_EndRenderPass(
 ) {
     VulkanCommandBuffer *vulkanCommandBuffer = (VulkanCommandBuffer*) commandBuffer;
     VulkanRenderer *renderer = (VulkanRenderer*) vulkanCommandBuffer->renderer;
+    Uint32 i;
 
     renderer->vkCmdEndRenderPass(
         vulkanCommandBuffer->commandBuffer
     );
 
-    VULKAN_INTERNAL_PostPassBarriers(
-        renderer,
-        vulkanCommandBuffer
-    );
+    for (i = 0; i < vulkanCommandBuffer->colorAttachmentSliceCount; i += 1)
+    {
+        VULKAN_INTERNAL_ResetTextureMemoryBarrier(
+            renderer,
+            vulkanCommandBuffer,
+            VULKAN_TEXTURE_BARRIER_TYPE_COLOR_ATTACHMENT,
+            vulkanCommandBuffer->colorAttachmentSlices[i]
+        );
+    }
+    vulkanCommandBuffer->colorAttachmentSliceCount = 0;
+
+    if (vulkanCommandBuffer->depthStencilAttachmentSlice != NULL)
+    {
+        VULKAN_INTERNAL_ResetTextureMemoryBarrier(
+            renderer,
+            vulkanCommandBuffer,
+            VULKAN_TEXTURE_BARRIER_TYPE_DEPTH_STENCIL_ATTACHMENT,
+            vulkanCommandBuffer->depthStencilAttachmentSlice
+        );
+        vulkanCommandBuffer->depthStencilAttachmentSlice = NULL;
+    }
 
     vulkanCommandBuffer->currentGraphicsPipeline = NULL;
 
@@ -8774,12 +8767,7 @@ static void VULKAN_BindComputeRWStorageTextures(
     VulkanRenderer *renderer = vulkanCommandBuffer->renderer;
     VulkanTextureContainer *textureContainer;
     VulkanTextureSlice *textureSlice;
-    VulkanResourceAccessInfo resourceAccessInfo;
     Uint32 i;
-
-    resourceAccessInfo.stageMask = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
-    resourceAccessInfo.accessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
-    resourceAccessInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
 
     for (i = 0; i < bindingCount; i += 1)
     {
@@ -8792,7 +8780,7 @@ static void VULKAN_BindComputeRWStorageTextures(
             storageTextureBindings[i].textureSlice.layer,
             storageTextureBindings[i].textureSlice.mipLevel,
             storageTextureBindings[i].cycle,
-            &resourceAccessInfo
+            VULKAN_TEXTURE_BARRIER_TYPE_COMPUTE_STORAGE_READ_WRITE
         );
 
         vulkanCommandBuffer->readWriteComputeStorageTextureSlices[firstSlot + i] = textureSlice;
@@ -8844,12 +8832,7 @@ static void VULKAN_BindComputeRWStorageBuffers(
     VulkanRenderer *renderer = vulkanCommandBuffer->renderer;
     VulkanBufferContainer *bufferContainer;
     VulkanBuffer *buffer;
-    VulkanResourceAccessInfo resourceAccessInfo;
     Uint32 i;
-
-    resourceAccessInfo.stageMask = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
-    resourceAccessInfo.accessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
-    resourceAccessInfo.imageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 
     for (i = 0; i < bindingCount; i += 1)
     {
@@ -8860,7 +8843,7 @@ static void VULKAN_BindComputeRWStorageBuffers(
             vulkanCommandBuffer,
             bufferContainer,
             storageBufferBindings[i].cycle,
-            &resourceAccessInfo
+            VULKAN_BUFFER_BARRIER_TYPE_COMPUTE_STORAGE_READ
         );
 
         vulkanCommandBuffer->readWriteComputeStorageBuffers[firstSlot + i] = buffer;
@@ -9312,11 +9295,6 @@ static void VULKAN_UploadToTexture(
     VulkanTextureContainer *vulkanTextureContainer = (VulkanTextureContainer*) textureRegion->textureSlice.texture;
     VulkanTextureSlice *vulkanTextureSlice;
     VkBufferImageCopy imageCopy;
-    VulkanResourceAccessInfo resourceAccessInfo;
-
-    resourceAccessInfo.stageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
-    resourceAccessInfo.accessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-    resourceAccessInfo.imageLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
 
     vulkanTextureSlice = VULKAN_INTERNAL_PrepareTextureSliceForWrite(
         renderer,
@@ -9325,17 +9303,14 @@ static void VULKAN_UploadToTexture(
         textureRegion->textureSlice.layer,
         textureRegion->textureSlice.mipLevel,
         cycle,
-        &resourceAccessInfo
+        VULKAN_TEXTURE_BARRIER_TYPE_COPY_DESTINATION
     );
-
-    resourceAccessInfo.accessMask = VK_ACCESS_TRANSFER_READ_BIT;
-    resourceAccessInfo.imageLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
 
     VULKAN_INTERNAL_BufferMemoryBarrier(
         renderer,
         vulkanCommandBuffer,
-        &resourceAccessInfo,
-        SDL_TRUE,
+        VULKAN_INTERNAL_DefaultBufferBarrierType(transferBufferContainer->activeBufferHandle->vulkanBuffer),
+        VULKAN_BUFFER_BARRIER_TYPE_COPY_SOURCE,
         transferBufferContainer->activeBufferHandle->vulkanBuffer
     );
 
@@ -9360,6 +9335,20 @@ static void VULKAN_UploadToTexture(
         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
         1,
         &imageCopy
+    );
+
+    VULKAN_INTERNAL_ResetTextureMemoryBarrier(
+        renderer,
+        vulkanCommandBuffer,
+        VULKAN_TEXTURE_BARRIER_TYPE_COPY_DESTINATION,
+        vulkanTextureSlice
+    );
+
+    VULKAN_INTERNAL_ResetBufferMemoryBarrier(
+        renderer,
+        vulkanCommandBuffer,
+        VULKAN_BUFFER_BARRIER_TYPE_COPY_SOURCE,
+        transferBufferContainer->activeBufferHandle->vulkanBuffer
     );
 
     VULKAN_INTERNAL_TrackBuffer(renderer, vulkanCommandBuffer, transferBufferContainer->activeBufferHandle->vulkanBuffer);
@@ -9453,8 +9442,8 @@ static void VULKAN_DownloadFromTexture(
     VULKAN_INTERNAL_ImageMemoryBarrier(
         renderer,
         vulkanCommandBuffer,
-        &resourceAccessInfo,
-        SDL_TRUE,
+        VULKAN_INTERNAL_DefaultTextureBarrierType(vulkanTextureSlice->parent),
+        VULKAN_TEXTURE_BARRIER_TYPE_COPY_SOURCE,
         vulkanTextureSlice
     );
 
@@ -9479,6 +9468,13 @@ static void VULKAN_DownloadFromTexture(
         transferBufferContainer->activeBufferHandle->vulkanBuffer->buffer,
         1,
         &imageCopy
+    );
+
+    VULKAN_INTERNAL_ResetTextureMemoryBarrier(
+        renderer,
+        vulkanCommandBuffer,
+        VULKAN_TEXTURE_BARRIER_TYPE_COPY_SOURCE,
+        vulkanTextureSlice
     );
 
     VULKAN_INTERNAL_TrackBuffer(renderer, vulkanCommandBuffer, transferBufferContainer->activeBufferHandle->vulkanBuffer);
@@ -9548,13 +9544,8 @@ static void VULKAN_CopyTextureToTexture(
     VulkanTextureSlice *srcSlice;
     VulkanTextureSlice *dstSlice;
     VkImageCopy imageCopy;
-    VulkanResourceAccessInfo resourceAccessInfo;
 
     srcSlice = VULKAN_INTERNAL_SDLToVulkanTextureSlice(&source->textureSlice);
-
-    resourceAccessInfo.stageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
-    resourceAccessInfo.accessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-    resourceAccessInfo.imageLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
 
     dstSlice = VULKAN_INTERNAL_PrepareTextureSliceForWrite(
         renderer,
@@ -9563,17 +9554,14 @@ static void VULKAN_CopyTextureToTexture(
         destination->textureSlice.layer,
         destination->textureSlice.mipLevel,
         cycle,
-        &resourceAccessInfo
+        VULKAN_TEXTURE_BARRIER_TYPE_COPY_DESTINATION
     );
-
-    resourceAccessInfo.accessMask = VK_ACCESS_TRANSFER_READ_BIT;
-    resourceAccessInfo.imageLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
 
     VULKAN_INTERNAL_ImageMemoryBarrier(
         renderer,
         vulkanCommandBuffer,
-        &resourceAccessInfo,
-        SDL_TRUE,
+        VULKAN_INTERNAL_DefaultTextureBarrierType(srcSlice->parent),
+        VULKAN_TEXTURE_BARRIER_TYPE_COPY_SOURCE,
         srcSlice
     );
 
@@ -9603,6 +9591,20 @@ static void VULKAN_CopyTextureToTexture(
         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
         1,
         &imageCopy
+    );
+
+    VULKAN_INTERNAL_ResetTextureMemoryBarrier(
+        renderer,
+        vulkanCommandBuffer,
+        VULKAN_TEXTURE_BARRIER_TYPE_COPY_SOURCE,
+        srcSlice
+    );
+
+    VULKAN_INTERNAL_ResetTextureMemoryBarrier(
+        renderer,
+        vulkanCommandBuffer,
+        VULKAN_TEXTURE_BARRIER_TYPE_COPY_DESTINATION,
+        dstSlice
     );
 
     VULKAN_INTERNAL_TrackTextureSlice(renderer, vulkanCommandBuffer, srcSlice);
@@ -9672,7 +9674,6 @@ static void VULKAN_GenerateMipmaps(
     VulkanTextureSlice *dstTextureSlice;
     VkImageBlit blit;
     Uint32 layer, level;
-    VulkanResourceAccessInfo resourceAccessInfo;
 
     if (vulkanTexture->levelCount <= 1) { return; }
 
@@ -9692,26 +9693,19 @@ static void VULKAN_GenerateMipmaps(
             level
         );
 
-        resourceAccessInfo.stageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
-        resourceAccessInfo.accessMask = VK_ACCESS_TRANSFER_READ_BIT;
-        resourceAccessInfo.imageLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-
         VULKAN_INTERNAL_ImageMemoryBarrier(
             renderer,
             vulkanCommandBuffer,
-            &resourceAccessInfo,
-            SDL_TRUE,
+            VULKAN_INTERNAL_DefaultTextureBarrierType(srcTextureSlice->parent),
+            VULKAN_TEXTURE_BARRIER_TYPE_COPY_SOURCE,
             srcTextureSlice
         );
 
-        resourceAccessInfo.accessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-        resourceAccessInfo.imageLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-
         VULKAN_INTERNAL_ImageMemoryBarrier(
             renderer,
             vulkanCommandBuffer,
-            &resourceAccessInfo,
-            SDL_TRUE,
+            VULKAN_INTERNAL_DefaultTextureBarrierType(dstTextureSlice->parent),
+            VULKAN_TEXTURE_BARRIER_TYPE_COPY_DESTINATION,
             dstTextureSlice
         );
 
@@ -9752,6 +9746,20 @@ static void VULKAN_GenerateMipmaps(
             VK_FILTER_LINEAR
         );
 
+        VULKAN_INTERNAL_ResetTextureMemoryBarrier(
+            renderer,
+            vulkanCommandBuffer,
+            VULKAN_TEXTURE_BARRIER_TYPE_COPY_SOURCE,
+            srcTextureSlice
+        );
+
+        VULKAN_INTERNAL_ResetTextureMemoryBarrier(
+            renderer,
+            vulkanCommandBuffer,
+            VULKAN_TEXTURE_BARRIER_TYPE_COPY_DESTINATION,
+            dstTextureSlice
+        );
+
         VULKAN_INTERNAL_TrackTextureSlice(renderer, vulkanCommandBuffer, srcTextureSlice);
         VULKAN_INTERNAL_TrackTextureSlice(renderer, vulkanCommandBuffer, dstTextureSlice);
     }
@@ -9779,17 +9787,12 @@ static void VULKAN_Blit(
     VulkanRenderer *renderer = (VulkanRenderer*) vulkanCommandBuffer->renderer;
     VulkanTextureContainer *sourceTextureContainer = (VulkanTextureContainer*) source->textureSlice.texture;
     VkImageBlit region;
-    VulkanResourceAccessInfo resourceAccessInfo;
 
     VulkanTextureSlice *srcTextureSlice = VULKAN_INTERNAL_FetchTextureSlice(
         sourceTextureContainer->activeTextureHandle->vulkanTexture,
         source->textureSlice.layer,
         source->textureSlice.mipLevel
     );
-
-    resourceAccessInfo.stageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
-    resourceAccessInfo.accessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-    resourceAccessInfo.imageLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
 
     VulkanTextureSlice *dstTextureSlice = VULKAN_INTERNAL_PrepareTextureSliceForWrite(
         renderer,
@@ -9798,17 +9801,14 @@ static void VULKAN_Blit(
         destination->textureSlice.layer,
         destination->textureSlice.mipLevel,
         cycle,
-        &resourceAccessInfo
+        VULKAN_TEXTURE_BARRIER_TYPE_COPY_DESTINATION
     );
-
-    resourceAccessInfo.accessMask = VK_ACCESS_TRANSFER_READ_BIT;
-    resourceAccessInfo.imageLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
 
     VULKAN_INTERNAL_ImageMemoryBarrier(
         renderer,
         vulkanCommandBuffer,
-        &resourceAccessInfo,
-        SDL_TRUE,
+        VULKAN_INTERNAL_DefaultTextureBarrierType(srcTextureSlice->parent),
+        VULKAN_TEXTURE_BARRIER_TYPE_COPY_SOURCE,
         srcTextureSlice
     );
 
@@ -9845,9 +9845,18 @@ static void VULKAN_Blit(
         SDLToVK_Filter[filterMode]
     );
 
-    VULKAN_INTERNAL_PostPassBarriers(
+    VULKAN_INTERNAL_ResetTextureMemoryBarrier(
         renderer,
-        vulkanCommandBuffer
+        vulkanCommandBuffer,
+        VULKAN_TEXTURE_BARRIER_TYPE_COPY_SOURCE,
+        srcTextureSlice
+    );
+
+    VULKAN_INTERNAL_ResetTextureMemoryBarrier(
+        renderer,
+        vulkanCommandBuffer,
+        VULKAN_TEXTURE_BARRIER_TYPE_COPY_DESTINATION,
+        dstTextureSlice
     );
 
     VULKAN_INTERNAL_TrackTextureSlice(renderer, vulkanCommandBuffer, srcTextureSlice);
@@ -10012,7 +10021,6 @@ static void VULKAN_INTERNAL_AllocateCommandBuffers(
 
         /* Synchronization */
 
-        commandBuffer->bufferSyncInfo = NULL;
         commandBuffer->textureSliceSyncInfo = NULL;
 
         /* Pool it! */
@@ -11072,7 +11080,6 @@ static void VULKAN_Submit(
     VulkanTextureSlice *swapchainTextureSlice;
     Uint8 commandBufferCleaned = 0;
     VulkanMemorySubAllocator *allocator;
-    VulkanResourceAccessInfo resourceAccessInfo;
     SDL_bool presenting = SDL_FALSE;
     Sint32 i, j;
 
@@ -11093,15 +11100,11 @@ static void VULKAN_Submit(
             0
         );
 
-        resourceAccessInfo.stageMask = 0;
-        resourceAccessInfo.accessMask = 0;
-        resourceAccessInfo.imageLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-
         VULKAN_INTERNAL_ImageMemoryBarrier(
             renderer,
             vulkanCommandBuffer,
-            &resourceAccessInfo,
-            SDL_FALSE,
+            VULKAN_INTERNAL_DefaultTextureBarrierType(swapchainTextureSlice->parent),
+            VULKAN_TEXTURE_BARRIER_TYPE_PRESENT,
             swapchainTextureSlice
         );
     }
@@ -11138,9 +11141,7 @@ static void VULKAN_Submit(
 
     /* Clean up sync info */
 
-    SDL_DestroyHashTable(vulkanCommandBuffer->bufferSyncInfo);
     SDL_DestroyHashTable(vulkanCommandBuffer->textureSliceSyncInfo);
-    vulkanCommandBuffer->bufferSyncInfo = NULL;
     vulkanCommandBuffer->textureSliceSyncInfo = NULL;
 
     /* Mark command buffers as submitted */
@@ -11275,7 +11276,6 @@ static Uint8 VULKAN_INTERNAL_DefragmentMemory(
     VulkanCommandBuffer *commandBuffer;
     VulkanTextureSlice *srcSlice;
     VulkanTextureSlice *dstSlice;
-    VulkanResourceAccessInfo resourceAccessInfo;
     Uint32 i, sliceIndex;
 
     SDL_LockMutex(renderer->allocatorLock);
@@ -11339,7 +11339,7 @@ static Uint8 VULKAN_INTERNAL_DefragmentMemory(
                     renderer,
                     commandBuffer,
                     &resourceAccessInfo,
-                    SDL_TRUE,
+                    SDL_FALSE,
                     currentRegion->vulkanBuffer
                 );
 
@@ -11350,7 +11350,7 @@ static Uint8 VULKAN_INTERNAL_DefragmentMemory(
                     renderer,
                     commandBuffer,
                     &resourceAccessInfo,
-                    SDL_TRUE,
+                    SDL_FALSE,
                     newBuffer
                 );
 
@@ -11364,6 +11364,19 @@ static Uint8 VULKAN_INTERNAL_DefragmentMemory(
                     newBuffer->buffer,
                     1,
                     &bufferCopy
+                );
+
+                VULKAN_INTERNAL_DefaultBufferAccessInfo(
+                    newBuffer->usage,
+                    &resourceAccessInfo
+                );
+
+                VULKAN_INTERNAL_BufferMemoryBarrier(
+                    renderer,
+                    commandBuffer,
+                    &resourceAccessInfo,
+                    SDL_FALSE,
+                    newBuffer
                 );
 
                 newBuffer->defragInProgress = 1;
@@ -11428,26 +11441,19 @@ static Uint8 VULKAN_INTERNAL_DefragmentMemory(
 
                 if (srcSlice->transitioned)
                 {
-                    resourceAccessInfo.stageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
-                    resourceAccessInfo.accessMask = VK_ACCESS_TRANSFER_READ_BIT;
-                    resourceAccessInfo.imageLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-
                     VULKAN_INTERNAL_ImageMemoryBarrier(
                         renderer,
                         commandBuffer,
-                        &resourceAccessInfo,
-                        SDL_TRUE,
+                        VULKAN_INTERNAL_DefaultTextureBarrierType(srcSlice->parent),
+                        VULKAN_TEXTURE_BARRIER_TYPE_COPY_SOURCE,
                         srcSlice
                     );
 
-                    resourceAccessInfo.accessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-                    resourceAccessInfo.imageLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-
                     VULKAN_INTERNAL_ImageMemoryBarrier(
                         renderer,
                         commandBuffer,
-                        &resourceAccessInfo,
-                        SDL_TRUE,
+                        VULKAN_INTERNAL_DefaultTextureBarrierType(dstSlice->parent),
+                        VULKAN_TEXTURE_BARRIER_TYPE_COPY_DESTINATION,
                         dstSlice
                     );
 
@@ -11479,6 +11485,13 @@ static Uint8 VULKAN_INTERNAL_DefragmentMemory(
                         &imageCopy
                     );
 
+                    VULKAN_INTERNAL_ResetTextureMemoryBarrier(
+                        renderer,
+                        commandBuffer,
+                        VULKAN_TEXTURE_BARRIER_TYPE_COPY_DESTINATION,
+                        dstSlice
+                    );
+
                     dstSlice->defragInProgress = 1;
 
                     VULKAN_INTERNAL_TrackTextureSlice(renderer, commandBuffer, srcSlice);
@@ -11496,11 +11509,6 @@ static Uint8 VULKAN_INTERNAL_DefragmentMemory(
     }
 
     SDL_UnlockMutex(renderer->allocatorLock);
-
-    VULKAN_INTERNAL_PostPassBarriers(
-        renderer,
-        commandBuffer
-    );
 
     VULKAN_Submit(
         (SDL_GpuCommandBuffer*) commandBuffer
@@ -11633,7 +11641,6 @@ static SDL_bool VULKAN_IsTextureFormatSupported(
     }
     if (usage & (
         SDL_GPU_TEXTUREUSAGE_GRAPHICS_STORAGE_READ_BIT |
-        SDL_GPU_TEXTUREUSAGE_GRAPHICS_STORAGE_WRITE_BIT |
         SDL_GPU_TEXTUREUSAGE_COMPUTE_STORAGE_READ_BIT |
         SDL_GPU_TEXTUREUSAGE_COMPUTE_STORAGE_WRITE_BIT
     )) {
