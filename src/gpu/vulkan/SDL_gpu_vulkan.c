@@ -10533,11 +10533,9 @@ static SDL_GpuTexture* VULKAN_AcquireSwapchainTexture(
 
     if (swapchainData->inFlightFences[swapchainData->frameCounter] != NULL)
     {
-        /* If we are here, there's backpressure on presentation */
-
         if (swapchainData->presentMode == VK_PRESENT_MODE_FIFO_KHR)
         {
-            /* If we are using VSYNC, block */
+            /* In VSYNC mode, block until the least recent presented frame is done */
             VULKAN_WaitForFences(
                 (SDL_GpuRenderer*) renderer,
                 SDL_TRUE,
@@ -10547,11 +10545,14 @@ static SDL_GpuTexture* VULKAN_AcquireSwapchainTexture(
         }
         else
         {
-            /* If we are using MAILBOX or IMMEDIATE, return NULL to indicate that rendering should be skipped */
             if (!VULKAN_QueryFence(
                 (SDL_GpuRenderer*) renderer,
                 (SDL_GpuFence*) swapchainData->inFlightFences[swapchainData->frameCounter]
             )) {
+                /*
+                 * In MAILBOX or IMMEDIATE mode, if the least recent fence is not signaled,
+                 * return NULL to indicate that rendering should be skipped
+                 */
                 return NULL;
             }
         }

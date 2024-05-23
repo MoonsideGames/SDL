@@ -5830,11 +5830,9 @@ static SDL_GpuTexture* D3D11_AcquireSwapchainTexture(
 
     if (windowData->inFlightFences[windowData->frameCounter] != NULL)
     {
-        /* If we are here, there's backpressure on presentation */
-
 		if (windowData->presentMode == SDL_GPU_PRESENTMODE_VSYNC)
 		{
-			/* If we are using VSYNC, block */
+            /* In VSYNC mode, block until the least recent presented frame is done */
 			D3D11_WaitForFences(
 				(SDL_GpuRenderer*) renderer,
 				SDL_TRUE,
@@ -5844,11 +5842,14 @@ static SDL_GpuTexture* D3D11_AcquireSwapchainTexture(
 		}
 		else
 		{
-			/* If we are using MAILBOX or IMMEDIATE, return NULL to indicate that rendering should be skipped */
 			if (!D3D11_QueryFence(
 				(SDL_GpuRenderer*) d3d11CommandBuffer->renderer,
 				(SDL_GpuFence*) windowData->inFlightFences[windowData->frameCounter]
 			)) {
+				/*
+                 * In MAILBOX or IMMEDIATE mode, if the least recent fence is not signaled,
+                 * return NULL to indicate that rendering should be skipped
+                 */
 				return NULL;
 			}
 		}
