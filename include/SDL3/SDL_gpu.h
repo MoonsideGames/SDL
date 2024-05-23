@@ -356,13 +356,16 @@ typedef enum SDL_GpuTransferUsage
  *   Waits for vblank before presenting.
  *   If there is a pending image to present, the new image is enqueued for presentation.
  *   Disallows tearing at the cost of visual latency.
+ *   When using this present mode, AcquireSwapchainTexture will block if too many frames are in flight.
  * IMMEDIATE:
  *   Immediately presents.
  *   Lowest latency option, but tearing may occur.
+ *   When using this mode, AcquireSwapchainTexture will return NULL if too many frames are in flight.
  * MAILBOX:
  *   Waits for vblank before presenting. No tearing is possible.
  *   If there is a pending image to present, the pending image is replaced by the new image.
  *   Similar to VSYNC, but with reduced visual latency.
+ *   When using this mode, AcquireSwapchainTexture will return NULL if too many frames are in flight.
  */
 typedef enum SDL_GpuPresentMode
 {

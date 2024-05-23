@@ -5828,16 +5828,30 @@ static SDL_GpuTexture* D3D11_AcquireSwapchainTexture(
 		ERROR_CHECK_RETURN("Could not resize swapchain", NULL);
 	}
 
-    /* Block if there are too many frames in flight */
     if (windowData->inFlightFences[windowData->frameCounter] != NULL)
     {
-        if (!D3D11_QueryFence(
-            (SDL_GpuRenderer*) d3d11CommandBuffer->renderer,
-            (SDL_GpuFence*) windowData->inFlightFences[windowData->frameCounter]
-        )) {
-            /* Too many frames in flight, bail */
-            return NULL;
-        }
+        /* If we are here, there's backpressure on presentation */
+
+		if (windowData->presentMode == SDL_GPU_PRESENTMODE_VSYNC)
+		{
+			/* If we are using VSYNC, block */
+			D3D11_WaitForFences(
+				(SDL_GpuRenderer*) renderer,
+				SDL_TRUE,
+				1,
+				(SDL_GpuFence**) &windowData->inFlightFences[windowData->frameCounter]
+			);
+		}
+		else
+		{
+			/* If we are using MAILBOX or IMMEDIATE, return NULL to indicate that rendering should be skipped */
+			if (!D3D11_QueryFence(
+				(SDL_GpuRenderer*) d3d11CommandBuffer->renderer,
+				(SDL_GpuFence*) windowData->inFlightFences[windowData->frameCounter]
+			)) {
+				return NULL;
+			}
+		}
 
         D3D11_ReleaseFence(
             (SDL_GpuRenderer*) d3d11CommandBuffer->renderer,

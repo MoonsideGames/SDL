@@ -2565,6 +2565,7 @@ static SDL_GpuTexture* METAL_AcquireSwapchainTexture(
     }
 
     /* FIXME: Handle minimization! */
+    /* FIXME: Handle acquisition for different present modes */
 
     /* Get the drawable and its underlying texture */
     windowData->drawable = [windowData->layer nextDrawable];

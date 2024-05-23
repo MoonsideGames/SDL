@@ -1359,6 +1359,7 @@ static Uint8 VULKAN_INTERNAL_DefragmentMemory(VulkanRenderer *renderer);
 static void VULKAN_INTERNAL_BeginCommandBuffer(VulkanRenderer *renderer, VulkanCommandBuffer *commandBuffer);
 static void VULKAN_UnclaimWindow(SDL_GpuRenderer *driverData, SDL_Window *windowHandle);
 static void VULKAN_Wait(SDL_GpuRenderer *driverData);
+static void VULKAN_WaitForFences(SDL_GpuRenderer *driverData, Uint8 waitAll, Uint32 fenceCount, SDL_GpuFence **pFences);
 static void VULKAN_Submit(SDL_GpuCommandBuffer *commandBuffer);
 static VulkanTextureSlice* VULKAN_INTERNAL_FetchTextureSlice(VulkanTexture* texture, Uint32 layer, Uint32 level);
 static VulkanTexture* VULKAN_INTERNAL_CreateTexture(
@@ -4776,6 +4777,8 @@ static Uint8 VULKAN_INTERNAL_CreateSwapchain(
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Device does not support requested colorspace!");
         return 0;
     }
+
+    swapchainData->presentMode = SDLToVK_PresentMode[windowData->presentMode];
 
     /* Sync now to be sure that our swapchain size is correct */
     SDL_SyncWindow(windowData->windowHandle);
@@ -10530,12 +10533,27 @@ static SDL_GpuTexture* VULKAN_AcquireSwapchainTexture(
 
     if (swapchainData->inFlightFences[swapchainData->frameCounter] != NULL)
     {
-        if (!VULKAN_QueryFence(
-            (SDL_GpuRenderer*) renderer,
-            (SDL_GpuFence*) swapchainData->inFlightFences[swapchainData->frameCounter]
-        )) {
-            /* Too many frames in flight, bail */
-            return NULL;
+        /* If we are here, there's backpressure on presentation */
+
+        if (swapchainData->presentMode == VK_PRESENT_MODE_FIFO_KHR)
+        {
+            /* If we are using VSYNC, block */
+            VULKAN_WaitForFences(
+                (SDL_GpuRenderer*) renderer,
+                SDL_TRUE,
+                1,
+                (SDL_GpuFence**) &swapchainData->inFlightFences[swapchainData->frameCounter]
+            );
+        }
+        else
+        {
+            /* If we are using MAILBOX or IMMEDIATE, return NULL to indicate that rendering should be skipped */
+            if (!VULKAN_QueryFence(
+                (SDL_GpuRenderer*) renderer,
+                (SDL_GpuFence*) swapchainData->inFlightFences[swapchainData->frameCounter]
+            )) {
+                return NULL;
+            }
         }
 
         VULKAN_ReleaseFence(
