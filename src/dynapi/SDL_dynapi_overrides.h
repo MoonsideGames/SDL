@@ -1098,6 +1098,7 @@
 #define SDL_GpuDownloadFromBuffer SDL_GpuDownloadFromBuffer_REAL
 #define SDL_GpuEndCopyPass SDL_GpuEndCopyPass_REAL
 #define SDL_GpuBlit SDL_GpuBlit_REAL
+#define SDL_GpuSupportsPresentMode SDL_GpuSupportsPresentMode_REAL
 #define SDL_GpuClaimWindow SDL_GpuClaimWindow_REAL
 #define SDL_GpuUnclaimWindow SDL_GpuUnclaimWindow_REAL
 #define SDL_GpuSetSwapchainParameters SDL_GpuSetSwapchainParameters_REAL

@@ -1104,6 +1104,7 @@ SDL_DYNAPI_PROC(void,SDL_GpuDownloadFromTexture,(SDL_GpuCopyPass *a, SDL_GpuText
 SDL_DYNAPI_PROC(void,SDL_GpuDownloadFromBuffer,(SDL_GpuCopyPass *a, SDL_GpuBuffer *b, SDL_GpuTransferBuffer *c, SDL_GpuBufferCopy *d),(a,b,c,d),)
 SDL_DYNAPI_PROC(void,SDL_GpuEndCopyPass,(SDL_GpuCopyPass *a),(a),)
 SDL_DYNAPI_PROC(void,SDL_GpuBlit,(SDL_GpuCommandBuffer *a, SDL_GpuTextureRegion *b, SDL_GpuTextureRegion *c, SDL_GpuFilter d, SDL_bool e),(a,b,c,d,e),)
+SDL_DYNAPI_PROC(SDL_bool,SDL_GpuSupportsPresentMode,(SDL_GpuDevice *a, SDL_GpuPresentMode b),(a,b),return)
 SDL_DYNAPI_PROC(SDL_bool,SDL_GpuClaimWindow,(SDL_GpuDevice *a, SDL_Window *b, SDL_GpuColorSpace c, SDL_GpuPresentMode d),(a,b,c,d),return)
 SDL_DYNAPI_PROC(void,SDL_GpuUnclaimWindow,(SDL_GpuDevice *a, SDL_Window *b),(a,b),)
 SDL_DYNAPI_PROC(void,SDL_GpuSetSwapchainParameters,(SDL_GpuDevice *a, SDL_Window *b, SDL_GpuColorSpace c, SDL_GpuPresentMode d),(a,b,c,d),)
