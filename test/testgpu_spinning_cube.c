@@ -427,7 +427,7 @@ init_render_state(void)
             gpu_device,
             state->windows[i],
             SDL_GPU_COLORSPACE_NONLINEAR_SRGB,
-            SDL_TRUE
+            SDL_GPU_PRESENTMODE_VSYNC
         );
     }
 

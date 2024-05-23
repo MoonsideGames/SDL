@@ -139,9 +139,9 @@ static const Uint8 DEVICE_PRIORITY[] =
 
 static VkPresentModeKHR SDLToVK_PresentMode[] =
 {
-    VK_PRESENT_MODE_MAILBOX_KHR,
     VK_PRESENT_MODE_FIFO_KHR,
-    VK_PRESENT_MODE_IMMEDIATE_KHR
+    VK_PRESENT_MODE_IMMEDIATE_KHR,
+    VK_PRESENT_MODE_MAILBOX_KHR
 };
 
 static VkFormat SDLToVK_SurfaceFormat[] =
