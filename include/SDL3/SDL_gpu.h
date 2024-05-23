@@ -864,6 +864,9 @@ extern SDL_DECLSPEC SDL_GpuShader *SDLCALL SDL_GpuCreateShader(
  * Creates a texture object to be used in graphics or compute workflows.
  * The contents of this texture are undefined until data is written to the texture.
  *
+ * Note that certain combinations of usage flags are invalid.
+ * For example, a texture cannot have both the SAMPLER and GRAPHICS_STORAGE_READ flags.
+ *
  * \param device a GPU Context
  * \param textureCreateInfo a struct describing the state of the texture to create
  * \returns a texture object on success, or NULL on failure
@@ -888,6 +891,9 @@ extern SDL_DECLSPEC SDL_GpuTexture *SDLCALL SDL_GpuCreateTexture(
 /**
  * Creates a buffer object to be used in graphics or compute workflows.
  * The contents of this buffer are undefined until data is written to the buffer.
+ *
+ * Note that certain combinations of usage flags are invalid.
+ * For example, a buffer cannot have both the VERTEX and INDEX flags.
  *
  * \param device a GPU Context
  * \param usageFlags bitflag mask hinting at how the buffer will be used

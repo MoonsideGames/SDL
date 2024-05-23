@@ -2684,6 +2684,41 @@ static void VULKAN_INTERNAL_TrackFramebuffer(
 
 /* Memory Barriers */
 
+/*
+ * In Vulkan, we must manually synchronize operations that write to resources on the GPU
+ * so that read-after-write, write-after-read, and write-after-write hazards do not occur.
+ * Additionally, textures are required to be in specific layouts for specific use cases.
+ * Both of these tasks are accomplished with vkCmdPipelineBarrier.
+ *
+ * To insert the correct barriers, we keep track of "usage modes" for buffers and textures.
+ * These indicate the current usage of that resource on the command buffer.
+ * The transition from one usage mode to another indicates how the barrier should be constructed.
+ *
+ * Pipeline barriers cannot be inserted during a render pass, but they can be inserted
+ * during a compute or copy pass.
+ *
+ * This means that the "default" usage mode of any given resource should be that it should be
+ * ready for a graphics-read operation, because we cannot barrier during a render pass.
+ * In the case where a resource is only used in compute, its default usage mode can be compute-read.
+ * This strategy allows us to avoid expensive record keeping of command buffer/resource usage mode pairs,
+ * and it fully covers synchronization between all combinations of stages.
+ *
+ * In Upload and Copy functions, we transition the resource immediately before and after the copy command.
+ *
+ * When binding a resource for compute, we transition when the Bind functions are called.
+ * If a bind slot containing a resource is overwritten, we transition the resource in that slot back to its default.
+ * When EndComputePass is called we transition all bound resources back to their default state.
+ *
+ * When binding a texture as a render pass attachment, we transition the resource on BeginRenderPass
+ * and transition it back to its default on EndRenderPass.
+ *
+ * This strategy imposes certain limitations on resource usage flags.
+ * For example, a texture cannot have both the SAMPLER and GRAPHICS_STORAGE usage flags,
+ * because then it is imposible for the backend to infer which default usage mode the texture should use.
+ *
+ * Sync hazards can be detected by setting VK_KHRONOS_VALIDATION_VALIDATE_SYNC=1 when using validation layers.
+ */
+
 static void VULKAN_INTERNAL_BufferMemoryBarrier(
     VulkanRenderer *renderer,
     VulkanCommandBuffer *commandBuffer,
