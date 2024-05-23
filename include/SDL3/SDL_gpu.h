@@ -351,11 +351,24 @@ typedef enum SDL_GpuTransferUsage
 	SDL_GPU_TRANSFERUSAGE_TEXTURE
 } SDL_GpuTransferUsage;
 
+/*
+ * VSYNC:
+ *   Waits for vblank before presenting.
+ *   If there is a pending image to present, the new image is enqueued for presentation.
+ *   Disallows tearing at the cost of visual latency.
+ * IMMEDIATE:
+ *   Immediately presents.
+ *   Lowest latency option, but tearing may occur.
+ * MAILBOX:
+ *   Waits for vblank before presenting. No tearing is possible.
+ *   If there is a pending image to present, the pending image is replaced by the new image.
+ *   Similar to VSYNC, but with reduced visual latency.
+ */
 typedef enum SDL_GpuPresentMode
 {
-	SDL_GPU_PRESENTMODE_MAILBOX,
 	SDL_GPU_PRESENTMODE_VSYNC,
-	SDL_GPU_PRESENTMODE_IMMEDIATE
+	SDL_GPU_PRESENTMODE_IMMEDIATE,
+	SDL_GPU_PRESENTMODE_MAILBOX
 } SDL_GpuPresentMode;
 
 typedef enum SDL_GpuBackendBits
