@@ -308,7 +308,51 @@ SDL_GpuGraphicsPipeline* SDL_GpuCreateGraphicsPipeline(
 	SDL_GpuDevice *device,
 	SDL_GpuGraphicsPipelineCreateInfo *graphicsPipelineCreateInfo
 ) {
+    SDL_GpuTextureFormat newFormat;
+
 	NULL_ASSERT(device)
+
+    /* Automatically swap out the depth format if it's unsupported.
+     * See SDL_GpuCreateTexture.
+     */
+    if (
+        graphicsPipelineCreateInfo->attachmentInfo.hasDepthStencilAttachment &&
+        !device->IsTextureFormatSupported(
+            device->driverData,
+            graphicsPipelineCreateInfo->attachmentInfo.depthStencilFormat,
+            SDL_GPU_TEXTURETYPE_2D,
+            SDL_GPU_TEXTUREUSAGE_DEPTH_STENCIL_TARGET_BIT
+        )
+    ) {
+        switch (graphicsPipelineCreateInfo->attachmentInfo.depthStencilFormat)
+        {
+            case SDL_GPU_TEXTUREFORMAT_D24_UNORM:
+                newFormat = SDL_GPU_TEXTUREFORMAT_D32_SFLOAT;
+                break;
+            case SDL_GPU_TEXTUREFORMAT_D32_SFLOAT:
+                newFormat = SDL_GPU_TEXTUREFORMAT_D24_UNORM;
+                break;
+            case SDL_GPU_TEXTUREFORMAT_D24_UNORM_S8_UINT:
+                newFormat = SDL_GPU_TEXTUREFORMAT_D32_SFLOAT_S8_UINT;
+                break;
+            case SDL_GPU_TEXTUREFORMAT_D32_SFLOAT_S8_UINT:
+                newFormat = SDL_GPU_TEXTUREFORMAT_D24_UNORM_S8_UINT;
+                break;
+            default:
+                /* This should never happen, but just in case... */
+                newFormat = SDL_GPU_TEXTUREFORMAT_D16_UNORM;
+                break;
+        }
+
+        SDL_LogWarn(
+            SDL_LOG_CATEGORY_APPLICATION,
+            "Requested unsupported depth format %d, falling back to format %d!",
+            graphicsPipelineCreateInfo->attachmentInfo.depthStencilFormat,
+            newFormat
+        );
+        graphicsPipelineCreateInfo->attachmentInfo.depthStencilFormat = newFormat;
+    }
+
 	return device->CreateGraphicsPipeline(
 		device->driverData,
 		graphicsPipelineCreateInfo
