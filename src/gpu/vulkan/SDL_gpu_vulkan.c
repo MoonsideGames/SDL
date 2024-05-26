@@ -3440,8 +3440,6 @@ static void VULKAN_INTERNAL_DestroyGraphicsPipeline(
     (void)SDL_AtomicDecRef(&graphicsPipeline->vertexShader->referenceCount);
     (void)SDL_AtomicDecRef(&graphicsPipeline->fragmentShader->referenceCount);
 
-    /* TODO: teardown resource layout structure */
-
     SDL_free(graphicsPipeline);
 }
 
@@ -3449,15 +3447,29 @@ static void VULKAN_INTERNAL_DestroyComputePipeline(
     VulkanRenderer *renderer,
     VulkanComputePipeline *computePipeline
 ) {
+    Uint32 i;
+
     renderer->vkDestroyPipeline(
         renderer->logicalDevice,
         computePipeline->pipeline,
         NULL
     );
 
-    (void)SDL_AtomicDecRef(&computePipeline->computeShader->referenceCount);
+    renderer->vkDestroyPipelineLayout(
+        renderer->logicalDevice,
+        computePipeline->resourceLayout.pipelineLayout,
+        NULL
+    );
 
-    /* TODO: teardown resource layout structure */
+    for (i = 0; i < 3; i += 1)
+    {
+        VULKAN_INTERNAL_DestroyDescriptorSetPool(
+            renderer,
+            &computePipeline->resourceLayout.descriptorSetPools[i]
+        );
+    }
+
+    (void)SDL_AtomicDecRef(&computePipeline->computeShader->referenceCount);
 
     SDL_free(computePipeline);
 }
@@ -8993,7 +9005,7 @@ static void VULKAN_INTERNAL_BindComputeDescriptorSets(
 
             imageInfos[imageInfoCount].sampler = VK_NULL_HANDLE;
             imageInfos[imageInfoCount].imageView = commandBuffer->readOnlyComputeStorageTextureSlices[i]->view;
-            imageInfos[imageInfoCount].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+            imageInfos[imageInfoCount].imageLayout = VK_IMAGE_LAYOUT_GENERAL;
 
             currentWriteDescriptorSet->pImageInfo = &imageInfos[imageInfoCount];
 
@@ -9016,7 +9028,7 @@ static void VULKAN_INTERNAL_BindComputeDescriptorSets(
 
             imageInfos[imageInfoCount].sampler = VK_NULL_HANDLE;
             imageInfos[imageInfoCount].imageView = commandBuffer->readWriteComputeStorageTextureSlices[i]->view;
-            imageInfos[imageInfoCount].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+            imageInfos[imageInfoCount].imageLayout = VK_IMAGE_LAYOUT_GENERAL;
 
             currentWriteDescriptorSet->pImageInfo = &imageInfos[imageInfoCount];
 
