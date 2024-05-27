@@ -87,6 +87,7 @@ static MTLPixelFormat SDLToMetal_SurfaceFormat[] =
     MTLPixelFormatA1BGR5Unorm,    /* A1R5G5B5 */ /* FIXME: Swizzle? */
     MTLPixelFormatABGR4Unorm,    /* B4G4R4A4 */
     MTLPixelFormatRGB10A2Unorm,    /* A2R10G10B10 */
+    MTLPixelFormatBGR10A2Unorm, /* A2B10G10R10 */
     MTLPixelFormatRG16Unorm,    /* R16G16 */
     MTLPixelFormatRGBA16Unorm,    /* R16G16B16A16 */
     MTLPixelFormatR8Unorm,        /* R8 */

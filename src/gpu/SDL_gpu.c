@@ -1287,66 +1287,81 @@ void SDL_GpuBlit(
 
 /* Submission/Presentation */
 
+SDL_bool SDL_GpuSupportsSwapchainComposition(
+    SDL_GpuDevice *device,
+    SDL_Window *window,
+    SDL_GpuSwapchainComposition swapchainFormat
+) {
+    if (device == NULL) { return 0; }
+    return device->SupportsSwapchainComposition(
+        device->driverData,
+        window,
+        swapchainFormat
+    );
+}
+
 SDL_bool SDL_GpuSupportsPresentMode(
 	SDL_GpuDevice *device,
+    SDL_Window *window,
 	SDL_GpuPresentMode presentMode
 ) {
 	if (device == NULL) { return 0; }
 	return device->SupportsPresentMode(
 		device->driverData,
+        window,
 		presentMode
 	);
 }
 
 SDL_bool SDL_GpuClaimWindow(
 	SDL_GpuDevice *device,
-	SDL_Window *windowHandle,
-    SDL_GpuColorSpace colorSpace,
+	SDL_Window *window,
+    SDL_GpuSwapchainComposition swapchainFormat,
     SDL_GpuPresentMode presentMode
 ) {
 	if (device == NULL) { return 0; }
 	return device->ClaimWindow(
 		device->driverData,
-		windowHandle,
-        colorSpace,
+		window,
+        swapchainFormat,
         presentMode
 	);
 }
 
 void SDL_GpuUnclaimWindow(
 	SDL_GpuDevice *device,
-	SDL_Window *windowHandle
+	SDL_Window *window
 ) {
 	NULL_ASSERT(device);
 	device->UnclaimWindow(
 		device->driverData,
-		windowHandle
+		window
 	);
 }
 
 void SDL_GpuSetSwapchainParameters(
 	SDL_GpuDevice *device,
-	SDL_Window *windowHandle,
-    SDL_GpuColorSpace colorSpace,
+	SDL_Window *window,
+    SDL_GpuSwapchainComposition swapchainFormat,
     SDL_GpuPresentMode presentMode
 ) {
 	NULL_ASSERT(device);
 	device->SetSwapchainParameters(
 		device->driverData,
-		windowHandle,
-        colorSpace,
+		window,
+        swapchainFormat,
         presentMode
 	);
 }
 
-SDL_GpuTextureFormat SDL_GpuGetSwapchainFormat(
+SDL_GpuTextureFormat SDL_GpuGetSwapchainTextureFormat(
 	SDL_GpuDevice *device,
-	SDL_Window *windowHandle
+	SDL_Window *window
 ) {
 	if (device == NULL) { return 0; }
-	return device->GetSwapchainFormat(
+	return device->GetSwapchainTextureFormat(
 		device->driverData,
-		windowHandle
+		window
 	);
 }
 
@@ -1383,14 +1398,14 @@ SDL_GpuCommandBuffer* SDL_GpuAcquireCommandBuffer(
 
 SDL_GpuTexture* SDL_GpuAcquireSwapchainTexture(
 	SDL_GpuCommandBuffer *commandBuffer,
-	SDL_Window *windowHandle,
+	SDL_Window *window,
 	Uint32 *pWidth,
 	Uint32 *pHeight
 ) {
     CHECK_COMMAND_BUFFER_RETURN_NULL
 	return COMMAND_BUFFER_DEVICE->AcquireSwapchainTexture(
 		commandBuffer,
-		windowHandle,
+		window,
 		pWidth,
 		pHeight
 	);

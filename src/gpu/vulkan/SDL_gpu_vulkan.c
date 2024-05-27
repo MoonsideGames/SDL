@@ -146,20 +146,21 @@ static VkPresentModeKHR SDLToVK_PresentMode[] =
 
 static VkFormat SDLToVK_SurfaceFormat[] =
 {
-    VK_FORMAT_R8G8B8A8_UNORM,			/* R8G8B8A8_UNORM */
-    VK_FORMAT_B8G8R8A8_UNORM,			/* B8G8R8A8_UNORM */
-    VK_FORMAT_R5G6B5_UNORM_PACK16,		/* R5G6B5_UNORM */
-    VK_FORMAT_A1R5G5B5_UNORM_PACK16,	/* A1R5G5B5_UNORM */
-    VK_FORMAT_B4G4R4A4_UNORM_PACK16,	/* B4G4R4A4_UNORM */
-    VK_FORMAT_A2R10G10B10_UNORM_PACK32,	/* A2R10G10B10_UNORM */
-    VK_FORMAT_R16G16_UNORM,				/* R16G16_UNORM */
-    VK_FORMAT_R16G16B16A16_UNORM,		/* R16G16B16A16_UNORM */
-    VK_FORMAT_R8_UNORM,					/* R8_UNORM */
-    VK_FORMAT_R8_UNORM,					/* A8_UNORM */
-    VK_FORMAT_BC1_RGBA_UNORM_BLOCK,		/* BC1_UNORM */
-    VK_FORMAT_BC2_UNORM_BLOCK,			/* BC2_UNORM */
-    VK_FORMAT_BC3_UNORM_BLOCK,			/* BC3_UNORM */
-    VK_FORMAT_BC7_UNORM_BLOCK,			/* BC7_UNORM */
+    VK_FORMAT_R8G8B8A8_UNORM,			/* R8G8B8A8 */
+    VK_FORMAT_B8G8R8A8_UNORM,			/* B8G8R8A8 */
+    VK_FORMAT_R5G6B5_UNORM_PACK16,		/* R5G6B5 */
+    VK_FORMAT_A1R5G5B5_UNORM_PACK16,	/* A1R5G5B5 */
+    VK_FORMAT_B4G4R4A4_UNORM_PACK16,	/* B4G4R4A4 */
+    VK_FORMAT_A2R10G10B10_UNORM_PACK32,	/* A2R10G10B10 */
+    VK_FORMAT_A2B10G10R10_UNORM_PACK32, /* A2R10G10B10 */
+    VK_FORMAT_R16G16_UNORM,				/* R16G16 */
+    VK_FORMAT_R16G16B16A16_UNORM,		/* R16G16B16A16 */
+    VK_FORMAT_R8_UNORM,					/* R8 */
+    VK_FORMAT_R8_UNORM,					/* A8 */
+    VK_FORMAT_BC1_RGBA_UNORM_BLOCK,		/* BC1 */
+    VK_FORMAT_BC2_UNORM_BLOCK,			/* BC2 */
+    VK_FORMAT_BC3_UNORM_BLOCK,			/* BC3 */
+    VK_FORMAT_BC7_UNORM_BLOCK,			/* BC7 */
     VK_FORMAT_R8G8_SNORM,				/* R8G8_SNORM */
     VK_FORMAT_R8G8B8A8_SNORM,			/* R8G8B8A8_SNORM */
     VK_FORMAT_R16_SFLOAT,				/* R16_SFLOAT */
@@ -185,8 +186,19 @@ static VkFormat SDLToVK_SurfaceFormat[] =
     VK_FORMAT_D32_SFLOAT_S8_UINT,		/* D32_SFLOAT_S8_UINT */
 };
 
-static VkColorSpaceKHR SDLToVK_ColorSpace[] =
+/* from SWAPCHAINCOMPOSITION */
+static VkFormat SwapchainCompositionToFormat[] =
 {
+    VK_FORMAT_B8G8R8A8_UNORM,           /* SDR */
+    VK_FORMAT_B8G8R8A8_SRGB,            /* SDR_SRGB */
+    VK_FORMAT_R16G16B16A16_SFLOAT,      /* HDR */
+    VK_FORMAT_A2B10G10R10_UNORM_PACK32  /* HDR_ADVANCED*/
+};
+
+/* from SWAPCHAINCOMPOSITION */
+static VkColorSpaceKHR SwapchainCompositionToColorSpace[] =
+{
+    VK_COLOR_SPACE_SRGB_NONLINEAR_KHR,
     VK_COLOR_SPACE_SRGB_NONLINEAR_KHR,
     VK_COLOR_SPACE_EXTENDED_SRGB_LINEAR_EXT,
     VK_COLOR_SPACE_HDR10_ST2084_EXT
@@ -621,11 +633,10 @@ typedef struct VulkanSwapchainData
 {
     /* Window surface */
     VkSurfaceKHR surface;
-    VkSurfaceFormatKHR surfaceFormat;
 
     /* Swapchain for window surface */
     VkSwapchainKHR swapchain;
-    VkFormat swapchainFormat;
+    VkFormat format;
     VkColorSpaceKHR colorSpace;
     VkComponentMapping swapchainSwizzle;
     VkPresentModeKHR presentMode;
@@ -645,9 +656,8 @@ typedef struct VulkanSwapchainData
 
 typedef struct WindowData
 {
-    SDL_Window *windowHandle;
-    SDL_GpuTextureFormat swapchainFormat;
-    SDL_GpuColorSpace colorSpace;
+    SDL_Window *window;
+    SDL_GpuSwapchainComposition swapchainComposition;
     SDL_GpuPresentMode presentMode;
     VulkanSwapchainData *swapchainData;
 } WindowData;
@@ -1264,9 +1274,6 @@ struct VulkanRenderer
     Uint8 debugMode;
     VulkanExtensions supports;
 
-    VkPresentModeKHR *supportedPresentModes;
-    Uint32 supportedPresentModesLength;
-
     VulkanMemoryAllocator *memoryAllocator;
     VkPhysicalDeviceMemoryProperties memoryProperties;
 
@@ -1357,7 +1364,7 @@ struct VulkanRenderer
 
 static Uint8 VULKAN_INTERNAL_DefragmentMemory(VulkanRenderer *renderer);
 static void VULKAN_INTERNAL_BeginCommandBuffer(VulkanRenderer *renderer, VulkanCommandBuffer *commandBuffer);
-static void VULKAN_UnclaimWindow(SDL_GpuRenderer *driverData, SDL_Window *windowHandle);
+static void VULKAN_UnclaimWindow(SDL_GpuRenderer *driverData, SDL_Window *window);
 static void VULKAN_Wait(SDL_GpuRenderer *driverData);
 static void VULKAN_WaitForFences(SDL_GpuRenderer *driverData, Uint8 waitAll, Uint32 fenceCount, SDL_GpuFence **pFences);
 static void VULKAN_Submit(SDL_GpuCommandBuffer *commandBuffer);
@@ -1483,7 +1490,7 @@ static inline SDL_bool BGRToRGBSwapchainFormat(
             return SDL_TRUE;
 
         default:
-            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "No valid RGB equivalent for this format exists!");
+            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "No valid fallback equivalent for this format exists!");
             *outputFormat = VK_FORMAT_R8G8B8A8_UNORM;
             return SDL_FALSE;
     }
@@ -4506,6 +4513,8 @@ static Uint8 VULKAN_INTERNAL_QuerySwapchainSupport(
     VULKAN_ERROR_CHECK(result, vkGetPhysicalDeviceSurfacePresentModesKHR, 0)
 
     /* Generate the arrays, if applicable */
+
+    outputDetails->formats = NULL;
     if (outputDetails->formatsLength != 0)
     {
         outputDetails->formats = (VkSurfaceFormatKHR*) SDL_malloc(
@@ -4536,6 +4545,8 @@ static Uint8 VULKAN_INTERNAL_QuerySwapchainSupport(
             return 0;
         }
     }
+
+    outputDetails->presentModes = NULL;
     if (outputDetails->presentModesLength != 0)
     {
         outputDetails->presentModes = (VkPresentModeKHR*) SDL_malloc(
@@ -4574,12 +4585,11 @@ static Uint8 VULKAN_INTERNAL_QuerySwapchainSupport(
     return 1;
 }
 
-static Uint8 VULKAN_INTERNAL_ChooseSwapSurfaceFormat(
+static SDL_bool VULKAN_INTERNAL_VerifySwapSurfaceFormat(
     VkFormat desiredFormat,
     VkColorSpaceKHR desiredColorSpace,
     VkSurfaceFormatKHR *availableFormats,
-    Uint32 availableFormatsLength,
-    VkSurfaceFormatKHR *outputFormat
+    Uint32 availableFormatsLength
 ) {
     Uint32 i;
     for (i = 0; i < availableFormatsLength; i += 1)
@@ -4587,12 +4597,11 @@ static Uint8 VULKAN_INTERNAL_ChooseSwapSurfaceFormat(
         if (	availableFormats[i].format == desiredFormat &&
             availableFormats[i].colorSpace == desiredColorSpace	)
         {
-            *outputFormat = availableFormats[i];
-            return 1;
+            return SDL_TRUE;
         }
     }
 
-    return 0;
+    return SDL_FALSE;
 }
 
 static SDL_bool VULKAN_INTERNAL_VerifySwapPresentMode(
@@ -4637,7 +4646,7 @@ static Uint8 VULKAN_INTERNAL_CreateSwapchain(
 
     if (!_this->Vulkan_CreateSurface(
         _this,
-        windowData->windowHandle,
+        windowData->window,
         renderer->instance,
         NULL, /* FIXME: VAllocationCallbacks */
         &swapchainData->surface
@@ -4696,23 +4705,22 @@ static Uint8 VULKAN_INTERNAL_CreateSwapchain(
         return 0;
     }
 
-    swapchainData->swapchainFormat = SDLToVK_SurfaceFormat[windowData->swapchainFormat];
-    swapchainData->colorSpace = SDLToVK_ColorSpace[windowData->colorSpace];
+    swapchainData->format = SwapchainCompositionToFormat[windowData->swapchainComposition];
+    swapchainData->colorSpace = SwapchainCompositionToColorSpace[windowData->swapchainComposition];
     swapchainData->swapchainSwizzle.r = VK_COMPONENT_SWIZZLE_IDENTITY;
     swapchainData->swapchainSwizzle.g = VK_COMPONENT_SWIZZLE_IDENTITY;
     swapchainData->swapchainSwizzle.b = VK_COMPONENT_SWIZZLE_IDENTITY;
     swapchainData->swapchainSwizzle.a = VK_COMPONENT_SWIZZLE_IDENTITY;
 
-    if (!VULKAN_INTERNAL_ChooseSwapSurfaceFormat(
-        swapchainData->swapchainFormat,
+    if (!VULKAN_INTERNAL_VerifySwapSurfaceFormat(
+        swapchainData->format,
         swapchainData->colorSpace,
         swapchainSupportDetails.formats,
-        swapchainSupportDetails.formatsLength,
-        &swapchainData->surfaceFormat
+        swapchainSupportDetails.formatsLength
     )) {
         if (!BGRToRGBSwapchainFormat(
-            swapchainData->swapchainFormat,
-            &swapchainData->swapchainFormat
+            swapchainData->format,
+            &swapchainData->format
         )) {
             renderer->vkDestroySurfaceKHR(
                 renderer->instance,
@@ -4735,12 +4743,11 @@ static Uint8 VULKAN_INTERNAL_CreateSwapchain(
             return 0;
         }
 
-        if (!VULKAN_INTERNAL_ChooseSwapSurfaceFormat(
-            swapchainData->swapchainFormat,
+        if (!VULKAN_INTERNAL_VerifySwapSurfaceFormat(
+            swapchainData->format,
             swapchainData->colorSpace,
             swapchainSupportDetails.formats,
-            swapchainSupportDetails.formatsLength,
-            &swapchainData->surfaceFormat
+            swapchainSupportDetails.formatsLength
         )) {
             renderer->vkDestroySurfaceKHR(
                 renderer->instance,
@@ -4786,16 +4793,16 @@ static Uint8 VULKAN_INTERNAL_CreateSwapchain(
         }
 
         SDL_free(swapchainData);
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Device does not support requested colorspace!");
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Device does not support requested present mode!");
         return 0;
     }
 
     swapchainData->presentMode = SDLToVK_PresentMode[windowData->presentMode];
 
     /* Sync now to be sure that our swapchain size is correct */
-    SDL_SyncWindow(windowData->windowHandle);
+    SDL_SyncWindow(windowData->window);
     SDL_GetWindowSizeInPixels(
-        windowData->windowHandle,
+        windowData->window,
         &drawableWidth,
         &drawableHeight
     );
@@ -4866,8 +4873,8 @@ static Uint8 VULKAN_INTERNAL_CreateSwapchain(
     swapchainCreateInfo.flags = 0;
     swapchainCreateInfo.surface = swapchainData->surface;
     swapchainCreateInfo.minImageCount = swapchainData->imageCount;
-    swapchainCreateInfo.imageFormat = swapchainData->surfaceFormat.format;
-    swapchainCreateInfo.imageColorSpace = swapchainData->surfaceFormat.colorSpace;
+    swapchainCreateInfo.imageFormat = swapchainData->format;
+    swapchainCreateInfo.imageColorSpace = swapchainData->colorSpace;
     swapchainCreateInfo.imageExtent = swapchainData->extent;
     swapchainCreateInfo.imageArrayLayers = 1;
     swapchainCreateInfo.imageUsage =
@@ -4947,7 +4954,7 @@ static Uint8 VULKAN_INTERNAL_CreateSwapchain(
     imageViewCreateInfo.pNext = NULL;
     imageViewCreateInfo.flags = 0;
     imageViewCreateInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-    imageViewCreateInfo.format = swapchainData->surfaceFormat.format;
+    imageViewCreateInfo.format = swapchainData->format;
     imageViewCreateInfo.components = swapchainData->swapchainSwizzle;
     imageViewCreateInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
     imageViewCreateInfo.subresourceRange.baseMipLevel = 0;
@@ -4995,7 +5002,7 @@ static Uint8 VULKAN_INTERNAL_CreateSwapchain(
         swapchainData->textureContainers[i].activeTextureHandle->vulkanTexture->usedRegion = NULL;
 
         swapchainData->textureContainers[i].activeTextureHandle->vulkanTexture->dimensions = swapchainData->extent;
-        swapchainData->textureContainers[i].activeTextureHandle->vulkanTexture->format = swapchainData->swapchainFormat;
+        swapchainData->textureContainers[i].activeTextureHandle->vulkanTexture->format = swapchainData->format;
         swapchainData->textureContainers[i].activeTextureHandle->vulkanTexture->swizzle = swapchainData->swapchainSwizzle;
         swapchainData->textureContainers[i].activeTextureHandle->vulkanTexture->is3D = 0;
         swapchainData->textureContainers[i].activeTextureHandle->vulkanTexture->isCube = 0;
@@ -5122,7 +5129,7 @@ static void VULKAN_DestroyDevice(
 
     for (i = renderer->claimedWindowCount - 1; i >= 0; i -= 1)
     {
-        VULKAN_UnclaimWindow(device->driverData, renderer->claimedWindows[i]->windowHandle);
+        VULKAN_UnclaimWindow(device->driverData, renderer->claimedWindows[i]->window);
     }
 
     SDL_free(renderer->claimedWindows);
@@ -5217,8 +5224,6 @@ static void VULKAN_DestroyDevice(
 
         SDL_free(renderer->memoryAllocator->subAllocators[i].sortedFreeRegions);
     }
-
-    SDL_free(renderer->supportedPresentModes);
 
     SDL_free(renderer->memoryAllocator);
 
@@ -10347,81 +10352,162 @@ static void VULKAN_ReleaseFence(
 }
 
 static WindowData* VULKAN_INTERNAL_FetchWindowData(
-    SDL_Window *windowHandle
+    SDL_Window *window
 ) {
-    SDL_PropertiesID properties = SDL_GetWindowProperties(windowHandle);
+    SDL_PropertiesID properties = SDL_GetWindowProperties(window);
     return (WindowData*) SDL_GetProperty(properties, WINDOW_PROPERTY_DATA, NULL);
 }
 
-static SDL_bool VULKAN_INTERNAL_ChooseSwapchainFormat(
-    WindowData *windowData
+static SDL_bool VULKAN_SupportsSwapchainComposition(
+    SDL_GpuRenderer *driverData,
+    SDL_Window *window,
+    SDL_GpuSwapchainComposition swapchainComposition
 ) {
-    if (windowData->colorSpace == SDL_GPU_COLORSPACE_NONLINEAR_SRGB)
+    VulkanRenderer *renderer = (VulkanRenderer*) driverData;
+    SDL_VideoDevice *_this;
+    WindowData *windowData = VULKAN_INTERNAL_FetchWindowData(window);
+    VkSurfaceKHR surface;
+    SwapchainSupportDetails supportDetails;
+    SDL_bool destroySurface = SDL_FALSE;
+    SDL_bool result = SDL_FALSE;
+    Uint32 i;
+
+    if (windowData == NULL || windowData->swapchainData == NULL)
     {
-        windowData->swapchainFormat = SDL_GPU_TEXTUREFORMAT_B8G8R8A8;
-        return SDL_TRUE;
-    }
-    else if (windowData->colorSpace == SDL_GPU_COLORSPACE_LINEAR_SRGB)
-    {
-        windowData->swapchainFormat = SDL_GPU_TEXTUREFORMAT_B8G8R8A8_SRGB;
-        return SDL_TRUE;
-    }
-    else if (windowData->colorSpace == SDL_GPU_COLORSPACE_HDR10_ST2048)
-    {
-        windowData->swapchainFormat = SDL_GPU_TEXTUREFORMAT_A2R10G10B10;
-        return SDL_TRUE;
+        /* Create a dummy surface is the window is not claimed */
+        destroySurface = SDL_TRUE;
+        _this = SDL_GetVideoDevice();
+        if (!_this->Vulkan_CreateSurface(
+            _this,
+            windowData->window,
+            renderer->instance,
+            NULL,
+            &surface
+        )) {
+            return SDL_FALSE;
+        }
     }
     else
     {
-        SDL_free(windowData);
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Unrecognized color space!");
-        return SDL_FALSE;
+        surface = windowData->swapchainData->surface;
     }
+
+    VULKAN_INTERNAL_QuerySwapchainSupport(
+        renderer,
+        renderer->physicalDevice,
+        surface,
+        &supportDetails
+    );
+
+    for (i = 0; i < supportDetails.formatsLength; i += 1)
+    {
+        if (    supportDetails.formats[i].format == SwapchainCompositionToFormat[swapchainComposition] &&
+                supportDetails.formats[i].colorSpace == SwapchainCompositionToColorSpace[swapchainComposition]  )
+        {
+            result = SDL_TRUE;
+            break;
+        }
+    }
+
+    SDL_free(supportDetails.formats);
+    SDL_free(supportDetails.presentModes);
+
+    if (destroySurface)
+    {
+        SDL_Vulkan_DestroySurface(
+            renderer->instance,
+            surface,
+            NULL
+        );
+    }
+
+    return result;
 }
 
 static SDL_bool VULKAN_SupportsPresentMode(
     SDL_GpuRenderer *driverData,
+    SDL_Window *window,
     SDL_GpuPresentMode presentMode
 ) {
     VulkanRenderer *renderer = (VulkanRenderer*) driverData;
+    SDL_VideoDevice *_this;
+    WindowData *windowData = VULKAN_INTERNAL_FetchWindowData(window);
+    VkSurfaceKHR surface;
+    SwapchainSupportDetails supportDetails;
+    SDL_bool destroySurface = SDL_FALSE;
+    SDL_bool result = SDL_FALSE;
     Uint32 i;
 
-    for (i = 0; i < renderer->supportedPresentModesLength; i += 1)
+    if (windowData == NULL || windowData->swapchainData == NULL)
     {
-        if (renderer->supportedPresentModes[i] == SDLToVK_PresentMode[presentMode])
+        /* Create a dummy surface is the window is not claimed */
+        destroySurface = SDL_TRUE;
+        _this = SDL_GetVideoDevice();
+        if (!_this->Vulkan_CreateSurface(
+            _this,
+            windowData->window,
+            renderer->instance,
+            NULL,
+            &surface
+        )) {
+            return SDL_FALSE;
+        }
+    }
+    else
+    {
+        surface = windowData->swapchainData->surface;
+    }
+
+    VULKAN_INTERNAL_QuerySwapchainSupport(
+        renderer,
+        renderer->physicalDevice,
+        surface,
+        &supportDetails
+    );
+
+    for (i = 0; i < supportDetails.presentModesLength; i += 1)
+    {
+        if (supportDetails.presentModes[i] == SDLToVK_PresentMode[presentMode])
         {
-            return SDL_TRUE;
+            result = SDL_TRUE;
+            break;
         }
     }
 
-    return SDL_FALSE;
+    SDL_free(supportDetails.formats);
+    SDL_free(supportDetails.presentModes);
+
+    if (destroySurface)
+    {
+        SDL_Vulkan_DestroySurface(
+            renderer->instance,
+            surface,
+            NULL
+        );
+    }
+
+    return result;
 }
 
 static SDL_bool VULKAN_ClaimWindow(
     SDL_GpuRenderer *driverData,
-    SDL_Window *windowHandle,
-    SDL_GpuColorSpace colorSpace,
+    SDL_Window *window,
+    SDL_GpuSwapchainComposition swapchainComposition,
     SDL_GpuPresentMode presentMode
 ) {
     VulkanRenderer *renderer = (VulkanRenderer*) driverData;
-    WindowData *windowData = VULKAN_INTERNAL_FetchWindowData(windowHandle);
+    WindowData *windowData = VULKAN_INTERNAL_FetchWindowData(window);
 
     if (windowData == NULL)
     {
         windowData = SDL_malloc(sizeof(WindowData));
-        windowData->windowHandle = windowHandle;
+        windowData->window = window;
         windowData->presentMode = presentMode;
-        windowData->colorSpace = colorSpace;
-
-        if (!VULKAN_INTERNAL_ChooseSwapchainFormat(windowData))
-        {
-            SDL_free(windowData);
-            return SDL_FALSE;
-        }
+        windowData->swapchainComposition = swapchainComposition;
 
         if (VULKAN_INTERNAL_CreateSwapchain(renderer, windowData))
         {
-            SDL_SetProperty(SDL_GetWindowProperties(windowHandle), WINDOW_PROPERTY_DATA, windowData);
+            SDL_SetProperty(SDL_GetWindowProperties(window), WINDOW_PROPERTY_DATA, windowData);
 
             if (renderer->claimedWindowCount >= renderer->claimedWindowCapacity)
             {
@@ -10453,10 +10539,10 @@ static SDL_bool VULKAN_ClaimWindow(
 
 static void VULKAN_UnclaimWindow(
     SDL_GpuRenderer *driverData,
-    SDL_Window *windowHandle
+    SDL_Window *window
 ) {
     VulkanRenderer *renderer = (VulkanRenderer*) driverData;
-    WindowData *windowData = VULKAN_INTERNAL_FetchWindowData(windowHandle);
+    WindowData *windowData = VULKAN_INTERNAL_FetchWindowData(window);
     Uint32 i;
 
     if (windowData == NULL)
@@ -10487,7 +10573,7 @@ static void VULKAN_UnclaimWindow(
 
     for (i = 0; i < renderer->claimedWindowCount; i += 1)
     {
-        if (renderer->claimedWindows[i]->windowHandle == windowHandle)
+        if (renderer->claimedWindows[i]->window == window)
         {
             renderer->claimedWindows[i] = renderer->claimedWindows[renderer->claimedWindowCount - 1];
             renderer->claimedWindowCount -= 1;
@@ -10497,12 +10583,12 @@ static void VULKAN_UnclaimWindow(
 
     SDL_free(windowData);
 
-    SDL_ClearProperty(SDL_GetWindowProperties(windowHandle), WINDOW_PROPERTY_DATA);
+    SDL_ClearProperty(SDL_GetWindowProperties(window), WINDOW_PROPERTY_DATA);
 }
 
 static SDL_GpuTexture* VULKAN_AcquireSwapchainTexture(
     SDL_GpuCommandBuffer *commandBuffer,
-    SDL_Window *windowHandle,
+    SDL_Window *window,
     Uint32 *pWidth,
     Uint32 *pHeight
 ) {
@@ -10515,7 +10601,7 @@ static SDL_GpuTexture* VULKAN_AcquireSwapchainTexture(
     VulkanTextureContainer *swapchainTextureContainer = NULL;
     VulkanPresentData *presentData;
 
-    windowData = VULKAN_INTERNAL_FetchWindowData(windowHandle);
+    windowData = VULKAN_INTERNAL_FetchWindowData(window);
     if (windowData == NULL)
     {
         return NULL;
@@ -10526,7 +10612,7 @@ static SDL_GpuTexture* VULKAN_AcquireSwapchainTexture(
     /* Window is claimed but swapchain is invalid! */
     if (swapchainData == NULL)
     {
-        if (SDL_GetWindowFlags(windowHandle) & SDL_WINDOW_MINIMIZED)
+        if (SDL_GetWindowFlags(window) & SDL_WINDOW_MINIMIZED)
         {
             /* Window is minimized, don't bother */
             return NULL;
@@ -10698,46 +10784,60 @@ static SDL_GpuTexture* VULKAN_AcquireSwapchainTexture(
     return (SDL_GpuTexture*) swapchainTextureContainer;
 }
 
-static SDL_GpuTextureFormat VULKAN_GetSwapchainFormat(
+static SDL_GpuTextureFormat VULKAN_GetSwapchainTextureFormat(
     SDL_GpuRenderer *driverData,
-    SDL_Window *windowHandle
+    SDL_Window *window
 ) {
-    WindowData *windowData = VULKAN_INTERNAL_FetchWindowData(windowHandle);
+    WindowData *windowData = VULKAN_INTERNAL_FetchWindowData(window);
 
     if (windowData == NULL)
     {
-        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Cannot get swapchain format, window has not been claimed!");
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Cannot get swapchain format, window has not been claimed!");
         return 0;
     }
 
     if (windowData->swapchainData == NULL)
     {
-        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Cannot get swapchain format, swapchain is currently invalid!");
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Cannot get swapchain format, swapchain is currently invalid!");
         return 0;
     }
 
-    if (windowData->swapchainData->swapchainFormat == VK_FORMAT_R8G8B8A8_UNORM)
+    switch (windowData->swapchainData->format)
     {
-        return SDL_GPU_TEXTUREFORMAT_R8G8B8A8;
-    }
-    else if (windowData->swapchainData->swapchainFormat == VK_FORMAT_B8G8R8A8_UNORM)
-    {
-        return SDL_GPU_TEXTUREFORMAT_B8G8R8A8;
-    }
-    else
-    {
-        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Unrecognized swapchain format!");
-        return 0;
+        case VK_FORMAT_R8G8B8A8_UNORM:
+            return SDL_GPU_TEXTUREFORMAT_R8G8B8A8;
+
+        case VK_FORMAT_B8G8R8A8_UNORM:
+            return SDL_GPU_TEXTUREFORMAT_B8G8R8A8;
+
+        case VK_FORMAT_B8G8R8A8_SRGB:
+            return SDL_GPU_TEXTUREFORMAT_B8G8R8A8_SRGB;
+
+        case VK_FORMAT_R8G8B8A8_SRGB:
+            return SDL_GPU_TEXTUREFORMAT_R8G8B8A8_SRGB;
+
+        case VK_FORMAT_R16G16B16A16_SFLOAT:
+            return SDL_GPU_TEXTUREFORMAT_R16G16B16A16_SFLOAT;
+
+        case VK_FORMAT_A2R10G10B10_UNORM_PACK32:
+            return SDL_GPU_TEXTUREFORMAT_A2R10G10B10;
+
+        case VK_FORMAT_A2B10G10R10_UNORM_PACK32:
+            return SDL_GPU_TEXTUREFORMAT_A2B10G10R10;
+
+        default:
+            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Unrecognized swapchain format!");
+            return 0;
     }
 }
 
 static void VULKAN_SetSwapchainParameters(
     SDL_GpuRenderer *driverData,
-    SDL_Window *windowHandle,
-    SDL_GpuColorSpace colorSpace,
+    SDL_Window *window,
+    SDL_GpuSwapchainComposition swapchainComposition,
     SDL_GpuPresentMode presentMode
 ) {
-    WindowData *windowData = VULKAN_INTERNAL_FetchWindowData(windowHandle);
+    WindowData *windowData = VULKAN_INTERNAL_FetchWindowData(window);
 
     if (windowData == NULL)
     {
@@ -10747,12 +10847,7 @@ static void VULKAN_SetSwapchainParameters(
 
     /* The window size may have changed, always update even if these params are the same */
     windowData->presentMode = presentMode;
-    windowData->colorSpace = colorSpace;
-
-    if (!VULKAN_INTERNAL_ChooseSwapchainFormat(windowData))
-    {
-        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Recreating swapchain with old colorspace!");
-    }
+    windowData->swapchainComposition = swapchainComposition;
 
     VULKAN_INTERNAL_RecreateSwapchain(
         (VulkanRenderer *)driverData,
@@ -12000,18 +12095,22 @@ static Uint8 VULKAN_INTERNAL_CreateInstance(
 
     /* Extra space for the following extensions:
      * VK_KHR_get_physical_device_properties2
+     * VK_EXT_swapchain_colorspace
      * VK_EXT_debug_utils
      * VK_KHR_portability_enumeration
      */
     instanceExtensionNames = SDL_stack_alloc(
         const char*,
-        instanceExtensionCount + 3
+        instanceExtensionCount + 4
     );
     SDL_memcpy(instanceExtensionNames, originalInstanceExtensionNames, instanceExtensionCount * sizeof(const char*));
 
     /* Core since 1.1 */
     instanceExtensionNames[instanceExtensionCount++] =
         VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME;
+
+    instanceExtensionNames[instanceExtensionCount++] =
+        VK_EXT_SWAPCHAIN_COLOR_SPACE_EXTENSION_NAME;
 
 #ifdef SDL_PLATFORM_APPLE
     instanceExtensionNames[instanceExtensionCount++] =
@@ -12610,10 +12709,8 @@ static Uint8 VULKAN_INTERNAL_PrepareVulkan(
         return 0;
     }
 
-    renderer->supportedPresentModesLength = swapchainSupportDetails.presentModesLength;
-    renderer->supportedPresentModes = swapchainSupportDetails.presentModes; /* malloc'd pointer, safe to assign */
-
     SDL_free(swapchainSupportDetails.formats);
+    SDL_free(swapchainSupportDetails.presentModes);
 
     SDL_Vulkan_DestroySurface(
         renderer->instance,

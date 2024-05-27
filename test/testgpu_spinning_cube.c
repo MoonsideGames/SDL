@@ -426,7 +426,7 @@ init_render_state(void)
         SDL_GpuClaimWindow(
             gpu_device,
             state->windows[i],
-            SDL_GPU_COLORSPACE_NONLINEAR_SRGB,
+            SDL_GPU_SWAPCHAINCOMPOSITION_SDR,
             SDL_GPU_PRESENTMODE_VSYNC
         );
     }
@@ -473,7 +473,7 @@ init_render_state(void)
 
     SDL_zero(pipelinedesc);
 
-    color_attachment_desc.format = SDL_GpuGetSwapchainFormat(gpu_device, state->windows[0]);
+    color_attachment_desc.format = SDL_GpuGetSwapchainTextureFormat(gpu_device, state->windows[0]);
     color_attachment_desc.blendState.blendEnable = 0;
     color_attachment_desc.blendState.alphaBlendOp = SDL_GPU_BLENDOP_ADD;
     color_attachment_desc.blendState.colorBlendOp = SDL_GPU_BLENDOP_ADD;

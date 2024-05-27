@@ -590,33 +590,40 @@ struct SDL_GpuDevice
 
 	/* Submission/Presentation */
 
+    SDL_bool (*SupportsSwapchainComposition)(
+        SDL_GpuRenderer *driverData,
+        SDL_Window *window,
+        SDL_GpuSwapchainComposition swapchainComposition
+    );
+
 	SDL_bool (*SupportsPresentMode)(
 		SDL_GpuRenderer *driverData,
+        SDL_Window *window,
 		SDL_GpuPresentMode presentMode
 	);
 
 	SDL_bool (*ClaimWindow)(
 		SDL_GpuRenderer *driverData,
-		SDL_Window *windowHandle,
-        SDL_GpuColorSpace colorSpace,
+		SDL_Window *window,
+        SDL_GpuSwapchainComposition swapchainComposition,
         SDL_GpuPresentMode presentMode
 	);
 
 	void (*UnclaimWindow)(
 		SDL_GpuRenderer *driverData,
-		SDL_Window *windowHandle
+		SDL_Window *window
 	);
 
 	void (*SetSwapchainParameters)(
 		SDL_GpuRenderer *driverData,
-		SDL_Window *windowHandle,
-        SDL_GpuColorSpace colorSpace,
+		SDL_Window *window,
+        SDL_GpuSwapchainComposition swapchainComposition,
         SDL_GpuPresentMode presentMode
 	);
 
-	SDL_GpuTextureFormat (*GetSwapchainFormat)(
+	SDL_GpuTextureFormat (*GetSwapchainTextureFormat)(
 		SDL_GpuRenderer *driverData,
-		SDL_Window *windowHandle
+		SDL_Window *window
 	);
 
 	SDL_GpuCommandBuffer* (*AcquireCommandBuffer)(
@@ -625,7 +632,7 @@ struct SDL_GpuDevice
 
 	SDL_GpuTexture* (*AcquireSwapchainTexture)(
 		SDL_GpuCommandBuffer *commandBuffer,
-		SDL_Window *windowHandle,
+		SDL_Window *window,
 		Uint32 *pWidth,
 		Uint32 *pHeight
 	);
@@ -772,11 +779,12 @@ struct SDL_GpuDevice
 	ASSIGN_DRIVER_FUNC(GenerateMipmaps, name) \
 	ASSIGN_DRIVER_FUNC(EndCopyPass, name) \
     ASSIGN_DRIVER_FUNC(Blit, name) \
+    ASSIGN_DRIVER_FUNC(SupportsSwapchainComposition, name) \
 	ASSIGN_DRIVER_FUNC(SupportsPresentMode, name) \
 	ASSIGN_DRIVER_FUNC(ClaimWindow, name) \
 	ASSIGN_DRIVER_FUNC(UnclaimWindow, name) \
 	ASSIGN_DRIVER_FUNC(SetSwapchainParameters, name) \
-	ASSIGN_DRIVER_FUNC(GetSwapchainFormat, name) \
+	ASSIGN_DRIVER_FUNC(GetSwapchainTextureFormat, name) \
 	ASSIGN_DRIVER_FUNC(AcquireCommandBuffer, name) \
 	ASSIGN_DRIVER_FUNC(AcquireSwapchainTexture, name) \
 	ASSIGN_DRIVER_FUNC(Submit, name) \

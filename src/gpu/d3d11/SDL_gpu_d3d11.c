@@ -158,11 +158,27 @@ static const GUID D3D_IID_DXGI_DEBUG_ALL = { 0xe48ae283,0xda80,0x490b,{0x87,0xe6
 static void D3D11_Wait(SDL_GpuRenderer *driverData);
 static void D3D11_UnclaimWindow(
 	SDL_GpuRenderer * driverData,
-	SDL_Window *windowHandle
+	SDL_Window *window
 );
 static void D3D11_INTERNAL_DestroyBlitPipelines(SDL_GpuRenderer *driverData);
 
  /* Conversions */
+
+static DXGI_FORMAT SwapchainCompositionToTextureFormat[] =
+{
+    DXGI_FORMAT_B8G8R8A8_UNORM,     /* SDR */
+    DXGI_FORMAT_B8G8R8A8_UNORM,     /* SDR_SRGB */ /* NOTE: The RTV uses the sRGB format */
+    DXGI_FORMAT_R16G16B16A16_FLOAT, /* HDR */
+    DXGI_FORMAT_R10G10B10A2_UNORM,  /* HDR_ADVANCED*/
+};
+
+static DXGI_COLOR_SPACE_TYPE SwapchainCompositionToColorSpace[] =
+{
+    DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709,   /* SDR */
+    DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709,   /* SDR_SRGB */
+    DXGI_COLOR_SPACE_RGB_FULL_G10_NONE_P709,   /* HDR */
+    DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020 /* HDR_ADVANCED */
+};
 
 static DXGI_FORMAT SDLToD3D11_TextureFormat[] =
 {
@@ -172,6 +188,7 @@ static DXGI_FORMAT SDLToD3D11_TextureFormat[] =
 	DXGI_FORMAT_B5G5R5A1_UNORM,	/* A1R5G5B5 */ /* FIXME: Swizzle? */
 	DXGI_FORMAT_B4G4R4A4_UNORM,	/* B4G4R4A4 */
 	DXGI_FORMAT_R10G10B10A2_UNORM,	/* A2R10G10B10 */
+    DXGI_FORMAT_UNKNOWN,        /* A2B10G10R10 */ /* UNSUPPORTED BY D3D11 */
 	DXGI_FORMAT_R16G16_UNORM,	/* R16G16 */
 	DXGI_FORMAT_R16G16B16A16_UNORM,	/* R16G16B16A16 */
 	DXGI_FORMAT_R8_UNORM,		/* R8 */
@@ -203,13 +220,6 @@ static DXGI_FORMAT SDLToD3D11_TextureFormat[] =
 	DXGI_FORMAT_D32_FLOAT,		/* D32_SFLOAT */
 	DXGI_FORMAT_D24_UNORM_S8_UINT,	/* D24_UNORM_S8_UINT */
 	DXGI_FORMAT_D32_FLOAT_S8X24_UINT,	/* D32_SFLOAT_S8_UINT */
-};
-
-static DXGI_COLOR_SPACE_TYPE SDLToD3D11_ColorSpace[] =
-{
-    DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709,
-    DXGI_COLOR_SPACE_RGB_FULL_G10_NONE_P709,
-    DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020
 };
 
 static DXGI_FORMAT SDLToD3D11_VertexFormat[] =
@@ -488,13 +498,14 @@ typedef struct D3D11Fence
 
 typedef struct D3D11WindowData
 {
-	SDL_Window *windowHandle;
+	SDL_Window *window;
 	IDXGISwapChain *swapchain;
     D3D11Texture texture;
     D3D11TextureContainer textureContainer;
     SDL_GpuPresentMode presentMode;
+    SDL_GpuSwapchainComposition swapchainComposition;
     DXGI_FORMAT swapchainFormat;
-    SDL_GpuColorSpace colorSpace;
+    DXGI_COLOR_SPACE_TYPE swapchainColorSpace;
     D3D11Fence *inFlightFences[MAX_FRAMES_IN_FLIGHT];
     Uint32 frameCounter;
 } D3D11WindowData;
@@ -932,7 +943,7 @@ static void D3D11_DestroyDevice(
 	/* Release the window data */
 	for (Sint32 i = renderer->claimedWindowCount - 1; i >= 0; i -= 1)
 	{
-		D3D11_UnclaimWindow(device->driverData, renderer->claimedWindows[i]->windowHandle);
+		D3D11_UnclaimWindow(device->driverData, renderer->claimedWindows[i]->window);
 	}
 	SDL_free(renderer->claimedWindows);
 
@@ -5339,9 +5350,9 @@ static SDL_bool D3D11_QueryFence(
 /* Window and Swapchain Management */
 
 static D3D11WindowData* D3D11_INTERNAL_FetchWindowData(
-	SDL_Window *windowHandle
+	SDL_Window *window
 ) {
-	SDL_PropertiesID properties = SDL_GetWindowProperties(windowHandle);
+	SDL_PropertiesID properties = SDL_GetWindowProperties(window);
 	return (D3D11WindowData*) SDL_GetProperty(properties, WINDOW_PROPERTY_DATA, NULL);
 }
 
@@ -5465,7 +5476,7 @@ static Uint8 D3D11_INTERNAL_InitializeSwapchainTexture(
 static Uint8 D3D11_INTERNAL_CreateSwapchain(
 	D3D11Renderer *renderer,
 	D3D11WindowData *windowData,
-    SDL_GpuColorSpace colorSpace,
+    SDL_GpuSwapchainComposition swapchainComposition,
     SDL_GpuPresentMode presentMode
 ) {
 	HWND dxgiHandle;
@@ -5476,31 +5487,20 @@ static Uint8 D3D11_INTERNAL_CreateSwapchain(
 	IDXGIFactory1 *pParent;
 	IDXGISwapChain *swapchain;
     IDXGISwapChain3 *swapchain3;
+    Uint32 colorSpaceSupport;
 	HRESULT res;
 
 	/* Get the DXGI handle */
 #ifdef _WIN32
-	dxgiHandle = (HWND) SDL_GetProperty(SDL_GetWindowProperties(windowData->windowHandle), SDL_PROP_WINDOW_WIN32_HWND_POINTER, NULL);
+	dxgiHandle = (HWND) SDL_GetProperty(SDL_GetWindowProperties(windowData->window), SDL_PROP_WINDOW_WIN32_HWND_POINTER, NULL);
 #else
-	dxgiHandle = (HWND) windowData->windowHandle;
+	dxgiHandle = (HWND) windowData->window;
 #endif
 
 	/* Get the window size */
-	SDL_GetWindowSize(windowData->windowHandle, &width, &height);
+	SDL_GetWindowSize(windowData->window, &width, &height);
 
-    if (colorSpace == SDL_GPU_COLORSPACE_NONLINEAR_SRGB || colorSpace == SDL_GPU_COLORSPACE_LINEAR_SRGB)
-    {
-        swapchainFormat = DXGI_FORMAT_B8G8R8A8_UNORM;
-    }
-    else if (colorSpace == SDL_GPU_COLORSPACE_HDR10_ST2048)
-    {
-        swapchainFormat = DXGI_FORMAT_R10G10B10A2_UNORM;
-    }
-    else
-    {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Unrecognized color space!");
-        return 0;
-    }
+    swapchainFormat = SwapchainCompositionToTextureFormat[swapchainComposition];
 
 	/* Initialize the swapchain buffer descriptor */
 	swapchainDesc.BufferDesc.Width = 0;
@@ -5587,8 +5587,9 @@ static Uint8 D3D11_INTERNAL_CreateSwapchain(
     /* Initialize the swapchain data */
 	windowData->swapchain = swapchain;
     windowData->presentMode = presentMode;
+    windowData->swapchainComposition = swapchainComposition;
     windowData->swapchainFormat = swapchainFormat;
-    windowData->colorSpace = colorSpace;
+    windowData->swapchainColorSpace = SwapchainCompositionToColorSpace[swapchainComposition];
     windowData->frameCounter = 0;
 
     for (i = 0; i < MAX_FRAMES_IN_FLIGHT; i += 1)
@@ -5601,18 +5602,39 @@ static Uint8 D3D11_INTERNAL_CreateSwapchain(
         &D3D_IID_IDXGISwapChain3,
         (void**) &swapchain3
     ))) {
-        IDXGISwapChain3_SetColorSpace1(swapchain3, SDLToD3D11_ColorSpace[windowData->colorSpace]);
+        IDXGISwapChain3_CheckColorSpaceSupport(
+            swapchain3,
+            windowData->swapchainColorSpace,
+            &colorSpaceSupport
+        );
+
+        if (!(colorSpaceSupport & DXGI_SWAP_CHAIN_COLOR_SPACE_SUPPORT_FLAG_PRESENT))
+        {
+            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Requested colorspace is unsupported!");
+            return 0;
+        }
+
+        IDXGISwapChain3_SetColorSpace1(
+            swapchain3,
+            windowData->swapchainColorSpace
+        );
+
         IDXGISwapChain3_Release(swapchain3);
     }
+    else
+    {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "DXGI 1.4 not supported, cannot use colorspace other than SDL_GPU_COLORSPACE_NONLINEAR_SRGB!");
+        return 0;
+    }
 
-
-    // If a you are using a FLIP model format you can't create the swapchain as DXGI_FORMAT_B8G8R8A8_UNORM_SRGB.
-    // You have to create the swapchain as DXGI_FORMAT_B8G8R8A8_UNORM and then set the render target view's format to DXGI_FORMAT_B8G8R8A8_UNORM_SRGB
+    /* If a you are using a FLIP model format you can't create the swapchain as DXGI_FORMAT_B8G8R8A8_UNORM_SRGB.
+     * You have to create the swapchain as DXGI_FORMAT_B8G8R8A8_UNORM and then set the render target view's format to DXGI_FORMAT_B8G8R8A8_UNORM_SRGB
+     */
 	if (!D3D11_INTERNAL_InitializeSwapchainTexture(
 		renderer,
 		swapchain,
         swapchainFormat,
-        (colorSpace == SDL_GPU_COLORSPACE_LINEAR_SRGB) ? DXGI_FORMAT_B8G8R8A8_UNORM_SRGB : windowData->swapchainFormat,
+        (swapchainComposition == SDL_GPU_SWAPCHAINCOMPOSITION_SDR_SRGB) ? DXGI_FORMAT_B8G8R8A8_UNORM_SRGB : windowData->swapchainFormat,
         &windowData->texture
 	)) {
 		IDXGISwapChain_Release(swapchain);
@@ -5655,16 +5677,45 @@ static Uint8 D3D11_INTERNAL_ResizeSwapchain(
 		renderer,
 		windowData->swapchain,
         windowData->swapchainFormat,
-        (windowData->colorSpace == SDL_GPU_COLORSPACE_LINEAR_SRGB) ? DXGI_FORMAT_B8G8R8A8_UNORM_SRGB : windowData->swapchainFormat,
+        (windowData->swapchainComposition == SDL_GPU_SWAPCHAINCOMPOSITION_SDR_SRGB) ? DXGI_FORMAT_B8G8R8A8_UNORM_SRGB : windowData->swapchainFormat,
         &windowData->texture
 	);
 }
 
+static SDL_bool D3D11_SupportsSwapchainComposition(
+    SDL_GpuRenderer *driverData,
+    SDL_Window *window,
+    SDL_GpuSwapchainComposition swapchainComposition
+) {
+    D3D11Renderer *renderer = (D3D11Renderer*) driverData;
+    D3D11WindowData *windowData;
+    DXGI_FORMAT format;
+    Uint32 formatSupport = 0;
+    HRESULT res;
+
+    format = SwapchainCompositionToTextureFormat[swapchainComposition];
+
+    res = ID3D11Device_CheckFormatSupport(
+        renderer->device,
+        format,
+        &formatSupport
+    );
+    if (FAILED(res))
+    {
+        /* Format is apparently unknown */
+        return SDL_FALSE;
+    }
+
+    return (formatSupport & D3D11_FORMAT_SUPPORT_DISPLAY);
+}
+
 static SDL_bool D3D11_SupportsPresentMode(
 	SDL_GpuRenderer *driverData,
+    SDL_Window *window,
 	SDL_GpuPresentMode presentMode
 ) {
 	D3D11Renderer *renderer = (D3D11Renderer*) driverData;
+    (void)window; /* used by other backends */
 	switch (presentMode)
 	{
 	case SDL_GPU_PRESENTMODE_IMMEDIATE:
@@ -5679,21 +5730,21 @@ static SDL_bool D3D11_SupportsPresentMode(
 
 static SDL_bool D3D11_ClaimWindow(
 	SDL_GpuRenderer *driverData,
-	SDL_Window *windowHandle,
-    SDL_GpuColorSpace colorSpace,
+	SDL_Window *window,
+    SDL_GpuSwapchainComposition swapchainComposition,
     SDL_GpuPresentMode presentMode
 ) {
 	D3D11Renderer *renderer = (D3D11Renderer*) driverData;
-	D3D11WindowData *windowData = D3D11_INTERNAL_FetchWindowData(windowHandle);
+	D3D11WindowData *windowData = D3D11_INTERNAL_FetchWindowData(window);
 
 	if (windowData == NULL)
 	{
 		windowData = (D3D11WindowData*) SDL_malloc(sizeof(D3D11WindowData));
-		windowData->windowHandle = windowHandle;
+		windowData->window = window;
 
-		if (D3D11_INTERNAL_CreateSwapchain(renderer, windowData, colorSpace, presentMode))
+		if (D3D11_INTERNAL_CreateSwapchain(renderer, windowData, swapchainComposition, presentMode))
 		{
-            SDL_SetProperty(SDL_GetWindowProperties(windowHandle), WINDOW_PROPERTY_DATA, windowData);
+            SDL_SetProperty(SDL_GetWindowProperties(window), WINDOW_PROPERTY_DATA, windowData);
 
 			SDL_LockMutex(renderer->windowLock);
 
@@ -5764,10 +5815,10 @@ static void D3D11_INTERNAL_DestroySwapchain(
 
 static void D3D11_UnclaimWindow(
 	SDL_GpuRenderer *driverData,
-	SDL_Window *windowHandle
+	SDL_Window *window
 ) {
 	D3D11Renderer *renderer = (D3D11Renderer*) driverData;
-	D3D11WindowData *windowData = D3D11_INTERNAL_FetchWindowData(windowHandle);
+	D3D11WindowData *windowData = D3D11_INTERNAL_FetchWindowData(window);
 
 	if (windowData == NULL)
 	{
@@ -5782,7 +5833,7 @@ static void D3D11_UnclaimWindow(
 	SDL_LockMutex(renderer->windowLock);
 	for (Uint32 i = 0; i < renderer->claimedWindowCount; i += 1)
 	{
-		if (renderer->claimedWindows[i]->windowHandle == windowHandle)
+		if (renderer->claimedWindows[i]->window == window)
 		{
 			renderer->claimedWindows[i] = renderer->claimedWindows[renderer->claimedWindowCount - 1];
 			renderer->claimedWindowCount -= 1;
@@ -5793,12 +5844,12 @@ static void D3D11_UnclaimWindow(
 
 	SDL_free(windowData);
 
-    SDL_ClearProperty(SDL_GetWindowProperties(windowHandle), WINDOW_PROPERTY_DATA);
+    SDL_ClearProperty(SDL_GetWindowProperties(window), WINDOW_PROPERTY_DATA);
 }
 
 static SDL_GpuTexture* D3D11_AcquireSwapchainTexture(
 	SDL_GpuCommandBuffer *commandBuffer,
-	SDL_Window *windowHandle,
+	SDL_Window *window,
 	Uint32 *pWidth,
 	Uint32 *pHeight
 ) {
@@ -5809,7 +5860,7 @@ static SDL_GpuTexture* D3D11_AcquireSwapchainTexture(
 	int w, h;
 	HRESULT res;
 
-	windowData = D3D11_INTERNAL_FetchWindowData(windowHandle);
+	windowData = D3D11_INTERNAL_FetchWindowData(window);
 	if (windowData == NULL)
 	{
 		return NULL;
@@ -5817,7 +5868,7 @@ static SDL_GpuTexture* D3D11_AcquireSwapchainTexture(
 
 	/* Check for window size changes and resize the swapchain if needed. */
 	IDXGISwapChain_GetDesc(windowData->swapchain, &swapchainDesc);
-	SDL_GetWindowSize(windowHandle, &w, &h);
+	SDL_GetWindowSize(window, &w, &h);
 
 	if (w != swapchainDesc.BufferDesc.Width || h != swapchainDesc.BufferDesc.Height)
 	{
@@ -5891,24 +5942,49 @@ static SDL_GpuTexture* D3D11_AcquireSwapchainTexture(
 	return (SDL_GpuTexture*) &windowData->textureContainer;
 }
 
-static SDL_GpuTextureFormat D3D11_GetSwapchainFormat(
+static SDL_GpuTextureFormat D3D11_GetSwapchainTextureFormat(
 	SDL_GpuRenderer *driverData,
-	SDL_Window *windowHandle
+	SDL_Window *window
 ) {
-	return SDL_GPU_TEXTUREFORMAT_R8G8B8A8;
+    D3D11WindowData *windowData = D3D11_INTERNAL_FetchWindowData(window);
+
+    if (windowData == NULL)
+    {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Cannot get swapchain format, window has not been claimed!");
+        return 0;
+    }
+
+    switch (windowData->swapchainFormat)
+    {
+        case DXGI_FORMAT_B8G8R8A8_UNORM:
+            return SDL_GPU_TEXTUREFORMAT_B8G8R8A8;
+
+        case DXGI_FORMAT_B8G8R8A8_UNORM_SRGB:
+            return SDL_GPU_TEXTUREFORMAT_B8G8R8A8_SRGB;
+
+        case DXGI_FORMAT_R16G16B16A16_FLOAT:
+            return SDL_GPU_TEXTUREFORMAT_R16G16B16A16_SFLOAT;
+
+        case DXGI_FORMAT_R10G10B10A2_UNORM:
+            return SDL_GPU_TEXTUREFORMAT_A2R10G10B10;
+
+        default:
+            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Unrecognized swapchain format!");
+            return 0;
+    }
 }
 
 static void D3D11_SetSwapchainParameters(
 	SDL_GpuRenderer *driverData,
-	SDL_Window *windowHandle,
-    SDL_GpuColorSpace colorSpace,
+	SDL_Window *window,
+    SDL_GpuSwapchainComposition swapchainComposition,
     SDL_GpuPresentMode presentMode
 ) {
     D3D11Renderer *renderer = (D3D11Renderer*) driverData;
-	D3D11WindowData *windowData = D3D11_INTERNAL_FetchWindowData(windowHandle);
+	D3D11WindowData *windowData = D3D11_INTERNAL_FetchWindowData(window);
 
     if (
-        colorSpace != windowData->colorSpace ||
+        swapchainComposition != windowData->swapchainComposition ||
         presentMode != windowData->presentMode
     ) {
         D3D11_Wait(driverData);
@@ -5922,7 +5998,7 @@ static void D3D11_SetSwapchainParameters(
         D3D11_INTERNAL_CreateSwapchain(
             renderer,
             windowData,
-            colorSpace,
+            swapchainComposition,
             presentMode
         );
     }

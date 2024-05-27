@@ -88,6 +88,7 @@ typedef enum SDL_GpuTextureFormat
 	SDL_GPU_TEXTUREFORMAT_A1R5G5B5,
 	SDL_GPU_TEXTUREFORMAT_B4G4R4A4,
 	SDL_GPU_TEXTUREFORMAT_A2R10G10B10,
+    SDL_GPU_TEXTUREFORMAT_A2B10G10R10,
 	SDL_GPU_TEXTUREFORMAT_R16G16,
 	SDL_GPU_TEXTUREFORMAT_R16G16B16A16,
 	SDL_GPU_TEXTUREFORMAT_R8,
@@ -139,13 +140,6 @@ typedef enum SDL_GpuTextureUsageFlagBits
 } SDL_GpuTextureUsageFlagBits;
 
 typedef Uint32 SDL_GpuTextureUsageFlags;
-
-typedef enum SDL_GpuColorSpace
-{
-    SDL_GPU_COLORSPACE_NONLINEAR_SRGB,
-    SDL_GPU_COLORSPACE_LINEAR_SRGB,
-    SDL_GPU_COLORSPACE_HDR10_ST2048
-} SDL_GpuColorSpace;
 
 typedef enum SDL_GpuTextureType
 {
@@ -373,6 +367,24 @@ typedef enum SDL_GpuPresentMode
 	SDL_GPU_PRESENTMODE_IMMEDIATE,
 	SDL_GPU_PRESENTMODE_MAILBOX
 } SDL_GpuPresentMode;
+
+/*
+ * SDR:
+ *   B8G8R8A8 or R8G8B8A8 swapchain. Pixel values are in nonlinear sRGB encoding. Blends raw pixel values.
+ * SDR_SRGB:
+ *   B8G8R8A8_SRGB or R8G8B8A8_SRGB swapchain. Pixel values are in nonlinear sRGB encoding. Blends in linear space.
+ * HDR:
+ *   R16G16B16A16_SFLOAT swapchain. Pixel values are in extended linear encoding. Blends in linear space.
+ * HDR_ADVANCED:
+ *   A2R10G10B10 or A2B10G10R10 swapchain. Pixel values are in PQ ST2048 encoding. Blends raw pixel values. (TODO: verify this)
+ */
+typedef enum SDL_GpuSwapchainComposition
+{
+    SDL_GPU_SWAPCHAINCOMPOSITION_SDR,
+    SDL_GPU_SWAPCHAINCOMPOSITION_SDR_SRGB,
+    SDL_GPU_SWAPCHAINCOMPOSITION_HDR,
+    SDL_GPU_SWAPCHAINCOMPOSITION_HDR_ADVANCED
+} SDL_GpuSwapchainComposition;
 
 typedef enum SDL_GpuBackendBits
 {
@@ -1899,9 +1911,27 @@ extern SDL_DECLSPEC void SDLCALL SDL_GpuBlit(
 /* Submission/Presentation */
 
 /**
+ * Obtains whether or not a swapchain composition is supported by the GPU backend.
+ *
+ * \param device a GPU context
+ * \param window an SDL_Window
+ * \param swapchainComposition the swapchain composition to check
+ *
+ * \returns SDL_TRUE if supported, SDL_FALSE if unsupported (or on error)
+ *
+ * \since This function is available since SDL 3.x.x
+ */
+extern SDL_DECLSPEC SDL_bool SDLCALL SDL_GpuSupportsSwapchainComposition(
+    SDL_GpuDevice *device,
+    SDL_Window *window,
+    SDL_GpuSwapchainComposition swapchainComposition
+);
+
+/**
  * Obtains whether or not a presentation mode is supported by the GPU backend.
  *
  * \param device a GPU context
+ * \param window an SDL_Window
  * \param presentMode the presentation mode to check
  *
  * \returns SDL_TRUE if supported, SDL_FALSE if unsupported (or on error)
@@ -1910,6 +1940,7 @@ extern SDL_DECLSPEC void SDLCALL SDL_GpuBlit(
  */
 extern SDL_DECLSPEC SDL_bool SDLCALL SDL_GpuSupportsPresentMode(
 	SDL_GpuDevice *device,
+    SDL_Window *window,
 	SDL_GpuPresentMode presentMode
 );
 
@@ -1918,8 +1949,8 @@ extern SDL_DECLSPEC SDL_bool SDLCALL SDL_GpuSupportsPresentMode(
  * This must be called before SDL_GpuAcquireSwapchainTexture is called using the window.
  *
  * \param device a GPU context
- * \param windowHandle an SDL_Window
- * \param colorSpace the desired color space for the swapchain
+ * \param window an SDL_Window
+ * \param swapchainComposition the desired composition of the swapchain
  * \param presentMode the desired present mode for the swapchain
  *
  * \returns SDL_TRUE on success, otherwise SDL_FALSE.
@@ -1931,8 +1962,8 @@ extern SDL_DECLSPEC SDL_bool SDLCALL SDL_GpuSupportsPresentMode(
  */
 extern SDL_DECLSPEC SDL_bool SDLCALL SDL_GpuClaimWindow(
 	SDL_GpuDevice *device,
-	SDL_Window *windowHandle,
-    SDL_GpuColorSpace colorSpace,
+	SDL_Window *window,
+    SDL_GpuSwapchainComposition swapchainComposition,
 	SDL_GpuPresentMode presentMode
 );
 
@@ -1940,7 +1971,7 @@ extern SDL_DECLSPEC SDL_bool SDLCALL SDL_GpuClaimWindow(
  * Unclaims a window, destroying its swapchain structure.
  *
  * \param device a GPU context
- * \param windowHandle an SDL_Window that has been claimed
+ * \param window an SDL_Window that has been claimed
  *
  * \since This function is available since SDL 3.x.x
  *
@@ -1948,23 +1979,23 @@ extern SDL_DECLSPEC SDL_bool SDLCALL SDL_GpuClaimWindow(
  */
 extern SDL_DECLSPEC void SDLCALL SDL_GpuUnclaimWindow(
 	SDL_GpuDevice *device,
-	SDL_Window *windowHandle
+	SDL_Window *window
 );
 
 /**
  * Changes the swapchain parameters for the given claimed window.
  *
  * \param device a GPU context
- * \param windowHandle an SDL_Window that has been claimed
- * \param colorSpace the desired color space for the swapchain
+ * \param window an SDL_Window that has been claimed
+ * \param swapchainComposition the desired composition of the swapchain
  * \param presentMode the desired present mode for the swapchain
  *
  * \since This function is available since SDL 3.x.x
  */
 extern SDL_DECLSPEC void SDLCALL SDL_GpuSetSwapchainParameters(
 	SDL_GpuDevice *device,
-	SDL_Window *windowHandle,
-    SDL_GpuColorSpace colorSpace,
+	SDL_Window *window,
+    SDL_GpuSwapchainComposition swapchainComposition,
     SDL_GpuPresentMode presentMode
 );
 
@@ -1972,14 +2003,15 @@ extern SDL_DECLSPEC void SDLCALL SDL_GpuSetSwapchainParameters(
  * Obtains the texture format of the swapchain for the given window.
  *
  * \param device a GPU context
- * \param windowHandle an SDL_Window that has been claimed
+ * \param window an SDL_Window that has been claimed
+ *
  * \returns the texture format of the swapchain
  *
  * \since This function is available since SDL 3.x.x
  */
-extern SDL_DECLSPEC SDL_GpuTextureFormat SDLCALL SDL_GpuGetSwapchainFormat(
+extern SDL_DECLSPEC SDL_GpuTextureFormat SDLCALL SDL_GpuGetSwapchainTextureFormat(
 	SDL_GpuDevice *device,
-	SDL_Window *windowHandle
+	SDL_Window *window
 );
 
 /**
@@ -2008,7 +2040,7 @@ extern SDL_DECLSPEC SDL_GpuCommandBuffer *SDLCALL SDL_GpuAcquireCommandBuffer(
  * You MUST NOT call this function from any thread other than the one that created the window.
  *
  * \param commandBuffer a command buffer
- * \param windowHandle a window that has been claimed
+ * \param window a window that has been claimed
  * \param pWidth a pointer filled in with the swapchain width
  * \param pHeight a pointer filled in with the swapchain height
  * \returns a swapchain texture
@@ -2021,7 +2053,7 @@ extern SDL_DECLSPEC SDL_GpuCommandBuffer *SDLCALL SDL_GpuAcquireCommandBuffer(
  */
 extern SDL_DECLSPEC SDL_GpuTexture *SDLCALL SDL_GpuAcquireSwapchainTexture(
 	SDL_GpuCommandBuffer *commandBuffer,
-	SDL_Window *windowHandle,
+	SDL_Window *window,
 	Uint32 *pWidth,
 	Uint32 *pHeight
 );
