@@ -680,8 +680,8 @@ void SDL_GpuSetScissor(
 void SDL_GpuBindVertexBuffers(
     SDL_GpuRenderPass *renderPass,
 	Uint32 firstBinding,
-	Uint32 bindingCount,
-	SDL_GpuBufferBinding *pBindings
+    SDL_GpuBufferBinding *pBindings,
+	Uint32 bindingCount
 ) {
 	NULL_ASSERT(renderPass)
     CHECK_RENDERPASS
@@ -689,8 +689,8 @@ void SDL_GpuBindVertexBuffers(
 	RENDERPASS_DEVICE->BindVertexBuffers(
 		RENDERPASS_COMMAND_BUFFER,
 		firstBinding,
-		bindingCount,
-		pBindings
+        pBindings,
+		bindingCount
 	);
 }
 

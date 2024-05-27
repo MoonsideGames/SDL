@@ -8560,8 +8560,8 @@ static void VULKAN_BindGraphicsPipeline(
 static void VULKAN_BindVertexBuffers(
     SDL_GpuCommandBuffer *commandBuffer,
     Uint32 firstBinding,
-    Uint32 bindingCount,
-    SDL_GpuBufferBinding *pBindings
+    SDL_GpuBufferBinding *pBindings,
+    Uint32 bindingCount
 ) {
     VulkanCommandBuffer *vulkanCommandBuffer = (VulkanCommandBuffer*) commandBuffer;
     VulkanRenderer *renderer = (VulkanRenderer*) vulkanCommandBuffer->renderer;

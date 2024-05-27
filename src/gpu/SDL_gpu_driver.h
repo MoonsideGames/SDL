@@ -342,8 +342,8 @@ struct SDL_GpuDevice
 	void (*BindVertexBuffers)(
 		SDL_GpuCommandBuffer *commandBuffer,
 		Uint32 firstBinding,
-		Uint32 bindingCount,
-		SDL_GpuBufferBinding *pBindings
+        SDL_GpuBufferBinding *pBindings,
+		Uint32 bindingCount
 	);
 
 	void (*BindIndexBuffer)(

@@ -1242,16 +1242,16 @@ extern SDL_DECLSPEC void SDLCALL SDL_GpuSetScissor(
  *
  * \param renderPass a render pass handle
  * \param firstBinding the starting bind point for the vertex buffers
- * \param bindingCount the number of bindings in the pBindings array
  * \param pBindings an array of SDL_GpuBufferBinding structs containing vertex buffers and offset values
+ * \param bindingCount the number of bindings in the pBindings array
  *
  * \since This function is available since SDL 3.x.x
  */
 extern SDL_DECLSPEC void SDLCALL SDL_GpuBindVertexBuffers(
     SDL_GpuRenderPass *renderPass,
 	Uint32 firstBinding,
-	Uint32 bindingCount,
-	SDL_GpuBufferBinding *pBindings
+    SDL_GpuBufferBinding *pBindings,
+	Uint32 bindingCount
 );
 
 /**

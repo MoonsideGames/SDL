@@ -358,7 +358,7 @@ Render(SDL_Window *window, const int windownum)
 
     pass = SDL_GpuBeginRenderPass(cmd, &color_attachment, 1, &depth_attachment);
     SDL_GpuBindGraphicsPipeline(pass, render_state.pipeline);
-    SDL_GpuBindVertexBuffers(pass, 0, 1, &vertex_binding);
+    SDL_GpuBindVertexBuffers(pass, 0, &vertex_binding, 1);
     SDL_GpuPushVertexUniformData(pass, 0, matrix_final, sizeof(matrix_final));
     SDL_GpuDrawPrimitives(pass, 0, 12);
     SDL_GpuEndRenderPass(pass);

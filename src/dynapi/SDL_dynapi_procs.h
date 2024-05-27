@@ -1067,7 +1067,7 @@ SDL_DYNAPI_PROC(SDL_GpuRenderPass*,SDL_GpuBeginRenderPass,(SDL_GpuCommandBuffer 
 SDL_DYNAPI_PROC(void,SDL_GpuBindGraphicsPipeline,(SDL_GpuRenderPass *a, SDL_GpuGraphicsPipeline *b),(a,b),)
 SDL_DYNAPI_PROC(void,SDL_GpuSetViewport,(SDL_GpuRenderPass *a, SDL_GpuViewport *b),(a,b),)
 SDL_DYNAPI_PROC(void,SDL_GpuSetScissor,(SDL_GpuRenderPass *a, SDL_GpuRect *b),(a,b),)
-SDL_DYNAPI_PROC(void,SDL_GpuBindVertexBuffers,(SDL_GpuRenderPass *a, Uint32 b, Uint32 c, SDL_GpuBufferBinding *d),(a,b,c,d),)
+SDL_DYNAPI_PROC(void,SDL_GpuBindVertexBuffers,(SDL_GpuRenderPass *a, Uint32 b, SDL_GpuBufferBinding *c, Uint32 d),(a,b,c,d),)
 SDL_DYNAPI_PROC(void,SDL_GpuBindIndexBuffer,(SDL_GpuRenderPass *a, SDL_GpuBufferBinding *b, SDL_GpuIndexElementSize c),(a,b,c),)
 SDL_DYNAPI_PROC(void,SDL_GpuBindVertexSamplers,(SDL_GpuRenderPass *a, Uint32 b, SDL_GpuTextureSamplerBinding *c, Uint32 d),(a,b,c,d),)
 SDL_DYNAPI_PROC(void,SDL_GpuBindVertexStorageTextures,(SDL_GpuRenderPass *a, Uint32 b, SDL_GpuTextureSlice *c, Uint32 d),(a,b,c,d),)

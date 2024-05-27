@@ -4188,8 +4188,8 @@ static void D3D11_SetScissor(
 static void D3D11_BindVertexBuffers(
 	SDL_GpuCommandBuffer *commandBuffer,
 	Uint32 firstBinding,
-	Uint32 bindingCount,
-	SDL_GpuBufferBinding *pBindings
+    SDL_GpuBufferBinding *pBindings,
+	Uint32 bindingCount
 ) {
 	D3D11CommandBuffer *d3d11CommandBuffer = (D3D11CommandBuffer*) commandBuffer;
 	ID3D11Buffer *bufferHandles[MAX_BUFFER_BINDINGS];
