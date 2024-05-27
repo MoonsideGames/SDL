@@ -5349,6 +5349,7 @@ static Uint8 D3D11_INTERNAL_InitializeSwapchainTexture(
 	D3D11Renderer *renderer,
 	IDXGISwapChain *swapchain,
     DXGI_FORMAT swapchainFormat,
+    DXGI_FORMAT rtvFormat,
 	D3D11Texture *pTexture
 ) {
 	ID3D11Texture2D *swapchainTexture;
@@ -5393,7 +5394,7 @@ static Uint8 D3D11_INTERNAL_InitializeSwapchainTexture(
 	}
 
 	/* Create the RTV for the swapchain */
-	rtvDesc.Format = swapchainFormat;
+    rtvDesc.Format = rtvFormat;
 	rtvDesc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
 	rtvDesc.Texture2D.MipSlice = 0;
 
@@ -5487,13 +5488,9 @@ static Uint8 D3D11_INTERNAL_CreateSwapchain(
 	/* Get the window size */
 	SDL_GetWindowSize(windowData->windowHandle, &width, &height);
 
-    if (colorSpace == SDL_GPU_COLORSPACE_NONLINEAR_SRGB)
+    if (colorSpace == SDL_GPU_COLORSPACE_NONLINEAR_SRGB || colorSpace == SDL_GPU_COLORSPACE_LINEAR_SRGB)
     {
         swapchainFormat = DXGI_FORMAT_B8G8R8A8_UNORM;
-    }
-    else if (colorSpace == SDL_GPU_COLORSPACE_LINEAR_SRGB)
-    {
-        swapchainFormat = DXGI_FORMAT_B8G8R8A8_UNORM_SRGB;
     }
     else if (colorSpace == SDL_GPU_COLORSPACE_HDR10_ST2048)
     {
@@ -5608,11 +5605,15 @@ static Uint8 D3D11_INTERNAL_CreateSwapchain(
         IDXGISwapChain3_Release(swapchain3);
     }
 
+
+    // If a you are using a FLIP model format you can't create the swapchain as DXGI_FORMAT_B8G8R8A8_UNORM_SRGB.
+    // You have to create the swapchain as DXGI_FORMAT_B8G8R8A8_UNORM and then set the render target view's format to DXGI_FORMAT_B8G8R8A8_UNORM_SRGB
 	if (!D3D11_INTERNAL_InitializeSwapchainTexture(
 		renderer,
 		swapchain,
         swapchainFormat,
-		&windowData->texture
+        (colorSpace == SDL_GPU_COLORSPACE_LINEAR_SRGB) ? DXGI_FORMAT_B8G8R8A8_UNORM_SRGB : windowData->swapchainFormat,
+        &windowData->texture
 	)) {
 		IDXGISwapChain_Release(swapchain);
 		return 0;
@@ -5654,7 +5655,8 @@ static Uint8 D3D11_INTERNAL_ResizeSwapchain(
 		renderer,
 		windowData->swapchain,
         windowData->swapchainFormat,
-		&windowData->texture
+        (windowData->colorSpace == SDL_GPU_COLORSPACE_LINEAR_SRGB) ? DXGI_FORMAT_B8G8R8A8_UNORM_SRGB : windowData->swapchainFormat,
+        &windowData->texture
 	);
 }
 
