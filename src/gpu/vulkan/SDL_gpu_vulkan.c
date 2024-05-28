@@ -5074,15 +5074,6 @@ static Uint8 VULKAN_INTERNAL_CreateSwapchain(
     return 1;
 }
 
-static void VULKAN_INTERNAL_RecreateSwapchain(
-    VulkanRenderer* renderer,
-    WindowData *windowData
-) {
-    VULKAN_Wait((SDL_GpuRenderer*) renderer);
-    VULKAN_INTERNAL_DestroySwapchain(renderer, windowData);
-    VULKAN_INTERNAL_CreateSwapchain(renderer, windowData);
-}
-
 /* Command Buffers */
 
 static void VULKAN_INTERNAL_BeginCommandBuffer(
@@ -10592,6 +10583,29 @@ static void VULKAN_UnclaimWindow(
     SDL_free(windowData);
 
     SDL_ClearProperty(SDL_GetWindowProperties(window), WINDOW_PROPERTY_DATA);
+}
+
+static void VULKAN_INTERNAL_RecreateSwapchain(
+    VulkanRenderer* renderer,
+    WindowData *windowData
+) {
+    Uint32 i;
+
+    VULKAN_Wait((SDL_GpuRenderer*) renderer);
+
+    for (i = 0; i < MAX_FRAMES_IN_FLIGHT; i += 1)
+    {
+        if (windowData->swapchainData->inFlightFences[i] != NULL)
+        {
+            VULKAN_ReleaseFence(
+                (SDL_GpuRenderer*) renderer,
+                (SDL_GpuFence*) windowData->swapchainData->inFlightFences[i]
+            );
+        }
+    }
+
+    VULKAN_INTERNAL_DestroySwapchain(renderer, windowData);
+    VULKAN_INTERNAL_CreateSwapchain(renderer, windowData);
 }
 
 static SDL_GpuTexture* VULKAN_AcquireSwapchainTexture(
