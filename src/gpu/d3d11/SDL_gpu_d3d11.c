@@ -5688,7 +5688,6 @@ static SDL_bool D3D11_SupportsSwapchainComposition(
     SDL_GpuSwapchainComposition swapchainComposition
 ) {
     D3D11Renderer *renderer = (D3D11Renderer*) driverData;
-    D3D11WindowData *windowData;
     DXGI_FORMAT format;
     Uint32 formatSupport = 0;
     HRESULT res;

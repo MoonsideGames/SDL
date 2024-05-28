@@ -74,7 +74,7 @@
 static void METAL_Wait(SDL_GpuRenderer *driverData);
 static void METAL_UnclaimWindow(
     SDL_GpuRenderer *driverData,
-    SDL_Window *windowHandle
+    SDL_Window *window
 );
 
 /* Conversions */
@@ -364,7 +364,7 @@ typedef struct MetalFence
 
 typedef struct MetalWindowData
 {
-    SDL_Window *windowHandle;
+    SDL_Window *window;
     SDL_MetalView view;
     CAMetalLayer *layer;
     id<CAMetalDrawable> drawable;
@@ -551,7 +551,7 @@ static void METAL_DestroyDevice(SDL_GpuDevice *device)
     /* Release the window data */
     for (Sint32 i = renderer->claimedWindowCount - 1; i >= 0; i -= 1)
     {
-        METAL_UnclaimWindow(device->driverData, renderer->claimedWindows[i]->windowHandle);
+        METAL_UnclaimWindow(device->driverData, renderer->claimedWindows[i]->window);
     }
     SDL_free(renderer->claimedWindows);
 
@@ -2400,10 +2400,19 @@ static int METAL_QueryFence(
 
 /* Window and Swapchain Management */
 
-static MetalWindowData* METAL_INTERNAL_FetchWindowData(SDL_Window *windowHandle)
+static MetalWindowData* METAL_INTERNAL_FetchWindowData(SDL_Window *window)
 {
-    SDL_PropertiesID properties = SDL_GetWindowProperties(windowHandle);
+    SDL_PropertiesID properties = SDL_GetWindowProperties(window);
     return (MetalWindowData*) SDL_GetProperty(properties, WINDOW_PROPERTY_DATA, NULL);
+}
+
+static SDL_bool METAL_SupportsSwapchainComposition(
+    SDL_GpuRenderer *driverData,
+    SDL_Window *window,
+    SDL_GpuSwapchainComposition swapchainComposition
+) {
+    NOT_IMPLEMENTED
+    return SDL_FALSE;
 }
 
 static Uint8 METAL_INTERNAL_CreateSwapchain(
@@ -2413,7 +2422,7 @@ static Uint8 METAL_INTERNAL_CreateSwapchain(
 ) {
     CGSize drawableSize;
 
-    windowData->view = SDL_Metal_CreateView(windowData->windowHandle);
+    windowData->view = SDL_Metal_CreateView(windowData->window);
     windowData->drawable = nil;
 
     windowData->layer = (__bridge CAMetalLayer *)(SDL_Metal_GetLayer(windowData->view));
@@ -2449,6 +2458,7 @@ static Uint8 METAL_INTERNAL_CreateSwapchain(
 
 static SDL_bool METAL_SupportsPresentMode(
     SDL_GpuRenderer *driverData,
+    SDL_Window *window,
     SDL_GpuPresentMode presentMode
 ) {
     switch (presentMode)
@@ -2465,21 +2475,21 @@ static SDL_bool METAL_SupportsPresentMode(
 
 static SDL_bool METAL_ClaimWindow(
     SDL_GpuRenderer *driverData,
-    SDL_Window *windowHandle,
-    SDL_GpuColorSpace colorSpace,
+    SDL_Window *window,
+    SDL_GpuSwapchainComposition swapchainComposition,
     SDL_GpuPresentMode presentMode
 ) {
     MetalRenderer *renderer = (MetalRenderer*) driverData;
-    MetalWindowData *windowData = METAL_INTERNAL_FetchWindowData(windowHandle);
+    MetalWindowData *windowData = METAL_INTERNAL_FetchWindowData(window);
 
     if (windowData == NULL)
     {
         windowData = (MetalWindowData*) SDL_malloc(sizeof(MetalWindowData));
-        windowData->windowHandle = windowHandle; /* FIXME: needed? */
+        windowData->window = window; /* FIXME: needed? */
 
         if (METAL_INTERNAL_CreateSwapchain(renderer, windowData, presentMode))
         {
-            SDL_SetProperty(SDL_GetWindowProperties(windowHandle), WINDOW_PROPERTY_DATA, windowData);
+            SDL_SetProperty(SDL_GetWindowProperties(window), WINDOW_PROPERTY_DATA, windowData);
 
             SDL_LockMutex(renderer->windowLock);
 
@@ -2516,10 +2526,10 @@ static SDL_bool METAL_ClaimWindow(
 
 static void METAL_UnclaimWindow(
     SDL_GpuRenderer *driverData,
-    SDL_Window *windowHandle
+    SDL_Window *window
 ) {
     MetalRenderer *renderer = (MetalRenderer*) driverData;
-    MetalWindowData *windowData = METAL_INTERNAL_FetchWindowData(windowHandle);
+    MetalWindowData *windowData = METAL_INTERNAL_FetchWindowData(window);
 
     if (windowData == NULL)
     {
@@ -2533,7 +2543,7 @@ static void METAL_UnclaimWindow(
     SDL_LockMutex(renderer->windowLock);
     for (Uint32 i = 0; i < renderer->claimedWindowCount; i += 1)
     {
-        if (renderer->claimedWindows[i]->windowHandle == windowHandle)
+        if (renderer->claimedWindows[i]->window == window)
         {
             renderer->claimedWindows[i] = renderer->claimedWindows[renderer->claimedWindowCount - 1];
             renderer->claimedWindowCount -= 1;
@@ -2544,12 +2554,12 @@ static void METAL_UnclaimWindow(
 
     SDL_free(windowData);
 
-    SDL_ClearProperty(SDL_GetWindowProperties(windowHandle), WINDOW_PROPERTY_DATA);
+    SDL_ClearProperty(SDL_GetWindowProperties(window), WINDOW_PROPERTY_DATA);
 }
 
 static SDL_GpuTexture* METAL_AcquireSwapchainTexture(
     SDL_GpuCommandBuffer *commandBuffer,
-    SDL_Window *windowHandle,
+    SDL_Window *window,
     Uint32 *pWidth,
     Uint32 *pHeight
 ) {
@@ -2557,7 +2567,7 @@ static SDL_GpuTexture* METAL_AcquireSwapchainTexture(
     MetalWindowData *windowData;
     CGSize drawableSize;
 
-    windowData = METAL_INTERNAL_FetchWindowData(windowHandle);
+    windowData = METAL_INTERNAL_FetchWindowData(window);
     if (windowData == NULL)
     {
         *pWidth = 0;
@@ -2588,9 +2598,9 @@ static SDL_GpuTexture* METAL_AcquireSwapchainTexture(
     return (SDL_GpuTexture*) &windowData->textureContainer;
 }
 
-static SDL_GpuTextureFormat METAL_GetSwapchainFormat(
+static SDL_GpuTextureFormat METAL_GetSwapchainTextureFormat(
     SDL_GpuRenderer *driverData,
-    SDL_Window *windowHandle
+    SDL_Window *window
 ) {
     NOT_IMPLEMENTED
     return SDL_GPU_TEXTUREFORMAT_R8;
@@ -2598,8 +2608,8 @@ static SDL_GpuTextureFormat METAL_GetSwapchainFormat(
 
 static void METAL_SetSwapchainParameters(
     SDL_GpuRenderer *driverData,
-    SDL_Window *windowHandle,
-    SDL_GpuColorSpace colorSpace,
+    SDL_Window *window,
+    SDL_GpuSwapchainComposition swapchainComposition,
     SDL_GpuPresentMode presentMode
 ) {
     NOT_IMPLEMENTED
