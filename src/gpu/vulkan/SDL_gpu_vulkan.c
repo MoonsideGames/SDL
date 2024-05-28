@@ -3052,6 +3052,10 @@ static VulkanBufferUsageMode VULKAN_INTERNAL_DefaultBufferUsageMode(
     {
         return VULKAN_BUFFER_USAGE_MODE_COMPUTE_STORAGE_READ;
     }
+    else if (buffer->usageFlags & SDL_GPU_BUFFERUSAGE_COMPUTE_STORAGE_WRITE_BIT)
+    {
+        return VULKAN_BUFFER_USAGE_MODE_COMPUTE_STORAGE_READ_WRITE;
+    }
     else
     {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Buffer has no default usage mode!");
@@ -3085,6 +3089,10 @@ static VulkanTextureUsageMode VULKAN_INTERNAL_DefaultTextureUsageMode(
     {
         return VULKAN_TEXTURE_USAGE_MODE_COMPUTE_STORAGE_READ;
     }
+	else if (texture->usageFlags & SDL_GPU_TEXTUREUSAGE_COMPUTE_STORAGE_WRITE_BIT)
+	{
+		return VULKAN_TEXTURE_USAGE_MODE_COMPUTE_STORAGE_READ_WRITE;
+	}
     else
     {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Texture has no default usage mode!");
