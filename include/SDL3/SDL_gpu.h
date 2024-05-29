@@ -631,10 +631,10 @@ typedef struct SDL_GpuGraphicsPipelineCreateInfo
 
 typedef struct SDL_GpuComputePipelineResourceLayoutInfo
 {
-    Uint32 readOnlyStorageBufferCount;
-    Uint32 readWriteStorageBufferCount;
     Uint32 readOnlyStorageTextureCount;
+    Uint32 readOnlyStorageBufferCount;
     Uint32 readWriteStorageTextureCount;
+    Uint32 readWriteStorageBufferCount;
     Uint32 uniformBufferCount;
 } SDL_GpuComputePipelineResourceLayoutInfo;
 

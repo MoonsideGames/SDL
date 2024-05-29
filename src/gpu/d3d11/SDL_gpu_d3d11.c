@@ -773,6 +773,10 @@ struct D3D11Renderer
 
 /* Null arrays for resetting shader resource slots */
 
+ID3D11RenderTargetView *nullRTVs[
+    MAX_COLOR_TARGET_BINDINGS
+];
+
 ID3D11ShaderResourceView *nullSRVs[
     MAX_TEXTURE_SAMPLERS_PER_STAGE +
     MAX_STORAGE_TEXTURES_PER_STAGE +
@@ -1951,7 +1955,7 @@ static D3D11Texture* D3D11_INTERNAL_CreateTexture(
 	D3D11Renderer *renderer,
 	SDL_GpuTextureCreateInfo *textureCreateInfo
 ) {
-Uint8 isColorTarget, isDepthStencil, isSampler, isStorage, isMultisample;
+    Uint8 isSampler, isColorTarget, isDepthStencil, isMultisample, needSubresourceSRV, needSubresourceUAV;
 	DXGI_FORMAT format;
 	ID3D11Resource *textureHandle;
 	ID3D11ShaderResourceView *srv = NULL;
@@ -1960,13 +1964,12 @@ Uint8 isColorTarget, isDepthStencil, isSampler, isStorage, isMultisample;
 
 	isColorTarget = textureCreateInfo->usageFlags & SDL_GPU_TEXTUREUSAGE_COLOR_TARGET_BIT;
 	isDepthStencil = textureCreateInfo->usageFlags & SDL_GPU_TEXTUREUSAGE_DEPTH_STENCIL_TARGET_BIT;
-	isSampler = textureCreateInfo->usageFlags & SDL_GPU_TEXTUREUSAGE_SAMPLER_BIT;
-	isStorage =
-        textureCreateInfo->usageFlags & (
-            SDL_GPU_TEXTUREUSAGE_GRAPHICS_STORAGE_READ_BIT |
-            SDL_GPU_TEXTUREUSAGE_COMPUTE_STORAGE_READ_BIT |
-            SDL_GPU_TEXTUREUSAGE_COMPUTE_STORAGE_WRITE_BIT
-        );
+    isSampler = textureCreateInfo->usageFlags & SDL_GPU_TEXTUREUSAGE_SAMPLER_BIT;
+    needSubresourceSRV =
+        (textureCreateInfo->usageFlags & SDL_GPU_TEXTUREUSAGE_GRAPHICS_STORAGE_READ_BIT) ||
+        (textureCreateInfo->usageFlags & SDL_GPU_TEXTUREUSAGE_COMPUTE_STORAGE_READ_BIT);
+    needSubresourceUAV =
+        (textureCreateInfo->usageFlags & SDL_GPU_TEXTUREUSAGE_COMPUTE_STORAGE_WRITE_BIT);
 	isMultisample = textureCreateInfo->sampleCount > 1;
 
 	format = SDLToD3D11_TextureFormat[textureCreateInfo->format];
@@ -1980,11 +1983,11 @@ Uint8 isColorTarget, isDepthStencil, isSampler, isStorage, isMultisample;
 		D3D11_TEXTURE2D_DESC desc2D;
 
 		desc2D.BindFlags = 0;
-		if (isSampler)
+		if (isSampler || needSubresourceSRV)
 		{
 			desc2D.BindFlags |= D3D11_BIND_SHADER_RESOURCE;
 		}
-		if (isStorage)
+		if (needSubresourceUAV)
 		{
 			desc2D.BindFlags |= D3D11_BIND_UNORDERED_ACCESS;
 		}
@@ -2062,11 +2065,11 @@ Uint8 isColorTarget, isDepthStencil, isSampler, isStorage, isMultisample;
 		D3D11_TEXTURE3D_DESC desc3D;
 
 		desc3D.BindFlags = 0;
-		if (isSampler)
+		if (isSampler || needSubresourceSRV)
 		{
 			desc3D.BindFlags |= D3D11_BIND_SHADER_RESOURCE;
 		}
-		if (isStorage)
+		if (needSubresourceUAV)
 		{
 			desc3D.BindFlags |= D3D11_BIND_UNORDERED_ACCESS;
 		}
@@ -2268,7 +2271,7 @@ Uint8 isColorTarget, isDepthStencil, isSampler, isStorage, isMultisample;
 				}
 			}
 
-			if (isStorage)
+			if (needSubresourceSRV)
 			{
                 D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc;
 
@@ -2302,7 +2305,10 @@ Uint8 isColorTarget, isDepthStencil, isSampler, isStorage, isMultisample;
                     &d3d11Texture->subresources[subresourceIndex].srv
                 );
                 ERROR_CHECK_RETURN("Could not create SRV!", NULL);
+            }
 
+            if (needSubresourceUAV)
+            {
 				D3D11_UNORDERED_ACCESS_VIEW_DESC uavDesc;
 				uavDesc.Format = format;
 
@@ -4769,7 +4775,14 @@ static void D3D11_Blit(
 static void D3D11_BeginComputePass(
 	SDL_GpuCommandBuffer *commandBuffer
 ) {
-	/* no-op */
+    D3D11CommandBuffer *d3d11CommandBuffer = (D3D11CommandBuffer*) commandBuffer;
+
+	ID3D11DeviceContext_OMSetRenderTargets(
+		d3d11CommandBuffer->context,
+		MAX_COLOR_TARGET_BINDINGS,
+		nullRTVs,
+		NULL
+	);
 }
 
 static void D3D11_BindComputePipeline(
@@ -6911,6 +6924,12 @@ tryCreateDevice:
 	);
 
     /* Initialize null states */
+
+    SDL_memset(
+        nullRTVs,
+        0,
+        MAX_COLOR_TARGET_BINDINGS
+    );
 
     SDL_memset(
         nullSRVs,

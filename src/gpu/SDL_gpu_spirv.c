@@ -135,6 +135,7 @@ SDL_GpuShader* SDL_CreateShaderFromSPIRV(SDL_GpuDevice *device, SDL_GpuShaderCre
 
 	if (backend == SPVC_BACKEND_HLSL) {
 		SDL_spvc_compiler_options_set_uint(options, SPVC_COMPILER_OPTION_HLSL_SHADER_MODEL, 50);
+        SDL_spvc_compiler_options_set_uint(options, SPVC_COMPILER_OPTION_HLSL_NONWRITABLE_UAV_TEXTURE_AS_SRV, 1);
 	}
 
 	result = SDL_spvc_compiler_install_compiler_options(compiler, options);
