@@ -2119,7 +2119,11 @@ static void METAL_Blit(
 /* Compute State */
 
 static void METAL_BeginComputePass(
-    SDL_GpuCommandBuffer *commandBuffer
+    SDL_GpuCommandBuffer *commandBuffer,
+    SDL_GpuStorageTextureReadWriteBinding *storageTextureBindings,
+    Uint32 storageTextureBindingCount,
+    SDL_GpuStorageBufferReadWriteBinding *storageBufferBindings,
+    Uint32 storageBufferBindingCount
 ) {
     NOT_IMPLEMENTED
 }
@@ -2140,28 +2144,10 @@ static void METAL_BindComputeStorageTextures(
     NOT_IMPLEMENTED
 }
 
-static void METAL_BindComputeRWStorageTextures(
-    SDL_GpuCommandBuffer *commandBuffer,
-    Uint32 firstSlot,
-    SDL_GpuStorageTextureReadWriteBinding *storageTextureBindings,
-    Uint32 bindingCount
-) {
-    NOT_IMPLEMENTED
-}
-
 static void METAL_BindComputeStorageBuffers(
     SDL_GpuCommandBuffer *commandBuffer,
     Uint32 firstSlot,
     SDL_GpuBuffer **storageBuffers,
-    Uint32 bindingCount
-) {
-    NOT_IMPLEMENTED
-}
-
-static void METAL_BindComputeRWStorageBuffers(
-    SDL_GpuCommandBuffer *commandBuffer,
-    Uint32 firstSlot,
-    SDL_GpuStorageBufferReadWriteBinding *storageBufferBindings,
     Uint32 bindingCount
 ) {
     NOT_IMPLEMENTED
