@@ -10359,7 +10359,7 @@ static SDL_bool VULKAN_SupportsSwapchainComposition(
         _this = SDL_GetVideoDevice();
         if (!_this->Vulkan_CreateSurface(
             _this,
-            windowData->window,
+            window,
             renderer->instance,
             NULL,
             &surface
@@ -10425,7 +10425,7 @@ static SDL_bool VULKAN_SupportsPresentMode(
         _this = SDL_GetVideoDevice();
         if (!_this->Vulkan_CreateSurface(
             _this,
-            windowData->window,
+            window,
             renderer->instance,
             NULL,
             &surface
