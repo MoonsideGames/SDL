@@ -917,14 +917,22 @@ void SDL_GpuEndRenderPass(
 /* Compute Pass */
 
 SDL_GpuComputePass* SDL_GpuBeginComputePass(
-	SDL_GpuCommandBuffer *commandBuffer
+	SDL_GpuCommandBuffer *commandBuffer,
+    SDL_GpuStorageTextureReadWriteBinding *storageTextureBindings,
+    Uint32 storageTextureBindingCount,
+    SDL_GpuStorageBufferReadWriteBinding *storageBufferBindings,
+    Uint32 storageBufferBindingCount
 ) {
     CommandBufferCommonHeader* commandBufferHeader;
 
     CHECK_COMMAND_BUFFER_RETURN_NULL
     CHECK_ANY_PASS_IN_PROGRESS
 	COMMAND_BUFFER_DEVICE->BeginComputePass(
-		commandBuffer
+		commandBuffer,
+        storageTextureBindings,
+        storageTextureBindingCount,
+        storageBufferBindings,
+        storageBufferBindingCount
 	);
 
     commandBufferHeader = (CommandBufferCommonHeader*) commandBuffer;
@@ -967,23 +975,6 @@ void SDL_GpuBindComputeStorageTextures(
     );
 }
 
-void SDL_GpuBindComputeRWStorageTextures(
-    SDL_GpuComputePass *computePass,
-    Uint32 firstSlot,
-    SDL_GpuStorageTextureReadWriteBinding *storageTextureBindings,
-    Uint32 bindingCount
-) {
-    NULL_ASSERT(computePass)
-    CHECK_COMPUTEPASS
-    CHECK_COMPUTE_PIPELINE_BOUND
-    COMPUTEPASS_DEVICE->BindComputeRWStorageTextures(
-        COMPUTEPASS_COMMAND_BUFFER,
-        firstSlot,
-        storageTextureBindings,
-        bindingCount
-    );
-}
-
 void SDL_GpuBindComputeStorageBuffers(
     SDL_GpuComputePass *computePass,
     Uint32 firstSlot,
@@ -997,23 +988,6 @@ void SDL_GpuBindComputeStorageBuffers(
         COMPUTEPASS_COMMAND_BUFFER,
         firstSlot,
         storageBuffers,
-        bindingCount
-    );
-}
-
-void SDL_GpuBindComputeRWStorageBuffers(
-    SDL_GpuComputePass *computePass,
-    Uint32 firstSlot,
-    SDL_GpuStorageBufferReadWriteBinding *storageBufferBindings,
-    Uint32 bindingCount
-) {
-    NULL_ASSERT(computePass)
-    CHECK_COMPUTEPASS
-    CHECK_COMPUTE_PIPELINE_BOUND
-    COMPUTEPASS_DEVICE->BindComputeRWStorageBuffers(
-        COMPUTEPASS_COMMAND_BUFFER,
-        firstSlot,
-        storageBufferBindings,
         bindingCount
     );
 }

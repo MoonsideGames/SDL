@@ -665,6 +665,40 @@ typedef struct D3D11CommandBuffer
 	/* Compute Pass */
 	D3D11ComputePipeline *computePipeline;
 
+    /* Resource slot state */
+
+    SDL_bool needVertexSamplerBind;
+    SDL_bool needVertexResourceBind;
+
+    SDL_bool needFragmentSamplerBind;
+    SDL_bool needFragmentResourceBind;
+
+    SDL_bool needComputeUAVBind;
+    SDL_bool needComputeSRVBind;
+
+    ID3D11SamplerState *vertexSamplers[MAX_TEXTURE_SAMPLERS_PER_STAGE];
+    ID3D11ShaderResourceView *vertexShaderResourceViews[
+        MAX_TEXTURE_SAMPLERS_PER_STAGE +
+        MAX_STORAGE_BUFFERS_PER_STAGE +
+        MAX_STORAGE_TEXTURES_PER_STAGE
+    ];
+
+    ID3D11SamplerState *fragmentSamplers[MAX_TEXTURE_SAMPLERS_PER_STAGE];
+    ID3D11ShaderResourceView *fragmentShaderResourceViews[
+        MAX_TEXTURE_SAMPLERS_PER_STAGE +
+        MAX_STORAGE_BUFFERS_PER_STAGE +
+        MAX_STORAGE_TEXTURES_PER_STAGE
+    ];
+
+    ID3D11ShaderResourceView *computeShaderResourceViews[
+        MAX_STORAGE_TEXTURES_PER_STAGE +
+        MAX_STORAGE_BUFFERS_PER_STAGE
+    ];
+    ID3D11UnorderedAccessView *computeUnorderedAccessViews[
+        MAX_STORAGE_TEXTURES_PER_STAGE +
+        MAX_STORAGE_BUFFERS_PER_STAGE
+    ];
+
     /* Uniform buffers */
     D3D11UniformBuffer *vertexUniformBuffers[MAX_UNIFORM_BUFFERS_PER_STAGE];
     D3D11UniformBuffer *fragmentUniformBuffers[MAX_UNIFORM_BUFFERS_PER_STAGE];
@@ -3660,7 +3694,7 @@ static SDL_GpuCommandBuffer* D3D11_AcquireCommandBuffer(
 	commandBuffer->windowData = NULL;
 	commandBuffer->graphicsPipeline = NULL;
 	commandBuffer->computePipeline = NULL;
-	for ( i = 0; i < MAX_COLOR_TARGET_BINDINGS; i += 1)
+	for (i = 0; i < MAX_COLOR_TARGET_BINDINGS; i += 1)
 	{
 		commandBuffer->colorTargetResolveTexture[i] = NULL;
 		commandBuffer->colorTargetResolveSubresourceIndex[i] = 0;
@@ -3673,6 +3707,20 @@ static SDL_GpuCommandBuffer* D3D11_AcquireCommandBuffer(
         commandBuffer->fragmentUniformBufferNeedsReset[i] = SDL_TRUE;
         commandBuffer->computeUniformBufferNeedsReset[i] = SDL_TRUE;
     }
+
+    commandBuffer->needVertexSamplerBind = SDL_TRUE;
+    commandBuffer->needVertexResourceBind = SDL_TRUE;
+    commandBuffer->needFragmentSamplerBind = SDL_TRUE;
+    commandBuffer->needFragmentResourceBind = SDL_TRUE;
+    commandBuffer->needComputeUAVBind = SDL_TRUE;
+    commandBuffer->needComputeSRVBind = SDL_TRUE;
+
+    SDL_zeroa(commandBuffer->vertexSamplers);
+    SDL_zeroa(commandBuffer->vertexShaderResourceViews);
+    SDL_zeroa(commandBuffer->fragmentSamplers);
+    SDL_zeroa(commandBuffer->fragmentShaderResourceViews);
+    SDL_zeroa(commandBuffer->computeShaderResourceViews);
+    SDL_zeroa(commandBuffer->computeUnorderedAccessViews);
 
 	D3D11_INTERNAL_AcquireFence(commandBuffer);
 	commandBuffer->autoReleaseFence = 1;
@@ -3833,6 +3881,11 @@ static void D3D11_BeginRenderPass(
 	Uint32 vpHeight = SDL_MAX_UINT32;
 	D3D11_VIEWPORT viewport;
 	D3D11_RECT scissorRect;
+
+    d3d11CommandBuffer->needVertexSamplerBind = SDL_TRUE;
+    d3d11CommandBuffer->needVertexResourceBind = SDL_TRUE;
+    d3d11CommandBuffer->needFragmentSamplerBind = SDL_TRUE;
+    d3d11CommandBuffer->needFragmentResourceBind = SDL_TRUE;
 
 	/* Clear the bound targets for the current command buffer */
 	for (Uint32 i = 0; i < MAX_COLOR_TARGET_BINDINGS; i += 1)
@@ -4256,8 +4309,6 @@ static void D3D11_BindVertexSamplers(
 ) {
     D3D11CommandBuffer *d3d11CommandBuffer = (D3D11CommandBuffer*) commandBuffer;
     D3D11TextureContainer *textureContainer;
-    ID3D11ShaderResourceView **views = SDL_stack_alloc(ID3D11ShaderResourceView*, bindingCount);
-    ID3D11SamplerState **samplers = SDL_stack_alloc(ID3D11SamplerState*, bindingCount);
     Uint32 i, j;
 
     for (i = 0; i < bindingCount; i += 1)
@@ -4272,26 +4323,15 @@ static void D3D11_BindVertexSamplers(
             );
         }
 
-        views[i] = textureContainer->activeTexture->shaderView;
-        samplers[i] = ((D3D11Sampler*) textureSamplerBindings[i].sampler)->handle;
+        d3d11CommandBuffer->vertexSamplers[firstSlot + i] =
+            ((D3D11Sampler*) textureSamplerBindings[i].sampler)->handle;
+
+        d3d11CommandBuffer->vertexShaderResourceViews[firstSlot + i] =
+            textureContainer->activeTexture->shaderView;
     }
 
-    ID3D11DeviceContext_VSSetShaderResources(
-        d3d11CommandBuffer->context,
-        firstSlot,
-        bindingCount,
-        views
-    );
-
-    ID3D11DeviceContext_VSSetSamplers(
-        d3d11CommandBuffer->context,
-        firstSlot,
-        bindingCount,
-        samplers
-    );
-
-    SDL_stack_free(views);
-    SDL_stack_free(samplers);
+    d3d11CommandBuffer->needVertexSamplerBind = SDL_TRUE;
+    d3d11CommandBuffer->needVertexResourceBind = SDL_TRUE;
 }
 
 static void D3D11_BindVertexStorageTextures(
@@ -4303,7 +4343,6 @@ static void D3D11_BindVertexStorageTextures(
     D3D11CommandBuffer *d3d11CommandBuffer = (D3D11CommandBuffer*) commandBuffer;
     D3D11TextureContainer *textureContainer;
     D3D11TextureSubresource *textureSubresource;
-    ID3D11ShaderResourceView **views = SDL_stack_alloc(ID3D11ShaderResourceView*, bindingCount);
     Uint32 i;
 
     for (i = 0; i < bindingCount; i += 1)
@@ -4320,17 +4359,13 @@ static void D3D11_BindVertexStorageTextures(
             textureSubresource
         );
 
-        views[i] = textureSubresource->srv;
+        d3d11CommandBuffer->vertexShaderResourceViews[
+            firstSlot + i +
+            d3d11CommandBuffer->graphicsPipeline->vertexSamplerCount
+        ] = textureSubresource->srv;
     }
 
-    ID3D11DeviceContext_VSSetShaderResources(
-        d3d11CommandBuffer->context,
-        d3d11CommandBuffer->graphicsPipeline->vertexSamplerCount + firstSlot,
-        bindingCount,
-        views
-    );
-
-    SDL_stack_free(views);
+    d3d11CommandBuffer->needVertexResourceBind = SDL_TRUE;
 }
 
 static void D3D11_BindVertexStorageBuffers(
@@ -4341,7 +4376,6 @@ static void D3D11_BindVertexStorageBuffers(
 ) {
     D3D11CommandBuffer *d3d11CommandBuffer = (D3D11CommandBuffer*) commandBuffer;
     D3D11BufferContainer *bufferContainer;
-    ID3D11ShaderResourceView **views = SDL_stack_alloc(ID3D11ShaderResourceView*, bindingCount);
     Uint32 i;
 
     for (i = 0; i < bindingCount; i += 1)
@@ -4353,21 +4387,14 @@ static void D3D11_BindVertexStorageBuffers(
             bufferContainer->activeBuffer
         );
 
-        views[i] = bufferContainer->activeBuffer->srv;
+        d3d11CommandBuffer->vertexShaderResourceViews[
+            firstSlot + i +
+            d3d11CommandBuffer->graphicsPipeline->vertexSamplerCount +
+            d3d11CommandBuffer->graphicsPipeline->vertexStorageTextureCount
+        ] = bufferContainer->activeBuffer->srv;
     }
 
-    ID3D11DeviceContext_VSSetShaderResources(
-        d3d11CommandBuffer->context,
-        (
-            d3d11CommandBuffer->graphicsPipeline->vertexSamplerCount +
-            d3d11CommandBuffer->graphicsPipeline->vertexStorageTextureCount +
-            firstSlot
-        ),
-        bindingCount,
-        views
-    );
-
-    SDL_stack_free(views);
+    d3d11CommandBuffer->needVertexResourceBind = SDL_TRUE;
 }
 
 static void D3D11_BindFragmentSamplers(
@@ -4378,8 +4405,6 @@ static void D3D11_BindFragmentSamplers(
 ) {
     D3D11CommandBuffer *d3d11CommandBuffer = (D3D11CommandBuffer*) commandBuffer;
     D3D11TextureContainer *textureContainer;
-    ID3D11ShaderResourceView **views = SDL_stack_alloc(ID3D11ShaderResourceView*, bindingCount);
-    ID3D11SamplerState **samplers = SDL_stack_alloc(ID3D11SamplerState*, bindingCount);
     Uint32 i, j;
 
     for (i = 0; i < bindingCount; i += 1)
@@ -4394,26 +4419,15 @@ static void D3D11_BindFragmentSamplers(
             );
         }
 
-        views[i] = textureContainer->activeTexture->shaderView;
-        samplers[i] = ((D3D11Sampler*) textureSamplerBindings[i].sampler)->handle;
+        d3d11CommandBuffer->fragmentSamplers[firstSlot + i] =
+            ((D3D11Sampler*) textureSamplerBindings[i].sampler)->handle;
+
+        d3d11CommandBuffer->fragmentShaderResourceViews[firstSlot + i] =
+            textureContainer->activeTexture->shaderView;
     }
 
-    ID3D11DeviceContext_PSSetShaderResources(
-        d3d11CommandBuffer->context,
-        firstSlot,
-        bindingCount,
-        views
-    );
-
-    ID3D11DeviceContext_PSSetSamplers(
-        d3d11CommandBuffer->context,
-        firstSlot,
-        bindingCount,
-        samplers
-    );
-
-    SDL_stack_free(views);
-    SDL_stack_free(samplers);
+    d3d11CommandBuffer->needFragmentSamplerBind = SDL_TRUE;
+    d3d11CommandBuffer->needFragmentResourceBind = SDL_TRUE;
 }
 
 static void D3D11_BindFragmentStorageTextures(
@@ -4425,7 +4439,6 @@ static void D3D11_BindFragmentStorageTextures(
     D3D11CommandBuffer *d3d11CommandBuffer = (D3D11CommandBuffer*) commandBuffer;
     D3D11TextureContainer *textureContainer;
     D3D11TextureSubresource *textureSubresource;
-    ID3D11ShaderResourceView **views = SDL_stack_alloc(ID3D11ShaderResourceView*, bindingCount);
     Uint32 i;
 
     for (i = 0; i < bindingCount; i += 1)
@@ -4442,17 +4455,13 @@ static void D3D11_BindFragmentStorageTextures(
             textureSubresource
         );
 
-        views[i] = textureSubresource->srv;
+        d3d11CommandBuffer->fragmentShaderResourceViews[
+            firstSlot + i +
+            d3d11CommandBuffer->graphicsPipeline->fragmentSamplerCount
+        ] = textureSubresource->srv;
     }
 
-    ID3D11DeviceContext_PSSetShaderResources(
-        d3d11CommandBuffer->context,
-        d3d11CommandBuffer->graphicsPipeline->fragmentSamplerCount + firstSlot,
-        bindingCount,
-        views
-    );
-
-    SDL_stack_free(views);
+    d3d11CommandBuffer->needFragmentResourceBind = SDL_TRUE;
 }
 
 static void D3D11_BindFragmentStorageBuffers(
@@ -4463,7 +4472,6 @@ static void D3D11_BindFragmentStorageBuffers(
 ) {
     D3D11CommandBuffer *d3d11CommandBuffer = (D3D11CommandBuffer*) commandBuffer;
     D3D11BufferContainer *bufferContainer;
-    ID3D11ShaderResourceView **views = SDL_stack_alloc(ID3D11ShaderResourceView*, bindingCount);
     Uint32 i;
 
     for (i = 0; i < bindingCount; i += 1)
@@ -4475,21 +4483,90 @@ static void D3D11_BindFragmentStorageBuffers(
             bufferContainer->activeBuffer
         );
 
-        views[i] = bufferContainer->activeBuffer->srv;
+        d3d11CommandBuffer->fragmentShaderResourceViews[
+            firstSlot + i +
+            d3d11CommandBuffer->graphicsPipeline->fragmentSamplerCount +
+            d3d11CommandBuffer->graphicsPipeline->fragmentStorageTextureCount
+        ] = bufferContainer->activeBuffer->srv;
     }
 
-    ID3D11DeviceContext_PSSetShaderResources(
-        d3d11CommandBuffer->context,
-        (
-            d3d11CommandBuffer->graphicsPipeline->fragmentSamplerCount +
-            d3d11CommandBuffer->graphicsPipeline->fragmentStorageTextureCount +
-            firstSlot
-        ),
-        bindingCount,
-        views
-    );
+    d3d11CommandBuffer->needFragmentResourceBind = SDL_TRUE;
+}
 
-    SDL_stack_free(views);
+static void D3D11_INTERNAL_BindGraphicsResources(
+    D3D11CommandBuffer *commandBuffer
+) {
+    D3D11GraphicsPipeline *graphicsPipeline = commandBuffer->graphicsPipeline;
+
+    Uint32 vertexResourceCount =
+        graphicsPipeline->vertexSamplerCount +
+        graphicsPipeline->vertexStorageTextureCount +
+        graphicsPipeline->vertexStorageBufferCount;
+
+    Uint32 fragmentResourceCount =
+        graphicsPipeline->fragmentSamplerCount +
+        graphicsPipeline->fragmentStorageTextureCount +
+        graphicsPipeline->fragmentStorageBufferCount;
+
+    if (commandBuffer->needVertexSamplerBind)
+    {
+        if (graphicsPipeline->vertexSamplerCount > 0)
+        {
+            ID3D11DeviceContext_VSSetSamplers(
+                commandBuffer->context,
+                0,
+                graphicsPipeline->vertexSamplerCount,
+                commandBuffer->vertexSamplers
+            );
+        }
+
+        commandBuffer->needVertexSamplerBind = SDL_FALSE;
+    }
+
+    if (commandBuffer->needVertexResourceBind)
+    {
+        if (vertexResourceCount > 0)
+        {
+            ID3D11DeviceContext_VSSetShaderResources(
+                commandBuffer->context,
+                0,
+                vertexResourceCount,
+                commandBuffer->vertexShaderResourceViews
+            );
+        }
+
+        commandBuffer->needVertexResourceBind = SDL_FALSE;
+    }
+
+    if (commandBuffer->needFragmentSamplerBind)
+    {
+        if (graphicsPipeline->fragmentSamplerCount > 0)
+        {
+            ID3D11DeviceContext_PSSetSamplers(
+                commandBuffer->context,
+                0,
+                graphicsPipeline->fragmentSamplerCount,
+                commandBuffer->fragmentSamplers
+            );
+        }
+
+        commandBuffer->needFragmentSamplerBind = SDL_FALSE;
+    }
+
+    if (commandBuffer->needFragmentResourceBind)
+    {
+        if (fragmentResourceCount > 0)
+        {
+            ID3D11DeviceContext_PSSetShaderResources(
+                commandBuffer->context,
+                0,
+                fragmentResourceCount,
+                commandBuffer->fragmentShaderResourceViews
+            );
+        }
+
+        commandBuffer->needFragmentResourceBind = SDL_FALSE;
+    }
 }
 
 static void D3D11_DrawInstancedPrimitives(
@@ -4500,6 +4577,7 @@ static void D3D11_DrawInstancedPrimitives(
 	Uint32 instanceCount
 ) {
 	D3D11CommandBuffer *d3d11CommandBuffer = (D3D11CommandBuffer*) commandBuffer;
+    D3D11_INTERNAL_BindGraphicsResources(d3d11CommandBuffer);
 
 	ID3D11DeviceContext_DrawIndexedInstanced(
 		d3d11CommandBuffer->context,
@@ -4517,6 +4595,7 @@ static void D3D11_DrawPrimitives(
 	Uint32 primitiveCount
 ) {
 	D3D11CommandBuffer *d3d11CommandBuffer = (D3D11CommandBuffer*) commandBuffer;
+    D3D11_INTERNAL_BindGraphicsResources(d3d11CommandBuffer);
 
 	ID3D11DeviceContext_Draw(
 		d3d11CommandBuffer->context,
@@ -4533,6 +4612,8 @@ static void D3D11_DrawPrimitivesIndirect(
 	Uint32 stride
 ) {
 	D3D11CommandBuffer *d3d11CommandBuffer = (D3D11CommandBuffer*) commandBuffer;
+    D3D11_INTERNAL_BindGraphicsResources(d3d11CommandBuffer);
+
 	D3D11Buffer *d3d11Buffer = ((D3D11BufferContainer*) gpuBuffer)->activeBuffer;
 
 	/* D3D11: "We have multi-draw at home!"
@@ -4556,6 +4637,15 @@ static void D3D11_EndRenderPass(
 	D3D11CommandBuffer *d3d11CommandBuffer = (D3D11CommandBuffer*) commandBuffer;
     Uint32 i;
 
+    /* Set render target slots to NULL to avoid NULL set behavior */
+    /* https://learn.microsoft.com/en-us/windows/win32/api/d3d11/nf-d3d11-id3d11devicecontext-pssetshaderresources */
+	ID3D11DeviceContext_OMSetRenderTargets(
+		d3d11CommandBuffer->context,
+		MAX_COLOR_TARGET_BINDINGS,
+		nullRTVs,
+		NULL
+	);
+
 	/* Resolve MSAA color render targets */
 	for (i = 0; i < MAX_COLOR_TARGET_BINDINGS; i += 1)
 	{
@@ -4571,35 +4661,6 @@ static void D3D11_EndRenderPass(
 			);
 		}
 	}
-
-    /* Reset slots */
-    ID3D11DeviceContext_VSSetShaderResources(
-        d3d11CommandBuffer->context,
-        0,
-        MAX_TEXTURE_SAMPLERS_PER_STAGE + MAX_STORAGE_BUFFERS_PER_STAGE + MAX_STORAGE_TEXTURES_PER_STAGE,
-        nullSRVs
-    );
-
-    ID3D11DeviceContext_VSSetSamplers(
-        d3d11CommandBuffer->context,
-        0,
-        MAX_TEXTURE_SAMPLERS_PER_STAGE,
-        nullSamplers
-    );
-
-    ID3D11DeviceContext_PSSetShaderResources(
-        d3d11CommandBuffer->context,
-        0,
-        MAX_TEXTURE_SAMPLERS_PER_STAGE + MAX_STORAGE_BUFFERS_PER_STAGE + MAX_STORAGE_TEXTURES_PER_STAGE,
-        nullSRVs
-    );
-
-    ID3D11DeviceContext_PSSetSamplers(
-        d3d11CommandBuffer->context,
-        0,
-        MAX_TEXTURE_SAMPLERS_PER_STAGE,
-        nullSamplers
-    );
 }
 
 static void D3D11_PushVertexUniformData(
@@ -4754,6 +4815,11 @@ static void D3D11_Blit(
         renderer->blitNearestSampler :
         renderer->blitLinearSampler;
 
+    if (((D3D11TextureContainer*) textureSamplerBinding.texture)->activeTexture->shaderView == NULL)
+    {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Blit source texture must be created with SAMPLER bit!");
+    }
+
     D3D11_BindFragmentSamplers(
         commandBuffer,
         0,
@@ -4773,16 +4839,61 @@ static void D3D11_Blit(
 /* Compute State */
 
 static void D3D11_BeginComputePass(
-	SDL_GpuCommandBuffer *commandBuffer
+	SDL_GpuCommandBuffer *commandBuffer,
+    SDL_GpuStorageTextureReadWriteBinding *storageTextureBindings,
+    Uint32 storageTextureBindingCount,
+    SDL_GpuStorageBufferReadWriteBinding *storageBufferBindings,
+    Uint32 storageBufferBindingCount
 ) {
     D3D11CommandBuffer *d3d11CommandBuffer = (D3D11CommandBuffer*) commandBuffer;
+    D3D11TextureContainer *textureContainer;
+    D3D11TextureSubresource *textureSubresource;
+    D3D11BufferContainer *bufferContainer;
+    D3D11Buffer *buffer;
+    Uint32 i;
 
-	ID3D11DeviceContext_OMSetRenderTargets(
-		d3d11CommandBuffer->context,
-		MAX_COLOR_TARGET_BINDINGS,
-		nullRTVs,
-		NULL
-	);
+    for (i = 0; i < storageTextureBindingCount; i += 1)
+    {
+        textureContainer = (D3D11TextureContainer*) storageTextureBindings[i].textureSlice.texture;
+
+        textureSubresource = D3D11_INTERNAL_PrepareTextureSubresourceForWrite(
+            d3d11CommandBuffer->renderer,
+            textureContainer,
+            storageTextureBindings[i].textureSlice.layer,
+            storageTextureBindings[i].textureSlice.mipLevel,
+            storageTextureBindings[i].cycle
+        );
+
+        D3D11_INTERNAL_TrackTextureSubresource(
+            d3d11CommandBuffer,
+            textureSubresource
+        );
+
+        d3d11CommandBuffer->computeUnorderedAccessViews[i] =
+            textureSubresource->uav;
+    }
+
+    for (i = 0; i < storageBufferBindingCount; i += 1)
+    {
+        bufferContainer = (D3D11BufferContainer*) storageBufferBindings[i].gpuBuffer;
+
+        buffer = D3D11_INTERNAL_PrepareGpuBufferForWrite(
+            d3d11CommandBuffer->renderer,
+            bufferContainer,
+            storageBufferBindings[i].cycle
+        );
+
+        D3D11_INTERNAL_TrackBuffer(
+            d3d11CommandBuffer,
+            buffer
+        );
+
+        d3d11CommandBuffer->computeUnorderedAccessViews[
+            i + storageTextureBindingCount
+        ] = buffer->uav;
+    }
+
+    d3d11CommandBuffer->needComputeUAVBind = SDL_TRUE;
 }
 
 static void D3D11_BindComputePipeline(
@@ -4863,7 +4974,6 @@ static void D3D11_BindComputeStorageTextures(
     D3D11CommandBuffer *d3d11CommandBuffer = (D3D11CommandBuffer*) commandBuffer;
     D3D11TextureContainer *textureContainer;
     D3D11TextureSubresource *textureSubresource;
-    ID3D11ShaderResourceView **views = SDL_stack_alloc(ID3D11ShaderResourceView*, bindingCount);
     Uint32 i;
 
     for (i = 0; i < bindingCount; i += 1)
@@ -4880,60 +4990,11 @@ static void D3D11_BindComputeStorageTextures(
             textureSubresource
         );
 
-        views[i] = textureSubresource->srv;
+        d3d11CommandBuffer->computeShaderResourceViews[firstSlot + i] =
+            textureSubresource->srv;
     }
 
-    ID3D11DeviceContext_CSSetShaderResources(
-        d3d11CommandBuffer->context,
-        firstSlot,
-        bindingCount,
-        views
-    );
-
-    SDL_stack_free(views);
-}
-
-static void D3D11_BindComputeRWStorageTextures(
-    SDL_GpuCommandBuffer *commandBuffer,
-    Uint32 firstSlot,
-    SDL_GpuStorageTextureReadWriteBinding *storageTextureBindings,
-    Uint32 bindingCount
-) {
-    D3D11CommandBuffer *d3d11CommandBuffer = (D3D11CommandBuffer*) commandBuffer;
-    D3D11TextureContainer *textureContainer;
-    D3D11TextureSubresource *textureSubresource;
-    ID3D11UnorderedAccessView **uavs = SDL_stack_alloc(ID3D11UnorderedAccessView*, bindingCount);
-    Uint32 i;
-
-    for (i = 0; i < bindingCount; i += 1)
-    {
-        textureContainer = (D3D11TextureContainer*) storageTextureBindings[i].textureSlice.texture;
-
-        textureSubresource = D3D11_INTERNAL_PrepareTextureSubresourceForWrite(
-            d3d11CommandBuffer->renderer,
-            textureContainer,
-            storageTextureBindings[i].textureSlice.layer,
-            storageTextureBindings[i].textureSlice.mipLevel,
-            storageTextureBindings[i].cycle
-        );
-
-        D3D11_INTERNAL_TrackTextureSubresource(
-            d3d11CommandBuffer,
-            textureSubresource
-        );
-
-        uavs[i] = textureSubresource->uav;
-    }
-
-    ID3D11DeviceContext_CSSetUnorderedAccessViews(
-        d3d11CommandBuffer->context,
-        firstSlot,
-        bindingCount,
-        uavs,
-        NULL
-    );
-
-    SDL_stack_free(uavs);
+    d3d11CommandBuffer->needComputeSRVBind = SDL_TRUE;
 }
 
 static void D3D11_BindComputeStorageBuffers(
@@ -4944,7 +5005,6 @@ static void D3D11_BindComputeStorageBuffers(
 ) {
     D3D11CommandBuffer *d3d11CommandBuffer = (D3D11CommandBuffer*) commandBuffer;
     D3D11BufferContainer *bufferContainer;
-    ID3D11ShaderResourceView **views = SDL_stack_alloc(ID3D11ShaderResourceView*, bindingCount);
     Uint32 i;
 
     for (i = 0; i < bindingCount; i += 1)
@@ -4956,59 +5016,13 @@ static void D3D11_BindComputeStorageBuffers(
             bufferContainer->activeBuffer
         );
 
-        views[i] = bufferContainer->activeBuffer->srv;
+        d3d11CommandBuffer->computeShaderResourceViews[
+            firstSlot + i +
+            d3d11CommandBuffer->computePipeline->readOnlyStorageTextureCount
+        ] = bufferContainer->activeBuffer->srv;
     }
 
-    ID3D11DeviceContext_CSSetShaderResources(
-        d3d11CommandBuffer->context,
-        (
-            d3d11CommandBuffer->computePipeline->readOnlyStorageTextureCount +
-            firstSlot
-        ),
-        bindingCount,
-        views
-    );
-
-    SDL_stack_free(views);
-}
-
-static void D3D11_BindComputeRWStorageBuffers(
-    SDL_GpuCommandBuffer *commandBuffer,
-    Uint32 firstSlot,
-    SDL_GpuStorageBufferReadWriteBinding *storageBufferBindings,
-    Uint32 bindingCount
-) {
-    D3D11CommandBuffer *d3d11CommandBuffer = (D3D11CommandBuffer*) commandBuffer;
-    D3D11BufferContainer *bufferContainer;
-    D3D11Buffer *buffer;
-    ID3D11UnorderedAccessView **uavs = SDL_stack_alloc(ID3D11UnorderedAccessView*, bindingCount);
-    Uint32 i;
-
-    for (i = 0; i < bindingCount; i += 1)
-    {
-        bufferContainer = (D3D11BufferContainer*) storageBufferBindings[i].gpuBuffer;
-
-        buffer = D3D11_INTERNAL_PrepareGpuBufferForWrite(
-            d3d11CommandBuffer->renderer,
-            bufferContainer,
-            storageBufferBindings[i].cycle
-        );
-
-        D3D11_INTERNAL_TrackBuffer(
-            d3d11CommandBuffer,
-            buffer
-        );
-
-        uavs[i] = buffer->uav;
-    }
-
-    ID3D11DeviceContext_CSSetUnorderedAccessViews(
-        d3d11CommandBuffer->context,
-        d3d11CommandBuffer->computePipeline->readWriteStorageTextureCount + firstSlot,
-        bindingCount,
-        uavs,
-        NULL
-    );
+    d3d11CommandBuffer->needComputeSRVBind = SDL_TRUE;
 }
 
 static void D3D11_PushComputeUniformData(
@@ -5034,6 +5048,45 @@ static void D3D11_PushComputeUniformData(
     );
 }
 
+static void D3D11_INTERNAL_BindComputeResources(
+    D3D11CommandBuffer *commandBuffer
+) {
+    D3D11ComputePipeline *computePipeline = commandBuffer->computePipeline;
+
+    Uint32 readOnlyResourceCount =
+        computePipeline->readOnlyStorageTextureCount +
+        computePipeline->readOnlyStorageBufferCount;
+
+    Uint32 readWriteResourceCount =
+        computePipeline->readWriteStorageTextureCount +
+        computePipeline->readWriteStorageBufferCount;
+
+    if (commandBuffer->needComputeUAVBind)
+    {
+        ID3D11DeviceContext_CSSetUnorderedAccessViews(
+            commandBuffer->context,
+            0,
+            readWriteResourceCount,
+            commandBuffer->computeUnorderedAccessViews,
+            NULL
+        );
+
+        commandBuffer->needComputeUAVBind = SDL_FALSE;
+    }
+
+    if (commandBuffer->needComputeSRVBind)
+    {
+        ID3D11DeviceContext_CSSetShaderResources(
+            commandBuffer->context,
+            0,
+            readOnlyResourceCount,
+            commandBuffer->computeShaderResourceViews
+        );
+
+        commandBuffer->needComputeSRVBind = SDL_FALSE;
+    }
+}
+
 static void D3D11_DispatchCompute(
 	SDL_GpuCommandBuffer *commandBuffer,
 	Uint32 groupCountX,
@@ -5041,6 +5094,7 @@ static void D3D11_DispatchCompute(
 	Uint32 groupCountZ
 ) {
 	D3D11CommandBuffer* d3d11CommandBuffer = (D3D11CommandBuffer*)commandBuffer;
+    D3D11_INTERNAL_BindComputeResources(d3d11CommandBuffer);
 
 	ID3D11DeviceContext_Dispatch(
 		d3d11CommandBuffer->context,
@@ -5055,22 +5109,17 @@ static void D3D11_EndComputePass(
 ) {
     D3D11CommandBuffer *d3d11CommandBuffer = (D3D11CommandBuffer*) commandBuffer;
 
-    /* Reset slots */
-
-    ID3D11DeviceContext_CSSetShaderResources(
-        d3d11CommandBuffer->context,
-        0,
-        MAX_STORAGE_BUFFERS_PER_STAGE + MAX_STORAGE_TEXTURES_PER_STAGE,
-        nullSRVs
-    );
-
+    /* reset UAV slots to avoid NULL set behavior */
+    /* https://learn.microsoft.com/en-us/windows/win32/api/d3d11/nf-d3d11-id3d11devicecontext-cssetshaderresources */
     ID3D11DeviceContext_CSSetUnorderedAccessViews(
         d3d11CommandBuffer->context,
         0,
-        MAX_STORAGE_BUFFERS_PER_STAGE + MAX_STORAGE_TEXTURES_PER_STAGE,
+        MAX_STORAGE_TEXTURES_PER_STAGE + MAX_STORAGE_BUFFERS_PER_STAGE,
         nullUAVs,
         NULL
     );
+
+    d3d11CommandBuffer->computePipeline = NULL;
 }
 
 /* Fence Cleanup */

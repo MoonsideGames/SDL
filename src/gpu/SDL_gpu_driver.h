@@ -437,7 +437,11 @@ struct SDL_GpuDevice
 	/* Compute Pass */
 
 	void (*BeginComputePass)(
-		SDL_GpuCommandBuffer *commandBuffer
+		SDL_GpuCommandBuffer *commandBuffer,
+        SDL_GpuStorageTextureReadWriteBinding *storageTextureBindings,
+        Uint32 storageTextureBindingCount,
+        SDL_GpuStorageBufferReadWriteBinding *storageBufferBindings,
+        Uint32 storageBufferBindingCount
 	);
 
 	void (*BindComputePipeline)(
@@ -452,24 +456,10 @@ struct SDL_GpuDevice
         Uint32 bindingCount
     );
 
-    void (*BindComputeRWStorageTextures)(
-        SDL_GpuCommandBuffer *commandBuffer,
-        Uint32 firstSlot,
-        SDL_GpuStorageTextureReadWriteBinding *storageTextureBindings,
-        Uint32 bindingCount
-    );
-
     void (*BindComputeStorageBuffers)(
         SDL_GpuCommandBuffer *commandBuffer,
         Uint32 firstSlot,
         SDL_GpuBuffer **storageBuffers,
-        Uint32 bindingCount
-    );
-
-    void (*BindComputeRWStorageBuffers)(
-        SDL_GpuCommandBuffer *commandBuffer,
-        Uint32 firstSlot,
-        SDL_GpuStorageBufferReadWriteBinding *storageBufferBindings,
         Uint32 bindingCount
     );
 
@@ -759,9 +749,7 @@ struct SDL_GpuDevice
 	ASSIGN_DRIVER_FUNC(BeginComputePass, name) \
     ASSIGN_DRIVER_FUNC(BindComputePipeline, name) \
     ASSIGN_DRIVER_FUNC(BindComputeStorageTextures, name) \
-    ASSIGN_DRIVER_FUNC(BindComputeRWStorageTextures, name) \
     ASSIGN_DRIVER_FUNC(BindComputeStorageBuffers, name) \
-    ASSIGN_DRIVER_FUNC(BindComputeRWStorageBuffers, name) \
 	ASSIGN_DRIVER_FUNC(PushComputeUniformData, name) \
 	ASSIGN_DRIVER_FUNC(DispatchCompute, name) \
 	ASSIGN_DRIVER_FUNC(EndComputePass, name) \

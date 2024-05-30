@@ -1185,7 +1185,7 @@ extern SDL_DECLSPEC void SDLCALL SDL_GpuQueueDestroyOcclusionQuery(
 
 /**
  * Begins a render pass on a command buffer.
- * A render pass consists of a set of textures, clear values, and load/store operations
+ * A render pass consists of a set of texture slices, clear values, and load/store operations
  * which will be rendered to during the render pass.
  * All operations related to graphics pipelines must take place inside of a render pass.
  * A default viewport and scissor state are automatically set when this is called.
@@ -1501,11 +1501,20 @@ extern SDL_DECLSPEC void SDLCALL SDL_GpuEndRenderPass(
 
 /**
  * Begins a compute pass on a command buffer.
+ * A compute pass is defined by a set of texture slices and buffers that
+ * will be written to by compute pipelines.
+ * These textures and buffers must have been created with the COMPUTE_STORAGE_WRITE bit.
+ * If these resources will also be read during the pass, they must be created with the COMPUTE_STORAGE_READ bit.
  * All operations related to compute pipelines must take place inside of a compute pass.
  * You must not begin another compute pass, or a render pass or copy pass
  * before ending the compute pass.
  *
  * \param commandBuffer a command buffer
+ * \param storageTextureBindings an array of writeable storage texture binding structs
+ * \param storageTextureBindingCount the number of storage textures to bind from the array
+ * \param storageBufferBindings an array of writeable storage buffer binding structs
+ * \param storageBufferBindingCount an array of read-write storage buffer binding structs
+ *
  * \returns a compute pass handle
  *
  * \since This function is available since SDL 3.x.x
@@ -1513,7 +1522,11 @@ extern SDL_DECLSPEC void SDLCALL SDL_GpuEndRenderPass(
  * \sa SDL_GpuEndComputePass
  */
 extern SDL_DECLSPEC SDL_GpuComputePass *SDLCALL SDL_GpuBeginComputePass(
-	SDL_GpuCommandBuffer *commandBuffer
+	SDL_GpuCommandBuffer *commandBuffer,
+    SDL_GpuStorageTextureReadWriteBinding *storageTextureBindings,
+    Uint32 storageTextureBindingCount,
+    SDL_GpuStorageBufferReadWriteBinding *storageBufferBindings,
+    Uint32 storageBufferBindingCount
 );
 
 /**
@@ -1548,25 +1561,6 @@ extern SDL_DECLSPEC void SDLCALL SDL_GpuBindComputeStorageTextures(
 );
 
 /**
- * Binds storage textures as read-write for use on the compute shader.
- * These textures must have been created with SDL_GPU_TEXTUREUSAGE_COMPUTE_STORAGE_READ_BIT if they are to be read
- * and SDL_GPU_TEXTUREUSAGE_COMPUTE_STORAGE_WRITE_BIT if they are to be written.
- *
- * \param computePass a compute pass handle
- * \param firstSlot the compute storage texture slot to begin binding from
- * \param storageTextureBindings an array of storage texture binding structs
- * \param bindingCount the number of storage textures to bind from the array
- *
- * \since This function is available since SDL 3.x.x
- */
-extern SDL_DECLSPEC void SDLCALL SDL_GpuBindComputeRWStorageTextures(
-    SDL_GpuComputePass *computePass,
-    Uint32 firstSlot,
-    SDL_GpuStorageTextureReadWriteBinding *storageTextureBindings,
-    Uint32 bindingCount
-);
-
-/**
  * Binds storage buffers as readonly for use on the compute shader.
  * These buffers must have been created with SDL_GPU_BUFFERUSAGE_COMPUTE_STORAGE_READ_BIT.
  *
@@ -1581,25 +1575,6 @@ extern SDL_DECLSPEC void SDLCALL SDL_GpuBindComputeStorageBuffers(
     SDL_GpuComputePass *computePass,
     Uint32 firstSlot,
     SDL_GpuBuffer **storageBuffers,
-    Uint32 bindingCount
-);
-
-/**
- * Binds storage buffers as read-write for use on the compute shader.
- * These buffers must have been created with SDL_GPU_BUFFERUSAGE_COMPUTE_STORAGE_READ_BIT if they are to be read
- * and SDL_GPU_BUFFERUSAGE_GRAPHICS_COMPUTE_WRITE_BIT if they are to be written.
- *
- * \param computePass a compute pass handle
- * \param firstSlot the compute storage buffer slot to begin binding from
- * \param storageBufferBindings an array of storage buffer binding structs
- * \param bindingCount the number of storage buffers to bind from the array
- *
- * \since This function is available since SDL 3.x.x
- */
-extern SDL_DECLSPEC void SDLCALL SDL_GpuBindComputeRWStorageBuffers(
-    SDL_GpuComputePass *computePass,
-    Uint32 firstSlot,
-    SDL_GpuStorageBufferReadWriteBinding *storageBufferBindings,
     Uint32 bindingCount
 );
 
@@ -1624,6 +1599,12 @@ extern SDL_DECLSPEC void SDLCALL SDL_GpuPushComputeUniformData(
 /**
  * Dispatches compute work.
  * You must not call this function before binding a compute pipeline.
+ *
+ * A VERY IMPORTANT NOTE
+ * If you dispatch multiple times in a compute pass,
+ * and the dispatches write to the same resource region as each other,
+ * there is no guarantee of which order the writes will occur.
+ * If the write order matters, you MUST end the compute pass and begin another one.
  *
  * \param computePass a compute pass handle
  * \param groupCountX number of local workgroups to dispatch in the X dimension

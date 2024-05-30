@@ -1053,9 +1053,7 @@ SDL3_0.0.0 {
     SDL_GpuBeginComputePass;
     SDL_GpuBindComputePipeline;
     SDL_GpuBindComputeStorageTextures;
-    SDL_GpuBindComputeRWStorageTextures;
     SDL_GpuBindComputeStorageBuffers;
-    SDL_GpuBindComputeRWStorageBuffers;
     SDL_GpuPushComputeUniformData;
     SDL_GpuDispatchCompute;
     SDL_GpuEndComputePass;
