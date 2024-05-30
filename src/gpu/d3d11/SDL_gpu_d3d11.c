@@ -6974,29 +6974,10 @@ tryCreateDevice:
 
     /* Initialize null states */
 
-    SDL_memset(
-        nullRTVs,
-        0,
-        MAX_COLOR_TARGET_BINDINGS
-    );
-
-    SDL_memset(
-        nullSRVs,
-        0,
-        (MAX_TEXTURE_SAMPLERS_PER_STAGE + MAX_STORAGE_TEXTURES_PER_STAGE + MAX_STORAGE_BUFFERS_PER_STAGE) * sizeof(ID3D11ShaderResourceView*)
-    );
-
-    SDL_memset(
-        nullSamplers,
-        0,
-        MAX_TEXTURE_SAMPLERS_PER_STAGE * sizeof(ID3D11SamplerState*)
-    );
-
-    SDL_memset(
-        nullUAVs,
-        0,
-        (MAX_STORAGE_TEXTURES_PER_STAGE + MAX_STORAGE_BUFFERS_PER_STAGE) * sizeof(ID3D11UnorderedAccessView*)
-    );
+    SDL_zeroa(nullRTVs);
+    SDL_zeroa(nullSRVs);
+    SDL_zeroa(nullSamplers);
+    SDL_zeroa(nullUAVs);
 
     /* Initialize built-in pipelines */
     D3D11_INTERNAL_InitBlitPipelines(renderer);
