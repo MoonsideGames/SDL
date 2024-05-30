@@ -5696,7 +5696,7 @@ static Uint8 D3D11_INTERNAL_CreateSwapchain(
 		renderer,
 		swapchain,
         swapchainFormat,
-        (swapchainComposition == SDL_GPU_SWAPCHAINCOMPOSITION_SDR_SRGB) ? DXGI_FORMAT_B8G8R8A8_UNORM_SRGB : windowData->swapchainFormat,
+        (swapchainComposition == SDL_GPU_SWAPCHAINCOMPOSITION_SDR_LINEAR) ? DXGI_FORMAT_B8G8R8A8_UNORM_SRGB : windowData->swapchainFormat,
         &windowData->texture
 	)) {
 		IDXGISwapChain_Release(swapchain);
@@ -5739,7 +5739,7 @@ static Uint8 D3D11_INTERNAL_ResizeSwapchain(
 		renderer,
 		windowData->swapchain,
         windowData->swapchainFormat,
-        (windowData->swapchainComposition == SDL_GPU_SWAPCHAINCOMPOSITION_SDR_SRGB) ? DXGI_FORMAT_B8G8R8A8_UNORM_SRGB : windowData->swapchainFormat,
+        (windowData->swapchainComposition == SDL_GPU_SWAPCHAINCOMPOSITION_SDR_LINEAR) ? DXGI_FORMAT_B8G8R8A8_UNORM_SRGB : windowData->swapchainFormat,
         &windowData->texture
 	);
 }
