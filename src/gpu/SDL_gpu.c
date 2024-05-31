@@ -525,89 +525,89 @@ void SDL_GpuSetStringMarker(
 
 /* Disposal */
 
-void SDL_GpuQueueDestroyTexture(
+void SDL_GpuReleaseTexture(
 	SDL_GpuDevice *device,
 	SDL_GpuTexture *texture
 ) {
 	NULL_ASSERT(device);
-	device->QueueDestroyTexture(
+	device->ReleaseTexture(
 		device->driverData,
 		texture
 	);
 }
 
-void SDL_GpuQueueDestroySampler(
+void SDL_GpuReleaseSampler(
 	SDL_GpuDevice *device,
 	SDL_GpuSampler *sampler
 ) {
 	NULL_ASSERT(device);
-	device->QueueDestroySampler(
+	device->ReleaseSampler(
 		device->driverData,
 		sampler
 	);
 }
 
-void SDL_GpuQueueDestroyGpuBuffer(
+void SDL_GpuReleaseGpuBuffer(
 	SDL_GpuDevice *device,
 	SDL_GpuBuffer *gpuBuffer
 ) {
 	NULL_ASSERT(device);
-	device->QueueDestroyGpuBuffer(
+	device->ReleaseGpuBuffer(
 		device->driverData,
 		gpuBuffer
 	);
 }
 
-void SDL_GpuQueueDestroyTransferBuffer(
+void SDL_GpuReleaseTransferBuffer(
 	SDL_GpuDevice *device,
 	SDL_GpuTransferBuffer *transferBuffer
 ) {
 	NULL_ASSERT(device);
-	device->QueueDestroyTransferBuffer(
+	device->ReleaseTransferBuffer(
 		device->driverData,
 		transferBuffer
 	);
 }
 
-void SDL_GpuQueueDestroyShader(
+void SDL_GpuReleaseShader(
 	SDL_GpuDevice *device,
 	SDL_GpuShader *shader
 ) {
 	NULL_ASSERT(device);
-	device->QueueDestroyShader(
+	device->ReleaseShader(
 		device->driverData,
 		shader
 	);
 }
 
-void SDL_GpuQueueDestroyComputePipeline(
+void SDL_GpuReleaseComputePipeline(
 	SDL_GpuDevice *device,
 	SDL_GpuComputePipeline *computePipeline
 ) {
 	NULL_ASSERT(device);
-	device->QueueDestroyComputePipeline(
+	device->ReleaseComputePipeline(
 		device->driverData,
 		computePipeline
 	);
 }
 
-void SDL_GpuQueueDestroyGraphicsPipeline(
+void SDL_GpuReleaseGraphicsPipeline(
 	SDL_GpuDevice *device,
 	SDL_GpuGraphicsPipeline *graphicsPipeline
 ) {
 	NULL_ASSERT(device);
-	device->QueueDestroyGraphicsPipeline(
+	device->ReleaseGraphicsPipeline(
 		device->driverData,
 		graphicsPipeline
 	);
 }
 
-void SDL_GpuQueueDestroyOcclusionQuery(
+void SDL_GpuReleaseOcclusionQuery(
     SDL_GpuDevice *device,
     SDL_GpuOcclusionQuery *query
 ) {
     NULL_ASSERT(device);
-    device->QueueDestroyOcclusionQuery(
+    device->ReleaseOcclusionQuery(
         device->driverData,
         query
     );

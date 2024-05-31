@@ -275,42 +275,42 @@ struct SDL_GpuDevice
 
 	/* Disposal */
 
-	void (*QueueDestroyTexture)(
+	void (*ReleaseTexture)(
 		SDL_GpuRenderer *driverData,
 		SDL_GpuTexture *texture
 	);
 
-	void (*QueueDestroySampler)(
+	void (*ReleaseSampler)(
 		SDL_GpuRenderer *driverData,
 		SDL_GpuSampler *sampler
 	);
 
-	void (*QueueDestroyGpuBuffer)(
+	void (*ReleaseGpuBuffer)(
 		SDL_GpuRenderer *driverData,
 		SDL_GpuBuffer *gpuBuffer
 	);
 
-	void (*QueueDestroyTransferBuffer)(
+	void (*ReleaseTransferBuffer)(
 		SDL_GpuRenderer *driverData,
 		SDL_GpuTransferBuffer *transferBuffer
 	);
 
-	void (*QueueDestroyShader)(
+	void (*ReleaseShader)(
 		SDL_GpuRenderer *driverData,
 		SDL_GpuShader *shader
 	);
 
-	void (*QueueDestroyComputePipeline)(
+	void (*ReleaseComputePipeline)(
 		SDL_GpuRenderer *driverData,
 		SDL_GpuComputePipeline *computePipeline
 	);
 
-	void (*QueueDestroyGraphicsPipeline)(
+	void (*ReleaseGraphicsPipeline)(
 		SDL_GpuRenderer *driverData,
 		SDL_GpuGraphicsPipeline *graphicsPipeline
 	);
 
-    void (*QueueDestroyOcclusionQuery)(
+    void (*ReleaseOcclusionQuery)(
         SDL_GpuRenderer *driverData,
         SDL_GpuOcclusionQuery *query
     );
@@ -720,14 +720,14 @@ struct SDL_GpuDevice
 	ASSIGN_DRIVER_FUNC(SetGpuBufferName, name) \
 	ASSIGN_DRIVER_FUNC(SetTextureName, name) \
     ASSIGN_DRIVER_FUNC(SetStringMarker, name) \
-	ASSIGN_DRIVER_FUNC(QueueDestroyTexture, name) \
-	ASSIGN_DRIVER_FUNC(QueueDestroySampler, name) \
-	ASSIGN_DRIVER_FUNC(QueueDestroyGpuBuffer, name) \
-	ASSIGN_DRIVER_FUNC(QueueDestroyTransferBuffer, name) \
-	ASSIGN_DRIVER_FUNC(QueueDestroyShader, name) \
-	ASSIGN_DRIVER_FUNC(QueueDestroyComputePipeline, name) \
-	ASSIGN_DRIVER_FUNC(QueueDestroyGraphicsPipeline, name) \
-    ASSIGN_DRIVER_FUNC(QueueDestroyOcclusionQuery, name) \
+	ASSIGN_DRIVER_FUNC(ReleaseTexture, name) \
+	ASSIGN_DRIVER_FUNC(ReleaseSampler, name) \
+	ASSIGN_DRIVER_FUNC(ReleaseGpuBuffer, name) \
+	ASSIGN_DRIVER_FUNC(ReleaseTransferBuffer, name) \
+	ASSIGN_DRIVER_FUNC(ReleaseShader, name) \
+	ASSIGN_DRIVER_FUNC(ReleaseComputePipeline, name) \
+	ASSIGN_DRIVER_FUNC(ReleaseGraphicsPipeline, name) \
+    ASSIGN_DRIVER_FUNC(ReleaseOcclusionQuery, name) \
 	ASSIGN_DRIVER_FUNC(BeginRenderPass, name) \
 	ASSIGN_DRIVER_FUNC(BindGraphicsPipeline, name) \
 	ASSIGN_DRIVER_FUNC(SetViewport, name) \

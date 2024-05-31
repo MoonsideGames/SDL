@@ -641,7 +641,7 @@ static void METAL_INTERNAL_DestroyTextureContainer(
     SDL_free(container);
 }
 
-static void METAL_QueueDestroyTexture(
+static void METAL_ReleaseTexture(
     SDL_GpuRenderer *driverData,
     SDL_GpuTexture *texture
 ) {
@@ -666,7 +666,7 @@ static void METAL_QueueDestroyTexture(
     SDL_UnlockMutex(renderer->disposeLock);
 }
 
-static void METAL_QueueDestroySampler(
+static void METAL_ReleaseSampler(
     SDL_GpuRenderer *driverData,
     SDL_GpuSampler *sampler
 ) {
@@ -687,7 +687,7 @@ static void METAL_INTERNAL_DestroyBufferContainer(
     SDL_free(container);
 }
 
-static void METAL_QueueDestroyGpuBuffer(
+static void METAL_ReleaseGpuBuffer(
     SDL_GpuRenderer *driverData,
     SDL_GpuBuffer *gpuBuffer
 ) {
@@ -712,7 +712,7 @@ static void METAL_QueueDestroyGpuBuffer(
     SDL_UnlockMutex(renderer->disposeLock);
 }
 
-static void METAL_QueueDestroyTransferBuffer(
+static void METAL_ReleaseTransferBuffer(
     SDL_GpuRenderer *driverData,
     SDL_GpuTransferBuffer *transferBuffer
 ) {
@@ -746,7 +746,7 @@ static void METAL_INTERNAL_DestroyTransferBufferContainer(
     SDL_free(transferBufferContainer->buffers);
 }
 
-static void METAL_QueueDestroyShader(
+static void METAL_ReleaseShader(
     SDL_GpuRenderer *driverData,
     SDL_GpuShader *shader
 ) {
@@ -755,14 +755,14 @@ static void METAL_QueueDestroyShader(
     SDL_free(metalShader);
 }
 
-static void METAL_QueueDestroyComputePipeline(
+static void METAL_ReleaseComputePipeline(
     SDL_GpuRenderer *driverData,
     SDL_GpuComputePipeline *computePipeline
 ) {
     NOT_IMPLEMENTED
 }
 
-static void METAL_QueueDestroyGraphicsPipeline(
+static void METAL_ReleaseGraphicsPipeline(
     SDL_GpuRenderer *driverData,
     SDL_GpuGraphicsPipeline *graphicsPipeline
 ) {
@@ -772,7 +772,7 @@ static void METAL_QueueDestroyGraphicsPipeline(
     SDL_free(metalGraphicsPipeline);
 }
 
-static void METAL_QueueDestroyOcclusionQuery(
+static void METAL_ReleaseOcclusionQuery(
     SDL_GpuRenderer *renderer,
     SDL_GpuOcclusionQuery *query
 ) {
