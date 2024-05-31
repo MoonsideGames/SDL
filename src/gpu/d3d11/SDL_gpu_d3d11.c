@@ -1185,7 +1185,7 @@ static void D3D11_INTERNAL_DestroyTextureContainer(
 	SDL_free(container);
 }
 
-static void D3D11_QueueDestroyTexture(
+static void D3D11_ReleaseTexture(
 	SDL_GpuRenderer *driverData,
 	SDL_GpuTexture *texture
 ) {
@@ -1210,7 +1210,7 @@ static void D3D11_QueueDestroyTexture(
     SDL_UnlockMutex(renderer->contextLock);
 }
 
-static void D3D11_QueueDestroySampler(
+static void D3D11_ReleaseSampler(
 	SDL_GpuRenderer *driverData,
 	SDL_GpuSampler *sampler
 ) {
@@ -1220,7 +1220,7 @@ static void D3D11_QueueDestroySampler(
 	SDL_free(d3d11Sampler);
 }
 
-static void D3D11_QueueDestroyGpuBuffer(
+static void D3D11_ReleaseGpuBuffer(
 	SDL_GpuRenderer *driverData,
 	SDL_GpuBuffer *gpuBuffer
 ) {
@@ -1245,7 +1245,7 @@ static void D3D11_QueueDestroyGpuBuffer(
     SDL_UnlockMutex(renderer->contextLock);
 }
 
-static void D3D11_QueueDestroyTransferBuffer(
+static void D3D11_ReleaseTransferBuffer(
 	SDL_GpuRenderer *driverData,
 	SDL_GpuTransferBuffer *transferBuffer
 ) {
@@ -1291,7 +1291,7 @@ static void D3D11_INTERNAL_DestroyTransferBufferContainer(
 	SDL_free(transferBufferContainer->buffers);
 }
 
-static void D3D11_QueueDestroyShader(
+static void D3D11_ReleaseShader(
 	SDL_GpuRenderer *driverData,
 	SDL_GpuShader *shader
 ) {
@@ -1311,7 +1311,7 @@ static void D3D11_QueueDestroyShader(
 	SDL_free(d3dShader);
 }
 
-static void D3D11_QueueDestroyComputePipeline(
+static void D3D11_ReleaseComputePipeline(
 	SDL_GpuRenderer *driverData,
 	SDL_GpuComputePipeline *computePipeline
 ) {
@@ -1324,7 +1324,7 @@ static void D3D11_QueueDestroyComputePipeline(
 	SDL_free(d3d11ComputePipeline);
 }
 
-static void D3D11_QueueDestroyGraphicsPipeline(
+static void D3D11_ReleaseGraphicsPipeline(
 	SDL_GpuRenderer *driverData,
 	SDL_GpuGraphicsPipeline *graphicsPipeline
 ) {
@@ -1352,7 +1352,7 @@ static void D3D11_QueueDestroyGraphicsPipeline(
 	SDL_free(d3d11GraphicsPipeline);
 }
 
-static void D3D11_QueueDestroyOcclusionQuery(
+static void D3D11_ReleaseOcclusionQuery(
     SDL_GpuRenderer *renderer,
     SDL_GpuOcclusionQuery *query
 ) {
@@ -3219,7 +3219,7 @@ static void D3D11_UploadToTexture(
     );
 
 	/* Clean up the staging texture */
-    D3D11_QueueDestroyTexture(
+    D3D11_ReleaseTexture(
         (SDL_GpuRenderer*) d3d11CommandBuffer->renderer,
         (SDL_GpuTexture *)stagingTexture
     );
@@ -6720,15 +6720,15 @@ static void D3D11_INTERNAL_DestroyBlitPipelines(
 ) {
 	D3D11Renderer *renderer = (D3D11Renderer *)driverData;
 
-	D3D11_QueueDestroySampler(driverData, renderer->blitLinearSampler);
-	D3D11_QueueDestroySampler(driverData, renderer->blitNearestSampler);
+	D3D11_ReleaseSampler(driverData, renderer->blitLinearSampler);
+	D3D11_ReleaseSampler(driverData, renderer->blitNearestSampler);
 
-	D3D11_QueueDestroyGraphicsPipeline(driverData, renderer->blitFrom2DPipeline);
-	D3D11_QueueDestroyGraphicsPipeline(driverData, renderer->blitFrom2DArrayPipeline);
+	D3D11_ReleaseGraphicsPipeline(driverData, renderer->blitFrom2DPipeline);
+	D3D11_ReleaseGraphicsPipeline(driverData, renderer->blitFrom2DArrayPipeline);
 
-	D3D11_QueueDestroyShader(driverData, renderer->fullscreenVertexShader);
-	D3D11_QueueDestroyShader(driverData, renderer->blitFrom2DPixelShader);
-	D3D11_QueueDestroyShader(driverData, renderer->blitFrom2DArrayPixelShader);
+	D3D11_ReleaseShader(driverData, renderer->fullscreenVertexShader);
+	D3D11_ReleaseShader(driverData, renderer->blitFrom2DPixelShader);
+	D3D11_ReleaseShader(driverData, renderer->blitFrom2DArrayPixelShader);
 }
 
 static SDL_GpuDevice* D3D11_CreateDevice(SDL_bool debugMode)

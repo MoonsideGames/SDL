@@ -56,7 +56,7 @@ static void shutdownGpu(void)
         int i;
         for (i = 0; i < state->num_windows; i++) {
             WindowState *winstate = &window_states[i];
-            SDL_GpuQueueDestroyTexture(gpu_device, winstate->tex_depth);
+            SDL_GpuReleaseTexture(gpu_device, winstate->tex_depth);
             SDL_GpuUnclaimWindow(gpu_device, state->windows[i]);
         }
         SDL_free(window_states);
@@ -65,10 +65,10 @@ static void shutdownGpu(void)
 
     /* API FIXME: Should we gracefully handle NULL pointers being passed to these functions? */
     if (render_state.buf_vertex) {
-        SDL_GpuQueueDestroyGpuBuffer(gpu_device, render_state.buf_vertex);
+        SDL_GpuReleaseGpuBuffer(gpu_device, render_state.buf_vertex);
     }
     if (render_state.pipeline) {
-        SDL_GpuQueueDestroyGraphicsPipeline(gpu_device, render_state.pipeline);
+        SDL_GpuReleaseGraphicsPipeline(gpu_device, render_state.pipeline);
     }
     SDL_GpuDestroyDevice(gpu_device);
 
@@ -328,7 +328,7 @@ Render(SDL_Window *window, const int windownum)
     /* Resize the depth buffer if the window size changed */
 
     if (winstate->prev_drawablew != drawablew || winstate->prev_drawableh != drawableh) {
-        SDL_GpuQueueDestroyTexture(gpu_device, winstate->tex_depth);
+        SDL_GpuReleaseTexture(gpu_device, winstate->tex_depth);
         winstate->tex_depth = CreateDepthTexture(drawablew, drawableh);
     }
     winstate->prev_drawablew = drawablew;
@@ -467,7 +467,7 @@ init_render_state(void)
     SDL_GpuEndCopyPass(copy_pass);
     SDL_GpuSubmit(cmd);
 
-    SDL_GpuQueueDestroyTransferBuffer(gpu_device, buf_transfer);
+    SDL_GpuReleaseTransferBuffer(gpu_device, buf_transfer);
 
     /* Set up the graphics pipeline */
 
@@ -532,8 +532,8 @@ init_render_state(void)
     CHECK_CREATE(render_state.pipeline, "Render Pipeline")
 
     /* These are reference-counted; once the pipeline is created, you don't need to keep these. */
-    SDL_GpuQueueDestroyShader(gpu_device, vertex_shader);
-    SDL_GpuQueueDestroyShader(gpu_device, fragment_shader);
+    SDL_GpuReleaseShader(gpu_device, vertex_shader);
+    SDL_GpuReleaseShader(gpu_device, fragment_shader);
 
     /* Set up per-window state */
 

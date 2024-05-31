@@ -834,7 +834,7 @@ extern SDL_DECLSPEC SDL_GpuBackend SDLCALL SDL_GpuGetBackend(SDL_GpuDevice *devi
  *
  * \sa SDL_GpuCreateShader
  * \sa SDL_GpuBindComputePipeline
- * \sa SDL_GpuQueueDestroyComputePipeline
+ * \sa SDL_GpuReleaseComputePipeline
  */
 extern SDL_DECLSPEC SDL_GpuComputePipeline *SDLCALL SDL_GpuCreateComputePipeline(
 	SDL_GpuDevice *device,
@@ -852,7 +852,7 @@ extern SDL_DECLSPEC SDL_GpuComputePipeline *SDLCALL SDL_GpuCreateComputePipeline
  *
  * \sa SDL_GpuCreateShader
  * \sa SDL_GpuBindGraphicsPipeline
- * \sa SDL_GpuQueueDestroyGraphicsPipeline
+ * \sa SDL_GpuReleaseGraphicsPipeline
  */
 extern SDL_DECLSPEC SDL_GpuGraphicsPipeline *SDLCALL SDL_GpuCreateGraphicsPipeline(
 	SDL_GpuDevice *device,
@@ -870,7 +870,7 @@ extern SDL_DECLSPEC SDL_GpuGraphicsPipeline *SDLCALL SDL_GpuCreateGraphicsPipeli
  *
  * \sa SDL_GpuBindVertexSamplers
  * \sa SDL_GpuBindFragmentSamplers
- * \sa SDL_QueueDestroySampler
+ * \sa SDL_ReleaseSampler
  */
 extern SDL_DECLSPEC SDL_GpuSampler *SDLCALL SDL_GpuCreateSampler(
 	SDL_GpuDevice *device,
@@ -888,7 +888,7 @@ extern SDL_DECLSPEC SDL_GpuSampler *SDLCALL SDL_GpuCreateSampler(
  *
  * \sa SDL_GpuCreateGraphicsPipeline
  * \sa SDL_GpuCreateComputePipeline
- * \sa SDL_GpuQueueDestroyShader
+ * \sa SDL_GpuReleaseShader
  */
 extern SDL_DECLSPEC SDL_GpuShader *SDLCALL SDL_GpuCreateShader(
 	SDL_GpuDevice *device,
@@ -916,7 +916,7 @@ extern SDL_DECLSPEC SDL_GpuShader *SDLCALL SDL_GpuCreateShader(
  * \sa SDL_GpuBindFragmentStorageTextures
  * \sa SDL_GpuBindComputeStorageTextures
  * \sa SDL_GpuBlit
- * \sa SDL_GpuQueueDestroyTexture
+ * \sa SDL_GpuReleaseTexture
  */
 extern SDL_DECLSPEC SDL_GpuTexture *SDLCALL SDL_GpuCreateTexture(
 	SDL_GpuDevice *device,
@@ -943,7 +943,7 @@ extern SDL_DECLSPEC SDL_GpuTexture *SDLCALL SDL_GpuCreateTexture(
  * \sa SDL_GpuBindVertexStorageBuffers
  * \sa SDL_GpuBindFragmentStorageBuffers
  * \sa SDL_GpuBindComputeStorageBuffers
- * \sa SDL_GpuQueueDestroyGpuBuffer
+ * \sa SDL_GpuReleaseGpuBuffer
  */
 extern SDL_DECLSPEC SDL_GpuBuffer *SDLCALL SDL_GpuCreateGpuBuffer(
 	SDL_GpuDevice *device,
@@ -966,7 +966,7 @@ extern SDL_DECLSPEC SDL_GpuBuffer *SDLCALL SDL_GpuCreateGpuBuffer(
  * \sa SDL_GpuDownloadFromBuffer
  * \sa SDL_GpuUploadToTexture
  * \sa SDL_GpuDownloadFromTexture
- * \sa SDL_GpuQueueDestroyTransferBuffer
+ * \sa SDL_GpuReleaseTransferBuffer
  */
 extern SDL_DECLSPEC SDL_GpuTransferBuffer *SDLCALL SDL_GpuCreateTransferBuffer(
 	SDL_GpuDevice *device,
@@ -986,7 +986,7 @@ extern SDL_DECLSPEC SDL_GpuTransferBuffer *SDLCALL SDL_GpuCreateTransferBuffer(
  *
  * \since This function is available since SDL 3.x.x
  *
- * \sa SDL_GpuQueueDestroyQuery
+ * \sa SDL_GpuReleaseQuery
  */
 extern SDL_DECLSPEC SDL_GpuOcclusionQuery *SDLCALL SDL_GpuCreateOcclusionQuery(
     SDL_GpuDevice *device
@@ -1040,105 +1040,113 @@ extern SDL_DECLSPEC void SDLCALL SDL_GpuSetStringMarker(
 /* Disposal */
 
 /**
- * Specifies that the given texture should be destroyed once it is no longer referenced.
+ * Frees the given texture as soon as it is safe to do so.
+ * You must not reference the texture after calling this function.
  *
  * \param device a GPU context
  * \param texture a texture to be destroyed
  *
  * \since This function is available since SDL 3.x.x
  */
-extern SDL_DECLSPEC void SDLCALL SDL_GpuQueueDestroyTexture(
+extern SDL_DECLSPEC void SDLCALL SDL_GpuReleaseTexture(
 	SDL_GpuDevice *device,
 	SDL_GpuTexture *texture
 );
 
 /**
- * Specifies that the given sampler should be destroyed once it is no longer referenced.
+ * Frees the given sampler as soon as it is safe to do so.
+ * You must not reference the texture after calling this function.
  *
  * \param device a GPU context
  * \param sampler a sampler to be destroyed
  *
  * \since This function is available since SDL 3.x.x
  */
-extern SDL_DECLSPEC void SDLCALL SDL_GpuQueueDestroySampler(
+extern SDL_DECLSPEC void SDLCALL SDL_GpuReleaseSampler(
 	SDL_GpuDevice *device,
 	SDL_GpuSampler *sampler
 );
 
 /**
- * Specifies that the given buffer should be destroyed once it is no longer referenced.
+ * Frees the given buffer as soon as it is safe to do so.
+ * You must not reference the buffer after calling this function.
  *
  * \param device a GPU context
  * \param gpuBuffer a buffer to be destroyed
  *
  * \since This function is available since SDL 3.x.x
  */
-extern SDL_DECLSPEC void SDLCALL SDL_GpuQueueDestroyGpuBuffer(
+extern SDL_DECLSPEC void SDLCALL SDL_GpuReleaseGpuBuffer(
 	SDL_GpuDevice *device,
 	SDL_GpuBuffer *gpuBuffer
 );
 
 /**
- * Specifies that the given transfer buffer should be destroyed once it is no longer bound.
+ * Frees the given transfer buffer as soon as it is safe to do so.
+ * You must not reference the transfer buffer after calling this function.
  *
  * \param device a GPU context
  * \param transferBuffer a transfer buffer to be destroyed
  *
  * \since This function is available since SDL 3.x.x
  */
-extern SDL_DECLSPEC void SDLCALL SDL_GpuQueueDestroyTransferBuffer(
+extern SDL_DECLSPEC void SDLCALL SDL_GpuReleaseTransferBuffer(
 	SDL_GpuDevice *device,
 	SDL_GpuTransferBuffer *transferBuffer
 );
 
 /**
- * Specifies that the given shader should be destroyed once it is no longer referenced.
+ * Frees the given shader as soon as it is safe to do so.
+ * You must not reference the shader after calling this function.
  *
  * \param device a GPU context
  * \param shader a shader to be destroyed
  *
  * \since This function is available since SDL 3.x.x
  */
-extern SDL_DECLSPEC void SDLCALL SDL_GpuQueueDestroyShader(
+extern SDL_DECLSPEC void SDLCALL SDL_GpuReleaseShader(
 	SDL_GpuDevice *device,
 	SDL_GpuShader *shader
 );
 
 /**
- * Specifies that the given compute pipeline should be destroyed once it is no longer referenced.
+ * Frees the given compute pipeline as soon as it is safe to do so.
+ * You must not reference the compute pipeline after calling this function.
  *
  * \param device a GPU context
  * \param computePipeline a compute pipeline to be destroyed
  *
  * \since This function is available since SDL 3.x.x
  */
-extern SDL_DECLSPEC void SDLCALL SDL_GpuQueueDestroyComputePipeline(
+extern SDL_DECLSPEC void SDLCALL SDL_GpuReleaseComputePipeline(
 	SDL_GpuDevice *device,
 	SDL_GpuComputePipeline *computePipeline
 );
 
 /**
- * Specifies that the given graphics pipeline should be destroyed once it is no longer referenced.
+ * Frees the given graphics pipeline as soon as it is safe to do so.
+ * You must not reference the graphics pipeline after calling this function.
  *
  * \param device a GPU context
  * \param graphicsPipeline a graphics pipeline to be destroyed
  *
  * \since This function is available since SDL 3.x.x
  */
-extern SDL_DECLSPEC void SDLCALL SDL_GpuQueueDestroyGraphicsPipeline(
+extern SDL_DECLSPEC void SDLCALL SDL_GpuReleaseGraphicsPipeline(
 	SDL_GpuDevice *device,
 	SDL_GpuGraphicsPipeline *graphicsPipeline
 );
 
 /**
- * Specifies that the given occlusion query should be destroyed once it is no longer referenced.
+ * Frees the given occlusion query as soon as it is safe to do so.
+ * You must not reference the occlusion query after calling this function.
  *
  * \param device a GPU context
  * \param query an occlusion query object to be destroyed
  *
  * \since This function is available since SDL 3.x.x
  */
-extern SDL_DECLSPEC void SDLCALL SDL_GpuQueueDestroyOcclusionQuery(
+extern SDL_DECLSPEC void SDLCALL SDL_GpuReleaseOcclusionQuery(
     SDL_GpuDevice *device,
     SDL_GpuOcclusionQuery *query
 );

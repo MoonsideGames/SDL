@@ -3163,7 +3163,7 @@ static void VULKAN_INTERNAL_TextureTransitionToDefaultUsage(
 
 /* Resource Disposal */
 
-static void VULKAN_INTERNAL_QueueDestroyFramebuffer(
+static void VULKAN_INTERNAL_ReleaseFramebuffer(
     VulkanRenderer *renderer,
     VulkanFramebuffer *framebuffer
 ) {
@@ -3216,7 +3216,7 @@ static void VULKAN_INTERNAL_RemoveFramebuffersContainingView(
                 /* FIXME: do we actually need to queue this?
                  * The framebuffer should not be in use once the associated texture is being destroyed
                  */
-                VULKAN_INTERNAL_QueueDestroyFramebuffer(
+                VULKAN_INTERNAL_ReleaseFramebuffer(
                     renderer,
                     renderer->framebufferHashArray.elements[i].value
                 );
@@ -7459,7 +7459,7 @@ static SDL_GpuTransferBuffer* VULKAN_CreateTransferBuffer(
     );
 }
 
-static void VULKAN_INTERNAL_QueueDestroyTexture(
+static void VULKAN_INTERNAL_ReleaseTexture(
     VulkanRenderer *renderer,
     VulkanTexture *vulkanTexture
 ) {
@@ -7485,7 +7485,7 @@ static void VULKAN_INTERNAL_QueueDestroyTexture(
     SDL_UnlockMutex(renderer->disposeLock);
 }
 
-static void VULKAN_QueueDestroyTexture(
+static void VULKAN_ReleaseTexture(
     SDL_GpuRenderer *driverData,
     SDL_GpuTexture *texture
 ) {
@@ -7497,7 +7497,7 @@ static void VULKAN_QueueDestroyTexture(
 
     for (i = 0; i < vulkanTextureContainer->textureCount; i += 1)
     {
-        VULKAN_INTERNAL_QueueDestroyTexture(renderer, vulkanTextureContainer->textureHandles[i]->vulkanTexture);
+        VULKAN_INTERNAL_ReleaseTexture(renderer, vulkanTextureContainer->textureHandles[i]->vulkanTexture);
         SDL_free(vulkanTextureContainer->textureHandles[i]);
     }
 
@@ -7512,7 +7512,7 @@ static void VULKAN_QueueDestroyTexture(
     SDL_UnlockMutex(renderer->disposeLock);
 }
 
-static void VULKAN_QueueDestroySampler(
+static void VULKAN_ReleaseSampler(
     SDL_GpuRenderer *driverData,
     SDL_GpuSampler *sampler
 ) {
@@ -7535,7 +7535,7 @@ static void VULKAN_QueueDestroySampler(
     SDL_UnlockMutex(renderer->disposeLock);
 }
 
-static void VULKAN_INTERNAL_QueueDestroyBuffer(
+static void VULKAN_INTERNAL_ReleaseBuffer(
     VulkanRenderer *renderer,
     VulkanBuffer *vulkanBuffer
 ) {
@@ -7561,7 +7561,7 @@ static void VULKAN_INTERNAL_QueueDestroyBuffer(
     SDL_UnlockMutex(renderer->disposeLock);
 }
 
-static void VULKAN_INTERNAL_QueueDestroyBufferContainer(
+static void VULKAN_INTERNAL_ReleaseBufferContainer(
     VulkanRenderer *renderer,
     VulkanBufferContainer *bufferContainer
 ) {
@@ -7571,7 +7571,7 @@ static void VULKAN_INTERNAL_QueueDestroyBufferContainer(
 
     for (i = 0; i < bufferContainer->bufferCount; i += 1)
     {
-        VULKAN_INTERNAL_QueueDestroyBuffer(renderer, bufferContainer->bufferHandles[i]->vulkanBuffer);
+        VULKAN_INTERNAL_ReleaseBuffer(renderer, bufferContainer->bufferHandles[i]->vulkanBuffer);
         SDL_free(bufferContainer->bufferHandles[i]);
     }
 
@@ -7586,33 +7586,33 @@ static void VULKAN_INTERNAL_QueueDestroyBufferContainer(
     SDL_UnlockMutex(renderer->disposeLock);
 }
 
-static void VULKAN_QueueDestroyGpuBuffer(
+static void VULKAN_ReleaseGpuBuffer(
     SDL_GpuRenderer *driverData,
     SDL_GpuBuffer *gpuBuffer
 ) {
     VulkanRenderer *renderer = (VulkanRenderer*) driverData;
     VulkanBufferContainer *vulkanBufferContainer = (VulkanBufferContainer*) gpuBuffer;
 
-    VULKAN_INTERNAL_QueueDestroyBufferContainer(
+    VULKAN_INTERNAL_ReleaseBufferContainer(
         renderer,
         vulkanBufferContainer
     );
 }
 
-static void VULKAN_QueueDestroyTransferBuffer(
+static void VULKAN_ReleaseTransferBuffer(
     SDL_GpuRenderer *driverData,
     SDL_GpuTransferBuffer *transferBuffer
 ) {
     VulkanRenderer *renderer = (VulkanRenderer*) driverData;
     VulkanBufferContainer *transferBufferContainer = (VulkanBufferContainer*) transferBuffer;
 
-    VULKAN_INTERNAL_QueueDestroyBufferContainer(
+    VULKAN_INTERNAL_ReleaseBufferContainer(
         renderer,
         transferBufferContainer
     );
 }
 
-static void VULKAN_QueueDestroyShader(
+static void VULKAN_ReleaseShader(
     SDL_GpuRenderer *driverData,
     SDL_GpuShader *shader
 ) {
@@ -7635,7 +7635,7 @@ static void VULKAN_QueueDestroyShader(
     SDL_UnlockMutex(renderer->disposeLock);
 }
 
-static void VULKAN_QueueDestroyComputePipeline(
+static void VULKAN_ReleaseComputePipeline(
     SDL_GpuRenderer *driverData,
     SDL_GpuComputePipeline *computePipeline
 ) {
@@ -7658,7 +7658,7 @@ static void VULKAN_QueueDestroyComputePipeline(
     SDL_UnlockMutex(renderer->disposeLock);
 }
 
-static void VULKAN_QueueDestroyGraphicsPipeline(
+static void VULKAN_ReleaseGraphicsPipeline(
     SDL_GpuRenderer *driverData,
     SDL_GpuGraphicsPipeline *graphicsPipeline
 ) {
@@ -7681,7 +7681,7 @@ static void VULKAN_QueueDestroyGraphicsPipeline(
     SDL_UnlockMutex(renderer->disposeLock);
 }
 
-static void VULKAN_QueueDestroyOcclusionQuery(
+static void VULKAN_ReleaseOcclusionQuery(
     SDL_GpuRenderer *driverData,
     SDL_GpuOcclusionQuery *query
 ) {
@@ -11556,7 +11556,7 @@ static Uint8 VULKAN_INTERNAL_DefragmentMemory(
                 currentRegion->vulkanBuffer->handle = NULL;
             }
 
-            VULKAN_INTERNAL_QueueDestroyBuffer(renderer, currentRegion->vulkanBuffer);
+            VULKAN_INTERNAL_ReleaseBuffer(renderer, currentRegion->vulkanBuffer);
         }
         else if (!currentRegion->isBuffer && !currentRegion->vulkanTexture->markedForDestroy)
         {
@@ -11663,7 +11663,7 @@ static Uint8 VULKAN_INTERNAL_DefragmentMemory(
             newTexture->handle->vulkanTexture = newTexture;
             currentRegion->vulkanTexture->handle = NULL;
 
-            VULKAN_INTERNAL_QueueDestroyTexture(renderer, currentRegion->vulkanTexture);
+            VULKAN_INTERNAL_ReleaseTexture(renderer, currentRegion->vulkanTexture);
         }
     }
 
