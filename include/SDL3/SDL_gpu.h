@@ -1507,7 +1507,7 @@ extern SDL_DECLSPEC void SDLCALL SDL_GpuDrawPrimitivesIndirect(
  *
  * \param renderPass a render pass handle
  * \param buffer a buffer containing draw parameters
- * \param offset the offset to start reading from the draw buffer
+ * \param offsetInBytes the offset to start reading from the draw buffer
  * \param drawCount the number of draw parameter sets that should be read from the draw buffer
  * \param stride the byte stride between sets of draw parameters
  *
