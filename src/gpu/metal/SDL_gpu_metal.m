@@ -2069,7 +2069,17 @@ static void METAL_DrawPrimitives(
 
 static void METAL_DrawPrimitivesIndirect(
     SDL_GpuCommandBuffer *commandBuffer,
-    SDL_GpuBuffer *gpuBuffer,
+    SDL_GpuBuffer *buffer,
+    Uint32 offsetInBytes,
+    Uint32 drawCount,
+    Uint32 stride
+) {
+    NOT_IMPLEMENTED
+}
+
+static void METAL_DrawIndexedPrimitivesIndirect(
+    SDL_GpuCommandBuffer *commandBuffer,
+    SDL_GpuBuffer *buffer,
     Uint32 offsetInBytes,
     Uint32 drawCount,
     Uint32 stride

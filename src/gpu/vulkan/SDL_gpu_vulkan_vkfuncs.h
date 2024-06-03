@@ -90,6 +90,7 @@ VULKAN_DEVICE_FUNCTION(BaseVK, void, vkCmdDispatch, (VkCommandBuffer commandBuff
 VULKAN_DEVICE_FUNCTION(BaseVK, void, vkCmdDraw, (VkCommandBuffer commandBuffer, Uint32 vertexCount, Uint32 instanceCount, Uint32 firstVertex, Uint32 firstInstance))
 VULKAN_DEVICE_FUNCTION(BaseVK, void, vkCmdDrawIndexed, (VkCommandBuffer commandBuffer, Uint32 indexCount, Uint32 instanceCount, Uint32 firstIndex, Sint32 vertexOffset, Uint32 firstInstance))
 VULKAN_DEVICE_FUNCTION(BaseVK, void, vkCmdDrawIndirect, (VkCommandBuffer commandBuffer, VkBuffer buffer, VkDeviceSize offset, Uint32 drawCount, Uint32 stride))
+VULKAN_DEVICE_FUNCTION(BaseVK, void, vkCmdDrawIndexedIndirect, (VkCommandBuffer commandBuffer, VkBuffer buffer, VkDeviceSize offset, Uint32 drawCount, Uint32 stride))
 VULKAN_DEVICE_FUNCTION(BaseVK, void, vkCmdEndRenderPass, (VkCommandBuffer commandBuffer))
 VULKAN_DEVICE_FUNCTION(BaseVK, void, vkCmdPipelineBarrier, (VkCommandBuffer commandBuffer, VkPipelineStageFlags srcStageMask, VkPipelineStageFlags dstStageMask, VkDependencyFlags dependencyFlags, Uint32 memoryBarrierCount, const VkMemoryBarrier *pMemoryBarriers, Uint32 bufferMemoryBarrierCount, const VkBufferMemoryBarrier *pBufferMemoryBarriers, Uint32 imageMemoryBarrierCount, const VkImageMemoryBarrier *pImageMemoryBarriers))
 VULKAN_DEVICE_FUNCTION(BaseVK, void, vkCmdResolveImage, (VkCommandBuffer commandBuffer, VkImage srcImage, VkImageLayout srcImageLayout, VkImage dstImage, VkImageLayout dstImageLayout, Uint32 regionCount, const VkImageResolve *pRegions))

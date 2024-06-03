@@ -5790,18 +5790,42 @@ static void VULKAN_DrawPrimitives(
 
 static void VULKAN_DrawPrimitivesIndirect(
     SDL_GpuCommandBuffer *commandBuffer,
-    SDL_GpuBuffer *gpuBuffer,
+    SDL_GpuBuffer *buffer,
     Uint32 offsetInBytes,
     Uint32 drawCount,
     Uint32 stride
 ) {
     VulkanCommandBuffer *vulkanCommandBuffer = (VulkanCommandBuffer*) commandBuffer;
     VulkanRenderer* renderer = (VulkanRenderer*) vulkanCommandBuffer->renderer;
-    VulkanBuffer *vulkanBuffer = ((VulkanBufferContainer*) gpuBuffer)->activeBufferHandle->vulkanBuffer;
+    VulkanBuffer *vulkanBuffer = ((VulkanBufferContainer*) buffer)->activeBufferHandle->vulkanBuffer;
 
     VULKAN_INTERNAL_BindGraphicsDescriptorSets(renderer, vulkanCommandBuffer);
 
     renderer->vkCmdDrawIndirect(
+        vulkanCommandBuffer->commandBuffer,
+        vulkanBuffer->buffer,
+        offsetInBytes,
+        drawCount,
+        stride
+    );
+
+    VULKAN_INTERNAL_TrackBuffer(renderer, vulkanCommandBuffer, vulkanBuffer);
+}
+
+static void VULKAN_DrawIndexedPrimitivesIndirect(
+    SDL_GpuCommandBuffer *commandBuffer,
+    SDL_GpuBuffer *buffer,
+    Uint32 offsetInBytes,
+    Uint32 drawCount,
+    Uint32 stride
+) {
+    VulkanCommandBuffer *vulkanCommandBuffer = (VulkanCommandBuffer*) commandBuffer;
+    VulkanRenderer* renderer = (VulkanRenderer*) vulkanCommandBuffer->renderer;
+    VulkanBuffer *vulkanBuffer = ((VulkanBufferContainer*) buffer)->activeBufferHandle->vulkanBuffer;
+
+    VULKAN_INTERNAL_BindGraphicsDescriptorSets(renderer, vulkanCommandBuffer);
+
+    renderer->vkCmdDrawIndexedIndirect(
         vulkanCommandBuffer->commandBuffer,
         vulkanBuffer->buffer,
         offsetInBytes,

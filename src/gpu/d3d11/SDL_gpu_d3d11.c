@@ -4612,7 +4612,7 @@ static void D3D11_DrawPrimitives(
 
 static void D3D11_DrawPrimitivesIndirect(
 	SDL_GpuCommandBuffer *commandBuffer,
-	SDL_GpuBuffer *gpuBuffer,
+	SDL_GpuBuffer *buffer,
 	Uint32 offsetInBytes,
 	Uint32 drawCount,
 	Uint32 stride
@@ -4620,7 +4620,7 @@ static void D3D11_DrawPrimitivesIndirect(
 	D3D11CommandBuffer *d3d11CommandBuffer = (D3D11CommandBuffer*) commandBuffer;
     D3D11_INTERNAL_BindGraphicsResources(d3d11CommandBuffer);
 
-	D3D11Buffer *d3d11Buffer = ((D3D11BufferContainer*) gpuBuffer)->activeBuffer;
+	D3D11Buffer *d3d11Buffer = ((D3D11BufferContainer*) buffer)->activeBuffer;
 
 	/* D3D11: "We have multi-draw at home!"
 	 * Multi-draw at home:
@@ -4635,6 +4635,33 @@ static void D3D11_DrawPrimitivesIndirect(
 	}
 
 	D3D11_INTERNAL_TrackBuffer(d3d11CommandBuffer, d3d11Buffer);
+}
+
+static void D3D11_DrawIndexedPrimitivesIndirect(
+	SDL_GpuCommandBuffer *commandBuffer,
+	SDL_GpuBuffer *buffer,
+	Uint32 offsetInBytes,
+	Uint32 drawCount,
+	Uint32 stride
+) {
+    D3D11CommandBuffer *d3d11CommandBuffer = (D3D11CommandBuffer*) commandBuffer;
+    D3D11_INTERNAL_BindGraphicsResources(d3d11CommandBuffer);
+
+	D3D11Buffer *d3d11Buffer = ((D3D11BufferContainer*) buffer)->activeBuffer;
+
+	/* D3D11: "We have multi-draw at home!"
+	 * Multi-draw at home:
+	 */
+	for (Uint32 i = 0; i < drawCount; i += 1)
+	{
+		ID3D11DeviceContext_DrawIndexedInstancedIndirect(
+			d3d11CommandBuffer->context,
+			d3d11Buffer->handle,
+			offsetInBytes + (stride * i)
+		);
+	}
+
+    D3D11_INTERNAL_TrackBuffer(d3d11CommandBuffer, d3d11Buffer);
 }
 
 static void D3D11_EndRenderPass(

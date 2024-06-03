@@ -881,7 +881,7 @@ void SDL_GpuDrawPrimitives(
 
 void SDL_GpuDrawPrimitivesIndirect(
     SDL_GpuRenderPass *renderPass,
-	SDL_GpuBuffer *gpuBuffer,
+	SDL_GpuBuffer *buffer,
 	Uint32 offsetInBytes,
 	Uint32 drawCount,
 	Uint32 stride
@@ -891,11 +891,30 @@ void SDL_GpuDrawPrimitivesIndirect(
     CHECK_GRAPHICS_PIPELINE_BOUND
 	RENDERPASS_DEVICE->DrawPrimitivesIndirect(
 		RENDERPASS_COMMAND_BUFFER,
-		gpuBuffer,
+		buffer,
 		offsetInBytes,
 		drawCount,
 		stride
 	);
+}
+
+void SDL_GpuDrawIndexedPrimitivesIndirect(
+    SDL_GpuRenderPass *renderPass,
+    SDL_GpuBuffer *buffer,
+    Uint32 offsetInBytes,
+    Uint32 drawCount,
+    Uint32 stride
+) {
+    NULL_ASSERT(renderPass)
+    CHECK_RENDERPASS
+    CHECK_GRAPHICS_PIPELINE_BOUND
+    RENDERPASS_DEVICE->DrawIndexedPrimitivesIndirect(
+        RENDERPASS_COMMAND_BUFFER,
+        buffer,
+        offsetInBytes,
+        drawCount,
+        stride
+    );
 }
 
 void SDL_GpuEndRenderPass(

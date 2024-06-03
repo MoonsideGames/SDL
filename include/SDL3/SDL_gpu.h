@@ -463,11 +463,20 @@ typedef struct SDL_GpuBufferCopy
 
 typedef struct SDL_GpuIndirectDrawCommand
 {
-	Uint32 vertexCount;
-	Uint32 instanceCount;
-	Uint32 firstVertex;
-	Uint32 firstInstance;
+	Uint32 vertexCount;   /* number of vertices to draw */
+	Uint32 instanceCount; /* number of instances to draw */
+	Uint32 firstVertex;   /* index of the first vertex to draw */
+	Uint32 firstInstance; /* ID of the first instance to draw */
 } SDL_GpuIndirectDrawCommand;
+
+typedef struct SDL_GpuIndexedIndirectDrawCommand
+{
+    Uint32 indexCount;    /* number of vertices to draw */
+    Uint32 instanceCount; /* number of instances to draw */
+    Uint32 firstIndex;    /* base index within the index buffer */
+    Uint32 vertexOffset;  /* value added to vertex index before indexing into the vertex buffer */
+    Uint32 firstInstance; /* ID of the first instance to draw */
+} SDL_GpuIndexedIndirectDrawCommand;
 
 /* State structures */
 
@@ -1434,7 +1443,7 @@ extern SDL_DECLSPEC void SDLCALL SDL_GpuPushFragmentUniformData(
 /* Drawing */
 
 /**
- * Draws data using bound graphics state with instancing enabled.
+ * Draws data using bound graphics state with an index buffer and instancing enabled.
  * You must not call this function before binding a graphics pipeline.
  *
  * \param renderPass a render pass handle
@@ -1475,7 +1484,7 @@ extern SDL_DECLSPEC void SDLCALL SDL_GpuDrawPrimitives(
  * You must not call this function before binding a graphics pipeline.
  *
  * \param renderPass a render pass handle
- * \param gpuBuffer a buffer containing draw parameters
+ * \param buffer a buffer containing draw parameters
  * \param offsetInBytes the offset to start reading from the draw buffer
  * \param drawCount the number of draw parameter sets that should be read from the draw buffer
  * \param stride the byte stride between sets of draw parameters
@@ -1484,10 +1493,32 @@ extern SDL_DECLSPEC void SDLCALL SDL_GpuDrawPrimitives(
  */
 extern SDL_DECLSPEC void SDLCALL SDL_GpuDrawPrimitivesIndirect(
 	SDL_GpuRenderPass *renderPass,
-	SDL_GpuBuffer *gpuBuffer,
+	SDL_GpuBuffer *buffer,
 	Uint32 offsetInBytes,
 	Uint32 drawCount,
 	Uint32 stride
+);
+
+/**
+ * Draws data using bound graphics state with an index buffer enabled
+ * and with draw parameters set from a buffer.
+ * The buffer layout should match the layout of SDL_GpuIndexedIndirectDrawCommand.
+ * You must not call this function before binding a graphics pipeline.
+ *
+ * \param renderPass a render pass handle
+ * \param buffer a buffer containing draw parameters
+ * \param offset the offset to start reading from the draw buffer
+ * \param drawCount the number of draw parameter sets that should be read from the draw buffer
+ * \param stride the byte stride between sets of draw parameters
+ *
+ * \since This function is available since SDL 3.x.x
+ */
+extern SDL_DECLSPEC void SDLCALL SDL_GpuDrawIndexedPrimitivesIndirect(
+    SDL_GpuRenderPass *renderPass,
+    SDL_GpuBuffer *buffer,
+    Uint32 offsetInBytes,
+    Uint32 drawCount,
+    Uint32 stride
 );
 
 /**
