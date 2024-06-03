@@ -1026,15 +1026,15 @@ SDL3_0.0.0 {
     SDL_GpuCreateSampler;
     SDL_GpuCreateShader;
     SDL_GpuCreateTexture;
-    SDL_GpuCreateGpuBuffer;
+    SDL_GpuCreateBuffer;
     SDL_GpuCreateTransferBuffer;
     SDL_GpuCreateOcclusionQuery;
-    SDL_GpuSetGpuBufferName;
+    SDL_GpuSetBufferName;
     SDL_GpuSetTextureName;
     SDL_GpuSetStringMarker;
     SDL_GpuReleaseTexture;
     SDL_GpuReleaseSampler;
-    SDL_GpuReleaseGpuBuffer;
+    SDL_GpuReleaseBuffer;
     SDL_GpuReleaseTransferBuffer;
     SDL_GpuReleaseShader;
     SDL_GpuReleaseComputePipeline;

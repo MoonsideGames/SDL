@@ -1220,12 +1220,12 @@ static void D3D11_ReleaseSampler(
 	SDL_free(d3d11Sampler);
 }
 
-static void D3D11_ReleaseGpuBuffer(
+static void D3D11_ReleaseBuffer(
 	SDL_GpuRenderer *driverData,
-	SDL_GpuBuffer *gpuBuffer
+	SDL_GpuBuffer *buffer
 ) {
     D3D11Renderer *renderer = (D3D11Renderer*) driverData;
-	D3D11BufferContainer *container = (D3D11BufferContainer*) gpuBuffer;
+	D3D11BufferContainer *container = (D3D11BufferContainer*) buffer;
 
     SDL_LockMutex(renderer->contextLock);
 
@@ -1715,7 +1715,7 @@ static SDL_GpuGraphicsPipeline* D3D11_CreateGraphicsPipeline(
 
 /* Debug Naming */
 
-static void D3D11_INTERNAL_SetGpuBufferName(
+static void D3D11_INTERNAL_SetBufferName(
 	D3D11Renderer *renderer,
 	D3D11Buffer *buffer,
 	const char *text
@@ -1731,7 +1731,7 @@ static void D3D11_INTERNAL_SetGpuBufferName(
 	}
 }
 
-static void D3D11_SetGpuBufferName(
+static void D3D11_SetBufferName(
 	SDL_GpuRenderer *driverData,
 	SDL_GpuBuffer *buffer,
 	const char *text
@@ -1754,7 +1754,7 @@ static void D3D11_SetGpuBufferName(
 
 		for (Uint32 i = 0; i < container->bufferCount; i += 1)
 		{
-			D3D11_INTERNAL_SetGpuBufferName(
+			D3D11_INTERNAL_SetBufferName(
 				renderer,
 				container->buffers[i],
 				text
@@ -2581,7 +2581,7 @@ static D3D11Buffer* D3D11_INTERNAL_CreateBuffer(
 	return d3d11Buffer;
 }
 
-static SDL_GpuBuffer* D3D11_CreateGpuBuffer(
+static SDL_GpuBuffer* D3D11_CreateBuffer(
 	SDL_GpuRenderer *driverData,
 	SDL_GpuBufferUsageFlags usageFlags,
 	Uint32 sizeInBytes
@@ -2640,7 +2640,7 @@ static SDL_GpuBuffer* D3D11_CreateGpuBuffer(
 
 	if (buffer == NULL)
 	{
-		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to create GpuBuffer!");
+		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to create buffer!");
 		return NULL;
 	}
 
@@ -2739,7 +2739,7 @@ static void D3D11_INTERNAL_CycleActiveBuffer(
 
 	if (renderer->debugMode && container->debugName != NULL)
 	{
-		D3D11_INTERNAL_SetGpuBufferName(
+		D3D11_INTERNAL_SetBufferName(
 			renderer,
 			container->activeBuffer,
 			container->debugName
@@ -2747,7 +2747,7 @@ static void D3D11_INTERNAL_CycleActiveBuffer(
 	}
 }
 
-static D3D11Buffer* D3D11_INTERNAL_PrepareGpuBufferForWrite(
+static D3D11Buffer* D3D11_INTERNAL_PrepareBufferForWrite(
 	D3D11Renderer *renderer,
 	D3D11BufferContainer *container,
 	SDL_bool cycle
@@ -3232,7 +3232,7 @@ static void D3D11_UploadToTexture(
 static void D3D11_UploadToBuffer(
 	SDL_GpuCommandBuffer *commandBuffer,
 	SDL_GpuTransferBuffer *transferBuffer,
-	SDL_GpuBuffer *gpuBuffer,
+	SDL_GpuBuffer *buffer,
 	SDL_GpuBufferCopy *copyParams,
 	SDL_bool cycle
 ) {
@@ -3240,10 +3240,10 @@ static void D3D11_UploadToBuffer(
     D3D11Renderer *renderer = (D3D11Renderer*) d3d11CommandBuffer->renderer;
 	D3D11TransferBufferContainer *transferContainer = (D3D11TransferBufferContainer*) transferBuffer;
 	D3D11TransferBuffer *d3d11TransferBuffer = transferContainer->activeBuffer;
-	D3D11BufferContainer *bufferContainer = (D3D11BufferContainer*) gpuBuffer;
+	D3D11BufferContainer *bufferContainer = (D3D11BufferContainer*) buffer;
 	D3D11_BOX srcBox = { copyParams->srcOffset, 0, 0, copyParams->srcOffset + copyParams->size, 1, 1 };
 
-	D3D11Buffer *d3d11Buffer = D3D11_INTERNAL_PrepareGpuBufferForWrite(
+	D3D11Buffer *d3d11Buffer = D3D11_INTERNAL_PrepareBufferForWrite(
 		renderer,
 		bufferContainer,
 		cycle
@@ -3369,14 +3369,14 @@ static void D3D11_DownloadFromTexture(
 
 static void D3D11_DownloadFromBuffer(
     SDL_GpuCommandBuffer *commandBuffer,
-	SDL_GpuBuffer *gpuBuffer,
+	SDL_GpuBuffer *buffer,
 	SDL_GpuTransferBuffer *transferBuffer,
 	SDL_GpuBufferCopy *copyParams
 ) {
     D3D11CommandBuffer *d3d11CommandBuffer = (D3D11CommandBuffer*) commandBuffer;
 	D3D11TransferBufferContainer *container = (D3D11TransferBufferContainer*) transferBuffer;
 	D3D11TransferBuffer *d3d11TransferBuffer = container->activeBuffer;
-	D3D11BufferContainer *d3d11BufferContainer = (D3D11BufferContainer*) gpuBuffer;
+	D3D11BufferContainer *d3d11BufferContainer = (D3D11BufferContainer*) buffer;
 	D3D11_BOX srcBox = { copyParams->srcOffset, 0, 0, copyParams->size, 1, 1 };
 
 	ID3D11DeviceContext1_CopySubresourceRegion1(
@@ -3451,7 +3451,7 @@ static void D3D11_CopyBufferToBuffer(
 	D3D11_BOX srcBox = { copyParams->srcOffset, 0, 0, copyParams->srcOffset + copyParams->size, 1, 1 };
 
 	D3D11Buffer *srcBuffer = srcBufferContainer->activeBuffer;
-	D3D11Buffer *dstBuffer = D3D11_INTERNAL_PrepareGpuBufferForWrite(
+	D3D11Buffer *dstBuffer = D3D11_INTERNAL_PrepareBufferForWrite(
 		renderer,
 		dstBufferContainer,
 		cycle
@@ -4273,7 +4273,7 @@ static void D3D11_BindVertexBuffers(
 
 	for (Uint32 i = 0; i < bindingCount; i += 1)
 	{
-		D3D11Buffer *currentBuffer = ((D3D11BufferContainer*) pBindings[i].gpuBuffer)->activeBuffer;
+		D3D11Buffer *currentBuffer = ((D3D11BufferContainer*) pBindings[i].buffer)->activeBuffer;
 		bufferHandles[i] = currentBuffer->handle;
 		bufferOffsets[i] = pBindings[i].offset;
 		D3D11_INTERNAL_TrackBuffer(d3d11CommandBuffer, currentBuffer);
@@ -4295,7 +4295,7 @@ static void D3D11_BindIndexBuffer(
 	SDL_GpuIndexElementSize indexElementSize
 ) {
 	D3D11CommandBuffer *d3d11CommandBuffer = (D3D11CommandBuffer*) commandBuffer;
-	D3D11Buffer *d3d11Buffer = ((D3D11BufferContainer*) pBinding->gpuBuffer)->activeBuffer;
+	D3D11Buffer *d3d11Buffer = ((D3D11BufferContainer*) pBinding->buffer)->activeBuffer;
 
 	D3D11_INTERNAL_TrackBuffer(d3d11CommandBuffer, d3d11Buffer);
 
@@ -4908,9 +4908,9 @@ static void D3D11_BeginComputePass(
 
     for (i = 0; i < storageBufferBindingCount; i += 1)
     {
-        bufferContainer = (D3D11BufferContainer*) storageBufferBindings[i].gpuBuffer;
+        bufferContainer = (D3D11BufferContainer*) storageBufferBindings[i].buffer;
 
-        buffer = D3D11_INTERNAL_PrepareGpuBufferForWrite(
+        buffer = D3D11_INTERNAL_PrepareBufferForWrite(
             d3d11CommandBuffer->renderer,
             bufferContainer,
             storageBufferBindings[i].cycle

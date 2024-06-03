@@ -65,7 +65,7 @@ static void shutdownGpu(void)
 
     /* API FIXME: Should we gracefully handle NULL pointers being passed to these functions? */
     if (render_state.buf_vertex) {
-        SDL_GpuReleaseGpuBuffer(gpu_device, render_state.buf_vertex);
+        SDL_GpuReleaseBuffer(gpu_device, render_state.buf_vertex);
     }
     if (render_state.pipeline) {
         SDL_GpuReleaseGraphicsPipeline(gpu_device, render_state.pipeline);
@@ -351,7 +351,7 @@ Render(SDL_Window *window, const int windownum)
 
     /* Set up the bindings */
 
-    vertex_binding.gpuBuffer = render_state.buf_vertex;
+    vertex_binding.buffer = render_state.buf_vertex;
     vertex_binding.offset = 0;
 
     /* Draw the cube! */
@@ -440,7 +440,7 @@ init_render_state(void)
 
     /* Create buffers */
 
-    render_state.buf_vertex = SDL_GpuCreateGpuBuffer(
+    render_state.buf_vertex = SDL_GpuCreateBuffer(
         gpu_device,
         SDL_GPU_BUFFERUSAGE_VERTEX_BIT,
         sizeof(vertex_data)

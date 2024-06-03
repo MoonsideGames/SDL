@@ -237,7 +237,7 @@ struct SDL_GpuDevice
 		SDL_GpuTextureCreateInfo *textureCreateInfo
 	);
 
-	SDL_GpuBuffer* (*CreateGpuBuffer)(
+	SDL_GpuBuffer* (*CreateBuffer)(
 		SDL_GpuRenderer *driverData,
 		SDL_GpuBufferUsageFlags usageFlags,
 		Uint32 sizeInBytes
@@ -256,7 +256,7 @@ struct SDL_GpuDevice
 
 	/* Debug Naming */
 
-	void (*SetGpuBufferName)(
+	void (*SetBufferName)(
 		SDL_GpuRenderer *driverData,
 		SDL_GpuBuffer *buffer,
 		const char *text
@@ -285,9 +285,9 @@ struct SDL_GpuDevice
 		SDL_GpuSampler *sampler
 	);
 
-	void (*ReleaseGpuBuffer)(
+	void (*ReleaseBuffer)(
 		SDL_GpuRenderer *driverData,
-		SDL_GpuBuffer *gpuBuffer
+		SDL_GpuBuffer *buffer
 	);
 
 	void (*ReleaseTransferBuffer)(
@@ -535,7 +535,7 @@ struct SDL_GpuDevice
 	void (*UploadToBuffer)(
 		SDL_GpuCommandBuffer *commandBuffer,
 		SDL_GpuTransferBuffer *transferBuffer,
-		SDL_GpuBuffer *gpuBuffer,
+		SDL_GpuBuffer *buffer,
 		SDL_GpuBufferCopy *copyParams,
 		SDL_bool cycle
 	);
@@ -569,7 +569,7 @@ struct SDL_GpuDevice
 
 	void (*DownloadFromBuffer)(
 		SDL_GpuCommandBuffer *commandBuffer,
-		SDL_GpuBuffer *gpuBuffer,
+		SDL_GpuBuffer *buffer,
 		SDL_GpuTransferBuffer *transferBuffer,
 		SDL_GpuBufferCopy *copyParams
 	);
@@ -722,15 +722,15 @@ struct SDL_GpuDevice
 	ASSIGN_DRIVER_FUNC(CreateSampler, name) \
 	ASSIGN_DRIVER_FUNC(CreateShader, name) \
 	ASSIGN_DRIVER_FUNC(CreateTexture, name) \
-	ASSIGN_DRIVER_FUNC(CreateGpuBuffer, name) \
+	ASSIGN_DRIVER_FUNC(CreateBuffer, name) \
 	ASSIGN_DRIVER_FUNC(CreateTransferBuffer, name) \
     ASSIGN_DRIVER_FUNC(CreateOcclusionQuery, name) \
-	ASSIGN_DRIVER_FUNC(SetGpuBufferName, name) \
+	ASSIGN_DRIVER_FUNC(SetBufferName, name) \
 	ASSIGN_DRIVER_FUNC(SetTextureName, name) \
     ASSIGN_DRIVER_FUNC(SetStringMarker, name) \
 	ASSIGN_DRIVER_FUNC(ReleaseTexture, name) \
 	ASSIGN_DRIVER_FUNC(ReleaseSampler, name) \
-	ASSIGN_DRIVER_FUNC(ReleaseGpuBuffer, name) \
+	ASSIGN_DRIVER_FUNC(ReleaseBuffer, name) \
 	ASSIGN_DRIVER_FUNC(ReleaseTransferBuffer, name) \
 	ASSIGN_DRIVER_FUNC(ReleaseShader, name) \
 	ASSIGN_DRIVER_FUNC(ReleaseComputePipeline, name) \

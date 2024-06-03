@@ -687,12 +687,12 @@ static void METAL_INTERNAL_DestroyBufferContainer(
     SDL_free(container);
 }
 
-static void METAL_ReleaseGpuBuffer(
+static void METAL_ReleaseBuffer(
     SDL_GpuRenderer *driverData,
-    SDL_GpuBuffer *gpuBuffer
+    SDL_GpuBuffer *buffer
 ) {
     MetalRenderer *renderer = (MetalRenderer*) driverData;
-    MetalBufferContainer *container = (MetalBufferContainer*) gpuBuffer;
+    MetalBufferContainer *container = (MetalBufferContainer*) buffer;
 
     SDL_LockMutex(renderer->disposeLock);
 
@@ -929,7 +929,7 @@ static SDL_GpuGraphicsPipeline* METAL_CreateGraphicsPipeline(
 
 /* Debug Naming */
 
-static void METAL_INTERNAL_SetGpuBufferName(
+static void METAL_INTERNAL_SetBufferName(
     MetalRenderer *renderer,
     MetalBuffer *buffer,
     const char *text
@@ -940,7 +940,7 @@ static void METAL_INTERNAL_SetGpuBufferName(
     }
 }
 
-static void METAL_SetGpuBufferName(
+static void METAL_SetBufferName(
     SDL_GpuRenderer *driverData,
     SDL_GpuBuffer *buffer,
     const char *text
@@ -1235,7 +1235,7 @@ static MetalBuffer* METAL_INTERNAL_CreateBuffer(
     return metalBuffer;
 }
 
-static SDL_GpuBuffer* METAL_CreateGpuBuffer(
+static SDL_GpuBuffer* METAL_CreateBuffer(
     SDL_GpuRenderer *driverData,
     SDL_GpuBufferUsageFlags usageFlags,
     Uint32 sizeInBytes
@@ -1251,7 +1251,7 @@ static SDL_GpuBuffer* METAL_CreateGpuBuffer(
 
     if (buffer == NULL)
     {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to create GpuBuffer!");
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to create buffer!");
         return NULL;
     }
 
@@ -1301,7 +1301,7 @@ static void METAL_INTERNAL_CycleActiveBuffer(
 
     if (renderer->debugMode && container->debugName != NULL)
     {
-        METAL_INTERNAL_SetGpuBufferName(
+        METAL_INTERNAL_SetBufferName(
             renderer,
             container->activeBuffer,
             container->debugName
@@ -1520,14 +1520,14 @@ static void METAL_UploadToTexture(
 static void METAL_UploadToBuffer(
     SDL_GpuCommandBuffer *commandBuffer,
     SDL_GpuTransferBuffer *transferBuffer,
-    SDL_GpuBuffer *gpuBuffer,
+    SDL_GpuBuffer *buffer,
     SDL_GpuBufferCopy *copyParams,
     SDL_bool cycle
 ) {
     MetalCommandBuffer *metalCommandBuffer = (MetalCommandBuffer*) commandBuffer;
     MetalRenderer *renderer = metalCommandBuffer->renderer;
     MetalTransferBufferContainer *metalTransferContainer = (MetalTransferBufferContainer*) transferBuffer;
-    MetalBufferContainer *metalBufferContainer = (MetalBufferContainer*) gpuBuffer;
+    MetalBufferContainer *metalBufferContainer = (MetalBufferContainer*) buffer;
 
     MetalBuffer *metalBuffer = METAL_INTERNAL_PrepareBufferForWrite(
             renderer,
@@ -1607,7 +1607,7 @@ static void METAL_DownloadFromTexture(
 
 static void METAL_DownloadFromBuffer(
     SDL_GpuCommandBuffer *commandBuffer,
-    SDL_GpuBuffer *gpuBuffer,
+    SDL_GpuBuffer *buffer,
     SDL_GpuTransferBuffer *transferBuffer,
     SDL_GpuBufferCopy *copyParams
 ) {
@@ -1954,7 +1954,7 @@ static void METAL_BindVertexBuffers(
 
     for (Uint32 i = 0; i < range.length; i += 1)
     {
-        MetalBuffer *currentBuffer = ((MetalBufferContainer*) pBindings[i].gpuBuffer)->activeBuffer;
+        MetalBuffer *currentBuffer = ((MetalBufferContainer*) pBindings[i].buffer)->activeBuffer;
         NSUInteger bindingIndex = range.length - 1 - i;
         metalBuffers[bindingIndex] = currentBuffer->handle;
         bufferOffsets[bindingIndex] = pBindings[i].offset;
@@ -1970,7 +1970,7 @@ static void METAL_BindIndexBuffer(
     SDL_GpuIndexElementSize indexElementSize
 ) {
     MetalCommandBuffer *metalCommandBuffer = (MetalCommandBuffer*) commandBuffer;
-    metalCommandBuffer->indexBuffer = ((MetalBufferContainer*) pBinding->gpuBuffer)->activeBuffer;
+    metalCommandBuffer->indexBuffer = ((MetalBufferContainer*) pBinding->buffer)->activeBuffer;
     metalCommandBuffer->indexBufferOffset = pBinding->offset;
     metalCommandBuffer->indexElementSize = indexElementSize;
 

@@ -2507,7 +2507,7 @@ static Uint8 VULKAN_INTERNAL_BindMemoryForBuffer(
         {
             if (!renderer->outOfDeviceLocalMemoryWarning)
             {
-                SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "Out of device-local memory, allocating GpuBuffers on host-local memory, expect degraded performance!");
+                SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "Out of device-local memory, allocating buffers on host-local memory, expect degraded performance!");
                 renderer->outOfDeviceLocalMemoryWarning = 1;
             }
         }
@@ -5838,7 +5838,7 @@ static void VULKAN_DrawIndexedPrimitivesIndirect(
 
 /* Debug Naming */
 
-static void VULKAN_INTERNAL_SetGpuBufferName(
+static void VULKAN_INTERNAL_SetBufferName(
     VulkanRenderer *renderer,
     VulkanBuffer *buffer,
     const char *text
@@ -5860,7 +5860,7 @@ static void VULKAN_INTERNAL_SetGpuBufferName(
     }
 }
 
-static void VULKAN_SetGpuBufferName(
+static void VULKAN_SetBufferName(
     SDL_GpuRenderer *driverData,
     SDL_GpuBuffer *buffer,
     const char *text
@@ -5883,7 +5883,7 @@ static void VULKAN_SetGpuBufferName(
 
         for (Uint32 i = 0; i < container->bufferCount; i += 1)
         {
-            VULKAN_INTERNAL_SetGpuBufferName(
+            VULKAN_INTERNAL_SetBufferName(
                 renderer,
                 container->bufferHandles[i]->vulkanBuffer,
                 text
@@ -6283,7 +6283,7 @@ static void VULKAN_INTERNAL_CycleActiveBuffer(
         renderer->supportsDebugUtils &&
         bufferContainer->debugName != NULL
     ) {
-        VULKAN_INTERNAL_SetGpuBufferName(
+        VULKAN_INTERNAL_SetBufferName(
             renderer,
             bufferContainer->activeBufferHandle->vulkanBuffer,
             bufferContainer->debugName
@@ -7437,7 +7437,7 @@ static SDL_GpuTexture* VULKAN_CreateTexture(
     return (SDL_GpuTexture*) container;
 }
 
-static SDL_GpuBuffer* VULKAN_CreateGpuBuffer(
+static SDL_GpuBuffer* VULKAN_CreateBuffer(
     SDL_GpuRenderer *driverData,
     SDL_GpuBufferUsageFlags usageFlags,
     Uint32 sizeInBytes
@@ -7610,12 +7610,12 @@ static void VULKAN_INTERNAL_ReleaseBufferContainer(
     SDL_UnlockMutex(renderer->disposeLock);
 }
 
-static void VULKAN_ReleaseGpuBuffer(
+static void VULKAN_ReleaseBuffer(
     SDL_GpuRenderer *driverData,
-    SDL_GpuBuffer *gpuBuffer
+    SDL_GpuBuffer *buffer
 ) {
     VulkanRenderer *renderer = (VulkanRenderer*) driverData;
-    VulkanBufferContainer *vulkanBufferContainer = (VulkanBufferContainer*) gpuBuffer;
+    VulkanBufferContainer *vulkanBufferContainer = (VulkanBufferContainer*) buffer;
 
     VULKAN_INTERNAL_ReleaseBufferContainer(
         renderer,
@@ -8625,7 +8625,7 @@ static void VULKAN_BindVertexBuffers(
 
     for (i = 0; i < bindingCount; i += 1)
     {
-        currentVulkanBuffer = ((VulkanBufferContainer*) pBindings[i].gpuBuffer)->activeBufferHandle->vulkanBuffer;
+        currentVulkanBuffer = ((VulkanBufferContainer*) pBindings[i].buffer)->activeBufferHandle->vulkanBuffer;
         buffers[i] = currentVulkanBuffer->buffer;
         offsets[i] = (VkDeviceSize) pBindings[i].offset;
         VULKAN_INTERNAL_TrackBuffer(renderer, vulkanCommandBuffer, currentVulkanBuffer);
@@ -8650,7 +8650,7 @@ static void VULKAN_BindIndexBuffer(
 ) {
     VulkanCommandBuffer *vulkanCommandBuffer = (VulkanCommandBuffer*) commandBuffer;
     VulkanRenderer *renderer = (VulkanRenderer*) vulkanCommandBuffer->renderer;
-    VulkanBuffer* vulkanBuffer = ((VulkanBufferContainer*) pBinding->gpuBuffer)->activeBufferHandle->vulkanBuffer;
+    VulkanBuffer* vulkanBuffer = ((VulkanBufferContainer*) pBinding->buffer)->activeBufferHandle->vulkanBuffer;
 
     VULKAN_INTERNAL_TrackBuffer(renderer, vulkanCommandBuffer, vulkanBuffer);
 
@@ -8790,7 +8790,7 @@ static void VULKAN_BeginComputePass(
 
     for (i = 0; i < storageBufferBindingCount; i += 1)
     {
-        bufferContainer = (VulkanBufferContainer*) storageBufferBindings[i].gpuBuffer;
+        bufferContainer = (VulkanBufferContainer*) storageBufferBindings[i].buffer;
         buffer = VULKAN_INTERNAL_PrepareBufferForWrite(
             renderer,
             vulkanCommandBuffer,
@@ -9486,14 +9486,14 @@ static void VULKAN_UploadToTexture(
 static void VULKAN_UploadToBuffer(
     SDL_GpuCommandBuffer *commandBuffer,
     SDL_GpuTransferBuffer *transferBuffer,
-    SDL_GpuBuffer *gpuBuffer,
+    SDL_GpuBuffer *buffer,
     SDL_GpuBufferCopy *copyParams,
 	SDL_bool cycle
 ) {
     VulkanCommandBuffer *vulkanCommandBuffer = (VulkanCommandBuffer*) commandBuffer;
     VulkanRenderer *renderer = (VulkanRenderer*) vulkanCommandBuffer->renderer;
     VulkanBufferContainer *transferBufferContainer = (VulkanBufferContainer*) transferBuffer;
-    VulkanBufferContainer *gpuBufferContainer = (VulkanBufferContainer*) gpuBuffer;
+    VulkanBufferContainer *bufferContainer = (VulkanBufferContainer*) buffer;
     VkBufferCopy bufferCopy;
 
     /* Note that the transfer buffer does not need a barrier, as it is synced by the client */
@@ -9501,7 +9501,7 @@ static void VULKAN_UploadToBuffer(
     VulkanBuffer *vulkanBuffer = VULKAN_INTERNAL_PrepareBufferForWrite(
         renderer,
         vulkanCommandBuffer,
-        gpuBufferContainer,
+        bufferContainer,
         cycle,
         VULKAN_BUFFER_USAGE_MODE_COPY_DESTINATION
     );
@@ -9589,13 +9589,13 @@ static void VULKAN_DownloadFromTexture(
 
 static void VULKAN_DownloadFromBuffer(
     SDL_GpuCommandBuffer *commandBuffer,
-    SDL_GpuBuffer *gpuBuffer,
+    SDL_GpuBuffer *buffer,
     SDL_GpuTransferBuffer *transferBuffer,
     SDL_GpuBufferCopy *copyParams
 ) {
     VulkanCommandBuffer *vulkanCommandBuffer = (VulkanCommandBuffer*) commandBuffer;
     VulkanRenderer *renderer = vulkanCommandBuffer->renderer;
-    VulkanBufferContainer *gpuBufferContainer = (VulkanBufferContainer*) gpuBuffer;
+    VulkanBufferContainer *bufferContainer = (VulkanBufferContainer*) buffer;
     VulkanBufferContainer *transferBufferContainer = (VulkanBufferContainer*) transferBuffer;
     VkBufferCopy bufferCopy;
 
@@ -9605,7 +9605,7 @@ static void VULKAN_DownloadFromBuffer(
         renderer,
         vulkanCommandBuffer,
         VULKAN_BUFFER_USAGE_MODE_COPY_SOURCE,
-        gpuBufferContainer->activeBufferHandle->vulkanBuffer
+        bufferContainer->activeBufferHandle->vulkanBuffer
     );
 
     bufferCopy.srcOffset = copyParams->srcOffset;
@@ -9614,7 +9614,7 @@ static void VULKAN_DownloadFromBuffer(
 
     renderer->vkCmdCopyBuffer(
         vulkanCommandBuffer->commandBuffer,
-        gpuBufferContainer->activeBufferHandle->vulkanBuffer->buffer,
+        bufferContainer->activeBufferHandle->vulkanBuffer->buffer,
         transferBufferContainer->activeBufferHandle->vulkanBuffer->buffer,
         1,
         &bufferCopy
@@ -9624,11 +9624,11 @@ static void VULKAN_DownloadFromBuffer(
         renderer,
         vulkanCommandBuffer,
         VULKAN_BUFFER_USAGE_MODE_COPY_SOURCE,
-        gpuBufferContainer->activeBufferHandle->vulkanBuffer
+        bufferContainer->activeBufferHandle->vulkanBuffer
     );
 
     VULKAN_INTERNAL_TrackBuffer(renderer, vulkanCommandBuffer, transferBufferContainer->activeBufferHandle->vulkanBuffer);
-    VULKAN_INTERNAL_TrackBuffer(renderer, vulkanCommandBuffer, gpuBufferContainer->activeBufferHandle->vulkanBuffer);
+    VULKAN_INTERNAL_TrackBuffer(renderer, vulkanCommandBuffer, bufferContainer->activeBufferHandle->vulkanBuffer);
 }
 
 static void VULKAN_CopyTextureToTexture(
@@ -11524,7 +11524,7 @@ static Uint8 VULKAN_INTERNAL_DefragmentMemory(
                 currentRegion->vulkanBuffer->handle->container != NULL &&
                 currentRegion->vulkanBuffer->handle->container->debugName != NULL
             ) {
-                VULKAN_INTERNAL_SetGpuBufferName(
+                VULKAN_INTERNAL_SetBufferName(
                     renderer,
                     newBuffer,
                     currentRegion->vulkanBuffer->handle->container->debugName

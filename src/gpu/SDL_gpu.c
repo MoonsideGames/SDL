@@ -443,13 +443,13 @@ SDL_GpuTexture* SDL_GpuCreateTexture(
 	);
 }
 
-SDL_GpuBuffer* SDL_GpuCreateGpuBuffer(
+SDL_GpuBuffer* SDL_GpuCreateBuffer(
 	SDL_GpuDevice *device,
 	SDL_GpuBufferUsageFlags usageFlags,
 	Uint32 sizeInBytes
 ) {
 	NULL_ASSERT(device)
-	return device->CreateGpuBuffer(
+	return device->CreateBuffer(
 		device->driverData,
 		usageFlags,
 		sizeInBytes
@@ -482,7 +482,7 @@ SDL_GpuOcclusionQuery* SDL_GpuCreateOcclusionQuery(
 
 /* Debug Naming */
 
-void SDL_GpuSetGpuBufferName(
+void SDL_GpuSetBufferName(
 	SDL_GpuDevice *device,
 	SDL_GpuBuffer *buffer,
 	const char *text
@@ -490,7 +490,7 @@ void SDL_GpuSetGpuBufferName(
 	NULL_ASSERT(device)
 	NULL_ASSERT(buffer)
 
-	device->SetGpuBufferName(
+	device->SetBufferName(
 		device->driverData,
 		buffer,
 		text
@@ -547,14 +547,14 @@ void SDL_GpuReleaseSampler(
 	);
 }
 
-void SDL_GpuReleaseGpuBuffer(
+void SDL_GpuReleaseBuffer(
 	SDL_GpuDevice *device,
-	SDL_GpuBuffer *gpuBuffer
+	SDL_GpuBuffer *buffer
 ) {
 	NULL_ASSERT(device);
-	device->ReleaseGpuBuffer(
+	device->ReleaseBuffer(
 		device->driverData,
-		gpuBuffer
+		buffer
 	);
 }
 
@@ -1162,7 +1162,7 @@ void SDL_GpuUploadToTexture(
 void SDL_GpuUploadToBuffer(
     SDL_GpuCopyPass *copyPass,
 	SDL_GpuTransferBuffer *transferBuffer,
-	SDL_GpuBuffer *gpuBuffer,
+	SDL_GpuBuffer *buffer,
 	SDL_GpuBufferCopy *copyParams,
 	SDL_bool cycle
 ) {
@@ -1170,7 +1170,7 @@ void SDL_GpuUploadToBuffer(
 	COPYPASS_DEVICE->UploadToBuffer(
 		COPYPASS_COMMAND_BUFFER,
 		transferBuffer,
-		gpuBuffer,
+		buffer,
 		copyParams,
 		cycle
 	);
@@ -1236,14 +1236,14 @@ void SDL_GpuDownloadFromTexture(
 
 void SDL_GpuDownloadFromBuffer(
 	SDL_GpuCopyPass *copyPass,
-	SDL_GpuBuffer *gpuBuffer,
+	SDL_GpuBuffer *buffer,
 	SDL_GpuTransferBuffer *transferBuffer,
 	SDL_GpuBufferCopy *copyParams
 ) {
 	NULL_ASSERT(copyPass);
 	COPYPASS_DEVICE->DownloadFromBuffer(
 		COPYPASS_COMMAND_BUFFER,
-		gpuBuffer,
+		buffer,
 		transferBuffer,
 		copyParams
 	);

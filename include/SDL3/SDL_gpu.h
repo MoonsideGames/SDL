@@ -754,7 +754,7 @@ typedef struct SDL_GpuDepthStencilAttachmentInfo
 
 typedef struct SDL_GpuBufferBinding
 {
-	SDL_GpuBuffer *gpuBuffer;
+	SDL_GpuBuffer *buffer;
 	Uint32 offset;
 } SDL_GpuBufferBinding;
 
@@ -766,7 +766,7 @@ typedef struct SDL_GpuTextureSamplerBinding
 
 typedef struct SDL_GpuStorageBufferReadWriteBinding
 {
-	SDL_GpuBuffer *gpuBuffer;
+	SDL_GpuBuffer *buffer;
 
     /* if SDL_TRUE, cycles the buffer if it is bound. */
 	SDL_bool cycle;
@@ -950,9 +950,9 @@ extern SDL_DECLSPEC SDL_GpuTexture *SDLCALL SDL_GpuCreateTexture(
  * \sa SDL_GpuBindVertexStorageBuffers
  * \sa SDL_GpuBindFragmentStorageBuffers
  * \sa SDL_GpuBindComputeStorageBuffers
- * \sa SDL_GpuReleaseGpuBuffer
+ * \sa SDL_GpuReleaseBuffer
  */
-extern SDL_DECLSPEC SDL_GpuBuffer *SDLCALL SDL_GpuCreateGpuBuffer(
+extern SDL_DECLSPEC SDL_GpuBuffer *SDLCALL SDL_GpuCreateBuffer(
 	SDL_GpuDevice *device,
 	SDL_GpuBufferUsageFlags usageFlags,
 	Uint32 sizeInBytes
@@ -1010,7 +1010,7 @@ extern SDL_DECLSPEC SDL_GpuOcclusionQuery *SDLCALL SDL_GpuCreateOcclusionQuery(
  *
  * \since This function is available since SDL 3.x.x
  */
-extern SDL_DECLSPEC void SDLCALL SDL_GpuSetGpuBufferName(
+extern SDL_DECLSPEC void SDLCALL SDL_GpuSetBufferName(
 	SDL_GpuDevice *device,
 	SDL_GpuBuffer *buffer,
 	const char *text
@@ -1079,13 +1079,13 @@ extern SDL_DECLSPEC void SDLCALL SDL_GpuReleaseSampler(
  * You must not reference the buffer after calling this function.
  *
  * \param device a GPU context
- * \param gpuBuffer a buffer to be destroyed
+ * \param buffer a buffer to be destroyed
  *
  * \since This function is available since SDL 3.x.x
  */
-extern SDL_DECLSPEC void SDLCALL SDL_GpuReleaseGpuBuffer(
+extern SDL_DECLSPEC void SDLCALL SDL_GpuReleaseBuffer(
 	SDL_GpuDevice *device,
-	SDL_GpuBuffer *gpuBuffer
+	SDL_GpuBuffer *buffer
 );
 
 /**
@@ -1780,7 +1780,7 @@ extern SDL_DECLSPEC void SDLCALL SDL_GpuUploadToTexture(
 	SDL_bool cycle
 );
 
-/* Uploads data from a TransferBuffer to a GpuBuffer. */
+/* Uploads data from a TransferBuffer to a Buffer. */
 
 /**
  * Uploads data from a transfer buffer to a buffer.
@@ -1789,7 +1789,7 @@ extern SDL_DECLSPEC void SDLCALL SDL_GpuUploadToTexture(
  *
  * \param copyPass a copy pass handle
  * \param transferBuffer a transfer buffer
- * \param gpuBuffer a buffer
+ * \param buffer a buffer
  * \param copyParams a struct containing offsets and length
  * \param cycle if SDL_TRUE, cycles the buffer if it is bound, otherwise overwrites the data.
  *
@@ -1798,7 +1798,7 @@ extern SDL_DECLSPEC void SDLCALL SDL_GpuUploadToTexture(
 extern SDL_DECLSPEC void SDLCALL SDL_GpuUploadToBuffer(
 	SDL_GpuCopyPass *copyPass,
 	SDL_GpuTransferBuffer *transferBuffer,
-	SDL_GpuBuffer *gpuBuffer,
+	SDL_GpuBuffer *buffer,
 	SDL_GpuBufferCopy *copyParams,
 	SDL_bool cycle
 );
@@ -1881,7 +1881,7 @@ extern SDL_DECLSPEC void SDLCALL SDL_GpuDownloadFromTexture(
  * This data is not guaranteed to be copied until the command buffer fence is signaled.
  *
  * \param copyPass a copy pass handle
- * \param gpuBuffer the buffer to download
+ * \param buffer the buffer to download
  * \param transferBuffer the transfer buffer to download into
  * \param copyParams a struct containing offsets and length
  *
@@ -1889,7 +1889,7 @@ extern SDL_DECLSPEC void SDLCALL SDL_GpuDownloadFromTexture(
  */
 extern SDL_DECLSPEC void SDLCALL SDL_GpuDownloadFromBuffer(
 	SDL_GpuCopyPass *copyPass,
-	SDL_GpuBuffer *gpuBuffer,
+	SDL_GpuBuffer *buffer,
 	SDL_GpuTransferBuffer *transferBuffer,
 	SDL_GpuBufferCopy *copyParams
 );
