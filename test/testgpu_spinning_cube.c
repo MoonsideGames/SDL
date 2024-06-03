@@ -518,15 +518,15 @@ init_render_state(void)
     pipelinedesc.vertexInputState.vertexAttributeCount = 2;
     pipelinedesc.vertexInputState.vertexAttributes = (SDL_GpuVertexAttribute*) &vertex_attributes;
 
-    pipelinedesc.vertexResourceLayoutInfo.samplerCount = 0;
-    pipelinedesc.vertexResourceLayoutInfo.storageTextureCount = 0;
-    pipelinedesc.vertexResourceLayoutInfo.storageBufferCount = 0;
-    pipelinedesc.vertexResourceLayoutInfo.uniformBufferCount = 1;
+    pipelinedesc.vertexResourceInfo.samplerCount = 0;
+    pipelinedesc.vertexResourceInfo.storageTextureCount = 0;
+    pipelinedesc.vertexResourceInfo.storageBufferCount = 0;
+    pipelinedesc.vertexResourceInfo.uniformBufferCount = 1;
 
-    pipelinedesc.fragmentResourceLayoutInfo.samplerCount = 0;
-    pipelinedesc.fragmentResourceLayoutInfo.storageTextureCount = 0;
-    pipelinedesc.fragmentResourceLayoutInfo.storageBufferCount = 0;
-    pipelinedesc.fragmentResourceLayoutInfo.uniformBufferCount = 0;
+    pipelinedesc.fragmentResourceInfo.samplerCount = 0;
+    pipelinedesc.fragmentResourceInfo.storageTextureCount = 0;
+    pipelinedesc.fragmentResourceInfo.storageBufferCount = 0;
+    pipelinedesc.fragmentResourceInfo.uniformBufferCount = 0;
 
     render_state.pipeline = SDL_GpuCreateGraphicsPipeline(gpu_device, &pipelinedesc);
     CHECK_CREATE(render_state.pipeline, "Render Pipeline")

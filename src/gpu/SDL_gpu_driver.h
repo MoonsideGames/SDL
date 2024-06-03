@@ -224,7 +224,7 @@ struct SDL_GpuDevice
 
 	SDL_GpuSampler* (*CreateSampler)(
 		SDL_GpuRenderer *driverData,
-		SDL_GpuSamplerStateCreateInfo *samplerStateCreateInfo
+		SDL_GpuSamplerCreateInfo *samplerCreateInfo
 	);
 
 	SDL_GpuShader* (*CreateShader)(
@@ -408,7 +408,7 @@ struct SDL_GpuDevice
         Uint32 dataLengthInBytes
     );
 
-	void (*DrawInstancedPrimitives)(
+	void (*DrawIndexedPrimitives)(
 		SDL_GpuCommandBuffer *commandBuffer,
 		Uint32 baseVertex,
 		Uint32 startIndex,
@@ -693,7 +693,7 @@ struct SDL_GpuDevice
 
     SDL_GpuShader* (*CompileFromSPIRVCross)(
         SDL_GpuRenderer *driverData,
-        SDL_GpuShaderStageFlagBits shader_stage,
+        SDL_GpuShaderStage shader_stage,
         const char *entryPointName,
         const char *source
     );
@@ -742,7 +742,7 @@ struct SDL_GpuDevice
     ASSIGN_DRIVER_FUNC(BindFragmentStorageBuffers, name) \
 	ASSIGN_DRIVER_FUNC(PushVertexUniformData, name) \
     ASSIGN_DRIVER_FUNC(PushFragmentUniformData, name) \
-	ASSIGN_DRIVER_FUNC(DrawInstancedPrimitives, name) \
+	ASSIGN_DRIVER_FUNC(DrawIndexedPrimitives, name) \
 	ASSIGN_DRIVER_FUNC(DrawPrimitives, name) \
 	ASSIGN_DRIVER_FUNC(DrawPrimitivesIndirect, name) \
 	ASSIGN_DRIVER_FUNC(EndRenderPass, name) \

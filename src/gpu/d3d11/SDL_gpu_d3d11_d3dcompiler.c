@@ -117,7 +117,7 @@ extern SDL_GpuShader* D3D11_CreateShader(
 
 SDL_GpuShader* D3D11_CompileFromSPIRVCross(
 	SDL_GpuRenderer *driverData,
-	SDL_GpuShaderStageFlagBits shader_stage,
+	SDL_GpuShaderStage shader_stage,
 	const char *entryPointName,
 	const char *source
 ) {

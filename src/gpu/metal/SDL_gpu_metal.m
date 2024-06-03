@@ -978,24 +978,24 @@ static void METAL_SetStringMarker(
 
 static SDL_GpuSampler* METAL_CreateSampler(
     SDL_GpuRenderer *driverData,
-    SDL_GpuSamplerStateCreateInfo *samplerStateCreateInfo
+    SDL_GpuSamplerCreateInfo *samplerCreateInfo
 ) {
     MetalRenderer *renderer = (MetalRenderer*) driverData;
     MTLSamplerDescriptor *samplerDesc = [MTLSamplerDescriptor new];
     id<MTLSamplerState> sampler;
     MetalSampler *metalSampler;
 
-    samplerDesc.rAddressMode = SDLToMetal_SamplerAddressMode[samplerStateCreateInfo->addressModeU];
-    samplerDesc.sAddressMode = SDLToMetal_SamplerAddressMode[samplerStateCreateInfo->addressModeV];
-    samplerDesc.tAddressMode = SDLToMetal_SamplerAddressMode[samplerStateCreateInfo->addressModeW];
-    samplerDesc.borderColor = SDLToMetal_BorderColor[samplerStateCreateInfo->borderColor];
-    samplerDesc.minFilter = SDLToMetal_MinMagFilter[samplerStateCreateInfo->minFilter];
-    samplerDesc.magFilter = SDLToMetal_MinMagFilter[samplerStateCreateInfo->magFilter];
-    samplerDesc.mipFilter = SDLToMetal_MipFilter[samplerStateCreateInfo->mipmapMode]; /* FIXME: Is this right with non-mipmapped samplers? */
-    samplerDesc.lodMinClamp = samplerStateCreateInfo->minLod;
-    samplerDesc.lodMaxClamp = samplerStateCreateInfo->maxLod;
-    samplerDesc.maxAnisotropy = (samplerStateCreateInfo->anisotropyEnable) ? samplerStateCreateInfo->maxAnisotropy : 1;
-    samplerDesc.compareFunction = (samplerStateCreateInfo->compareEnable) ? SDLToMetal_CompareOp[samplerStateCreateInfo->compareOp] : MTLCompareFunctionAlways;
+    samplerDesc.rAddressMode = SDLToMetal_SamplerAddressMode[samplerCreateInfo->addressModeU];
+    samplerDesc.sAddressMode = SDLToMetal_SamplerAddressMode[samplerCreateInfo->addressModeV];
+    samplerDesc.tAddressMode = SDLToMetal_SamplerAddressMode[samplerCreateInfo->addressModeW];
+    samplerDesc.borderColor = SDLToMetal_BorderColor[samplerCreateInfo->borderColor];
+    samplerDesc.minFilter = SDLToMetal_MinMagFilter[samplerCreateInfo->minFilter];
+    samplerDesc.magFilter = SDLToMetal_MinMagFilter[samplerCreateInfo->magFilter];
+    samplerDesc.mipFilter = SDLToMetal_MipFilter[samplerCreateInfo->mipmapMode]; /* FIXME: Is this right with non-mipmapped samplers? */
+    samplerDesc.lodMinClamp = samplerCreateInfo->minLod;
+    samplerDesc.lodMaxClamp = samplerCreateInfo->maxLod;
+    samplerDesc.maxAnisotropy = (samplerCreateInfo->anisotropyEnable) ? samplerCreateInfo->maxAnisotropy : 1;
+    samplerDesc.compareFunction = (samplerCreateInfo->compareEnable) ? SDLToMetal_CompareOp[samplerCreateInfo->compareOp] : MTLCompareFunctionAlways;
 
     sampler = [renderer->device newSamplerStateWithDescriptor:samplerDesc];
     if (sampler == NULL)
@@ -2031,7 +2031,7 @@ static void METAL_BindFragmentStorageBuffers(
     NOT_IMPLEMENTED
 }
 
-static void METAL_DrawInstancedPrimitives(
+static void METAL_DrawIndexedPrimitives(
     SDL_GpuCommandBuffer *commandBuffer,
     Uint32 baseVertex,
     Uint32 startIndex,
@@ -2819,7 +2819,7 @@ static SDL_GpuSampleCount METAL_GetBestSampleCount(
 
 static SDL_GpuShader* METAL_CompileFromSPIRVCross(
     SDL_GpuRenderer *driverData,
-    SDL_GpuShaderStageFlagBits shader_stage,
+    SDL_GpuShaderStage shader_stage,
     const char *entryPointName,
     const char *source
 ) {

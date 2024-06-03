@@ -361,12 +361,12 @@ SDL_GpuGraphicsPipeline* SDL_GpuCreateGraphicsPipeline(
 
 SDL_GpuSampler* SDL_GpuCreateSampler(
 	SDL_GpuDevice *device,
-	SDL_GpuSamplerStateCreateInfo *samplerStateCreateInfo
+	SDL_GpuSamplerCreateInfo *samplerCreateInfo
 ) {
 	NULL_ASSERT(device)
 	return device->CreateSampler(
 		device->driverData,
-		samplerStateCreateInfo
+		samplerCreateInfo
 	);
 }
 
@@ -845,7 +845,7 @@ void SDL_GpuPushFragmentUniformData(
     );
 }
 
-void SDL_GpuDrawInstancedPrimitives(
+void SDL_GpuDrawIndexedPrimitives(
     SDL_GpuRenderPass *renderPass,
 	Uint32 baseVertex,
 	Uint32 startIndex,
@@ -855,7 +855,7 @@ void SDL_GpuDrawInstancedPrimitives(
 	NULL_ASSERT(renderPass)
     CHECK_RENDERPASS
     CHECK_GRAPHICS_PIPELINE_BOUND
-	RENDERPASS_DEVICE->DrawInstancedPrimitives(
+	RENDERPASS_DEVICE->DrawIndexedPrimitives(
 		RENDERPASS_COMMAND_BUFFER,
 		baseVertex,
 		startIndex,

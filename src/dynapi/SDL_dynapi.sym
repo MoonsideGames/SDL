@@ -1054,7 +1054,7 @@ SDL3_0.0.0 {
     SDL_GpuBindFragmentStorageBuffers;
     SDL_GpuPushVertexUniformData;
     SDL_GpuPushFragmentUniformData;
-    SDL_GpuDrawInstancedPrimitives;
+    SDL_GpuDrawIndexedPrimitives;
     SDL_GpuDrawPrimitives;
     SDL_GpuDrawPrimitivesIndirect;
     SDL_GpuEndRenderPass;

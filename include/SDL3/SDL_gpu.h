@@ -186,14 +186,12 @@ typedef enum SDL_GpuTransferBufferMapFlagBits
 
 typedef Uint32 SDL_GpuTransferBufferMapFlags;
 
-typedef enum SDL_GpuShaderStageFlagBits
+typedef enum SDL_GpuShaderStage
 {
-	SDL_GPU_SHADERSTAGE_VERTEX    = 0x00000001,
-	SDL_GPU_SHADERSTAGE_FRAGMENT  = 0x00000002,
-	SDL_GPU_SHADERSTAGE_COMPUTE   = 0x00000004
-} SDL_GpuShaderStageFlagBits;
-
-typedef Uint32 SDL_GpuShaderStageFlags;
+	SDL_GPU_SHADERSTAGE_VERTEX,
+	SDL_GPU_SHADERSTAGE_FRAGMENT,
+	SDL_GPU_SHADERSTAGE_COMPUTE
+} SDL_GpuShaderStage;
 
 typedef enum SDL_GpuShaderFormat
 {
@@ -473,7 +471,7 @@ typedef struct SDL_GpuIndirectDrawCommand
 
 /* State structures */
 
-typedef struct SDL_GpuSamplerStateCreateInfo
+typedef struct SDL_GpuSamplerCreateInfo
 {
 	SDL_GpuFilter minFilter;
 	SDL_GpuFilter magFilter;
@@ -489,7 +487,7 @@ typedef struct SDL_GpuSamplerStateCreateInfo
 	float minLod;
 	float maxLod;
 	SDL_GpuBorderColor borderColor;
-} SDL_GpuSamplerStateCreateInfo;
+} SDL_GpuSamplerCreateInfo;
 
 typedef struct SDL_GpuVertexBinding
 {
@@ -540,7 +538,7 @@ typedef struct SDL_GpuShaderCreateInfo
 	size_t codeSize;
 	const Uint8 *code;
 	const char* entryPointName;
-	SDL_GpuShaderStageFlagBits stage;
+	SDL_GpuShaderStage stage;
 	SDL_GpuShaderFormat format;
 } SDL_GpuShaderCreateInfo;
 
@@ -606,13 +604,13 @@ typedef struct SDL_GpuGraphicsPipelineAttachmentInfo
 	SDL_GpuTextureFormat depthStencilFormat;
 } SDL_GpuGraphicsPipelineAttachmentInfo;
 
-typedef struct SDL_GpuGraphicsPipelineResourceLayoutInfo
+typedef struct SDL_GpuGraphicsPipelineResourceInfo
 {
     Uint32 samplerCount;
     Uint32 storageBufferCount;
     Uint32 storageTextureCount;
     Uint32 uniformBufferCount;
-} SDL_GpuGraphicsPipelineResourceLayoutInfo;
+} SDL_GpuGraphicsPipelineResourceInfo;
 
 typedef struct SDL_GpuGraphicsPipelineCreateInfo
 {
@@ -624,24 +622,24 @@ typedef struct SDL_GpuGraphicsPipelineCreateInfo
 	SDL_GpuMultisampleState multisampleState;
 	SDL_GpuDepthStencilState depthStencilState;
 	SDL_GpuGraphicsPipelineAttachmentInfo attachmentInfo;
-	SDL_GpuGraphicsPipelineResourceLayoutInfo vertexResourceLayoutInfo;
-    SDL_GpuGraphicsPipelineResourceLayoutInfo fragmentResourceLayoutInfo;
+	SDL_GpuGraphicsPipelineResourceInfo vertexResourceInfo;
+    SDL_GpuGraphicsPipelineResourceInfo fragmentResourceInfo;
 	float blendConstants[4];
 } SDL_GpuGraphicsPipelineCreateInfo;
 
-typedef struct SDL_GpuComputePipelineResourceLayoutInfo
+typedef struct SDL_GpuComputePipelineResourceInfo
 {
     Uint32 readOnlyStorageTextureCount;
     Uint32 readOnlyStorageBufferCount;
     Uint32 readWriteStorageTextureCount;
     Uint32 readWriteStorageBufferCount;
     Uint32 uniformBufferCount;
-} SDL_GpuComputePipelineResourceLayoutInfo;
+} SDL_GpuComputePipelineResourceInfo;
 
 typedef struct SDL_GpuComputePipelineCreateInfo
 {
 	SDL_GpuShader *computeShader;
-	SDL_GpuComputePipelineResourceLayoutInfo pipelineResourceLayoutInfo;
+	SDL_GpuComputePipelineResourceInfo pipelineResourceInfo;
 } SDL_GpuComputePipelineCreateInfo;
 
 typedef struct SDL_GpuColorAttachmentInfo
@@ -863,7 +861,7 @@ extern SDL_DECLSPEC SDL_GpuGraphicsPipeline *SDLCALL SDL_GpuCreateGraphicsPipeli
  * Creates a sampler object to be used when binding textures in a graphics workflow.
  *
  * \param device a GPU Context
- * \param samplerStateCreateInfo a struct describing the state of the desired sampler
+ * \param samplerCreateInfo a struct describing the state of the desired sampler
  * \returns a sampler object on success, or NULL on failure
  *
  * \since This function is available since SDL 3.x.x
@@ -874,7 +872,7 @@ extern SDL_DECLSPEC SDL_GpuGraphicsPipeline *SDLCALL SDL_GpuCreateGraphicsPipeli
  */
 extern SDL_DECLSPEC SDL_GpuSampler *SDLCALL SDL_GpuCreateSampler(
 	SDL_GpuDevice *device,
-	SDL_GpuSamplerStateCreateInfo *samplerStateCreateInfo
+	SDL_GpuSamplerCreateInfo *samplerCreateInfo
 );
 
 /**
@@ -1447,7 +1445,7 @@ extern SDL_DECLSPEC void SDLCALL SDL_GpuPushFragmentUniformData(
  *
  * \since This function is available since SDL 3.x.x
  */
-extern SDL_DECLSPEC void SDLCALL SDL_GpuDrawInstancedPrimitives(
+extern SDL_DECLSPEC void SDLCALL SDL_GpuDrawIndexedPrimitives(
 	SDL_GpuRenderPass *renderPass,
 	Uint32 baseVertex,
 	Uint32 startIndex,
