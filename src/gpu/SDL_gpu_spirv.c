@@ -26,9 +26,9 @@
 #if defined(_WIN32)
 #define SPIRV_CROSS_DLL "spirv-cross-c-shared.dll"
 #elif defined(__APPLE__)
-#define SPIRV_CROSS_DLL "libspirv-cross-c-shared.dylib"
+#define SPIRV_CROSS_DLL "libspirv-cross-c-shared.0.dylib"
 #else
-#define SPIRV_CROSS_DLL "libspirv-cross-c-shared.so"
+#define SPIRV_CROSS_DLL "libspirv-cross-c-shared.so.0"
 #endif
 
 #define SPVC_ERROR(func) \
