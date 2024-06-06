@@ -525,6 +525,7 @@ struct VulkanTexture
     Uint8 is3D;
     Uint8 isCube;
     Uint8 isRenderTarget;
+    Uint8 isMSAAColorTarget;
 
     Uint32 depth;
     Uint32 layerCount;
@@ -5449,6 +5450,7 @@ static VulkanTexture *VULKAN_INTERNAL_CreateTexture(
     texture->isCube = 0;
     texture->is3D = 0;
     texture->isRenderTarget = isRenderTarget;
+    texture->isMSAAColorTarget = isMSAAColorTarget;
     texture->markedForDestroy = 0;
 
     if (isCube) {
@@ -10396,7 +10398,7 @@ static Uint8 VULKAN_INTERNAL_DefragmentMemory(
                 currentRegion->vulkanTexture->swizzle,
                 currentRegion->vulkanTexture->aspectFlags,
                 currentRegion->vulkanTexture->usageFlags,
-                SDL_FALSE);
+                currentRegion->vulkanTexture->isMSAAColorTarget);
 
             if (newTexture == NULL) {
                 SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to create defrag texture!");
