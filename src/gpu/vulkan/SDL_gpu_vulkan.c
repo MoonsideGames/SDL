@@ -10296,6 +10296,10 @@ static Uint8 VULKAN_INTERNAL_DefragmentMemory(
     renderer->defragInProgress = 1;
 
     commandBuffer = (VulkanCommandBuffer *)VULKAN_AcquireCommandBuffer((SDL_GpuRenderer *)renderer);
+    if (commandBuffer == NULL) {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to create defrag command buffer!");
+        return 0;
+    }
     commandBuffer->isDefrag = 1;
 
     allocation = renderer->allocationsToDefrag[renderer->allocationsToDefragCount - 1];
