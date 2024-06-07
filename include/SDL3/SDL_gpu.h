@@ -189,8 +189,7 @@ typedef Uint32 SDL_GpuTransferBufferMapFlags;
 typedef enum SDL_GpuShaderStage
 {
     SDL_GPU_SHADERSTAGE_VERTEX,
-    SDL_GPU_SHADERSTAGE_FRAGMENT,
-    SDL_GPU_SHADERSTAGE_COMPUTE
+    SDL_GPU_SHADERSTAGE_FRAGMENT
 } SDL_GpuShaderStage;
 
 typedef enum SDL_GpuShaderFormat
@@ -549,6 +548,10 @@ typedef struct SDL_GpuShaderCreateInfo
     const char *entryPointName;
     SDL_GpuShaderStage stage;
     SDL_GpuShaderFormat format;
+    Uint32 samplerCount;
+    Uint32 storageTextureCount;
+    Uint32 storageBufferCount;
+    Uint32 uniformBufferCount;
 } SDL_GpuShaderCreateInfo;
 
 typedef struct SDL_GpuTextureCreateInfo
@@ -613,14 +616,6 @@ typedef struct SDL_GpuGraphicsPipelineAttachmentInfo
     SDL_GpuTextureFormat depthStencilFormat;
 } SDL_GpuGraphicsPipelineAttachmentInfo;
 
-typedef struct SDL_GpuGraphicsPipelineResourceInfo
-{
-    Uint32 samplerCount;
-    Uint32 storageTextureCount;
-    Uint32 storageBufferCount;
-    Uint32 uniformBufferCount;
-} SDL_GpuGraphicsPipelineResourceInfo;
-
 typedef struct SDL_GpuGraphicsPipelineCreateInfo
 {
     SDL_GpuShader *vertexShader;
@@ -631,24 +626,23 @@ typedef struct SDL_GpuGraphicsPipelineCreateInfo
     SDL_GpuMultisampleState multisampleState;
     SDL_GpuDepthStencilState depthStencilState;
     SDL_GpuGraphicsPipelineAttachmentInfo attachmentInfo;
-    SDL_GpuGraphicsPipelineResourceInfo vertexResourceInfo;
-    SDL_GpuGraphicsPipelineResourceInfo fragmentResourceInfo;
     float blendConstants[4];
 } SDL_GpuGraphicsPipelineCreateInfo;
 
-typedef struct SDL_GpuComputePipelineResourceInfo
+typedef struct SDL_GpuComputePipelineCreateInfo
 {
+    size_t codeSize;
+    const Uint8 *code;
+    const char *entryPointName;
+    SDL_GpuShaderFormat format;
     Uint32 readOnlyStorageTextureCount;
     Uint32 readOnlyStorageBufferCount;
     Uint32 readWriteStorageTextureCount;
     Uint32 readWriteStorageBufferCount;
     Uint32 uniformBufferCount;
-} SDL_GpuComputePipelineResourceInfo;
-
-typedef struct SDL_GpuComputePipelineCreateInfo
-{
-    SDL_GpuShader *computeShader;
-    SDL_GpuComputePipelineResourceInfo pipelineResourceInfo;
+    Uint32 threadCountX;
+    Uint32 threadCountY;
+    Uint32 threadCountZ;
 } SDL_GpuComputePipelineCreateInfo;
 
 typedef struct SDL_GpuColorAttachmentInfo
@@ -838,7 +832,6 @@ extern SDL_DECLSPEC SDL_GpuBackend SDLCALL SDL_GpuGetBackend(SDL_GpuDevice *devi
  *
  * \since This function is available since SDL 3.x.x
  *
- * \sa SDL_GpuCreateShader
  * \sa SDL_GpuBindComputePipeline
  * \sa SDL_GpuReleaseComputePipeline
  */
@@ -881,7 +874,7 @@ extern SDL_DECLSPEC SDL_GpuSampler *SDLCALL SDL_GpuCreateSampler(
     SDL_GpuSamplerCreateInfo *samplerCreateInfo);
 
 /**
- * Creates a shader to be used when creating a graphics or compute pipeline.
+ * Creates a shader to be used when creating a graphics pipeline.
  *
  * \param device a GPU Context
  * \param shaderCreateInfo a struct describing the state of the desired shader
@@ -890,7 +883,6 @@ extern SDL_DECLSPEC SDL_GpuSampler *SDLCALL SDL_GpuCreateSampler(
  * \since This function is available since SDL 3.x.x
  *
  * \sa SDL_GpuCreateGraphicsPipeline
- * \sa SDL_GpuCreateComputePipeline
  * \sa SDL_GpuReleaseShader
  */
 extern SDL_DECLSPEC SDL_GpuShader *SDLCALL SDL_GpuCreateShader(
@@ -1087,19 +1079,6 @@ extern SDL_DECLSPEC void SDLCALL SDL_GpuReleaseTransferBuffer(
     SDL_GpuTransferBuffer *transferBuffer);
 
 /**
- * Frees the given shader as soon as it is safe to do so.
- * You must not reference the shader after calling this function.
- *
- * \param device a GPU context
- * \param shader a shader to be destroyed
- *
- * \since This function is available since SDL 3.x.x
- */
-extern SDL_DECLSPEC void SDLCALL SDL_GpuReleaseShader(
-    SDL_GpuDevice *device,
-    SDL_GpuShader *shader);
-
-/**
  * Frees the given compute pipeline as soon as it is safe to do so.
  * You must not reference the compute pipeline after calling this function.
  *
@@ -1111,6 +1090,19 @@ extern SDL_DECLSPEC void SDLCALL SDL_GpuReleaseShader(
 extern SDL_DECLSPEC void SDLCALL SDL_GpuReleaseComputePipeline(
     SDL_GpuDevice *device,
     SDL_GpuComputePipeline *computePipeline);
+
+/**
+ * Frees the given shader as soon as it is safe to do so.
+ * You must not reference the shader after calling this function.
+ *
+ * \param device a GPU context
+ * \param shader a shader to be destroyed
+ *
+ * \since This function is available since SDL 3.x.x
+ */
+extern SDL_DECLSPEC void SDLCALL SDL_GpuReleaseShader(
+    SDL_GpuDevice *device,
+    SDL_GpuShader *shader);
 
 /**
  * Frees the given graphics pipeline as soon as it is safe to do so.
@@ -1539,7 +1531,7 @@ extern SDL_DECLSPEC void SDLCALL SDL_GpuBindComputePipeline(
     SDL_GpuComputePipeline *computePipeline);
 
 /**
- * Binds storage textures as readonly for use on the compute shader.
+ * Binds storage textures as readonly for use on the compute pipeline.
  * These textures must have been created with SDL_GPU_TEXTUREUSAGE_COMPUTE_STORAGE_READ_BIT.
  *
  * \param computePass a compute pass handle
@@ -1556,7 +1548,7 @@ extern SDL_DECLSPEC void SDLCALL SDL_GpuBindComputeStorageTextures(
     Uint32 bindingCount);
 
 /**
- * Binds storage buffers as readonly for use on the compute shader.
+ * Binds storage buffers as readonly for use on the compute pipeline.
  * These buffers must have been created with SDL_GPU_BUFFERUSAGE_COMPUTE_STORAGE_READ_BIT.
  *
  * \param computePass a compute pass handle
