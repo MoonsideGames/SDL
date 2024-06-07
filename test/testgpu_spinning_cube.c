@@ -373,6 +373,10 @@ static SDL_GpuShader*
 load_shader(SDL_bool is_vertex)
 {
     SDL_GpuShaderCreateInfo createinfo;
+    createinfo.samplerCount = 0;
+    createinfo.storageBufferCount = 0;
+    createinfo.storageTextureCount = 0;
+    createinfo.uniformBufferCount = is_vertex ? 1 : 0;
 
 #if !FORCE_SPIRV_CROSS
     SDL_GpuBackend backend = SDL_GpuGetBackend(gpu_device);
@@ -519,16 +523,6 @@ init_render_state(void)
     pipelinedesc.vertexInputState.vertexBindings = &vertex_binding;
     pipelinedesc.vertexInputState.vertexAttributeCount = 2;
     pipelinedesc.vertexInputState.vertexAttributes = (SDL_GpuVertexAttribute*) &vertex_attributes;
-
-    pipelinedesc.vertexResourceInfo.samplerCount = 0;
-    pipelinedesc.vertexResourceInfo.storageTextureCount = 0;
-    pipelinedesc.vertexResourceInfo.storageBufferCount = 0;
-    pipelinedesc.vertexResourceInfo.uniformBufferCount = 1;
-
-    pipelinedesc.fragmentResourceInfo.samplerCount = 0;
-    pipelinedesc.fragmentResourceInfo.storageTextureCount = 0;
-    pipelinedesc.fragmentResourceInfo.storageBufferCount = 0;
-    pipelinedesc.fragmentResourceInfo.uniformBufferCount = 0;
 
     render_state.pipeline = SDL_GpuCreateGraphicsPipeline(gpu_device, &pipelinedesc);
     CHECK_CREATE(render_state.pipeline, "Render Pipeline")
