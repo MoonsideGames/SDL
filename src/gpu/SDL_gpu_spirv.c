@@ -70,7 +70,6 @@ static int SDL_TranslateShaderFromSPIRV(
     const char **out_translated_source,
     spvc_context *out_context)
 {
-    SDL_GpuShader *shader;
     spvc_result result;
     spvc_backend backend;
     spvc_context context = NULL;
@@ -207,7 +206,7 @@ SDL_GpuShader *SDL_CreateShaderFromSPIRV(SDL_GpuDevice *device, SDL_GpuShaderCre
     /* Copy the original create info, but with the new source code */
     newCreateInfo = *createInfo;
     newCreateInfo.format = shader_format;
-    newCreateInfo.code = translated_source;
+    newCreateInfo.code = (const Uint8 *)translated_source;
     newCreateInfo.codeSize = SDL_strlen(translated_source) + 1;
     newCreateInfo.entryPointName = cleansed_entrypoint;
 
@@ -247,7 +246,7 @@ SDL_GpuComputePipeline* SDL_CreateComputePipelineFromSPIRV(
     /* Copy the original create info, but with the new source code */
     newCreateInfo = *createInfo;
     newCreateInfo.format = shader_format;
-    newCreateInfo.code = translated_source;
+    newCreateInfo.code = (const Uint8 *)translated_source;
     newCreateInfo.codeSize = SDL_strlen(translated_source) + 1;
     newCreateInfo.entryPointName = cleansed_entrypoint;
 
