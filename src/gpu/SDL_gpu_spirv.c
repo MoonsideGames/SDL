@@ -60,7 +60,15 @@ static pfn_spvc_context_get_last_error_string SDL_spvc_context_get_last_error_st
 static pfn_spvc_compiler_get_execution_model SDL_spvc_compiler_get_execution_model = NULL;
 static pfn_spvc_compiler_get_cleansed_entry_point_name SDL_spvc_compiler_get_cleansed_entry_point_name = NULL;
 
-SDL_GpuShader *SDL_CreateShaderFromSPIRV(SDL_GpuDevice *device, SDL_GpuShaderCreateInfo *createInfo)
+static int SDL_TranslateShaderFromSPIRV(
+    SDL_GpuDevice* device,
+    const Uint8* code,
+    size_t codesize,
+    const char *original_entrypoint,
+    SDL_GpuShaderFormat *out_shader_format,
+    const char **out_cleansed_entrypoint,
+    const char **out_translated_source,
+    spvc_context *out_context)
 {
     SDL_GpuShader *shader;
     spvc_result result;
@@ -69,26 +77,26 @@ SDL_GpuShader *SDL_CreateShaderFromSPIRV(SDL_GpuDevice *device, SDL_GpuShaderCre
     spvc_parsed_ir ir = NULL;
     spvc_compiler compiler = NULL;
     spvc_compiler_options options = NULL;
-    const char *cleansed_entrypoint = NULL;
-    const char *translated = NULL;
 
     switch (SDL_GpuGetBackend(device)) {
     case SDL_GPU_BACKEND_D3D11:
         backend = SPVC_BACKEND_HLSL;
+        *out_shader_format = SDL_GPU_SHADERFORMAT_HLSL;
         break;
     case SDL_GPU_BACKEND_METAL:
         backend = SPVC_BACKEND_MSL;
+        *out_shader_format = SDL_GPU_SHADERFORMAT_MSL;
         break;
     default:
         SDL_SetError("SDL_CreateShaderFromSPIRV: Unexpected SDL_GpuBackend");
-        return NULL;
+        return -1;
     }
 
     /* FIXME: spirv-cross could probably be loaded in a better spot */
     if (spirvcross_dll == NULL) {
         spirvcross_dll = SDL_LoadObject(SPIRV_CROSS_DLL);
         if (spirvcross_dll == NULL) {
-            return NULL;
+            return -1;
         }
     }
 
@@ -96,7 +104,7 @@ SDL_GpuShader *SDL_CreateShaderFromSPIRV(SDL_GpuDevice *device, SDL_GpuShaderCre
     if (SDL_##func == NULL) {                                             \
         SDL_##func = (pfn_##func)SDL_LoadFunction(spirvcross_dll, #func); \
         if (SDL_##func == NULL) {                                         \
-            return NULL;                                                  \
+            return -1;                                                    \
         }                                                                 \
     }
     CHECK_FUNC(spvc_context_create)
@@ -116,15 +124,15 @@ SDL_GpuShader *SDL_CreateShaderFromSPIRV(SDL_GpuDevice *device, SDL_GpuShaderCre
     result = SDL_spvc_context_create(&context);
     if (result < 0) {
         SDL_SetError("spvc_context_create failed: %X", result);
-        return NULL;
+        return -1;
     }
 
     /* Parse the SPIR-V into IR */
-    result = SDL_spvc_context_parse_spirv(context, (const SpvId *)createInfo->code, createInfo->codeSize / sizeof(SpvId), &ir);
+    result = SDL_spvc_context_parse_spirv(context, (const SpvId *)code, codesize / sizeof(SpvId), &ir);
     if (result < 0) {
         SPVC_ERROR(spvc_context_parse_spirv);
         SDL_spvc_context_destroy(context);
-        return NULL;
+        return -1;
     }
 
     /* Create the cross-compiler */
@@ -132,7 +140,7 @@ SDL_GpuShader *SDL_CreateShaderFromSPIRV(SDL_GpuDevice *device, SDL_GpuShaderCre
     if (result < 0) {
         SPVC_ERROR(spvc_context_create_compiler);
         SDL_spvc_context_destroy(context);
-        return NULL;
+        return -1;
     }
 
     /* Set up the cross-compiler options */
@@ -140,7 +148,7 @@ SDL_GpuShader *SDL_CreateShaderFromSPIRV(SDL_GpuDevice *device, SDL_GpuShaderCre
     if (result < 0) {
         SPVC_ERROR(spvc_compiler_create_compiler_options);
         SDL_spvc_context_destroy(context);
-        return NULL;
+        return -1;
     }
 
     if (backend == SPVC_BACKEND_HLSL) {
@@ -152,28 +160,102 @@ SDL_GpuShader *SDL_CreateShaderFromSPIRV(SDL_GpuDevice *device, SDL_GpuShaderCre
     if (result < 0) {
         SPVC_ERROR(spvc_compiler_install_compiler_options);
         SDL_spvc_context_destroy(context);
-        return NULL;
+        return -1;
     }
 
     /* Compile to the target shader language */
-    result = SDL_spvc_compiler_compile(compiler, &translated);
+    result = SDL_spvc_compiler_compile(compiler, out_translated_source);
     if (result < 0) {
         SPVC_ERROR(spvc_compiler_compile);
         SDL_spvc_context_destroy(context);
-        return NULL;
+        return -1;
     }
 
     /* Determine the "cleansed" entrypoint name (e.g. main -> main0 on MSL) */
-    cleansed_entrypoint = SDL_spvc_compiler_get_cleansed_entry_point_name(
+    *out_cleansed_entrypoint = SDL_spvc_compiler_get_cleansed_entry_point_name(
         compiler,
-        createInfo->entryPointName,
+        original_entrypoint,
         SDL_spvc_compiler_get_execution_model(compiler));
 
-    /* Compile the shader */
-    shader = device->CompileFromSPIRVCross(device->driverData, createInfo->stage, cleansed_entrypoint, translated);
+    *out_context = context;
+
+    return 0;
+}
+
+SDL_GpuShader *SDL_CreateShaderFromSPIRV(SDL_GpuDevice *device, SDL_GpuShaderCreateInfo *createInfo)
+{
+    SDL_GpuShaderFormat shader_format;
+    const char *cleansed_entrypoint;
+    const char *translated_source;
+    spvc_context context;
+    SDL_GpuShaderCreateInfo newCreateInfo;
+    SDL_GpuShader *shader;
+
+    int result = SDL_TranslateShaderFromSPIRV(
+        device,
+        createInfo->code,
+        createInfo->codeSize,
+        createInfo->entryPointName,
+        &shader_format,
+        &cleansed_entrypoint,
+        &translated_source,
+        &context);
+    if (result < 0) {
+        return NULL;
+    }
+
+    /* Copy the original create info, but with the new source code */
+    newCreateInfo = *createInfo;
+    newCreateInfo.format = shader_format;
+    newCreateInfo.code = translated_source;
+    newCreateInfo.codeSize = SDL_strlen(translated_source) + 1;
+    newCreateInfo.entryPointName = cleansed_entrypoint;
+
+    /* Create the shader! */
+    shader = SDL_GpuCreateShader(device, &newCreateInfo);
 
     /* Clean up */
     SDL_spvc_context_destroy(context);
 
     return shader;
+}
+
+SDL_GpuComputePipeline* SDL_CreateComputePipelineFromSPIRV(
+    SDL_GpuDevice* device,
+    SDL_GpuComputePipelineCreateInfo* createInfo)
+{
+    SDL_GpuShaderFormat shader_format;
+    const char *cleansed_entrypoint;
+    const char *translated_source;
+    spvc_context context;
+    SDL_GpuComputePipelineCreateInfo newCreateInfo;
+    SDL_GpuComputePipeline *pipeline;
+
+    int result = SDL_TranslateShaderFromSPIRV(
+        device,
+        createInfo->code,
+        createInfo->codeSize,
+        createInfo->entryPointName,
+        &shader_format,
+        &cleansed_entrypoint,
+        &translated_source,
+        &context);
+    if (result < 0) {
+        return NULL;
+    }
+
+    /* Copy the original create info, but with the new source code */
+    newCreateInfo = *createInfo;
+    newCreateInfo.format = shader_format;
+    newCreateInfo.code = translated_source;
+    newCreateInfo.codeSize = SDL_strlen(translated_source) + 1;
+    newCreateInfo.entryPointName = cleansed_entrypoint;
+
+    /* Create the pipeline! */
+    pipeline = SDL_GpuCreateComputePipeline(device, &newCreateInfo);
+
+    /* Clean up */
+    SDL_spvc_context_destroy(context);
+
+    return pipeline;
 }
