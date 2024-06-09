@@ -287,6 +287,12 @@ SDL_GpuComputePipeline *SDL_GpuCreateComputePipeline(
     SDL_GpuComputePipelineCreateInfo *computePipelineCreateInfo)
 {
     NULL_ASSERT(device)
+    if (computePipelineCreateInfo->threadCountX == 0 ||
+        computePipelineCreateInfo->threadCountY == 0 ||
+        computePipelineCreateInfo->threadCountZ == 0) {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "All ComputePipeline threadCount dimensions must be at least 1!");
+        return NULL;
+    }
     if (computePipelineCreateInfo->format == SDL_GPU_SHADERFORMAT_SPIRV &&
         device->backend != SDL_GPU_BACKEND_VULKAN) {
         return SDL_CompileFromSPIRV(device, computePipelineCreateInfo, SDL_TRUE);
