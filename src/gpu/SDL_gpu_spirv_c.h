@@ -20,9 +20,6 @@
 */
 #include "SDL_internal.h"
 
-extern SDL_GpuShader *SDL_CreateShaderFromSPIRV(SDL_GpuDevice *device,
-                                                SDL_GpuShaderCreateInfo *createInfo);
-
-extern SDL_GpuComputePipeline *SDL_CreateComputePipelineFromSPIRV(
-                                                SDL_GpuDevice *device,
-                                                SDL_GpuComputePipelineCreateInfo *createInfo);
+extern void* SDL_CompileFromSPIRV(SDL_GpuDevice *device,
+                                  void *createInfo,
+                                  SDL_bool isCompute);

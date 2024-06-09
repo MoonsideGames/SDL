@@ -289,7 +289,7 @@ SDL_GpuComputePipeline *SDL_GpuCreateComputePipeline(
     NULL_ASSERT(device)
     if (computePipelineCreateInfo->format == SDL_GPU_SHADERFORMAT_SPIRV &&
         device->backend != SDL_GPU_BACKEND_VULKAN) {
-        return SDL_CreateComputePipelineFromSPIRV(device, computePipelineCreateInfo);
+        return SDL_CompileFromSPIRV(device, computePipelineCreateInfo, SDL_TRUE);
     }
     return device->CreateComputePipeline(
         device->driverData,
@@ -363,7 +363,7 @@ SDL_GpuShader *SDL_GpuCreateShader(
     NULL_ASSERT(device)
     if (shaderCreateInfo->format == SDL_GPU_SHADERFORMAT_SPIRV &&
         device->backend != SDL_GPU_BACKEND_VULKAN) {
-        return SDL_CreateShaderFromSPIRV(device, shaderCreateInfo);
+        return SDL_CompileFromSPIRV(device, shaderCreateInfo, SDL_FALSE);
     }
     return device->CreateShader(
         device->driverData,

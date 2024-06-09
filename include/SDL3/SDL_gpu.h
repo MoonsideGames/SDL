@@ -547,8 +547,8 @@ typedef struct SDL_GpuShaderCreateInfo
     size_t codeSize;
     const Uint8 *code;
     const char *entryPointName;
-    SDL_GpuShaderStage stage;
     SDL_GpuShaderFormat format;
+    SDL_GpuShaderStage stage;
     Uint32 samplerCount;
     Uint32 storageTextureCount;
     Uint32 storageBufferCount;
