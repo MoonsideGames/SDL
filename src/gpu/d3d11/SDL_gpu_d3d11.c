@@ -611,7 +611,6 @@ typedef struct D3D11TextureTransfer
     Uint32 downloadDepth;
     Uint32 downloadBytesPerRow;
     Uint32 downloadBytesPerDepthSlice;
-    SDL_bool downloadTightlyPacked;
 } D3D11TextureTransfer;
 
 typedef struct D3D11TransferBuffer
@@ -2862,26 +2861,19 @@ static void D3D11_GetTransferData(
         dataPtr = (Uint8 *)data;
         dataPtrOffset = copyParams->dstOffset;
 
-        if (buffer->textureTransfer.downloadTightlyPacked) {
-            SDL_memcpy(
-                dataPtr + dataPtrOffset,
-                (Uint8 *)subresource.pData + copyParams->srcOffset,
-                SDL_min(copyParams->size, buffer->textureTransfer.downloadDepth * buffer->textureTransfer.downloadHeight * buffer->textureTransfer.downloadBytesPerRow));
-        } else {
-            for (depth = 0; depth < buffer->textureTransfer.downloadDepth; depth += 1) {
-                for (row = 0; row < buffer->textureTransfer.downloadHeight; row += 1) {
-                    copySize = SDL_min(copyParams->size - dataPtrOffset, buffer->textureTransfer.downloadBytesPerRow);
+        for (depth = 0; depth < buffer->textureTransfer.downloadDepth; depth += 1) {
+            for (row = 0; row < buffer->textureTransfer.downloadHeight; row += 1) {
+                copySize = SDL_min(copyParams->size - dataPtrOffset, buffer->textureTransfer.downloadBytesPerRow);
 
-                    if (copySize == 0) {
-                        goto unmap;
-                    }
-
-                    SDL_memcpy(
-                        dataPtr + dataPtrOffset,
-                        (Uint8 *)subresource.pData + copyParams->srcOffset + (depth * buffer->textureTransfer.downloadBytesPerDepthSlice) + (row * buffer->textureTransfer.downloadBytesPerRow),
-                        copySize);
-                    dataPtrOffset += copySize;
+                if (copySize == 0) {
+                    goto unmap;
                 }
+
+                SDL_memcpy(
+                    dataPtr + dataPtrOffset,
+                    (Uint8 *)subresource.pData + copyParams->srcOffset + (depth * subresource.DepthPitch) + (row * subresource.RowPitch),
+                    copySize);
+                dataPtrOffset += copySize;
             }
         }
 
@@ -3117,7 +3109,6 @@ static void D3D11_DownloadFromTexture(
     d3d11TransferBuffer->textureTransfer.downloadDepth = textureRegion->d;
     d3d11TransferBuffer->textureTransfer.downloadBytesPerRow = bytesPerRow;
     d3d11TransferBuffer->textureTransfer.downloadBytesPerDepthSlice = bytesPerDepthSlice;
-    d3d11TransferBuffer->textureTransfer.downloadTightlyPacked = textureRegion->w == bufferStride && textureRegion->h == bufferImageHeight;
 
     ID3D11DeviceContext1_CopySubresourceRegion1(
         d3d11CommandBuffer->context,
