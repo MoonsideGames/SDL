@@ -2279,17 +2279,12 @@ static void METAL_INTERNAL_PushUniformData(
             setFragmentBuffer:metalUniformBuffer->container->activeBuffer->handle
                        offset:drawOffset
                       atIndex:slotIndex];
-    }
-#if 0 // FIXME
-    else if (shaderStage == SDL_GPU_SHADERSTAGE_COMPUTE)
-    {
+    } else if (shaderStage == SDL_GPU_SHADERSTAGE_COMPUTE) {
         [metalCommandBuffer->computeEncoder
             setBuffer:metalUniformBuffer->container->activeBuffer->handle
-            offset:drawOffset
-            atIndex:slotIndex];
-    }
-#endif
-    else {
+               offset:drawOffset
+              atIndex:slotIndex];
+    } else {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Unrecognized shader stage!");
     }
 }
@@ -2596,7 +2591,19 @@ static void METAL_PushComputeUniformData(
     void *data,
     Uint32 dataLengthInBytes)
 {
-    NOT_IMPLEMENTED
+    MetalCommandBuffer *metalCommandBuffer = (MetalCommandBuffer *)commandBuffer;
+
+    if (slotIndex >= metalCommandBuffer->computePipeline->uniformBufferCount) {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "No compute uniforms exist on slot %i for this pipeline", slotIndex);
+        return;
+    }
+
+    METAL_INTERNAL_PushUniformData(
+        metalCommandBuffer,
+        SDL_GPU_SHADERSTAGE_COMPUTE,
+        slotIndex,
+        data,
+        dataLengthInBytes);
 }
 
 static void METAL_DispatchCompute(
