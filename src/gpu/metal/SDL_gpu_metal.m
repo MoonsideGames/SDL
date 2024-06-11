@@ -2573,7 +2573,21 @@ static void METAL_BindComputeStorageTextures(
     SDL_GpuTextureSlice *storageTextureSlices,
     Uint32 bindingCount)
 {
-    NOT_IMPLEMENTED
+    MetalCommandBuffer *metalCommandBuffer = (MetalCommandBuffer *)commandBuffer;
+    MetalTextureContainer *textureContainer;
+
+    for (Uint32 i = 0; i < bindingCount; i += 1) {
+        textureContainer = (MetalTextureContainer *)storageTextureSlices[i].texture;
+
+        METAL_INTERNAL_TrackTexture(
+            metalCommandBuffer,
+            textureContainer->activeTexture);
+
+        metalCommandBuffer->computeReadOnlyTextures[firstSlot + i] =
+            textureContainer->activeTexture->handle;
+    }
+
+    metalCommandBuffer->needComputeTextureBind = SDL_TRUE;
 }
 
 static void METAL_BindComputeStorageBuffers(
@@ -2582,7 +2596,21 @@ static void METAL_BindComputeStorageBuffers(
     SDL_GpuBuffer **storageBuffers,
     Uint32 bindingCount)
 {
-    NOT_IMPLEMENTED
+    MetalCommandBuffer *metalCommandBuffer = (MetalCommandBuffer *)commandBuffer;
+    MetalBufferContainer *bufferContainer;
+
+    for (Uint32 i = 0; i < bindingCount; i += 1) {
+        bufferContainer = (MetalBufferContainer *)storageBuffers[i];
+
+        METAL_INTERNAL_TrackBuffer(
+            metalCommandBuffer,
+            bufferContainer->activeBuffer);
+
+        metalCommandBuffer->computeReadOnlyBuffers[firstSlot + i] =
+            bufferContainer->activeBuffer->handle;
+    }
+
+    metalCommandBuffer->needComputeBufferBind = SDL_TRUE;
 }
 
 static void METAL_PushComputeUniformData(
