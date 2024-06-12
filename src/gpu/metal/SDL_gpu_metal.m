@@ -2233,7 +2233,23 @@ static void METAL_DrawPrimitivesIndirect(
     Uint32 drawCount,
     Uint32 stride)
 {
-    NOT_IMPLEMENTED
+    MetalCommandBuffer *metalCommandBuffer = (MetalCommandBuffer *)commandBuffer;
+    MetalBuffer *metalBuffer = ((MetalBufferContainer *)buffer)->activeBuffer;
+    SDL_GpuPrimitiveType primitiveType = metalCommandBuffer->graphicsPipeline->primitiveType;
+
+    METAL_INTERNAL_BindGraphicsResources(metalCommandBuffer);
+
+    /* Metal: "We have multi-draw at home!"
+     * Multi-draw at home:
+     */
+    for (Uint32 i = 0; i < drawCount; i += 1) {
+        [metalCommandBuffer->renderEncoder
+                  drawPrimitives:SDLToMetal_PrimitiveType[primitiveType]
+                  indirectBuffer:metalBuffer->handle
+            indirectBufferOffset:offsetInBytes + (stride * i)];
+    }
+
+    METAL_INTERNAL_TrackBuffer(metalCommandBuffer, metalBuffer);
 }
 
 static void METAL_DrawIndexedPrimitivesIndirect(
