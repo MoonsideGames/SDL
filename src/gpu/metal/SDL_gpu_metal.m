@@ -738,6 +738,9 @@ static void METAL_INTERNAL_DestroyTextureContainer(
     for (Uint32 i = 0; i < container->textureCount; i += 1) {
         SDL_free(container->textures[i]);
     }
+    if (container->debugName != NULL) {
+        SDL_free(container->debugName);
+    }
     SDL_free(container->textures);
     SDL_free(container);
 }
@@ -777,8 +780,10 @@ static void METAL_INTERNAL_DestroyBufferContainer(
     MetalBufferContainer *container)
 {
     for (Uint32 i = 0; i < container->bufferCount; i += 1) {
-        MetalBuffer *buffer = container->buffers[i];
-        SDL_free(buffer);
+        SDL_free(container->buffers[i]);
+    }
+    if (container->debugName != NULL) {
+        SDL_free(container->debugName);
     }
     SDL_free(container->buffers);
     SDL_free(container);
@@ -1031,13 +1036,10 @@ static SDL_GpuGraphicsPipeline *METAL_CreateGraphicsPipeline(
 /* Debug Naming */
 
 static void METAL_INTERNAL_SetBufferName(
-    MetalRenderer *renderer,
     MetalBuffer *buffer,
     const char *text)
 {
-    if (renderer->debugMode) {
-        NOT_IMPLEMENTED
-    }
+    buffer->handle.label = @(text);
 }
 
 static void METAL_SetBufferName(
@@ -1045,17 +1047,33 @@ static void METAL_SetBufferName(
     SDL_GpuBuffer *buffer,
     const char *text)
 {
-    NOT_IMPLEMENTED
+    MetalRenderer *renderer = (MetalRenderer *)driverData;
+    MetalBufferContainer *container = (MetalBufferContainer *)buffer;
+    size_t textLength = SDL_strlen(text) + 1;
+
+    if (renderer->debugMode) {
+        container->debugName = SDL_realloc(
+            container->debugName,
+            textLength);
+
+        SDL_utf8strlcpy(
+            container->debugName,
+            text,
+            textLength);
+
+        for (Uint32 i = 0; i < container->bufferCount; i += 1) {
+            METAL_INTERNAL_SetBufferName(
+                container->buffers[i],
+                text);
+        }
+    }
 }
 
 static void METAL_INTERNAL_SetTextureName(
-    MetalRenderer *renderer,
     MetalTexture *texture,
     const char *text)
 {
-    if (renderer->debugMode) {
-        NOT_IMPLEMENTED
-    }
+    texture->handle.label = @(text);
 }
 
 static void METAL_SetTextureName(
@@ -1063,7 +1081,26 @@ static void METAL_SetTextureName(
     SDL_GpuTexture *texture,
     const char *text)
 {
-    NOT_IMPLEMENTED
+    MetalRenderer *renderer = (MetalRenderer *)driverData;
+    MetalTextureContainer *container = (MetalTextureContainer *)texture;
+    size_t textLength = SDL_strlen(text) + 1;
+
+    if (renderer->debugMode) {
+        container->debugName = SDL_realloc(
+            container->debugName,
+            textLength);
+
+        SDL_utf8strlcpy(
+            container->debugName,
+            text,
+            textLength);
+
+        for (Uint32 i = 0; i < container->textureCount; i += 1) {
+            METAL_INTERNAL_SetTextureName(
+                container->textures[i],
+                text);
+        }
+    }
 }
 
 static void METAL_SetStringMarker(
@@ -1241,7 +1278,6 @@ static void METAL_INTERNAL_CycleActiveTexture(
 
     if (renderer->debugMode && container->debugName != NULL) {
         METAL_INTERNAL_SetTextureName(
-            renderer,
             container->activeTexture,
             container->debugName);
     }
@@ -1391,7 +1427,6 @@ static void METAL_INTERNAL_CycleActiveBuffer(
 
     if (renderer->debugMode && container->debugName != NULL) {
         METAL_INTERNAL_SetBufferName(
-            renderer,
             container->activeBuffer,
             container->debugName);
     }
