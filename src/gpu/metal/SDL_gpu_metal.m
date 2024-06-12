@@ -474,15 +474,23 @@ typedef struct MetalCommandBuffer
 
     /* Resource slot state */
     SDL_bool needVertexSamplerBind;
+    SDL_bool needVertexStorageTextureBind;
+
     SDL_bool needFragmentSamplerBind;
+    SDL_bool needFragmentStorageTextureBind;
+
     SDL_bool needComputeTextureBind;
     SDL_bool needComputeBufferBind;
 
     id<MTLSamplerState> vertexSamplers[MAX_TEXTURE_SAMPLERS_PER_STAGE];
-    id<MTLTexture> vertexTextures[MAX_TEXTURE_SAMPLERS_PER_STAGE + MAX_STORAGE_TEXTURES_PER_STAGE];
+    id<MTLTexture> vertexTextures[MAX_TEXTURE_SAMPLERS_PER_STAGE];
+    id<MTLTexture> vertexStorageTextures[MAX_STORAGE_TEXTURES_PER_STAGE];
+    id<MTLBuffer> vertexStorageBuffers[MAX_STORAGE_BUFFERS_PER_STAGE];
 
     id<MTLSamplerState> fragmentSamplers[MAX_TEXTURE_SAMPLERS_PER_STAGE];
-    id<MTLTexture> fragmentTextures[MAX_TEXTURE_SAMPLERS_PER_STAGE + MAX_STORAGE_TEXTURES_PER_STAGE];
+    id<MTLTexture> fragmentTextures[MAX_TEXTURE_SAMPLERS_PER_STAGE];
+    id<MTLTexture> fragmentStorageTextures[MAX_STORAGE_TEXTURES_PER_STAGE];
+    id<MTLBuffer> fragmentStorageBuffers[MAX_STORAGE_BUFFERS_PER_STAGE];
 
     id<MTLTexture> computeReadOnlyTextures[MAX_STORAGE_TEXTURES_PER_STAGE];
     id<MTLBuffer> computeReadOnlyBuffers[MAX_STORAGE_BUFFERS_PER_STAGE];
@@ -2069,7 +2077,21 @@ static void METAL_BindFragmentStorageTextures(
     SDL_GpuTextureSlice *storageTextureSlices,
     Uint32 bindingCount)
 {
-    NOT_IMPLEMENTED
+    MetalCommandBuffer *metalCommandBuffer = (MetalCommandBuffer *)commandBuffer;
+    MetalTextureContainer *textureContainer;
+
+    for (Uint32 i = 0; i < bindingCount; i += 1) {
+        textureContainer = (MetalTextureContainer *)storageTextureSlices[i].texture;
+
+        METAL_INTERNAL_TrackTexture(
+            metalCommandBuffer,
+            textureContainer->activeTexture);
+
+        metalCommandBuffer->fragmentStorageTextures[firstSlot + i] =
+            textureContainer->activeTexture->handle;
+    }
+
+    metalCommandBuffer->needFragmentStorageTextureBind = SDL_TRUE;
 }
 
 static void METAL_BindFragmentStorageBuffers(
@@ -2086,29 +2108,37 @@ static void METAL_INTERNAL_BindGraphicsResources(
 {
     MetalGraphicsPipeline *graphicsPipeline = commandBuffer->graphicsPipeline;
 
-    if (commandBuffer->needVertexSamplerBind) {
-        if (graphicsPipeline->vertexSamplerCount > 0) {
-            [commandBuffer->renderEncoder setVertexSamplerStates:commandBuffer->vertexSamplers
-                                                       withRange:NSMakeRange(0, graphicsPipeline->vertexSamplerCount)];
-
-            [commandBuffer->renderEncoder setVertexTextures:commandBuffer->vertexTextures
-                                                  withRange:NSMakeRange(0, graphicsPipeline->vertexSamplerCount)];
-        }
-
+    if (graphicsPipeline->vertexSamplerCount > 0 && commandBuffer->needVertexSamplerBind) {
+        [commandBuffer->renderEncoder setVertexSamplerStates:commandBuffer->vertexSamplers
+                                                   withRange:NSMakeRange(0, graphicsPipeline->vertexSamplerCount)];
+        [commandBuffer->renderEncoder setVertexTextures:commandBuffer->vertexTextures
+                                              withRange:NSMakeRange(0, graphicsPipeline->vertexSamplerCount)];
         commandBuffer->needVertexSamplerBind = SDL_FALSE;
     }
 
-    if (commandBuffer->needFragmentSamplerBind) {
-        if (graphicsPipeline->fragmentSamplerCount > 0) {
-            [commandBuffer->renderEncoder setFragmentSamplerStates:commandBuffer->fragmentSamplers
-                                                         withRange:NSMakeRange(0, graphicsPipeline->fragmentSamplerCount)];
+    if (graphicsPipeline->vertexStorageTextureCount > 0 && commandBuffer->needVertexStorageTextureBind) {
+        [commandBuffer->renderEncoder setVertexTextures:commandBuffer->vertexStorageTextures
+                                              withRange:NSMakeRange(graphicsPipeline->vertexSamplerCount,
+                                                                    graphicsPipeline->vertexStorageTextureCount)];
+        commandBuffer->needVertexStorageTextureBind = SDL_FALSE;
+    }
 
-            [commandBuffer->renderEncoder setFragmentTextures:commandBuffer->fragmentTextures
-                                                    withRange:NSMakeRange(0, graphicsPipeline->fragmentSamplerCount)];
-        }
-
+    if (graphicsPipeline->fragmentSamplerCount > 0 && commandBuffer->needFragmentSamplerBind) {
+        [commandBuffer->renderEncoder setFragmentSamplerStates:commandBuffer->fragmentSamplers
+                                                     withRange:NSMakeRange(0, graphicsPipeline->fragmentSamplerCount)];
+        [commandBuffer->renderEncoder setFragmentTextures:commandBuffer->fragmentTextures
+                                                withRange:NSMakeRange(0, graphicsPipeline->fragmentSamplerCount)];
         commandBuffer->needFragmentSamplerBind = SDL_FALSE;
     }
+
+    if (graphicsPipeline->fragmentStorageTextureCount > 0 && commandBuffer->needFragmentStorageTextureBind) {
+        [commandBuffer->renderEncoder setFragmentTextures:commandBuffer->fragmentStorageTextures
+                                                withRange:NSMakeRange(graphicsPipeline->fragmentSamplerCount,
+                                                                      graphicsPipeline->fragmentStorageTextureCount)];
+        commandBuffer->needFragmentStorageTextureBind = SDL_FALSE;
+    }
+
+    /* FIXME: Storage buffers! */
 }
 
 static void METAL_INTERNAL_BindComputeResources(
@@ -2140,14 +2170,16 @@ static void METAL_INTERNAL_BindComputeResources(
         if (computePipeline->readOnlyStorageBufferCount > 0) {
             [commandBuffer->computeEncoder setBuffers:commandBuffer->computeReadOnlyBuffers
                                               offsets:offsets
-                                            withRange:NSMakeRange(0, computePipeline->readOnlyStorageBufferCount)];
+                                            withRange:NSMakeRange(computePipeline->uniformBufferCount,
+                                                                  computePipeline->readOnlyStorageBufferCount)];
         }
         /* Bind read-write buffers */
         if (computePipeline->readWriteStorageBufferCount > 0) {
             [commandBuffer->computeEncoder setBuffers:commandBuffer->computeReadWriteBuffers
                                               offsets:offsets
                                             withRange:NSMakeRange(
-                                                          computePipeline->readOnlyStorageBufferCount,
+                                                          computePipeline->uniformBufferCount +
+                                                              computePipeline->readOnlyStorageBufferCount,
                                                           computePipeline->readWriteStorageBufferCount)];
         }
         commandBuffer->needComputeBufferBind = SDL_FALSE;
