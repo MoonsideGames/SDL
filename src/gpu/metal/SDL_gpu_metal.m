@@ -3124,12 +3124,14 @@ static Uint8 METAL_INTERNAL_CreateSwapchain(
 
     windowData->layer = (__bridge CAMetalLayer *)(SDL_Metal_GetLayer(windowData->view));
     windowData->layer.device = renderer->device;
+    windowData->layer.framebufferOnly = false; /* Allow sampling swapchain textures, at the expense of performance */
 #ifdef SDL_PLATFORM_MACOS
     windowData->layer.displaySyncEnabled = (presentMode != SDL_GPU_PRESENTMODE_IMMEDIATE);
 #endif
-    windowData->layer.framebufferOnly = false; /* Allow sampling swapchain textures, at the expense of performance */
     windowData->layer.pixelFormat = SDLToMetal_SurfaceFormat[SwapchainCompositionToFormat[swapchainComposition]];
+#ifndef SDL_PLATFORM_TVOS
     windowData->layer.wantsExtendedDynamicRangeContent = (swapchainComposition != SDL_GPU_SWAPCHAINCOMPOSITION_SDR); /* FIXME: Metadata? */
+#endif
 
     colorspace = CGColorSpaceCreateWithName(SwapchainCompositionToColorSpace[swapchainComposition]);
     windowData->layer.colorspace = colorspace;
@@ -3328,7 +3330,9 @@ static void METAL_SetSwapchainParameters(
     windowData->layer.displaySyncEnabled = (presentMode != SDL_GPU_PRESENTMODE_IMMEDIATE);
 #endif
     windowData->layer.pixelFormat = SDLToMetal_SurfaceFormat[SwapchainCompositionToFormat[swapchainComposition]];
+#ifndef SDL_PLATFORM_TVOS
     windowData->layer.wantsExtendedDynamicRangeContent = (swapchainComposition != SDL_GPU_SWAPCHAINCOMPOSITION_SDR); /* FIXME: Metadata? */
+#endif
 
     colorspace = CGColorSpaceCreateWithName(SwapchainCompositionToColorSpace[swapchainComposition]);
     windowData->layer.colorspace = colorspace;
