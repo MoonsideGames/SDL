@@ -3102,7 +3102,7 @@ static SDL_bool METAL_SupportsSwapchainComposition(
     SDL_Window *window,
     SDL_GpuSwapchainComposition swapchainComposition)
 {
-#if !SDL_PLATFORM_MACOS
+#ifndef SDL_PLATFORM_MACOS
     if (swapchainComposition == SDL_GPU_SWAPCHAINCOMPOSITION_HDR10_ST2048) {
         return SDL_FALSE;
     }
