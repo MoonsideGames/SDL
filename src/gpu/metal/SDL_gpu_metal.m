@@ -1109,7 +1109,19 @@ static void METAL_SetStringMarker(
     SDL_GpuCommandBuffer *commandBuffer,
     const char *text)
 {
-    NOT_IMPLEMENTED
+    MetalCommandBuffer *metalCommandBuffer = (MetalCommandBuffer *)commandBuffer;
+    NSString *label = @(text);
+
+    if (metalCommandBuffer->renderEncoder) {
+        [metalCommandBuffer->renderEncoder insertDebugSignpost:label];
+    } else if (metalCommandBuffer->blitEncoder) {
+        [metalCommandBuffer->blitEncoder insertDebugSignpost:label];
+    } else if (metalCommandBuffer->computeEncoder) {
+        [metalCommandBuffer->computeEncoder insertDebugSignpost:label];
+    } else {
+        [metalCommandBuffer->handle pushDebugGroup:label];
+        [metalCommandBuffer->handle popDebugGroup];
+    }
 }
 
 /* Resource Creation */
@@ -1670,6 +1682,7 @@ static void METAL_EndCopyPass(
 {
     MetalCommandBuffer *metalCommandBuffer = (MetalCommandBuffer *)commandBuffer;
     [metalCommandBuffer->blitEncoder endEncoding];
+    metalCommandBuffer->blitEncoder = nil;
 }
 
 /* Graphics State */
@@ -2399,8 +2412,7 @@ static void METAL_EndRenderPass(
 {
     MetalCommandBuffer *metalCommandBuffer = (MetalCommandBuffer *)commandBuffer;
     [metalCommandBuffer->renderEncoder endEncoding];
-
-    /* FIXME: Anything else to do here? */
+    metalCommandBuffer->renderEncoder = nil;
 }
 
 static void METAL_INTERNAL_PushUniformData(
@@ -2839,8 +2851,7 @@ static void METAL_EndComputePass(
 {
     MetalCommandBuffer *metalCommandBuffer = (MetalCommandBuffer *)commandBuffer;
     [metalCommandBuffer->computeEncoder endEncoding];
-
-    /* FIXME: Anything else to do here? */
+    metalCommandBuffer->computeEncoder = nil;
 }
 
 /* Fence Cleanup */
