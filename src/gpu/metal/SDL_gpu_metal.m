@@ -287,11 +287,10 @@ static MTLVertexStepFunction SDLToMetal_StepFunction[] = {
 };
 
 static SDL_GpuTextureFormat SwapchainCompositionToFormat[] = {
-    SDL_GPU_TEXTUREFORMAT_B8G8R8A8,      /* SDR */
-    SDL_GPU_TEXTUREFORMAT_B8G8R8A8_SRGB, /* SDR_LINEAR */
-    SDL_GPU_TEXTUREFORMAT_R16G16B16A16,  /* HDR_EXTENDED_LINEAR */
-    SDL_GPU_TEXTUREFORMAT_A2B10G10R10,
-    /* HDR10_ST2048 */ /* FIXME: Is this ok on iOS? */
+    SDL_GPU_TEXTUREFORMAT_B8G8R8A8,            /* SDR */
+    SDL_GPU_TEXTUREFORMAT_B8G8R8A8_SRGB,       /* SDR_LINEAR */
+    SDL_GPU_TEXTUREFORMAT_R16G16B16A16_SFLOAT, /* HDR_EXTENDED_LINEAR */
+    SDL_GPU_TEXTUREFORMAT_A2B10G10R10,         /* HDR10_ST2048 */
 };
 
 static CFStringRef SwapchainCompositionToColorSpace[4]; /* initialized on device creation */
@@ -3033,8 +3032,12 @@ static SDL_bool METAL_SupportsSwapchainComposition(
     SDL_Window *window,
     SDL_GpuSwapchainComposition swapchainComposition)
 {
-    NOT_IMPLEMENTED
-    return SDL_FALSE;
+#if !SDL_PLATFORM_MACOS
+    if (swapchainComposition == SDL_GPU_SWAPCHAINCOMPOSITION_HDR10_ST2048) {
+        return SDL_FALSE;
+    }
+#endif
+    return SDL_TRUE;
 }
 
 static Uint8 METAL_INTERNAL_CreateSwapchain(
@@ -3054,8 +3057,9 @@ static Uint8 METAL_INTERNAL_CreateSwapchain(
 #ifdef SDL_PLATFORM_MACOS
     windowData->layer.displaySyncEnabled = (presentMode != SDL_GPU_PRESENTMODE_IMMEDIATE);
 #endif
-    windowData->layer.framebufferOnly = FALSE; /* Allow sampling swapchain textures, at the expense of performance */
+    windowData->layer.framebufferOnly = false; /* Allow sampling swapchain textures, at the expense of performance */
     windowData->layer.pixelFormat = SDLToMetal_SurfaceFormat[SwapchainCompositionToFormat[swapchainComposition]];
+    windowData->layer.wantsExtendedDynamicRangeContent = (swapchainComposition != SDL_GPU_SWAPCHAINCOMPOSITION_SDR); /* FIXME: Metadata? */
 
     colorspace = CGColorSpaceCreateWithName(SwapchainCompositionToColorSpace[swapchainComposition]);
     windowData->layer.colorspace = colorspace;
@@ -3146,18 +3150,6 @@ static void METAL_INTERNAL_DestroySwapchain(
 {
     METAL_Wait((SDL_GpuRenderer *)renderer);
     SDL_Metal_DestroyView(windowData->view);
-    /*
-        for (Uint32 i = 0; i < MAX_FRAMES_IN_FLIGHT; i += 1)
-        {
-            if (windowData->inFlightFences[i] != NULL)
-            {
-                METAL_ReleaseFence(
-                    (SDL_GpuRenderer*) renderer,
-                    (SDL_GpuFence*) windowData->inFlightFences[i]
-                );
-            }
-        }
-    */
 }
 
 static void METAL_UnclaimWindow(
@@ -3252,16 +3244,21 @@ static void METAL_SetSwapchainParameters(
     SDL_GpuSwapchainComposition swapchainComposition,
     SDL_GpuPresentMode presentMode)
 {
-    (void)driverData;
     MetalWindowData *windowData = METAL_INTERNAL_FetchWindowData(window);
     CGColorSpaceRef colorspace;
 
-    /* FIXME: Do we need to Wait()? */
+    if (windowData == NULL) {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Cannot set swapchain parameters, window has not been claimed!");
+        return;
+    }
+
+    METAL_Wait(driverData);
 
 #ifdef SDL_PLATFORM_MACOS
     windowData->layer.displaySyncEnabled = (presentMode != SDL_GPU_PRESENTMODE_IMMEDIATE);
 #endif
     windowData->layer.pixelFormat = SDLToMetal_SurfaceFormat[SwapchainCompositionToFormat[swapchainComposition]];
+    windowData->layer.wantsExtendedDynamicRangeContent = (swapchainComposition != SDL_GPU_SWAPCHAINCOMPOSITION_SDR); /* FIXME: Metadata? */
 
     colorspace = CGColorSpaceCreateWithName(SwapchainCompositionToColorSpace[swapchainComposition]);
     windowData->layer.colorspace = colorspace;
