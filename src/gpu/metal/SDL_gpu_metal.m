@@ -475,9 +475,11 @@ typedef struct MetalCommandBuffer
     /* Resource slot state */
     SDL_bool needVertexSamplerBind;
     SDL_bool needVertexStorageTextureBind;
+    SDL_bool needVertexStorageBufferBind;
 
     SDL_bool needFragmentSamplerBind;
     SDL_bool needFragmentStorageTextureBind;
+    SDL_bool needFragmentStorageBufferBind;
 
     SDL_bool needComputeTextureBind;
     SDL_bool needComputeBufferBind;
@@ -1476,10 +1478,10 @@ static void METAL_UnmapTransferBuffer(
     SDL_GpuTransferBuffer *transferBuffer)
 {
 #ifdef SDL_PLATFORM_MACOS
+    /* FIXME: Is this necessary? */
     MetalBufferContainer *container = (MetalBufferContainer *)transferBuffer;
     MetalBuffer *buffer = container->activeBuffer;
     if (buffer->handle.storageMode == MTLStorageModeManaged) {
-        /* FIXME: Can we limit this somehow? */
         [buffer->handle didModifyRange:NSMakeRange(0, container->size)];
     }
 #endif
@@ -1510,6 +1512,7 @@ static void METAL_SetTransferData(
         copyParams->size);
 
 #ifdef SDL_PLATFORM_MACOS
+    /* FIXME: Is this necessary? */
     if (buffer->handle.storageMode == MTLStorageModeManaged) {
         [buffer->handle didModifyRange:NSMakeRange(copyParams->dstOffset, copyParams->size)];
     }
@@ -1522,7 +1525,11 @@ static void METAL_GetTransferData(
     void *data,
     SDL_GpuBufferCopy *copyParams)
 {
-    NOT_IMPLEMENTED
+    MetalBufferContainer *transferBufferContainer = (MetalBufferContainer *)transferBuffer;
+    SDL_memcpy(
+        ((Uint8 *)data) + copyParams->dstOffset,
+        ((Uint8 *)transferBufferContainer->activeBuffer->handle.contents) + copyParams->srcOffset,
+        copyParams->size);
 }
 
 /* Copy Pass */
@@ -1787,8 +1794,13 @@ static SDL_GpuCommandBuffer *METAL_AcquireCommandBuffer(
     commandBuffer = METAL_INTERNAL_GetInactiveCommandBufferFromPool(renderer);
     commandBuffer->handle = [renderer->queue commandBuffer];
 
+    /* FIXME: Do we actually need to set this? */
     commandBuffer->needVertexSamplerBind = SDL_TRUE;
+    commandBuffer->needVertexStorageTextureBind = SDL_TRUE;
+    commandBuffer->needVertexStorageBufferBind = SDL_TRUE;
     commandBuffer->needFragmentSamplerBind = SDL_TRUE;
+    commandBuffer->needFragmentStorageTextureBind = SDL_TRUE;
+    commandBuffer->needFragmentStorageBufferBind = SDL_TRUE;
     commandBuffer->needComputeBufferBind = SDL_TRUE;
     commandBuffer->needComputeTextureBind = SDL_TRUE;
 
@@ -2068,7 +2080,21 @@ static void METAL_BindVertexStorageTextures(
     SDL_GpuTextureSlice *storageTextureSlices,
     Uint32 bindingCount)
 {
-    NOT_IMPLEMENTED
+    MetalCommandBuffer *metalCommandBuffer = (MetalCommandBuffer *)commandBuffer;
+    MetalTextureContainer *textureContainer;
+
+    for (Uint32 i = 0; i < bindingCount; i += 1) {
+        textureContainer = (MetalTextureContainer *)storageTextureSlices[i].texture;
+
+        METAL_INTERNAL_TrackTexture(
+            metalCommandBuffer,
+            textureContainer->activeTexture);
+
+        metalCommandBuffer->vertexStorageTextures[firstSlot + i] =
+            textureContainer->activeTexture->handle;
+    }
+
+    metalCommandBuffer->needVertexStorageTextureBind = SDL_TRUE;
 }
 
 static void METAL_BindVertexStorageBuffers(
@@ -2077,7 +2103,21 @@ static void METAL_BindVertexStorageBuffers(
     SDL_GpuBuffer **storageBuffers,
     Uint32 bindingCount)
 {
-    NOT_IMPLEMENTED
+    MetalCommandBuffer *metalCommandBuffer = (MetalCommandBuffer *)commandBuffer;
+    MetalBufferContainer *bufferContainer;
+
+    for (Uint32 i = 0; i < bindingCount; i += 1) {
+        bufferContainer = (MetalBufferContainer *)storageBuffers[i];
+
+        METAL_INTERNAL_TrackBuffer(
+            metalCommandBuffer,
+            bufferContainer->activeBuffer);
+
+        metalCommandBuffer->vertexStorageBuffers[firstSlot + i] =
+            bufferContainer->activeBuffer->handle;
+    }
+
+    metalCommandBuffer->needVertexStorageBufferBind = SDL_TRUE;
 }
 
 static void METAL_BindFragmentSamplers(
@@ -2135,13 +2175,30 @@ static void METAL_BindFragmentStorageBuffers(
     SDL_GpuBuffer **storageBuffers,
     Uint32 bindingCount)
 {
-    NOT_IMPLEMENTED
+    MetalCommandBuffer *metalCommandBuffer = (MetalCommandBuffer *)commandBuffer;
+    MetalBufferContainer *bufferContainer;
+
+    for (Uint32 i = 0; i < bindingCount; i += 1) {
+        bufferContainer = (MetalBufferContainer *)storageBuffers[i];
+
+        METAL_INTERNAL_TrackBuffer(
+            metalCommandBuffer,
+            bufferContainer->activeBuffer);
+
+        metalCommandBuffer->fragmentStorageBuffers[firstSlot + i] =
+            bufferContainer->activeBuffer->handle;
+    }
+
+    metalCommandBuffer->needFragmentStorageBufferBind = SDL_TRUE;
 }
 
 static void METAL_INTERNAL_BindGraphicsResources(
     MetalCommandBuffer *commandBuffer)
 {
     MetalGraphicsPipeline *graphicsPipeline = commandBuffer->graphicsPipeline;
+    NSUInteger offsets[MAX_STORAGE_BUFFERS_PER_STAGE] = { 0 };
+
+    /* Vertex Samplers+Textures */
 
     if (graphicsPipeline->vertexSamplerCount > 0 && commandBuffer->needVertexSamplerBind) {
         [commandBuffer->renderEncoder setVertexSamplerStates:commandBuffer->vertexSamplers
@@ -2151,12 +2208,26 @@ static void METAL_INTERNAL_BindGraphicsResources(
         commandBuffer->needVertexSamplerBind = SDL_FALSE;
     }
 
+    /* Vertex Storage Textures */
+
     if (graphicsPipeline->vertexStorageTextureCount > 0 && commandBuffer->needVertexStorageTextureBind) {
         [commandBuffer->renderEncoder setVertexTextures:commandBuffer->vertexStorageTextures
                                               withRange:NSMakeRange(graphicsPipeline->vertexSamplerCount,
                                                                     graphicsPipeline->vertexStorageTextureCount)];
         commandBuffer->needVertexStorageTextureBind = SDL_FALSE;
     }
+
+    /* Vertex Storage Buffers */
+
+    if (graphicsPipeline->vertexStorageBufferCount > 0 && commandBuffer->needVertexStorageBufferBind) {
+        [commandBuffer->renderEncoder setVertexBuffers:commandBuffer->vertexStorageBuffers
+                                               offsets:offsets
+                                             withRange:NSMakeRange(graphicsPipeline->vertexUniformBufferCount,
+                                                                   graphicsPipeline->vertexStorageBufferCount)];
+        commandBuffer->needVertexStorageBufferBind = SDL_FALSE;
+    }
+
+    /* Fragment Samplers+Textures */
 
     if (graphicsPipeline->fragmentSamplerCount > 0 && commandBuffer->needFragmentSamplerBind) {
         [commandBuffer->renderEncoder setFragmentSamplerStates:commandBuffer->fragmentSamplers
@@ -2166,6 +2237,8 @@ static void METAL_INTERNAL_BindGraphicsResources(
         commandBuffer->needFragmentSamplerBind = SDL_FALSE;
     }
 
+    /* Fragment Storage Textures */
+
     if (graphicsPipeline->fragmentStorageTextureCount > 0 && commandBuffer->needFragmentStorageTextureBind) {
         [commandBuffer->renderEncoder setFragmentTextures:commandBuffer->fragmentStorageTextures
                                                 withRange:NSMakeRange(graphicsPipeline->fragmentSamplerCount,
@@ -2173,7 +2246,15 @@ static void METAL_INTERNAL_BindGraphicsResources(
         commandBuffer->needFragmentStorageTextureBind = SDL_FALSE;
     }
 
-    /* FIXME: Storage buffers! */
+    /* Fragment Storage Buffers */
+
+    if (graphicsPipeline->fragmentStorageBufferCount > 0 && commandBuffer->needFragmentStorageBufferBind) {
+        [commandBuffer->renderEncoder setFragmentBuffers:commandBuffer->fragmentStorageBuffers
+                                                 offsets:offsets
+                                               withRange:NSMakeRange(graphicsPipeline->fragmentUniformBufferCount,
+                                                                     graphicsPipeline->fragmentStorageBufferCount)];
+        commandBuffer->needFragmentStorageBufferBind = SDL_FALSE;
+    }
 }
 
 static void METAL_INTERNAL_BindComputeResources(
@@ -2274,6 +2355,9 @@ static void METAL_DrawPrimitivesIndirect(
 
     METAL_INTERNAL_BindGraphicsResources(metalCommandBuffer);
 
+    /* Metal: "We have multi-draw at home!"
+     * Multi-draw at home:
+     */
     for (Uint32 i = 0; i < drawCount; i += 1) {
         [metalCommandBuffer->renderEncoder
                   drawPrimitives:SDLToMetal_PrimitiveType[primitiveType]
@@ -2917,12 +3001,12 @@ static void METAL_WaitForFences(
     METAL_INTERNAL_PerformPendingDestroys(renderer);
 }
 
-static int METAL_QueryFence(
+static SDL_bool METAL_QueryFence(
     SDL_GpuRenderer *driverData,
     SDL_GpuFence *fence)
 {
-    NOT_IMPLEMENTED
-    return 0;
+    MetalFence *metalFence = (MetalFence *)fence;
+    return SDL_AtomicGet(&metalFence->complete) == 1;
 }
 
 /* Window and Swapchain Management */
