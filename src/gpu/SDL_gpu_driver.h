@@ -235,9 +235,6 @@ struct SDL_GpuDevice
         SDL_GpuTransferBufferMapFlags mapFlags,
         Uint32 sizeInBytes);
 
-    SDL_GpuOcclusionQuery *(*CreateOcclusionQuery)(
-        SDL_GpuRenderer *driverData);
-
     /* Debug Naming */
 
     void (*SetBufferName)(
@@ -283,10 +280,6 @@ struct SDL_GpuDevice
     void (*ReleaseGraphicsPipeline)(
         SDL_GpuRenderer *driverData,
         SDL_GpuGraphicsPipeline *graphicsPipeline);
-
-    void (*ReleaseOcclusionQuery)(
-        SDL_GpuRenderer *driverData,
-        SDL_GpuOcclusionQuery *query);
 
     /* Render Pass */
 
@@ -583,21 +576,6 @@ struct SDL_GpuDevice
         SDL_GpuRenderer *driverData,
         SDL_GpuFence *fence);
 
-    /* Queries */
-
-    void (*OcclusionQueryBegin)(
-        SDL_GpuCommandBuffer *commandBuffer,
-        SDL_GpuOcclusionQuery *query);
-
-    void (*OcclusionQueryEnd)(
-        SDL_GpuCommandBuffer *commandBuffer,
-        SDL_GpuOcclusionQuery *query);
-
-    SDL_bool (*OcclusionQueryPixelCount)(
-        SDL_GpuRenderer *driverData,
-        SDL_GpuOcclusionQuery *query,
-        Uint32 *pixelCount);
-
     /* Feature Queries */
 
     SDL_bool (*IsTextureFormatSupported)(
@@ -629,7 +607,6 @@ struct SDL_GpuDevice
     ASSIGN_DRIVER_FUNC(CreateTexture, name)                 \
     ASSIGN_DRIVER_FUNC(CreateBuffer, name)                  \
     ASSIGN_DRIVER_FUNC(CreateTransferBuffer, name)          \
-    ASSIGN_DRIVER_FUNC(CreateOcclusionQuery, name)          \
     ASSIGN_DRIVER_FUNC(SetBufferName, name)                 \
     ASSIGN_DRIVER_FUNC(SetTextureName, name)                \
     ASSIGN_DRIVER_FUNC(SetStringMarker, name)               \
@@ -640,7 +617,6 @@ struct SDL_GpuDevice
     ASSIGN_DRIVER_FUNC(ReleaseShader, name)                 \
     ASSIGN_DRIVER_FUNC(ReleaseComputePipeline, name)        \
     ASSIGN_DRIVER_FUNC(ReleaseGraphicsPipeline, name)       \
-    ASSIGN_DRIVER_FUNC(ReleaseOcclusionQuery, name)         \
     ASSIGN_DRIVER_FUNC(BeginRenderPass, name)               \
     ASSIGN_DRIVER_FUNC(BindGraphicsPipeline, name)          \
     ASSIGN_DRIVER_FUNC(SetViewport, name)                   \
@@ -695,9 +671,6 @@ struct SDL_GpuDevice
     ASSIGN_DRIVER_FUNC(WaitForFences, name)                 \
     ASSIGN_DRIVER_FUNC(QueryFence, name)                    \
     ASSIGN_DRIVER_FUNC(ReleaseFence, name)                  \
-    ASSIGN_DRIVER_FUNC(OcclusionQueryBegin, name)           \
-    ASSIGN_DRIVER_FUNC(OcclusionQueryEnd, name)             \
-    ASSIGN_DRIVER_FUNC(OcclusionQueryPixelCount, name)      \
     ASSIGN_DRIVER_FUNC(IsTextureFormatSupported, name)      \
     ASSIGN_DRIVER_FUNC(GetBestSampleCount, name)
 

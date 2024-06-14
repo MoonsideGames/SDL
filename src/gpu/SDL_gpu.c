@@ -456,14 +456,6 @@ SDL_GpuTransferBuffer *SDL_GpuCreateTransferBuffer(
         sizeInBytes);
 }
 
-SDL_GpuOcclusionQuery *SDL_GpuCreateOcclusionQuery(
-    SDL_GpuDevice *device)
-{
-    NULL_ASSERT(device)
-    return device->CreateOcclusionQuery(
-        device->driverData);
-}
-
 /* Debug Naming */
 
 void SDL_GpuSetBufferName(
@@ -574,16 +566,6 @@ void SDL_GpuReleaseGraphicsPipeline(
     device->ReleaseGraphicsPipeline(
         device->driverData,
         graphicsPipeline);
-}
-
-void SDL_GpuReleaseOcclusionQuery(
-    SDL_GpuDevice *device,
-    SDL_GpuOcclusionQuery *query)
-{
-    NULL_ASSERT(device);
-    device->ReleaseOcclusionQuery(
-        device->driverData,
-        query);
 }
 
 /* Render Pass */
@@ -1418,38 +1400,4 @@ void SDL_GpuReleaseFence(
     device->ReleaseFence(
         device->driverData,
         fence);
-}
-
-void SDL_GpuOcclusionQueryBegin(
-    SDL_GpuCommandBuffer *commandBuffer,
-    SDL_GpuOcclusionQuery *query)
-{
-    NULL_ASSERT(commandBuffer);
-    COMMAND_BUFFER_DEVICE->OcclusionQueryBegin(
-        commandBuffer,
-        query);
-}
-
-void SDL_GpuOcclusionQueryEnd(
-    SDL_GpuCommandBuffer *commandBuffer,
-    SDL_GpuOcclusionQuery *query)
-{
-    NULL_ASSERT(commandBuffer);
-    COMMAND_BUFFER_DEVICE->OcclusionQueryEnd(
-        commandBuffer,
-        query);
-}
-
-SDL_bool SDL_GpuOcclusionQueryPixelCount(
-    SDL_GpuDevice *device,
-    SDL_GpuOcclusionQuery *query,
-    Uint32 *pixelCount)
-{
-    if (device == NULL)
-        return SDL_FALSE;
-
-    return device->OcclusionQueryPixelCount(
-        device->driverData,
-        query,
-        pixelCount);
 }

@@ -1028,7 +1028,6 @@ SDL3_0.0.0 {
     SDL_GpuCreateTexture;
     SDL_GpuCreateBuffer;
     SDL_GpuCreateTransferBuffer;
-    SDL_GpuCreateOcclusionQuery;
     SDL_GpuSetBufferName;
     SDL_GpuSetTextureName;
     SDL_GpuSetStringMarker;
@@ -1039,7 +1038,6 @@ SDL3_0.0.0 {
     SDL_GpuReleaseComputePipeline;
     SDL_GpuReleaseShader;
     SDL_GpuReleaseGraphicsPipeline;
-    SDL_GpuReleaseOcclusionQuery;
     SDL_GpuBeginRenderPass;
     SDL_GpuBindGraphicsPipeline;
     SDL_GpuSetViewport;
@@ -1097,9 +1095,6 @@ SDL3_0.0.0 {
     SDL_GpuTextureFormatTexelBlockSize;
     SDL_GpuIsTextureFormatSupported;
     SDL_GpuGetBestSampleCount;
-    SDL_GpuOcclusionQueryBegin;
-    SDL_GpuOcclusionQueryEnd;
-    SDL_GpuOcclusionQueryPixelCount;
     # extra symbols go here (don't modify this line)
   local: *;
 };

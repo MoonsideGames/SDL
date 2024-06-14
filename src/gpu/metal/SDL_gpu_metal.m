@@ -850,13 +850,6 @@ static void METAL_ReleaseGraphicsPipeline(
     SDL_free(metalGraphicsPipeline);
 }
 
-static void METAL_ReleaseOcclusionQuery(
-    SDL_GpuRenderer *renderer,
-    SDL_GpuOcclusionQuery *query)
-{
-    NOT_IMPLEMENTED
-}
-
 /* Pipeline Creation */
 
 static SDL_GpuComputePipeline *METAL_CreateComputePipeline(
@@ -3428,38 +3421,6 @@ static void METAL_Wait(
     METAL_INTERNAL_PerformPendingDestroys(renderer);
 
     SDL_UnlockMutex(renderer->submitLock);
-}
-
-/* Queries */
-
-static SDL_GpuOcclusionQuery *METAL_CreateOcclusionQuery(
-    SDL_GpuRenderer *driverData)
-{
-    NOT_IMPLEMENTED
-    return NULL;
-}
-
-static void METAL_OcclusionQueryBegin(
-    SDL_GpuCommandBuffer *commandBuffer,
-    SDL_GpuOcclusionQuery *query)
-{
-    NOT_IMPLEMENTED
-}
-
-static void METAL_OcclusionQueryEnd(
-    SDL_GpuCommandBuffer *commandBuffer,
-    SDL_GpuOcclusionQuery *query)
-{
-    NOT_IMPLEMENTED
-}
-
-static SDL_bool METAL_OcclusionQueryPixelCount(
-    SDL_GpuRenderer *driverData,
-    SDL_GpuOcclusionQuery *query,
-    Uint32 *pixelCount)
-{
-    NOT_IMPLEMENTED
-    return SDL_FALSE;
 }
 
 /* Format Info */

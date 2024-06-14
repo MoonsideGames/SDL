@@ -76,7 +76,6 @@ typedef struct VulkanExtensions
 #define MAX_UBO_SECTION_SIZE          4096     /* 4   KiB */
 #define UNIFORM_BUFFER_SIZE           1048576  /* 1   MiB */
 #define DESCRIPTOR_POOL_STARTING_SIZE 128
-#define MAX_QUERIES                   16
 #define WINDOW_PROPERTY_DATA          "SDL_GpuVulkanWindowPropertyData"
 
 #define IDENTITY_SWIZZLE               \
@@ -756,11 +755,6 @@ typedef struct VulkanComputePipeline
     SDL_AtomicInt referenceCount;
 } VulkanComputePipeline;
 
-typedef struct VulkanOcclusionQuery
-{
-    Uint32 index;
-} VulkanOcclusionQuery;
-
 typedef struct RenderPassColorTargetDescription
 {
     VkFormat format;
@@ -1253,11 +1247,6 @@ struct VulkanRenderer
     VkFormat D16Format;
     VkFormat D16S8Format;
 
-    /* Queries */
-    VkQueryPool queryPool;
-    Sint8 freeQueryIndexStack[MAX_QUERIES];
-    Sint8 freeQueryIndexStackHead;
-
     /* Deferred resource destruction */
 
     VulkanTexture **texturesToDestroy;
@@ -1294,17 +1283,12 @@ struct VulkanRenderer
     SDL_Mutex *acquireCommandBufferLock;
     SDL_Mutex *renderPassFetchLock;
     SDL_Mutex *framebufferFetchLock;
-    SDL_Mutex *queryLock;
 
     Uint8 defragInProgress;
 
     VulkanMemoryAllocation **allocationsToDefrag;
     Uint32 allocationsToDefragCount;
     Uint32 allocationsToDefragCapacity;
-
-    /* Support checks */
-
-    SDL_bool supportsPreciseOcclusionQueries;
 
 #define VULKAN_INSTANCE_FUNCTION(ext, ret, func, params) \
     vkfntype_##func func;
@@ -4679,11 +4663,6 @@ static void VULKAN_DestroyDevice(
         }
     }
 
-    renderer->vkDestroyQueryPool(
-        renderer->logicalDevice,
-        renderer->queryPool,
-        NULL);
-
     for (i = 0; i < renderer->framebufferHashArray.count; i += 1) {
         VULKAN_INTERNAL_DestroyFramebuffer(
             renderer,
@@ -4740,7 +4719,6 @@ static void VULKAN_DestroyDevice(
     SDL_DestroyMutex(renderer->acquireCommandBufferLock);
     SDL_DestroyMutex(renderer->renderPassFetchLock);
     SDL_DestroyMutex(renderer->framebufferFetchLock);
-    SDL_DestroyMutex(renderer->queryLock);
 
     renderer->vkDestroyDevice(renderer->logicalDevice, NULL);
     renderer->vkDestroyInstance(renderer->instance, NULL);
@@ -6977,23 +6955,6 @@ static void VULKAN_ReleaseGraphicsPipeline(
     renderer->graphicsPipelinesToDestroyCount += 1;
 
     SDL_UnlockMutex(renderer->disposeLock);
-}
-
-static void VULKAN_ReleaseOcclusionQuery(
-    SDL_GpuRenderer *driverData,
-    SDL_GpuOcclusionQuery *query)
-{
-    VulkanRenderer *renderer = (VulkanRenderer *)driverData;
-    VulkanOcclusionQuery *vulkanQuery = (VulkanOcclusionQuery *)query;
-
-    SDL_LockMutex(renderer->queryLock);
-
-    /* Push the now-free index to the stack */
-    renderer->freeQueryIndexStack[vulkanQuery->index] =
-        renderer->freeQueryIndexStackHead;
-    renderer->freeQueryIndexStackHead = vulkanQuery->index;
-
-    SDL_UnlockMutex(renderer->queryLock);
 }
 
 /* Command Buffer render state */
@@ -10556,93 +10517,6 @@ static Uint8 VULKAN_INTERNAL_DefragmentMemory(
     return 1;
 }
 
-/* Queries */
-
-static SDL_GpuOcclusionQuery *VULKAN_CreateOcclusionQuery(
-    SDL_GpuRenderer *driverData)
-{
-    VulkanRenderer *renderer = (VulkanRenderer *)driverData;
-    VulkanOcclusionQuery *query = (VulkanOcclusionQuery *)SDL_malloc(sizeof(VulkanOcclusionQuery));
-
-    SDL_LockMutex(renderer->queryLock);
-
-    if (renderer->freeQueryIndexStackHead == -1) {
-        SDL_LogError(
-            SDL_LOG_CATEGORY_APPLICATION,
-            "Query limit of %d has been exceeded!",
-            MAX_QUERIES);
-        return NULL;
-    }
-
-    query->index = (Uint32)renderer->freeQueryIndexStackHead;
-    renderer->freeQueryIndexStackHead = renderer->freeQueryIndexStack[renderer->freeQueryIndexStackHead];
-
-    SDL_UnlockMutex(renderer->queryLock);
-
-    return (SDL_GpuOcclusionQuery *)query;
-}
-
-static void VULKAN_OcclusionQueryBegin(
-    SDL_GpuCommandBuffer *commandBuffer,
-    SDL_GpuOcclusionQuery *query)
-{
-    VulkanCommandBuffer *vulkanCommandBuffer = (VulkanCommandBuffer *)commandBuffer;
-    VulkanRenderer *renderer = (VulkanRenderer *)vulkanCommandBuffer->renderer;
-    VulkanOcclusionQuery *vulkanQuery = (VulkanOcclusionQuery *)query;
-
-    renderer->vkCmdResetQueryPool(
-        vulkanCommandBuffer->commandBuffer,
-        renderer->queryPool,
-        vulkanQuery->index,
-        1);
-
-    renderer->vkCmdBeginQuery(
-        vulkanCommandBuffer->commandBuffer,
-        renderer->queryPool,
-        vulkanQuery->index,
-        renderer->supportsPreciseOcclusionQueries ? VK_QUERY_CONTROL_PRECISE_BIT : 0);
-}
-
-static void VULKAN_OcclusionQueryEnd(
-    SDL_GpuCommandBuffer *commandBuffer,
-    SDL_GpuOcclusionQuery *query)
-{
-    VulkanCommandBuffer *vulkanCommandBuffer = (VulkanCommandBuffer *)commandBuffer;
-    VulkanRenderer *renderer = (VulkanRenderer *)vulkanCommandBuffer->renderer;
-    VulkanOcclusionQuery *vulkanQuery = (VulkanOcclusionQuery *)query;
-
-    renderer->vkCmdEndQuery(
-        vulkanCommandBuffer->commandBuffer,
-        renderer->queryPool,
-        vulkanQuery->index);
-}
-
-static SDL_bool VULKAN_OcclusionQueryPixelCount(
-    SDL_GpuRenderer *driverData,
-    SDL_GpuOcclusionQuery *query,
-    Uint32 *pixelCount)
-{
-    VulkanRenderer *renderer = (VulkanRenderer *)driverData;
-    VulkanOcclusionQuery *vulkanQuery = (VulkanOcclusionQuery *)query;
-    VkResult vulkanResult;
-    Uint32 queryResult;
-
-    SDL_LockMutex(renderer->queryLock);
-    vulkanResult = renderer->vkGetQueryPoolResults(
-        renderer->logicalDevice,
-        renderer->queryPool,
-        vulkanQuery->index,
-        1,
-        sizeof(queryResult),
-        &queryResult,
-        0,
-        0);
-    SDL_UnlockMutex(renderer->queryLock);
-
-    *pixelCount = queryResult;
-    return vulkanResult == VK_SUCCESS;
-}
-
 /* Format Info */
 
 static SDL_bool VULKAN_IsTextureFormatSupported(
@@ -11506,9 +11380,6 @@ static SDL_GpuDevice *VULKAN_CreateDevice(SDL_bool debugMode)
     /* Variables: Image Format Detection */
     VkImageFormatProperties imageFormatProperties;
 
-    /* Variables: Query Pool Creation */
-    VkQueryPoolCreateInfo queryPoolCreateInfo;
-
     /* Variables: Device Feature Checks */
     VkPhysicalDeviceFeatures physicalDeviceFeatures;
 
@@ -11576,7 +11447,6 @@ static SDL_GpuDevice *VULKAN_CreateDevice(SDL_bool debugMode)
     renderer->acquireCommandBufferLock = SDL_CreateMutex();
     renderer->renderPassFetchLock = SDL_CreateMutex();
     renderer->framebufferFetchLock = SDL_CreateMutex();
-    renderer->queryLock = SDL_CreateMutex();
 
     /*
      * Create submitted command buffer list
@@ -11604,27 +11474,6 @@ static SDL_GpuDevice *VULKAN_CreateDevice(SDL_bool debugMode)
     /* UBO alignment */
 
     renderer->minUBOAlignment = (Uint32)renderer->physicalDeviceProperties.properties.limits.minUniformBufferOffsetAlignment;
-
-    /* Initialize query pool */
-
-    queryPoolCreateInfo.sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO;
-    queryPoolCreateInfo.pNext = NULL;
-    queryPoolCreateInfo.flags = 0;
-    queryPoolCreateInfo.queryType = VK_QUERY_TYPE_OCCLUSION;
-    queryPoolCreateInfo.queryCount = MAX_QUERIES;
-    queryPoolCreateInfo.pipelineStatistics = 0;
-
-    vulkanResult = renderer->vkCreateQueryPool(
-        renderer->logicalDevice,
-        &queryPoolCreateInfo,
-        NULL,
-        &renderer->queryPool);
-    VULKAN_ERROR_CHECK(vulkanResult, vkCreateQueryPool, NULL)
-
-    for (i = 0; i < MAX_QUERIES - 1; i += 1) {
-        renderer->freeQueryIndexStack[i] = i + 1;
-    }
-    renderer->freeQueryIndexStack[MAX_QUERIES - 1] = -1;
 
     /* Initialize caches */
 
@@ -11747,8 +11596,6 @@ static SDL_GpuDevice *VULKAN_CreateDevice(SDL_bool debugMode)
     renderer->vkGetPhysicalDeviceFeatures(
         renderer->physicalDevice,
         &physicalDeviceFeatures);
-
-    renderer->supportsPreciseOcclusionQueries = physicalDeviceFeatures.occlusionQueryPrecise;
 
     return result;
 }
