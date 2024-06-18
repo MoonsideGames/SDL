@@ -4708,7 +4708,6 @@ static void D3D11_INTERNAL_MapAndCopyTextureDownload(
 {
     D3D11_MAPPED_SUBRESOURCE subres;
     HRESULT res;
-    Uint8 *dataPtr;
     Uint32 dataPtrOffset;
     Uint32 depth, row;
 
@@ -4722,14 +4721,12 @@ static void D3D11_INTERNAL_MapAndCopyTextureDownload(
         &subres);
     ERROR_CHECK_RETURN("Could not map staging textre",)
 
-    dataPtr = (Uint8 *)subres.pData;
-
     for (depth = 0; depth < textureDownload->depth; depth += 1) {
         dataPtrOffset = textureDownload->bufferOffset + (depth * textureDownload->bytesPerDepthSlice);
 
         for (row = 0; row < textureDownload->height; row += 1) {
             SDL_memcpy(
-                dataPtr + dataPtrOffset,
+                transferBuffer->data + dataPtrOffset,
                 (Uint8 *)subres.pData + (depth * subres.DepthPitch) + (row * subres.RowPitch),
                 textureDownload->bytesPerRow);
             dataPtrOffset += textureDownload->bytesPerRow;
