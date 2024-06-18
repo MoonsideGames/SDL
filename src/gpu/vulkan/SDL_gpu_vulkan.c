@@ -10856,11 +10856,6 @@ static Uint8 VULKAN_INTERNAL_CreateInstance(
         /* Append colorspace extension */
         instanceExtensionNames[instanceExtensionCount++] =
             VK_EXT_SWAPCHAIN_COLOR_SPACE_EXTENSION_NAME;
-    } else {
-        SDL_LogWarn(
-            SDL_LOG_CATEGORY_APPLICATION,
-            "%s is not supported!",
-            VK_EXT_SWAPCHAIN_COLOR_SPACE_EXTENSION_NAME);
     }
 
     createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
