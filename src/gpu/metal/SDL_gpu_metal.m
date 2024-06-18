@@ -1374,8 +1374,7 @@ static MetalBufferContainer *METAL_INTERNAL_CreateBufferContainer(
 
     if (isPrivate) {
         resourceOptions = MTLResourceStorageModePrivate;
-    } else
-    {
+    } else {
         if (isWriteOnly) {
             resourceOptions = MTLResourceCPUCacheModeWriteCombined;
         } else {
@@ -1410,7 +1409,6 @@ static SDL_GpuTransferBuffer *METAL_CreateTransferBuffer(
     SDL_bool uploadOnly,
     Uint32 sizeInBytes)
 {
-    (void)usage;
     return (SDL_GpuTransferBuffer *)METAL_INTERNAL_CreateBufferContainer(
         (MetalRenderer *)driverData,
         sizeInBytes,
@@ -1452,12 +1450,14 @@ static void METAL_INTERNAL_CycleActiveBuffer(
         container->bufferCapacity,
         container->bufferCapacity + 1);
 
-    if (container->transferMapFlags == 0) {
+    if (container->isPrivate) {
         resourceOptions = MTLResourceStorageModePrivate;
-    } else if ((container->transferMapFlags & SDL_GPU_TRANSFER_MAP_WRITE) && !(container->transferMapFlags & SDL_GPU_TRANSFER_MAP_READ)) {
-        resourceOptions = MTLResourceCPUCacheModeWriteCombined;
     } else {
-        resourceOptions = MTLResourceCPUCacheModeDefaultCache;
+        if (container->isWriteOnly) {
+            resourceOptions = MTLResourceCPUCacheModeWriteCombined;
+        } else {
+            resourceOptions = MTLResourceCPUCacheModeDefaultCache;
+        }
     }
 
     container->buffers[container->bufferCount] = METAL_INTERNAL_CreateBuffer(
