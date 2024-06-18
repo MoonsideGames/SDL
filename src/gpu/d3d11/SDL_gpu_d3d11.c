@@ -2660,8 +2660,6 @@ static void D3D11_MapTransferBuffer(
     D3D11Renderer *renderer = (D3D11Renderer *)driverData;
     D3D11TransferBufferContainer *container = (D3D11TransferBufferContainer *)transferBuffer;
     D3D11TransferBuffer *buffer = container->activeBuffer;
-    D3D11_MAPPED_SUBRESOURCE mappedSubresource;
-    HRESULT res;
 
     /* Rotate the transfer buffer if necessary */
     if (
@@ -2681,8 +2679,8 @@ static void D3D11_UnmapTransferBuffer(
     SDL_GpuTransferBuffer *transferBuffer)
 {
     /* no-op */
-    (void*)driverData;
-    (void*)transferBuffer;
+    (void)driverData;
+    (void)transferBuffer;
 }
 
 static void D3D11_SetTransferData(
@@ -2694,7 +2692,6 @@ static void D3D11_SetTransferData(
 {
     D3D11TransferBufferContainer *container = (D3D11TransferBufferContainer *)transferBuffer;
     void *dataPtr;
-    (void*)driverData;
 
     D3D11_MapTransferBuffer(driverData, transferBuffer, cycle, &dataPtr);
 
