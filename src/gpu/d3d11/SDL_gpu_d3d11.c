@@ -614,9 +614,6 @@ typedef struct D3D11TransferBuffer
 
 typedef struct D3D11TransferBufferContainer
 {
-    SDL_GpuTransferUsage usage;
-    SDL_GpuTransferBufferMapFlags mapFlags;
-
     D3D11TransferBuffer *activeBuffer;
 
     /* These are all the buffers that have been used by this container.
@@ -1885,7 +1882,7 @@ static D3D11Texture *D3D11_INTERNAL_CreateTexture(
     SDL_GpuTextureCreateInfo *textureCreateInfo,
     D3D11_SUBRESOURCE_DATA *initialData)
 {
-    Uint8 isSampler, isColorTarget, isDepthStencil, isMultisample, needSubresourceSRV, needSubresourceUAV;
+    Uint8 isSampler, isColorTarget, isDepthStencil, isMultisample, isStaging, needSubresourceSRV, needSubresourceUAV;
     DXGI_FORMAT format;
     ID3D11Resource *textureHandle;
     ID3D11ShaderResourceView *srv = NULL;
@@ -1901,6 +1898,7 @@ static D3D11Texture *D3D11_INTERNAL_CreateTexture(
     needSubresourceUAV =
         (textureCreateInfo->usageFlags & SDL_GPU_TEXTUREUSAGE_COMPUTE_STORAGE_WRITE_BIT);
     isMultisample = textureCreateInfo->sampleCount > SDL_GPU_SAMPLECOUNT_1;
+    isStaging = textureCreateInfo->usageFlags == 0;
 
     format = SDLToD3D11_TextureFormat[textureCreateInfo->format];
     if (isDepthStencil) {
@@ -1927,13 +1925,13 @@ static D3D11Texture *D3D11_INTERNAL_CreateTexture(
         desc2D.Width = textureCreateInfo->width;
         desc2D.Height = textureCreateInfo->height;
         desc2D.ArraySize = textureCreateInfo->isCube ? 6 : textureCreateInfo->layerCount;
-        desc2D.CPUAccessFlags = 0;
+        desc2D.CPUAccessFlags = isStaging ? D3D11_CPU_ACCESS_WRITE : 0;
         desc2D.Format = format;
         desc2D.MipLevels = textureCreateInfo->levelCount;
         desc2D.MiscFlags = textureCreateInfo->isCube ? D3D11_RESOURCE_MISC_TEXTURECUBE : 0;
         desc2D.SampleDesc.Count = 1;
         desc2D.SampleDesc.Quality = 0;
-        desc2D.Usage = D3D11_USAGE_DEFAULT;
+        desc2D.Usage = isStaging ? D3D11_USAGE_STAGING : D3D11_USAGE_DEFAULT;
 
         res = ID3D11Device_CreateTexture2D(
             renderer->device,
@@ -1991,11 +1989,11 @@ static D3D11Texture *D3D11_INTERNAL_CreateTexture(
         desc3D.Width = textureCreateInfo->width;
         desc3D.Height = textureCreateInfo->height;
         desc3D.Depth = textureCreateInfo->depth;
-        desc3D.CPUAccessFlags = 0;
+        desc3D.CPUAccessFlags = isStaging ? D3D11_CPU_ACCESS_WRITE : 0;
         desc3D.Format = format;
         desc3D.MipLevels = textureCreateInfo->levelCount;
         desc3D.MiscFlags = 0;
-        desc3D.Usage = D3D11_USAGE_DEFAULT;
+        desc3D.Usage = isStaging ? D3D11_USAGE_STAGING : D3D11_USAGE_DEFAULT;
 
         res = ID3D11Device_CreateTexture3D(
             renderer->device,
@@ -2588,8 +2586,6 @@ static D3D11Buffer *D3D11_INTERNAL_PrepareBufferForWrite(
 
 static D3D11TransferBuffer *D3D11_INTERNAL_CreateTransferBuffer(
     D3D11Renderer *renderer,
-    SDL_GpuTransferUsage usage,
-    SDL_GpuTransferBufferMapFlags mapFlags,
     Uint32 sizeInBytes)
 {
     D3D11TransferBuffer *transferBuffer = SDL_malloc(sizeof(D3D11TransferBuffer));
@@ -2605,15 +2601,12 @@ static D3D11TransferBuffer *D3D11_INTERNAL_CreateTransferBuffer(
 /* This actually returns a container handle so we can rotate buffers on Cycle. */
 static SDL_GpuTransferBuffer *D3D11_CreateTransferBuffer(
     SDL_GpuRenderer *driverData,
-    SDL_GpuTransferUsage usage,
-    SDL_GpuTransferBufferMapFlags mapFlags,
+    SDL_bool uploadOnly, /* ignored on D3D11 */
     Uint32 sizeInBytes)
 {
     D3D11Renderer *renderer = (D3D11Renderer *)driverData;
     D3D11TransferBufferContainer *container = (D3D11TransferBufferContainer *)SDL_malloc(sizeof(D3D11TransferBufferContainer));
 
-    container->usage = usage;
-    container->mapFlags = mapFlags;
     container->bufferCapacity = 1;
     container->bufferCount = 1;
     container->buffers = SDL_malloc(
@@ -2621,8 +2614,6 @@ static SDL_GpuTransferBuffer *D3D11_CreateTransferBuffer(
 
     container->buffers[0] = D3D11_INTERNAL_CreateTransferBuffer(
         renderer,
-        usage,
-        mapFlags,
         sizeInBytes);
 
     container->activeBuffer = container->buffers[0];
@@ -2654,8 +2645,6 @@ static void D3D11_INTERNAL_CycleActiveTransferBuffer(
 
     container->buffers[container->bufferCount] = D3D11_INTERNAL_CreateTransferBuffer(
         renderer,
-        container->usage,
-        container->mapFlags,
         size);
     container->bufferCount += 1;
 

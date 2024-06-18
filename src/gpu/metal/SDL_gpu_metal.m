@@ -430,7 +430,8 @@ typedef struct MetalBufferContainer
     Uint32 bufferCount;
     MetalBuffer **buffers;
 
-    SDL_GpuTransferBufferMapFlags transferMapFlags;
+    SDL_bool isPrivate;
+    SDL_bool isWriteOnly;
     char *debugName;
 } MetalBufferContainer;
 
@@ -1356,7 +1357,8 @@ static MetalBuffer *METAL_INTERNAL_CreateBuffer(
 static MetalBufferContainer *METAL_INTERNAL_CreateBufferContainer(
     MetalRenderer *renderer,
     Uint32 sizeInBytes,
-    SDL_GpuTransferBufferMapFlags transferMapFlags)
+    SDL_bool isPrivate,
+    SDL_bool isWriteOnly)
 {
     MetalBufferContainer *container = SDL_malloc(sizeof(MetalBufferContainer));
     MTLResourceOptions resourceOptions;
@@ -1366,15 +1368,19 @@ static MetalBufferContainer *METAL_INTERNAL_CreateBufferContainer(
     container->bufferCount = 1;
     container->buffers = SDL_malloc(
         container->bufferCapacity * sizeof(MetalBuffer *));
-    container->transferMapFlags = transferMapFlags;
+    container->isPrivate = isPrivate;
+    container->isWriteOnly = isWriteOnly;
     container->debugName = NULL;
 
-    if (transferMapFlags == 0) {
+    if (isPrivate) {
         resourceOptions = MTLResourceStorageModePrivate;
-    } else if ((transferMapFlags & SDL_GPU_TRANSFER_MAP_WRITE) && !(transferMapFlags & SDL_GPU_TRANSFER_MAP_READ)) {
-        resourceOptions = MTLResourceCPUCacheModeWriteCombined;
-    } else {
-        resourceOptions = MTLResourceCPUCacheModeDefaultCache;
+    } else
+    {
+        if (isWriteOnly) {
+            resourceOptions = MTLResourceCPUCacheModeWriteCombined;
+        } else {
+            resourceOptions = MTLResourceCPUCacheModeDefaultCache;
+        }
     }
 
     container->buffers[0] = METAL_INTERNAL_CreateBuffer(
@@ -1395,20 +1401,21 @@ static SDL_GpuBuffer *METAL_CreateBuffer(
     return (SDL_GpuBuffer *)METAL_INTERNAL_CreateBufferContainer(
         (MetalRenderer *)driverData,
         sizeInBytes,
-        0);
+        SDL_TRUE,
+        SDL_FALSE);
 }
 
 static SDL_GpuTransferBuffer *METAL_CreateTransferBuffer(
     SDL_GpuRenderer *driverData,
-    SDL_GpuTransferUsage usage,
-    SDL_GpuTransferBufferMapFlags mapFlags,
+    SDL_bool uploadOnly,
     Uint32 sizeInBytes)
 {
     (void)usage;
     return (SDL_GpuTransferBuffer *)METAL_INTERNAL_CreateBufferContainer(
         (MetalRenderer *)driverData,
         sizeInBytes,
-        mapFlags);
+        SDL_FALSE,
+        uploadOnly);
 }
 
 static MetalUniformBuffer *METAL_INTERNAL_CreateUniformBuffer(
@@ -1419,7 +1426,8 @@ static MetalUniformBuffer *METAL_INTERNAL_CreateUniformBuffer(
     uniformBuffer->container = METAL_INTERNAL_CreateBufferContainer(
         renderer,
         sizeInBytes,
-        SDL_GPU_TRANSFER_MAP_WRITE);
+        SDL_FALSE,
+        SDL_TRUE);
     uniformBuffer->offset = 0;
     return uniformBuffer;
 }
