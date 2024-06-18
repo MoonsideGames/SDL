@@ -177,6 +177,12 @@ typedef enum SDL_GpuBufferUsageFlagBits
 
 typedef Uint32 SDL_GpuBufferUsageFlags;
 
+typedef enum SDL_GpuTransferBufferUsage
+{
+    SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD,
+    SDL_GPU_TRANSFERBUFFERUSAGE_DOWNLOAD
+} SDL_GpuTransferBufferUsage;
+
 typedef enum SDL_GpuShaderStage
 {
     SDL_GPU_SHADERSTAGE_VERTEX,
@@ -936,7 +942,7 @@ extern SDL_DECLSPEC SDL_GpuBuffer *SDLCALL SDL_GpuCreateBuffer(
  * Creates a transfer buffer to be used when uploading to or downloading from graphics resources.
  *
  * \param device a GPU Context
- * \param uploadOnly specifies that the transfer buffer will only be used for uploads, allows optimizations on certain backends
+ * \param usage whether the transfer buffer will be used for uploads or downloads
  * \param sizeInBytes the size of the transfer buffer
  * \returns a transfer buffer on success, or NULL on failure
  *
@@ -950,7 +956,7 @@ extern SDL_DECLSPEC SDL_GpuBuffer *SDLCALL SDL_GpuCreateBuffer(
  */
 extern SDL_DECLSPEC SDL_GpuTransferBuffer *SDLCALL SDL_GpuCreateTransferBuffer(
     SDL_GpuDevice *device,
-    SDL_bool uploadOnly,
+    SDL_GpuTransferBufferUsage usage,
     Uint32 sizeInBytes);
 
 /* Debug Naming */
