@@ -4710,7 +4710,7 @@ static void D3D11_INTERNAL_MapAndCopyTextureDownload(
     HRESULT res;
     Uint8 *dataPtr;
     Uint32 dataPtrOffset;
-    Uint32 depth, row, copySize;
+    Uint32 depth, row;
 
     SDL_LockMutex(renderer->contextLock);
     res = ID3D11DeviceContext_Map(

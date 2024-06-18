@@ -1406,14 +1406,14 @@ static SDL_GpuBuffer *METAL_CreateBuffer(
 
 static SDL_GpuTransferBuffer *METAL_CreateTransferBuffer(
     SDL_GpuRenderer *driverData,
-    SDL_bool uploadOnly,
+    SDL_GpuTransferBufferUsage usage,
     Uint32 sizeInBytes)
 {
     return (SDL_GpuTransferBuffer *)METAL_INTERNAL_CreateBufferContainer(
         (MetalRenderer *)driverData,
         sizeInBytes,
         SDL_FALSE,
-        uploadOnly);
+        usage == SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD);
 }
 
 static MetalUniformBuffer *METAL_INTERNAL_CreateUniformBuffer(
