@@ -1096,7 +1096,7 @@ static void METAL_SetTextureName(
     }
 }
 
-static void METAL_SetStringMarker(
+static void METAL_InsertDebugLabel(
     SDL_GpuCommandBuffer *commandBuffer,
     const char *text)
 {
@@ -1113,6 +1113,22 @@ static void METAL_SetStringMarker(
         [metalCommandBuffer->handle pushDebugGroup:label];
         [metalCommandBuffer->handle popDebugGroup];
     }
+}
+
+static void METAL_PushDebugGroup(
+    SDL_GpuCommandBuffer *commandBuffer,
+    const char *name)
+{
+    MetalCommandBuffer *metalCommandBuffer = (MetalCommandBuffer *)commandBuffer;
+    [metalCommandBuffer->handle pushDebugGroup:@(name)];
+}
+
+static void METAL_PopDebugGroup(
+    SDL_GpuCommandBuffer *commandBuffer,
+    const char *name)
+{
+    MetalCommandBuffer *metalCommandBuffer = (MetalCommandBuffer *)commandBuffer;
+    [metalCommandBuffer->handle popDebugGroup];
 }
 
 /* Resource Creation */
