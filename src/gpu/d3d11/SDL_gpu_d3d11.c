@@ -3220,7 +3220,7 @@ static void D3D11_INTERNAL_SetUniformBufferData(
     D3D11CommandBuffer *commandBuffer,
     D3D11Buffer *uniformBuffer,
     Uint32 offset,
-    void *data,
+    const void *data,
     Uint32 dataLength)
 {
     D3D11_MAPPED_SUBRESOURCE subres;
