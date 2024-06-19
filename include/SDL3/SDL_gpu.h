@@ -1004,10 +1004,14 @@ extern SDL_DECLSPEC void SDLCALL SDL_GpuInsertDebugLabel(
 
 /**
  * Begins a debug group with an arbitary name.
- * Used for denoting groups of calls when viewing the command buffer
- * callstream in a graphics debugging tool.
+ * Used for denoting groups of calls when viewing the command buffer callstream
+ * in a graphics debugging tool.
  *
  * Each call to SDL_GpuPushDebugGroup must have a corresponding call to SDL_GpuPopDebugGroup.
+ *
+ * On some backends (e.g. Metal), pushing a debug group during a render/blit/compute pass
+ * will create a group that is scoped to the native pass rather than the command buffer.
+ * For best results, if you push a debug group during a pass, always pop it in the same pass.
  *
  * \param commandBuffer a command buffer
  * \param name a UTF-8 string constant that names the group
