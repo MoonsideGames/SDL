@@ -1124,8 +1124,7 @@ static void METAL_PushDebugGroup(
 }
 
 static void METAL_PopDebugGroup(
-    SDL_GpuCommandBuffer *commandBuffer,
-    const char *name)
+    SDL_GpuCommandBuffer *commandBuffer)
 {
     MetalCommandBuffer *metalCommandBuffer = (MetalCommandBuffer *)commandBuffer;
     [metalCommandBuffer->handle popDebugGroup];
