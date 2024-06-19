@@ -4739,6 +4739,8 @@ static void D3D11_INTERNAL_MapAndCopyTextureDownload(
         0);
 
     SDL_UnlockMutex(renderer->contextLock);
+
+    ID3D11Resource_Release(textureDownload->stagingTexture);
 }
 
 static void D3D11_INTERNAL_CleanCommandBuffer(
