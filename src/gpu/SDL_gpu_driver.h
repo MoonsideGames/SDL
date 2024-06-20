@@ -310,12 +310,12 @@ struct SDL_GpuDevice
     void (*BindVertexBuffers)(
         SDL_GpuCommandBuffer *commandBuffer,
         Uint32 firstBinding,
-        SDL_GpuBufferBinding *pBindings,
+        SDL_GpuBufferWithOffset *pBindings,
         Uint32 bindingCount);
 
     void (*BindIndexBuffer)(
         SDL_GpuCommandBuffer *commandBuffer,
-        SDL_GpuBufferBinding *pBinding,
+        SDL_GpuBufferWithOffset *pBinding,
         SDL_GpuIndexElementSize indexElementSize);
 
     void (*BindVertexSamplers)(
@@ -449,16 +449,16 @@ struct SDL_GpuDevice
 
     void (*SetTransferData)(
         SDL_GpuRenderer *driverData,
-        const void *data,
-        SDL_GpuTransferBuffer *transferBuffer,
-        SDL_GpuBufferCopy *copyParams,
+        const void *source,
+        SDL_GpuTransferBufferWithOffset *destination,
+        Uint32 size,
         SDL_bool cycle);
 
     void (*GetTransferData)(
         SDL_GpuRenderer *driverData,
-        SDL_GpuTransferBuffer *transferBuffer,
+        SDL_GpuTransferBufferWithOffset *transferBuffer,
         void *data,
-        SDL_GpuBufferCopy *copyParams);
+        Uint32 size);
 
     /* Copy Pass */
 
@@ -467,16 +467,15 @@ struct SDL_GpuDevice
 
     void (*UploadToTexture)(
         SDL_GpuCommandBuffer *commandBuffer,
-        SDL_GpuTransferBuffer *source,
+        SDL_GpuImageTransfer *source,
         SDL_GpuTextureRegion *destination,
-        SDL_GpuBufferImageCopy *copyParams,
         SDL_bool cycle);
 
     void (*UploadToBuffer)(
         SDL_GpuCommandBuffer *commandBuffer,
-        SDL_GpuTransferBuffer *source,
-        SDL_GpuBuffer *destination,
-        SDL_GpuBufferCopy *copyParams,
+        SDL_GpuTransferBufferWithOffset *source,
+        SDL_GpuBufferWithOffset *destination,
+        Uint32 size,
         SDL_bool cycle);
 
     void (*CopyTextureToTexture)(
@@ -487,9 +486,9 @@ struct SDL_GpuDevice
 
     void (*CopyBufferToBuffer)(
         SDL_GpuCommandBuffer *commandBuffer,
-        SDL_GpuBuffer *source,
-        SDL_GpuBuffer *destination,
-        SDL_GpuBufferCopy *copyParams,
+        SDL_GpuBufferWithOffset *source,
+        SDL_GpuBufferWithOffset *destination,
+        Uint32 size,
         SDL_bool cycle);
 
     void (*GenerateMipmaps)(
@@ -499,14 +498,13 @@ struct SDL_GpuDevice
     void (*DownloadFromTexture)(
         SDL_GpuCommandBuffer *commandBuffer,
         SDL_GpuTextureRegion *source,
-        SDL_GpuTransferBuffer *destination,
-        SDL_GpuBufferImageCopy *copyParams);
+        SDL_GpuImageTransfer *destination);
 
     void (*DownloadFromBuffer)(
         SDL_GpuCommandBuffer *commandBuffer,
-        SDL_GpuBuffer *source,
-        SDL_GpuTransferBuffer *destination,
-        SDL_GpuBufferCopy *copyParams);
+        SDL_GpuBufferWithOffset *source,
+        SDL_GpuTransferBufferWithOffset *destination,
+        Uint32 size);
 
     void (*EndCopyPass)(
         SDL_GpuCommandBuffer *commandBuffer);

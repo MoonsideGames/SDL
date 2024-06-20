@@ -647,7 +647,7 @@ void SDL_GpuSetScissor(
 void SDL_GpuBindVertexBuffers(
     SDL_GpuRenderPass *renderPass,
     Uint32 firstBinding,
-    SDL_GpuBufferBinding *pBindings,
+    SDL_GpuBufferWithOffset *pBindings,
     Uint32 bindingCount)
 {
     NULL_ASSERT(renderPass)
@@ -662,7 +662,7 @@ void SDL_GpuBindVertexBuffers(
 
 void SDL_GpuBindIndexBuffer(
     SDL_GpuRenderPass *renderPass,
-    SDL_GpuBufferBinding *pBinding,
+    SDL_GpuBufferWithOffset *pBinding,
     SDL_GpuIndexElementSize indexElementSize)
 {
     NULL_ASSERT(renderPass)
@@ -1035,32 +1035,32 @@ void SDL_GpuUnmapTransferBuffer(
 
 void SDL_GpuSetTransferData(
     SDL_GpuDevice *device,
-    const void *data,
-    SDL_GpuTransferBuffer *transferBuffer,
-    SDL_GpuBufferCopy *copyParams,
+    const void *source,
+    SDL_GpuTransferBufferWithOffset *destination,
+    Uint32 size,
     SDL_bool cycle)
 {
     NULL_ASSERT(device)
     device->SetTransferData(
         device->driverData,
-        data,
-        transferBuffer,
-        copyParams,
+        source,
+        destination,
+        size,
         cycle);
 }
 
 void SDL_GpuGetTransferData(
     SDL_GpuDevice *device,
-    SDL_GpuTransferBuffer *transferBuffer,
-    void *data,
-    SDL_GpuBufferCopy *copyParams)
+    SDL_GpuTransferBufferWithOffset *source,
+    void *destination,
+    Uint32 size)
 {
     NULL_ASSERT(device)
     device->GetTransferData(
         device->driverData,
-        transferBuffer,
-        data,
-        copyParams);
+        source,
+        destination,
+        size);
 }
 
 /* Copy Pass */
@@ -1082,9 +1082,8 @@ SDL_GpuCopyPass *SDL_GpuBeginCopyPass(
 
 void SDL_GpuUploadToTexture(
     SDL_GpuCopyPass *copyPass,
-    SDL_GpuTransferBuffer *source,
+    SDL_GpuImageTransfer *source,
     SDL_GpuTextureRegion *destination,
-    SDL_GpuBufferImageCopy *copyParams,
     SDL_bool cycle)
 {
     NULL_ASSERT(copyPass)
@@ -1093,15 +1092,14 @@ void SDL_GpuUploadToTexture(
         COPYPASS_COMMAND_BUFFER,
         source,
         destination,
-        copyParams,
         cycle);
 }
 
 void SDL_GpuUploadToBuffer(
     SDL_GpuCopyPass *copyPass,
-    SDL_GpuTransferBuffer *source,
-    SDL_GpuBuffer *destination,
-    SDL_GpuBufferCopy *copyParams,
+    SDL_GpuTransferBufferWithOffset *source,
+    SDL_GpuBufferWithOffset *destination,
+    Uint32 size,
     SDL_bool cycle)
 {
     NULL_ASSERT(copyPass)
@@ -1109,7 +1107,7 @@ void SDL_GpuUploadToBuffer(
         COPYPASS_COMMAND_BUFFER,
         source,
         destination,
-        copyParams,
+        size,
         cycle);
 }
 
@@ -1129,9 +1127,9 @@ void SDL_GpuCopyTextureToTexture(
 
 void SDL_GpuCopyBufferToBuffer(
     SDL_GpuCopyPass *copyPass,
-    SDL_GpuBuffer *source,
-    SDL_GpuBuffer *destination,
-    SDL_GpuBufferCopy *copyParams,
+    SDL_GpuBufferWithOffset *source,
+    SDL_GpuBufferWithOffset *destination,
+    Uint32 size,
     SDL_bool cycle)
 {
     NULL_ASSERT(copyPass)
@@ -1139,7 +1137,7 @@ void SDL_GpuCopyBufferToBuffer(
         COPYPASS_COMMAND_BUFFER,
         source,
         destination,
-        copyParams,
+        size,
         cycle);
 }
 
@@ -1156,29 +1154,27 @@ void SDL_GpuGenerateMipmaps(
 void SDL_GpuDownloadFromTexture(
     SDL_GpuCopyPass *copyPass,
     SDL_GpuTextureRegion *source,
-    SDL_GpuTransferBuffer *destination,
-    SDL_GpuBufferImageCopy *copyParams)
+    SDL_GpuImageTransfer *destination)
 {
     NULL_ASSERT(copyPass);
     COPYPASS_DEVICE->DownloadFromTexture(
         COPYPASS_COMMAND_BUFFER,
         source,
-        destination,
-        copyParams);
+        destination);
 }
 
 void SDL_GpuDownloadFromBuffer(
     SDL_GpuCopyPass *copyPass,
-    SDL_GpuBuffer *source,
-    SDL_GpuTransferBuffer *destination,
-    SDL_GpuBufferCopy *copyParams)
+    SDL_GpuBufferWithOffset *source,
+    SDL_GpuTransferBufferWithOffset *destination,
+    Uint32 size)
 {
     NULL_ASSERT(copyPass);
     COPYPASS_DEVICE->DownloadFromBuffer(
         COPYPASS_COMMAND_BUFFER,
         source,
         destination,
-        copyParams);
+        size);
 }
 
 void SDL_GpuEndCopyPass(
