@@ -324,17 +324,7 @@ static VkSamplerMipmapMode SDLToVK_SamplerMipmapMode[] = {
 static VkSamplerAddressMode SDLToVK_SamplerAddressMode[] = {
     VK_SAMPLER_ADDRESS_MODE_REPEAT,
     VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT,
-    VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
-    VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER
-};
-
-static VkBorderColor SDLToVK_BorderColor[] = {
-    VK_BORDER_COLOR_FLOAT_TRANSPARENT_BLACK,
-    VK_BORDER_COLOR_INT_TRANSPARENT_BLACK,
-    VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK,
-    VK_BORDER_COLOR_INT_OPAQUE_BLACK,
-    VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE,
-    VK_BORDER_COLOR_INT_OPAQUE_WHITE
+    VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE
 };
 
 /* Structures */
@@ -6602,7 +6592,7 @@ static SDL_GpuSampler *VULKAN_CreateSampler(
     vkSamplerCreateInfo.compareOp = SDLToVK_CompareOp[samplerCreateInfo->compareOp];
     vkSamplerCreateInfo.minLod = samplerCreateInfo->minLod;
     vkSamplerCreateInfo.maxLod = samplerCreateInfo->maxLod;
-    vkSamplerCreateInfo.borderColor = SDLToVK_BorderColor[samplerCreateInfo->borderColor];
+    vkSamplerCreateInfo.borderColor = VK_BORDER_COLOR_FLOAT_TRANSPARENT_BLACK; /* arbitrary, unused */
     vkSamplerCreateInfo.unnormalizedCoordinates = VK_FALSE;
 
     vulkanResult = renderer->vkCreateSampler(
