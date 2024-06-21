@@ -450,15 +450,13 @@ struct SDL_GpuDevice
     void (*SetTransferData)(
         SDL_GpuRenderer *driverData,
         const void *data,
-        SDL_GpuTransferBuffer *transferBuffer,
-        SDL_GpuBufferCopy *copyParams,
+        SDL_GpuTransferBufferRegion *transferBuffer,
         SDL_bool cycle);
 
     void (*GetTransferData)(
         SDL_GpuRenderer *driverData,
-        SDL_GpuTransferBuffer *transferBuffer,
-        void *data,
-        SDL_GpuBufferCopy *copyParams);
+        SDL_GpuTransferBufferRegion *transferBuffer,
+        void *data);
 
     /* Copy Pass */
 
@@ -467,29 +465,30 @@ struct SDL_GpuDevice
 
     void (*UploadToTexture)(
         SDL_GpuCommandBuffer *commandBuffer,
-        SDL_GpuTransferBuffer *source,
+        SDL_GpuTransferBufferImage *source,
         SDL_GpuTextureRegion *destination,
-        SDL_GpuBufferImageCopy *copyParams,
         SDL_bool cycle);
 
     void (*UploadToBuffer)(
         SDL_GpuCommandBuffer *commandBuffer,
-        SDL_GpuTransferBuffer *source,
-        SDL_GpuBuffer *destination,
-        SDL_GpuBufferCopy *copyParams,
+        SDL_GpuTransferBufferLocation *source,
+        SDL_GpuBufferRegion *destination,
         SDL_bool cycle);
 
     void (*CopyTextureToTexture)(
         SDL_GpuCommandBuffer *commandBuffer,
-        SDL_GpuTextureRegion *source,
-        SDL_GpuTextureRegion *destination,
+        SDL_GpuTextureLocation *source,
+        SDL_GpuTextureLocation *destination,
+        Uint32 w,
+        Uint32 h,
+        Uint32 d,
         SDL_bool cycle);
 
     void (*CopyBufferToBuffer)(
         SDL_GpuCommandBuffer *commandBuffer,
-        SDL_GpuBuffer *source,
-        SDL_GpuBuffer *destination,
-        SDL_GpuBufferCopy *copyParams,
+        SDL_GpuBufferLocation *source,
+        SDL_GpuBufferLocation *destination,
+        Uint32 size,
         SDL_bool cycle);
 
     void (*GenerateMipmaps)(
@@ -499,14 +498,12 @@ struct SDL_GpuDevice
     void (*DownloadFromTexture)(
         SDL_GpuCommandBuffer *commandBuffer,
         SDL_GpuTextureRegion *source,
-        SDL_GpuTransferBuffer *destination,
-        SDL_GpuBufferImageCopy *copyParams);
+        SDL_GpuTransferBufferImage *destination);
 
     void (*DownloadFromBuffer)(
         SDL_GpuCommandBuffer *commandBuffer,
-        SDL_GpuBuffer *source,
-        SDL_GpuTransferBuffer *destination,
-        SDL_GpuBufferCopy *copyParams);
+        SDL_GpuBufferRegion *source,
+        SDL_GpuTransferBufferLocation *destination);
 
     void (*EndCopyPass)(
         SDL_GpuCommandBuffer *commandBuffer);
