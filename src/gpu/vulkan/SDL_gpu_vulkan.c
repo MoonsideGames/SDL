@@ -8531,7 +8531,7 @@ static void VULKAN_BeginCopyPass(
 
 static void VULKAN_UploadToTexture(
     SDL_GpuCommandBuffer *commandBuffer,
-    SDL_GpuTransferBufferImage *source,
+    SDL_GpuTextureTransferInfo *source,
     SDL_GpuTextureRegion *destination,
     SDL_bool cycle)
 {
@@ -8632,7 +8632,7 @@ static void VULKAN_UploadToBuffer(
 static void VULKAN_DownloadFromTexture(
     SDL_GpuCommandBuffer *commandBuffer,
     SDL_GpuTextureRegion *source,
-    SDL_GpuTransferBufferImage *destination)
+    SDL_GpuTextureTransferInfo *destination)
 {
     VulkanCommandBuffer *vulkanCommandBuffer = (VulkanCommandBuffer *)commandBuffer;
     VulkanRenderer *renderer = vulkanCommandBuffer->renderer;

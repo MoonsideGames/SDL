@@ -2798,7 +2798,7 @@ static void D3D11_BeginCopyPass(
 
 static void D3D11_UploadToTexture(
     SDL_GpuCommandBuffer *commandBuffer,
-    SDL_GpuTransferBufferImage *source,
+    SDL_GpuTextureTransferInfo *source,
     SDL_GpuTextureRegion *destination,
     SDL_bool cycle)
 {
@@ -2945,7 +2945,7 @@ static void D3D11_UploadToBuffer(
 static void D3D11_DownloadFromTexture(
     SDL_GpuCommandBuffer *commandBuffer,
     SDL_GpuTextureRegion *source,
-    SDL_GpuTransferBufferImage *destination)
+    SDL_GpuTextureTransferInfo *destination)
 {
     D3D11CommandBuffer *d3d11CommandBuffer = (D3D11CommandBuffer *)commandBuffer;
     D3D11Renderer *renderer = d3d11CommandBuffer->renderer;

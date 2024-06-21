@@ -465,7 +465,7 @@ struct SDL_GpuDevice
 
     void (*UploadToTexture)(
         SDL_GpuCommandBuffer *commandBuffer,
-        SDL_GpuTransferBufferImage *source,
+        SDL_GpuTextureTransferInfo *source,
         SDL_GpuTextureRegion *destination,
         SDL_bool cycle);
 
@@ -498,7 +498,7 @@ struct SDL_GpuDevice
     void (*DownloadFromTexture)(
         SDL_GpuCommandBuffer *commandBuffer,
         SDL_GpuTextureRegion *source,
-        SDL_GpuTransferBufferImage *destination);
+        SDL_GpuTextureTransferInfo *destination);
 
     void (*DownloadFromBuffer)(
         SDL_GpuCommandBuffer *commandBuffer,

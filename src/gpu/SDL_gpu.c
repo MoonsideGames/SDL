@@ -1078,7 +1078,7 @@ SDL_GpuCopyPass *SDL_GpuBeginCopyPass(
 
 void SDL_GpuUploadToTexture(
     SDL_GpuCopyPass *copyPass,
-    SDL_GpuTransferBufferImage *source,
+    SDL_GpuTextureTransferInfo *source,
     SDL_GpuTextureRegion *destination,
     SDL_bool cycle)
 {
@@ -1154,7 +1154,7 @@ void SDL_GpuGenerateMipmaps(
 void SDL_GpuDownloadFromTexture(
     SDL_GpuCopyPass *copyPass,
     SDL_GpuTextureRegion *source,
-    SDL_GpuTransferBufferImage *destination)
+    SDL_GpuTextureTransferInfo *destination)
 {
     NULL_ASSERT(copyPass);
     COPYPASS_DEVICE->DownloadFromTexture(

@@ -420,13 +420,13 @@ typedef struct SDL_GpuViewport
     float maxDepth;
 } SDL_GpuViewport;
 
-typedef struct SDL_GpuTransferBufferImage
+typedef struct SDL_GpuTextureTransferInfo
 {
     SDL_GpuTransferBuffer *transferBuffer;
     Uint32 offset;      /* starting location of the image data */
     Uint32 imagePitch;  /* number of pixels from one row to the next */
     Uint32 imageHeight; /* number of rows from one layer/depth-slice to the next */
-} SDL_GpuTransferBufferImage;
+} SDL_GpuTextureTransferInfo;
 
 typedef struct SDL_GpuTransferBufferLocation
 {
@@ -1737,7 +1737,7 @@ extern SDL_DECLSPEC SDL_GpuCopyPass *SDLCALL SDL_GpuBeginCopyPass(
  */
 extern SDL_DECLSPEC void SDLCALL SDL_GpuUploadToTexture(
     SDL_GpuCopyPass *copyPass,
-    SDL_GpuTransferBufferImage *source,
+    SDL_GpuTextureTransferInfo *source,
     SDL_GpuTextureRegion *destination,
     SDL_bool cycle);
 
@@ -1832,7 +1832,7 @@ extern SDL_DECLSPEC void SDLCALL SDL_GpuGenerateMipmaps(
 extern SDL_DECLSPEC void SDLCALL SDL_GpuDownloadFromTexture(
     SDL_GpuCopyPass *copyPass,
     SDL_GpuTextureRegion *source,
-    SDL_GpuTransferBufferImage *destination);
+    SDL_GpuTextureTransferInfo *destination);
 
 /**
  * Copies data from a buffer to a transfer buffer on the GPU timeline.
