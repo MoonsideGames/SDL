@@ -8482,12 +8482,12 @@ static void VULKAN_UnmapTransferBuffer(
 
 static void VULKAN_SetTransferData(
     SDL_GpuRenderer *driverData,
-    const void *data,
-    SDL_GpuTransferBufferRegion *transferBuffer,
+    const void *source,
+    SDL_GpuTransferBufferRegion *destination,
     SDL_bool cycle)
 {
     VulkanRenderer *renderer = (VulkanRenderer *)driverData;
-    VulkanBufferContainer *transferBufferContainer = (VulkanBufferContainer *)transferBuffer->transferBuffer;
+    VulkanBufferContainer *transferBufferContainer = (VulkanBufferContainer *)destination->transferBuffer;
 
     if (
         cycle &&
@@ -8500,26 +8500,26 @@ static void VULKAN_SetTransferData(
     Uint8 *bufferPointer =
         transferBufferContainer->activeBufferHandle->vulkanBuffer->usedRegion->allocation->mapPointer +
         transferBufferContainer->activeBufferHandle->vulkanBuffer->usedRegion->resourceOffset +
-        transferBuffer->offset;
+        destination->offset;
 
-    SDL_memcpy(bufferPointer, data, transferBuffer->size);
+    SDL_memcpy(bufferPointer, source, destination->size);
 }
 
 static void VULKAN_GetTransferData(
     SDL_GpuRenderer *driverData,
-    SDL_GpuTransferBufferRegion *transferBuffer,
-    void *data)
+    SDL_GpuTransferBufferRegion *source,
+    void *destination)
 {
     (void)driverData; /* used by other backends */
-    VulkanBufferContainer *transferBufferContainer = (VulkanBufferContainer *)transferBuffer->transferBuffer;
+    VulkanBufferContainer *transferBufferContainer = (VulkanBufferContainer *)source->transferBuffer;
     VulkanBuffer *vulkanBuffer = transferBufferContainer->activeBufferHandle->vulkanBuffer;
 
     Uint8 *bufferPointer =
         vulkanBuffer->usedRegion->allocation->mapPointer +
         vulkanBuffer->usedRegion->resourceOffset +
-        transferBuffer->offset;
+        source->offset;
 
-    SDL_memcpy(data, bufferPointer, transferBuffer->size);
+    SDL_memcpy(destination, bufferPointer, source->size);
 }
 
 static void VULKAN_BeginCopyPass(

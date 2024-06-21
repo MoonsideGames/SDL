@@ -2756,35 +2756,35 @@ static void D3D11_UnmapTransferBuffer(
 
 static void D3D11_SetTransferData(
     SDL_GpuRenderer *driverData,
-    const void *data,
-    SDL_GpuTransferBufferRegion *transferBuffer,
+    const void *source,
+    SDL_GpuTransferBufferRegion *destination,
     SDL_bool cycle)
 {
-    D3D11TransferBufferContainer *container = (D3D11TransferBufferContainer *)transferBuffer->transferBuffer;
+    D3D11TransferBufferContainer *container = (D3D11TransferBufferContainer *)destination->transferBuffer;
     void *dataPtr;
 
-    D3D11_MapTransferBuffer(driverData, transferBuffer->transferBuffer, cycle, &dataPtr);
+    D3D11_MapTransferBuffer(driverData, destination->transferBuffer, cycle, &dataPtr);
 
     SDL_memcpy(
-        ((Uint8 *)container->activeBuffer->data) + transferBuffer->offset,
-        data,
-        transferBuffer->size);
+        ((Uint8 *)container->activeBuffer->data) + destination->offset,
+        source,
+        destination->size);
 
-    D3D11_UnmapTransferBuffer(driverData, transferBuffer->transferBuffer);
+    D3D11_UnmapTransferBuffer(driverData, destination->transferBuffer);
 }
 
 static void D3D11_GetTransferData(
     SDL_GpuRenderer *driverData,
-    SDL_GpuTransferBufferRegion *transferBuffer,
-    void *data)
+    SDL_GpuTransferBufferRegion *source,
+    void *destination)
 {
     (void)driverData;
-    D3D11TransferBufferContainer *container = (D3D11TransferBufferContainer *)transferBuffer->transferBuffer;
+    D3D11TransferBufferContainer *container = (D3D11TransferBufferContainer *)source->transferBuffer;
 
     SDL_memcpy(
-        data,
-        ((Uint8 *)container->activeBuffer->data) + transferBuffer->offset,
-        transferBuffer->size
+        destination,
+        ((Uint8 *)container->activeBuffer->data) + source->offset,
+        source->size
     );
 }
 

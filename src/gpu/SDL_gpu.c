@@ -1035,28 +1035,28 @@ void SDL_GpuUnmapTransferBuffer(
 
 void SDL_GpuSetTransferData(
     SDL_GpuDevice *device,
-    const void *data,
-    SDL_GpuTransferBufferRegion *transferBuffer,
+    const void *source,
+    SDL_GpuTransferBufferRegion *destination,
     SDL_bool cycle)
 {
     NULL_ASSERT(device)
     device->SetTransferData(
         device->driverData,
-        data,
-        transferBuffer,
+        source,
+        destination,
         cycle);
 }
 
 void SDL_GpuGetTransferData(
     SDL_GpuDevice *device,
-    SDL_GpuTransferBufferRegion *transferBuffer,
-    void *data)
+    SDL_GpuTransferBufferRegion *source,
+    void *destination)
 {
     NULL_ASSERT(device)
     device->GetTransferData(
         device->driverData,
-        transferBuffer,
-        data);
+        source,
+        destination);
 }
 
 /* Copy Pass */

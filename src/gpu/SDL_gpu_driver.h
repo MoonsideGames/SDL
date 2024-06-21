@@ -449,14 +449,14 @@ struct SDL_GpuDevice
 
     void (*SetTransferData)(
         SDL_GpuRenderer *driverData,
-        const void *data,
-        SDL_GpuTransferBufferRegion *transferBuffer,
+        const void *source,
+        SDL_GpuTransferBufferRegion *destination,
         SDL_bool cycle);
 
     void (*GetTransferData)(
         SDL_GpuRenderer *driverData,
-        SDL_GpuTransferBufferRegion *transferBuffer,
-        void *data);
+        SDL_GpuTransferBufferRegion *source,
+        void *destination);
 
     /* Copy Pass */
 
