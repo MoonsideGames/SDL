@@ -4941,6 +4941,12 @@ static void VULKAN_INTERNAL_BindGraphicsDescriptorSets(
             currentWriteDescriptorSet->pBufferInfo = &bufferInfos[bufferInfoCount];
 
             bufferInfoCount += 1;
+
+            VULKAN_INTERNAL_TrackBuffer(
+                renderer,
+                commandBuffer,
+                commandBuffer->vertexUniformBuffers[i]->bufferContainer->activeBufferHandle->vulkanBuffer
+            );
         }
 
         renderer->vkUpdateDescriptorSets(
@@ -5009,6 +5015,12 @@ static void VULKAN_INTERNAL_BindGraphicsDescriptorSets(
             currentWriteDescriptorSet->pImageInfo = &imageInfos[imageInfoCount];
 
             imageInfoCount += 1;
+
+            VULKAN_INTERNAL_TrackBuffer(
+                renderer,
+                commandBuffer,
+                commandBuffer->fragmentUniformBuffers[i]->bufferContainer->activeBufferHandle->vulkanBuffer
+            );
         }
 
         for (i = 0; i < resourceLayout->fragmentStorageTextureCount; i += 1) {
@@ -5076,7 +5088,7 @@ static void VULKAN_INTERNAL_BindGraphicsDescriptorSets(
         bufferInfoCount = 0;
         imageInfoCount = 0;
 
-        commandBuffer->needNewFragmentResourceDescriptorSet = SDL_TRUE;
+        commandBuffer->needNewFragmentResourceDescriptorSet = SDL_FALSE;
     }
 
     if (commandBuffer->needNewFragmentUniformDescriptorSet) {
@@ -7454,11 +7466,6 @@ static void VULKAN_INTERNAL_PushUniformData(
         uniformBuffer->drawOffset = 0;
         uniformBuffer->offset = 0;
 
-        VULKAN_INTERNAL_TrackBuffer(
-            renderer,
-            commandBuffer,
-            uniformBuffer->bufferContainer->activeBufferHandle->vulkanBuffer);
-
         if (uniformBufferStage == VULKAN_UNIFORM_BUFFER_STAGE_VERTEX) {
             commandBuffer->needNewVertexUniformDescriptorSet = SDL_TRUE;
         } else if (uniformBufferStage == VULKAN_UNIFORM_BUFFER_STAGE_FRAGMENT) {
@@ -7755,6 +7762,7 @@ static void VULKAN_BindGraphicsPipeline(
         1,
         &vulkanCommandBuffer->currentScissor);
 
+    /* Initialize null uniform buffers */
     for (i = vulkanCommandBuffer->initializedVertexUniformBufferCount; i < pipeline->resourceLayout.vertexUniformBufferCount; i += 1) {
         vulkanCommandBuffer->vertexUniformBuffers[i] = VULKAN_INTERNAL_CreateUniformBuffer(renderer, UNIFORM_BUFFER_SIZE);
         vulkanCommandBuffer->initializedVertexUniformBufferCount += 1;
@@ -7765,20 +7773,7 @@ static void VULKAN_BindGraphicsPipeline(
         vulkanCommandBuffer->initializedFragmentUniformBufferCount += 1;
     }
 
-    for (i = 0; i < pipeline->resourceLayout.vertexUniformBufferCount; i += 1) {
-        VULKAN_INTERNAL_TrackBuffer(
-            renderer,
-            vulkanCommandBuffer,
-            vulkanCommandBuffer->vertexUniformBuffers[i]->bufferContainer->activeBufferHandle->vulkanBuffer);
-    }
-
-    for (i = 0; i < pipeline->resourceLayout.fragmentUniformBufferCount; i += 1) {
-        VULKAN_INTERNAL_TrackBuffer(
-            renderer,
-            vulkanCommandBuffer,
-            vulkanCommandBuffer->fragmentUniformBuffers[i]->bufferContainer->activeBufferHandle->vulkanBuffer);
-    }
-
+    /* Mark bindings as needed */
     vulkanCommandBuffer->needNewVertexResourceDescriptorSet = SDL_TRUE;
     vulkanCommandBuffer->needNewFragmentResourceDescriptorSet = SDL_TRUE;
     vulkanCommandBuffer->needNewVertexUniformDescriptorSet = SDL_TRUE;
@@ -7843,10 +7838,14 @@ static void VULKAN_PushVertexUniformData(
     Uint32 dataLengthInBytes)
 {
     VulkanCommandBuffer *vulkanCommandBuffer = (VulkanCommandBuffer *)commandBuffer;
+    Uint32 i;
 
-    if (slotIndex >= vulkanCommandBuffer->currentGraphicsPipeline->resourceLayout.vertexUniformBufferCount) {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "No vertex uniforms exist on slot %i for this pipeline", slotIndex);
-        return;
+    /* Initialize null uniform buffers */
+    for (i = vulkanCommandBuffer->initializedVertexUniformBufferCount; i <= slotIndex; i += 1) {
+        vulkanCommandBuffer->vertexUniformBuffers[i] = VULKAN_INTERNAL_CreateUniformBuffer(
+            vulkanCommandBuffer->renderer,
+            UNIFORM_BUFFER_SIZE);
+        vulkanCommandBuffer->initializedVertexUniformBufferCount += 1;
     }
 
     VULKAN_INTERNAL_PushUniformData(
@@ -7865,10 +7864,14 @@ static void VULKAN_PushFragmentUniformData(
     Uint32 dataLengthInBytes)
 {
     VulkanCommandBuffer *vulkanCommandBuffer = (VulkanCommandBuffer *)commandBuffer;
+    Uint32 i;
 
-    if (slotIndex >= vulkanCommandBuffer->currentGraphicsPipeline->resourceLayout.fragmentUniformBufferCount) {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "No fragment uniforms exist on slot %i for this pipeline", slotIndex);
-        return;
+    /* Initialize null uniform buffers */
+    for (i = vulkanCommandBuffer->initializedFragmentUniformBufferCount; i <= slotIndex; i += 1) {
+        vulkanCommandBuffer->fragmentUniformBuffers[i] = VULKAN_INTERNAL_CreateUniformBuffer(
+            vulkanCommandBuffer->renderer,
+            UNIFORM_BUFFER_SIZE);
+        vulkanCommandBuffer->initializedFragmentUniformBufferCount += 1;
     }
 
     VULKAN_INTERNAL_PushUniformData(
@@ -7986,18 +7989,13 @@ static void VULKAN_BindComputePipeline(
 
     VULKAN_INTERNAL_TrackComputePipeline(renderer, vulkanCommandBuffer, vulkanComputePipeline);
 
+    /* Initialize null uniform buffers */
     for (i = vulkanCommandBuffer->initializedComputeUniformBufferCount; i < vulkanComputePipeline->resourceLayout.uniformBufferCount; i += 1) {
         vulkanCommandBuffer->computeUniformBuffers[i] = VULKAN_INTERNAL_CreateUniformBuffer(renderer, UNIFORM_BUFFER_SIZE);
         vulkanCommandBuffer->initializedComputeUniformBufferCount += 1;
     }
 
-    for (i = 0; i < vulkanComputePipeline->resourceLayout.uniformBufferCount; i += 1) {
-        VULKAN_INTERNAL_TrackBuffer(
-            renderer,
-            vulkanCommandBuffer,
-            vulkanCommandBuffer->computeUniformBuffers[i]->bufferContainer->activeBufferHandle->vulkanBuffer);
-    }
-
+    /* Mark binding as needed */
     vulkanCommandBuffer->needNewComputeReadWriteDescriptorSet = SDL_TRUE;
     vulkanCommandBuffer->needNewComputeReadOnlyDescriptorSet = SDL_TRUE;
     vulkanCommandBuffer->needNewComputeUniformDescriptorSet = SDL_TRUE;
@@ -8094,10 +8092,15 @@ static void VULKAN_PushComputeUniformData(
     Uint32 dataLengthInBytes)
 {
     VulkanCommandBuffer *vulkanCommandBuffer = (VulkanCommandBuffer *)commandBuffer;
+    Uint32 i;
 
-    if (slotIndex >= vulkanCommandBuffer->currentComputePipeline->resourceLayout.uniformBufferCount) {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "No compute uniforms exist on slot %i for this pipeline", slotIndex);
-        return;
+    /* Initialize null uniform buffers */
+    for (i = vulkanCommandBuffer->initializedComputeUniformBufferCount; i <= slotIndex; i += 1) {
+        vulkanCommandBuffer->computeUniformBuffers[slotIndex] = VULKAN_INTERNAL_CreateUniformBuffer(
+            vulkanCommandBuffer->renderer,
+            UNIFORM_BUFFER_SIZE
+        );
+        vulkanCommandBuffer->initializedComputeUniformBufferCount += 1;
     }
 
     VULKAN_INTERNAL_PushUniformData(
@@ -8319,6 +8322,12 @@ static void VULKAN_INTERNAL_BindComputeDescriptorSets(
             currentWriteDescriptorSet->pBufferInfo = &bufferInfos[bufferInfoCount];
 
             bufferInfoCount += 1;
+
+            VULKAN_INTERNAL_TrackBuffer(
+                renderer,
+                commandBuffer,
+                commandBuffer->computeUniformBuffers[i]->bufferContainer->activeBufferHandle->vulkanBuffer
+            );
         }
 
         renderer->vkUpdateDescriptorSets(
