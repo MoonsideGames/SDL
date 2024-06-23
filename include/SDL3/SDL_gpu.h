@@ -1184,6 +1184,8 @@ extern SDL_DECLSPEC SDL_GpuCommandBuffer *SDLCALL SDL_GpuAcquireCommandBuffer(
  * For example, you could write your vertex shaders to read a camera matrix from uniform binding slot 0,
  * push the camera matrix at the start of the command buffer, and that data will be used for every
  * subsequent draw call.
+ *
+ * It is valid to push uniform data during a render or compute pass.
  */
 
 /**
