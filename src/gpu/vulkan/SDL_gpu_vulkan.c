@@ -652,7 +652,7 @@ typedef struct VulkanUniformBuffer
     VulkanBufferContainer *bufferContainer;
 
     Uint32 drawOffset;
-    Uint32 offset;
+    Uint32 writeOffset;
 } VulkanUniformBuffer;
 
 typedef struct VulkanDescriptorInfo
@@ -6788,7 +6788,7 @@ static VulkanUniformBuffer *VULKAN_INTERNAL_CreateUniformBuffer(
         VULKAN_BUFFER_TYPE_UNIFORM);
 
     uniformBuffer->drawOffset = 0;
-    uniformBuffer->offset = 0;
+    uniformBuffer->writeOffset = 0;
 
     return uniformBuffer;
 }
@@ -7458,13 +7458,13 @@ static void VULKAN_INTERNAL_PushUniformData(
             renderer->minUBOAlignment);
 
     /* If there is no more room, cycle the uniform buffer */
-    if (uniformBuffer->offset + blockSize + MAX_UBO_SECTION_SIZE >= uniformBuffer->bufferContainer->activeBufferHandle->vulkanBuffer->size) {
+    if (uniformBuffer->writeOffset + blockSize + MAX_UBO_SECTION_SIZE >= uniformBuffer->bufferContainer->activeBufferHandle->vulkanBuffer->size) {
         VULKAN_INTERNAL_CycleActiveBuffer(
             renderer,
             uniformBuffer->bufferContainer);
 
         uniformBuffer->drawOffset = 0;
-        uniformBuffer->offset = 0;
+        uniformBuffer->writeOffset = 0;
 
         if (uniformBufferStage == VULKAN_UNIFORM_BUFFER_STAGE_VERTEX) {
             commandBuffer->needNewVertexUniformDescriptorSet = SDL_TRUE;
@@ -7478,19 +7478,19 @@ static void VULKAN_INTERNAL_PushUniformData(
         }
     }
 
-    uniformBuffer->drawOffset = uniformBuffer->offset;
+    uniformBuffer->drawOffset = uniformBuffer->writeOffset;
 
     Uint8 *dst =
         uniformBuffer->bufferContainer->activeBufferHandle->vulkanBuffer->usedRegion->allocation->mapPointer +
         uniformBuffer->bufferContainer->activeBufferHandle->vulkanBuffer->usedRegion->resourceOffset +
-        uniformBuffer->offset;
+        uniformBuffer->writeOffset;
 
     SDL_memcpy(
         dst,
         data,
         dataLengthInBytes);
 
-    uniformBuffer->offset += blockSize;
+    uniformBuffer->writeOffset += blockSize;
 
     if (uniformBufferStage == VULKAN_UNIFORM_BUFFER_STAGE_VERTEX) {
         commandBuffer->needNewVertexUniformOffsets = SDL_TRUE;

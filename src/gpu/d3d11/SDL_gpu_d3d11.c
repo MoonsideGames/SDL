@@ -615,7 +615,7 @@ typedef struct D3D11UniformBuffer
     D3D11BufferContainer *bufferContainer;
 
     Uint32 drawOffset;
-    Uint32 offset;
+    Uint32 writeOffset;
     Uint32 currentBlockSize;
 } D3D11UniformBuffer;
 
@@ -2553,7 +2553,7 @@ static D3D11UniformBuffer *D3D11_INTERNAL_CreateUniformBuffer(
 
     uniformBuffer = SDL_malloc(sizeof(D3D11UniformBuffer));
     uniformBuffer->bufferContainer = container;
-    uniformBuffer->offset = 0;
+    uniformBuffer->writeOffset = 0;
     uniformBuffer->currentBlockSize = 0;
 
     return uniformBuffer;
@@ -3416,12 +3416,13 @@ static void D3D11_INTERNAL_PushUniformData(
             dataLengthInBytes,
             256);
 
-    if (d3d11UniformBuffer->offset + d3d11UniformBuffer->currentBlockSize >= d3d11UniformBuffer->bufferContainer->activeBuffer->size) {
+    if (d3d11UniformBuffer->writeOffset + d3d11UniformBuffer->currentBlockSize >= d3d11UniformBuffer->bufferContainer->activeBuffer->size) {
         D3D11_INTERNAL_CycleActiveBuffer(
             renderer,
             d3d11UniformBuffer->bufferContainer);
 
-        d3d11UniformBuffer->offset = 0;
+        d3d11UniformBuffer->drawOffset = 0;
+        d3d11UniformBuffer->writeOffset = 0;
 
         if (shaderStage == SDL_GPU_SHADERSTAGE_VERTEX) {
             d3d11CommandBuffer->needVertexUniformBufferBind = SDL_TRUE;
@@ -3434,17 +3435,17 @@ static void D3D11_INTERNAL_PushUniformData(
         }
     }
 
-    d3d11UniformBuffer->drawOffset = d3d11UniformBuffer->offset;
+    d3d11UniformBuffer->drawOffset = d3d11UniformBuffer->writeOffset;
 
     D3D11_INTERNAL_SetUniformBufferData(
         renderer,
         d3d11CommandBuffer,
         d3d11UniformBuffer->bufferContainer->activeBuffer,
-        d3d11UniformBuffer->offset,
+        d3d11UniformBuffer->writeOffset,
         data,
         dataLengthInBytes);
 
-    d3d11UniformBuffer->offset += d3d11UniformBuffer->currentBlockSize;
+    d3d11UniformBuffer->writeOffset += d3d11UniformBuffer->currentBlockSize;
 }
 
 static void D3D11_BeginRenderPass(
@@ -4183,7 +4184,7 @@ static void D3D11_PushVertexUniformData(
             d3d11CommandBuffer->renderer,
             d3d11CommandBuffer->vertexUniformBuffers[slotIndex]->bufferContainer);
 
-        d3d11CommandBuffer->vertexUniformBuffers[slotIndex]->offset = 0;
+        d3d11CommandBuffer->vertexUniformBuffers[slotIndex]->writeOffset = 0;
         d3d11CommandBuffer->vertexUniformBuffers[slotIndex]->drawOffset = 0;
 
         d3d11CommandBuffer->vertexUniformBufferNeedsReset[slotIndex] = SDL_FALSE;
@@ -4221,7 +4222,7 @@ static void D3D11_PushFragmentUniformData(
             d3d11CommandBuffer->renderer,
             d3d11CommandBuffer->fragmentUniformBuffers[slotIndex]->bufferContainer);
 
-        d3d11CommandBuffer->fragmentUniformBuffers[slotIndex]->offset = 0;
+        d3d11CommandBuffer->fragmentUniformBuffers[slotIndex]->writeOffset = 0;
         d3d11CommandBuffer->fragmentUniformBuffers[slotIndex]->drawOffset = 0;
 
         d3d11CommandBuffer->fragmentUniformBufferNeedsReset[slotIndex] = SDL_FALSE;
@@ -4496,7 +4497,7 @@ static void D3D11_PushComputeUniformData(
             d3d11CommandBuffer->renderer,
             d3d11CommandBuffer->computeUniformBuffers[slotIndex]->bufferContainer);
 
-        d3d11CommandBuffer->computeUniformBuffers[slotIndex]->offset = 0;
+        d3d11CommandBuffer->computeUniformBuffers[slotIndex]->writeOffset = 0;
         d3d11CommandBuffer->computeUniformBuffers[slotIndex]->drawOffset = 0;
 
         d3d11CommandBuffer->computeUniformBufferNeedsReset[slotIndex] = SDL_FALSE;
