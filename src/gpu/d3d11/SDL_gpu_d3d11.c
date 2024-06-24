@@ -134,7 +134,6 @@ static const GUID D3D_IID_DXGI_DEBUG_ALL = { 0xe48ae283, 0xda80, 0x490b, { 0x87,
 #define DXGI_GET_DEBUG_INTERFACE_FUNC "DXGIGetDebugInterface"
 #define WINDOW_PROPERTY_DATA          "SDL_GpuD3D11WindowPropertyData"
 
-#define UNIFORM_BUFFER_SIZE         1048576 /* 1 MiB */
 #define SDL_GPU_SHADERSTAGE_COMPUTE 2
 
 #ifdef _WIN32
@@ -686,10 +685,6 @@ typedef struct D3D11CommandBuffer
     SDL_bool fragmentUniformBufferNeedsReset[MAX_UNIFORM_BUFFERS_PER_STAGE];
     SDL_bool computeUniformBufferNeedsReset[MAX_UNIFORM_BUFFERS_PER_STAGE];
 
-    Uint32 initializedVertexUniformBufferCount;
-    Uint32 initializedFragmentUniformBufferCount;
-    Uint32 initializedComputeUniformBufferCount;
-
     /* Fences */
     D3D11Fence *fence;
     Uint8 autoReleaseFence;
@@ -950,19 +945,19 @@ static void D3D11_DestroyDevice(
         SDL_free(commandBuffer->usedBuffers);
         SDL_free(commandBuffer->usedTransferBuffers);
 
-        for (Uint32 j = 0; j < commandBuffer->initializedVertexUniformBufferCount; j += 1) {
+        for (Uint32 j = 0; j < MAX_UNIFORM_BUFFERS_PER_STAGE; j += 1) {
             D3D11_INTERNAL_DestroyBufferContainer(
                 commandBuffer->vertexUniformBuffers[j]->bufferContainer);
             SDL_free(commandBuffer->vertexUniformBuffers[j]);
         }
 
-        for (Uint32 j = 0; j < commandBuffer->initializedFragmentUniformBufferCount; j += 1) {
+        for (Uint32 j = 0; j < MAX_UNIFORM_BUFFERS_PER_STAGE; j += 1) {
             D3D11_INTERNAL_DestroyBufferContainer(
                 commandBuffer->fragmentUniformBuffers[j]->bufferContainer);
             SDL_free(commandBuffer->fragmentUniformBuffers[j]);
         }
 
-        for (Uint32 j = 0; j < commandBuffer->initializedComputeUniformBufferCount; j += 1) {
+        for (Uint32 j = 0; j < MAX_UNIFORM_BUFFERS_PER_STAGE; j += 1) {
             D3D11_INTERNAL_DestroyBufferContainer(
                 commandBuffer->computeUniformBuffers[j]->bufferContainer);
             SDL_free(commandBuffer->computeUniformBuffers[j]);
@@ -3230,10 +3225,20 @@ static void D3D11_INTERNAL_AllocateCommandBuffers(
             &D3D_IID_ID3DUserDefinedAnnotation,
             (void **)&commandBuffer->annotation);
 
-        commandBuffer->initializedVertexUniformBufferCount = 0;
-        commandBuffer->initializedFragmentUniformBufferCount = 0;
-        commandBuffer->initializedComputeUniformBufferCount = 0;
+        /* Uniform buffers */
+        for (i = 0; i < MAX_UNIFORM_BUFFERS_PER_STAGE; i += 1) {
+            commandBuffer->vertexUniformBuffers[i] = D3D11_INTERNAL_CreateUniformBuffer(
+                renderer,
+                UNIFORM_BUFFER_SIZE);
+            commandBuffer->fragmentUniformBuffers[i] = D3D11_INTERNAL_CreateUniformBuffer(
+                renderer,
+                UNIFORM_BUFFER_SIZE);
+            commandBuffer->computeUniformBuffers[i] = D3D11_INTERNAL_CreateUniformBuffer(
+                renderer,
+                UNIFORM_BUFFER_SIZE);
+        }
 
+        /* Window handling */
         commandBuffer->windowDataCapacity = 1;
         commandBuffer->windowDataCount = 0;
         commandBuffer->windowDatas = SDL_malloc(
@@ -3618,7 +3623,6 @@ static void D3D11_BindGraphicsPipeline(
 {
     D3D11CommandBuffer *d3d11CommandBuffer = (D3D11CommandBuffer *)commandBuffer;
     D3D11GraphicsPipeline *pipeline = (D3D11GraphicsPipeline *)graphicsPipeline;
-    Uint32 i;
 
     d3d11CommandBuffer->graphicsPipeline = pipeline;
 
@@ -3656,17 +3660,6 @@ static void D3D11_BindGraphicsPipeline(
         pipeline->fragmentShader,
         NULL,
         0);
-
-    /* Initialize null uniform buffers */
-    for (i = d3d11CommandBuffer->initializedVertexUniformBufferCount; i < pipeline->vertexUniformBufferCount; i += 1) {
-        d3d11CommandBuffer->vertexUniformBuffers[i] = D3D11_INTERNAL_CreateUniformBuffer(d3d11CommandBuffer->renderer, UNIFORM_BUFFER_SIZE);
-        d3d11CommandBuffer->initializedVertexUniformBufferCount += 1;
-    }
-
-    for (i = d3d11CommandBuffer->initializedFragmentUniformBufferCount; i < pipeline->fragmentUniformBufferCount; i += 1) {
-        d3d11CommandBuffer->fragmentUniformBuffers[i] = D3D11_INTERNAL_CreateUniformBuffer(d3d11CommandBuffer->renderer, UNIFORM_BUFFER_SIZE);
-        d3d11CommandBuffer->initializedFragmentUniformBufferCount += 1;
-    }
 
     /* Mark that uniform bindings are needed */
     d3d11CommandBuffer->needVertexUniformBufferBind = SDL_TRUE;
@@ -4167,16 +4160,6 @@ static void D3D11_PushVertexUniformData(
     Uint32 dataLengthInBytes)
 {
     D3D11CommandBuffer *d3d11CommandBuffer = (D3D11CommandBuffer *)commandBuffer;
-    Uint32 i;
-
-    /* Initialize null uniform buffers */
-    for (i = d3d11CommandBuffer->initializedVertexUniformBufferCount; i <= slotIndex; i += 1) {
-        d3d11CommandBuffer->vertexUniformBuffers[i] = D3D11_INTERNAL_CreateUniformBuffer(
-            d3d11CommandBuffer->renderer,
-            UNIFORM_BUFFER_SIZE
-        );
-        d3d11CommandBuffer->initializedVertexUniformBufferCount += 1;
-    }
 
     /* The first map call on a deferred context must be DISCARD so we cycle here */
     if (d3d11CommandBuffer->vertexUniformBufferNeedsReset[slotIndex]) {
@@ -4205,16 +4188,6 @@ static void D3D11_PushFragmentUniformData(
     Uint32 dataLengthInBytes)
 {
     D3D11CommandBuffer *d3d11CommandBuffer = (D3D11CommandBuffer *)commandBuffer;
-    Uint32 i;
-
-    /* Initialize null uniform buffers */
-    for (i = d3d11CommandBuffer->initializedFragmentUniformBufferCount; i <= slotIndex; i += 1) {
-        d3d11CommandBuffer->fragmentUniformBuffers[i] = D3D11_INTERNAL_CreateUniformBuffer(
-            d3d11CommandBuffer->renderer,
-            UNIFORM_BUFFER_SIZE
-        );
-        d3d11CommandBuffer->initializedFragmentUniformBufferCount += 1;
-    }
 
     /* The first map call on a deferred context must be DISCARD so we reset here */
     if (d3d11CommandBuffer->fragmentUniformBufferNeedsReset[slotIndex]) {
@@ -4402,7 +4375,6 @@ static void D3D11_BindComputePipeline(
 {
     D3D11CommandBuffer *d3d11CommandBuffer = (D3D11CommandBuffer *)commandBuffer;
     D3D11ComputePipeline *pipeline = (D3D11ComputePipeline *)computePipeline;
-    Uint32 i;
 
     d3d11CommandBuffer->computePipeline = pipeline;
 
@@ -4411,12 +4383,6 @@ static void D3D11_BindComputePipeline(
         pipeline->computeShader,
         NULL,
         0);
-
-    /* Initialize null uniform buffers */
-    for (i = d3d11CommandBuffer->initializedComputeUniformBufferCount; i < pipeline->uniformBufferCount; i += 1) {
-        d3d11CommandBuffer->computeUniformBuffers[i] = D3D11_INTERNAL_CreateUniformBuffer(d3d11CommandBuffer->renderer, UNIFORM_BUFFER_SIZE);
-        d3d11CommandBuffer->initializedComputeUniformBufferCount += 1;
-    }
 
     d3d11CommandBuffer->needComputeUniformBufferBind = SDL_TRUE;
 }
@@ -4481,15 +4447,6 @@ static void D3D11_PushComputeUniformData(
     Uint32 dataLengthInBytes)
 {
     D3D11CommandBuffer *d3d11CommandBuffer = (D3D11CommandBuffer *)commandBuffer;
-    Uint32 i;
-
-    /* Initialize null uniform buffers */
-    for (i = d3d11CommandBuffer->initializedComputeUniformBufferCount; i <= slotIndex; i += 1) {
-        d3d11CommandBuffer->computeUniformBuffers[i] = D3D11_INTERNAL_CreateUniformBuffer(
-            d3d11CommandBuffer->renderer,
-            UNIFORM_BUFFER_SIZE);
-        d3d11CommandBuffer->initializedComputeUniformBufferCount += 1;
-    }
 
     /* The first map call on a deferred context must be DISCARD so we reset here */
     if (d3d11CommandBuffer->computeUniformBufferNeedsReset[slotIndex]) {

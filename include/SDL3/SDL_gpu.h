@@ -1177,7 +1177,7 @@ extern SDL_DECLSPEC SDL_GpuCommandBuffer *SDLCALL SDL_GpuAcquireCommandBuffer(
  * Uniforms are for passing data to shaders.
  * The uniform data will be constant across all executions of the shader.
  *
- * There are 14 available uniform slots per shader stage (vertex, fragment, compute).
+ * There are 4 available uniform slots per shader stage (vertex, fragment, compute).
  * Uniform data pushed to a slot on a stage keeps its value throughout the command buffer
  * until you call the relevant Push function on that slot again.
  *
@@ -1186,6 +1186,9 @@ extern SDL_DECLSPEC SDL_GpuCommandBuffer *SDLCALL SDL_GpuAcquireCommandBuffer(
  * subsequent draw call.
  *
  * It is valid to push uniform data during a render or compute pass.
+ *
+ * Uniforms are best for pushing small amounts of data.
+ * If you are pushing more than a matrix or two per call you should consider using a storage buffer instead.
  */
 
 /**
