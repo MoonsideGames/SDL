@@ -8980,7 +8980,7 @@ static void VULKAN_INTERNAL_AllocateCommandBuffers(
 {
     VkCommandBufferAllocateInfo allocateInfo;
     VkResult vulkanResult;
-    Uint32 i;
+    Uint32 i, j;
     VkCommandBuffer *commandBuffers = SDL_stack_alloc(VkCommandBuffer, allocateCount);
     VulkanCommandBuffer *commandBuffer;
 
@@ -9017,14 +9017,14 @@ static void VULKAN_INTERNAL_AllocateCommandBuffers(
         commandBuffer->inFlightFence = VK_NULL_HANDLE;
 
         /* Uniform buffers */
-        for (i = 0; i < MAX_UNIFORM_BUFFERS_PER_STAGE; i += 1) {
-            commandBuffer->vertexUniformBuffers[i] = VULKAN_INTERNAL_CreateUniformBuffer(
+        for (j = 0; j < MAX_UNIFORM_BUFFERS_PER_STAGE; j += 1) {
+            commandBuffer->vertexUniformBuffers[j] = VULKAN_INTERNAL_CreateUniformBuffer(
                 renderer,
                 UNIFORM_BUFFER_SIZE);
-            commandBuffer->fragmentUniformBuffers[i] = VULKAN_INTERNAL_CreateUniformBuffer(
+            commandBuffer->fragmentUniformBuffers[j] = VULKAN_INTERNAL_CreateUniformBuffer(
                 renderer,
                 UNIFORM_BUFFER_SIZE);
-            commandBuffer->computeUniformBuffers[i] = VULKAN_INTERNAL_CreateUniformBuffer(
+            commandBuffer->computeUniformBuffers[j] = VULKAN_INTERNAL_CreateUniformBuffer(
                 renderer,
                 UNIFORM_BUFFER_SIZE);
         }
