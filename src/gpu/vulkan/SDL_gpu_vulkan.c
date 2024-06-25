@@ -2990,34 +2990,11 @@ static void VULKAN_INTERNAL_DestroyBuffer(
     SDL_free(buffer);
 }
 
-static void VULKAN_INTERNAL_DestroyBufferContainer(
-    VulkanRenderer *renderer,
-    VulkanBufferContainer *bufferContainer)
-{
-    Uint32 i;
-
-    SDL_LockMutex(renderer->disposeLock);
-
-    for (i = 0; i < bufferContainer->bufferCount; i += 1) {
-        VULKAN_INTERNAL_DestroyBuffer(renderer, bufferContainer->bufferHandles[i]->vulkanBuffer);
-        SDL_free(bufferContainer->bufferHandles[i]);
-    }
-
-    /* Containers are just client handles, so we can free immediately */
-    if (bufferContainer->debugName != NULL) {
-        SDL_free(bufferContainer->debugName);
-    }
-    SDL_free(bufferContainer->bufferHandles);
-    SDL_free(bufferContainer);
-
-    SDL_UnlockMutex(renderer->disposeLock);
-}
-
 static void VULKAN_INTERNAL_DestroyCommandPool(
     VulkanRenderer *renderer,
     VulkanCommandPool *commandPool)
 {
-    Uint32 i, j;
+    Uint32 i;
     VulkanCommandBuffer *commandBuffer;
 
     renderer->vkDestroyCommandPool(
@@ -7287,7 +7264,6 @@ static void VULKAN_BindVertexSamplers(
     Uint32 bindingCount)
 {
     VulkanCommandBuffer *vulkanCommandBuffer = (VulkanCommandBuffer *)commandBuffer;
-    VulkanRenderer *renderer = vulkanCommandBuffer->renderer;
     VulkanTextureContainer *textureContainer;
     Uint32 i, j;
 
@@ -7317,7 +7293,6 @@ static void VULKAN_BindVertexStorageTextures(
     Uint32 bindingCount)
 {
     VulkanCommandBuffer *vulkanCommandBuffer = (VulkanCommandBuffer *)commandBuffer;
-    VulkanRenderer *renderer = vulkanCommandBuffer->renderer;
     VulkanTextureContainer *textureContainer;
     VulkanTextureSlice *textureSlice;
     Uint32 i;
@@ -7346,7 +7321,6 @@ static void VULKAN_BindVertexStorageBuffers(
     Uint32 bindingCount)
 {
     VulkanCommandBuffer *vulkanCommandBuffer = (VulkanCommandBuffer *)commandBuffer;
-    VulkanRenderer *renderer = vulkanCommandBuffer->renderer;
     VulkanBufferContainer *bufferContainer;
     Uint32 i;
 
@@ -7370,7 +7344,6 @@ static void VULKAN_BindFragmentSamplers(
     Uint32 bindingCount)
 {
     VulkanCommandBuffer *vulkanCommandBuffer = (VulkanCommandBuffer *)commandBuffer;
-    VulkanRenderer *renderer = vulkanCommandBuffer->renderer;
     VulkanTextureContainer *textureContainer;
     Uint32 i, j;
 
@@ -7400,7 +7373,6 @@ static void VULKAN_BindFragmentStorageTextures(
     Uint32 bindingCount)
 {
     VulkanCommandBuffer *vulkanCommandBuffer = (VulkanCommandBuffer *)commandBuffer;
-    VulkanRenderer *renderer = vulkanCommandBuffer->renderer;
     VulkanTextureContainer *textureContainer;
     VulkanTextureSlice *textureSlice;
     Uint32 i;
@@ -7429,7 +7401,6 @@ static void VULKAN_BindFragmentStorageBuffers(
     Uint32 bindingCount)
 {
     VulkanCommandBuffer *vulkanCommandBuffer = (VulkanCommandBuffer *)commandBuffer;
-    VulkanRenderer *renderer = vulkanCommandBuffer->renderer;
     VulkanBufferContainer *bufferContainer;
     Uint32 i;
 
@@ -9049,7 +9020,7 @@ static void VULKAN_INTERNAL_AllocateCommandBuffers(
 {
     VkCommandBufferAllocateInfo allocateInfo;
     VkResult vulkanResult;
-    Uint32 i, j;
+    Uint32 i;
     VkCommandBuffer *commandBuffers = SDL_stack_alloc(VkCommandBuffer, allocateCount);
     VulkanCommandBuffer *commandBuffer;
 
