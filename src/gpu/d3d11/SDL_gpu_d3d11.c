@@ -1,4 +1,4 @@
-﻿/*
+/*
   Simple DirectMedia Layer
   Copyright (C) 1997-2024 Sam Lantinga <slouken@libsdl.org>
 
@@ -3115,8 +3115,8 @@ static void D3D11_CopyBufferToBuffer(
 {
     D3D11CommandBuffer *d3d11CommandBuffer = (D3D11CommandBuffer *)commandBuffer;
     D3D11Renderer *renderer = (D3D11Renderer *)d3d11CommandBuffer->renderer;
-    D3D11BufferContainer *srcBufferContainer = (D3D11BufferContainer *)source;
-    D3D11BufferContainer *dstBufferContainer = (D3D11BufferContainer *)destination;
+    D3D11BufferContainer *srcBufferContainer = (D3D11BufferContainer *)source->buffer;
+    D3D11BufferContainer *dstBufferContainer = (D3D11BufferContainer *)destination->buffer;
     D3D11_BOX srcBox = { source->offset, 0, 0, source->offset + size, 1, 1 };
 
     D3D11Buffer *srcBuffer = srcBufferContainer->activeBuffer;
