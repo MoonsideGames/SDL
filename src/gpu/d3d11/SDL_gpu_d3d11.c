@@ -2532,7 +2532,6 @@ static D3D11UniformBuffer *D3D11_INTERNAL_CreateUniformBuffer(
     Uint32 sizeInBytes)
 {
     D3D11UniformBuffer *uniformBuffer;
-    D3D11BufferContainer *container;
     ID3D11Buffer *buffer;
     D3D11_BUFFER_DESC bufferDesc;
     HRESULT res;
@@ -3475,6 +3474,7 @@ static void D3D11_INTERNAL_PushUniformData(
             D3D11_MAP_WRITE_DISCARD,
             0,
             &subres);
+        ERROR_CHECK_RETURN("Failed to map uniform buffer",)
 
         d3d11UniformBuffer->mappedData = subres.pData;
     }
@@ -5543,11 +5543,10 @@ static void D3D11_Submit(
     D3D11Renderer *renderer = (D3D11Renderer *)d3d11CommandBuffer->renderer;
     ID3D11CommandList *commandList;
     HRESULT res;
-    Uint32 i;
 
     /* Unmap uniform buffers */
 
-    for (i = 0; i < MAX_UNIFORM_BUFFERS_PER_STAGE; i += 1) {
+    for (Uint32 i = 0; i < MAX_UNIFORM_BUFFERS_PER_STAGE; i += 1) {
         if (d3d11CommandBuffer->vertexUniformBuffers[i] != NULL) {
             ID3D11DeviceContext_Unmap(
                 d3d11CommandBuffer->context,
