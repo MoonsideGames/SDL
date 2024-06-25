@@ -3463,13 +3463,10 @@ static void D3D11_INTERNAL_PushUniformData(
 
         if (shaderStage == SDL_GPU_SHADERSTAGE_VERTEX) {
             d3d11CommandBuffer->vertexUniformBuffers[slotIndex] = d3d11UniformBuffer;
-            d3d11CommandBuffer->needVertexUniformBufferBind = SDL_TRUE;
         } else if (shaderStage == SDL_GPU_SHADERSTAGE_FRAGMENT) {
             d3d11CommandBuffer->fragmentUniformBuffers[slotIndex] = d3d11UniformBuffer;
-            d3d11CommandBuffer->needFragmentUniformBufferBind = SDL_TRUE;
         } else if (shaderStage == SDL_GPU_SHADERSTAGE_COMPUTE) {
             d3d11CommandBuffer->computeUniformBuffers[slotIndex] = d3d11UniformBuffer;
-            d3d11CommandBuffer->needComputeUniformBufferBind = SDL_TRUE;
         } else {
             SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Unrecognized shader stage!");
         }
@@ -3496,6 +3493,16 @@ static void D3D11_INTERNAL_PushUniformData(
         dataLengthInBytes);
 
     d3d11UniformBuffer->writeOffset += d3d11UniformBuffer->currentBlockSize;
+
+    if (shaderStage == SDL_GPU_SHADERSTAGE_VERTEX) {
+        d3d11CommandBuffer->needVertexUniformBufferBind = SDL_TRUE;
+    } else if (shaderStage == SDL_GPU_SHADERSTAGE_FRAGMENT) {
+        d3d11CommandBuffer->needFragmentUniformBufferBind = SDL_TRUE;
+    } else if (shaderStage == SDL_GPU_SHADERSTAGE_COMPUTE) {
+        d3d11CommandBuffer->needComputeUniformBufferBind = SDL_TRUE;
+    } else {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Unrecognized shader stage!");
+    }
 }
 
 static void D3D11_BeginRenderPass(
