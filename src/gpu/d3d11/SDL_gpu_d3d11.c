@@ -1,4 +1,4 @@
-/*
+﻿/*
   Simple DirectMedia Layer
   Copyright (C) 1997-2024 Sam Lantinga <slouken@libsdl.org>
 
@@ -2825,7 +2825,7 @@ static void D3D11_UploadToTexture(
         return;
     }
 
-    ID3D11DeviceContext1_CopySubresourceRegion1(
+    ID3D11DeviceContext_CopySubresourceRegion(
         d3d11CommandBuffer->context,
         textureSubresource->parent->handle,
         textureSubresource->index,
@@ -2834,8 +2834,7 @@ static void D3D11_UploadToTexture(
         destination->z,
         stagingTexture->handle,
         0,
-        NULL,
-        D3D11_COPY_NO_OVERWRITE);
+        NULL);
 
     /* Clean up the staging texture */
     D3D11_INTERNAL_DestroyTexture(stagingTexture);
@@ -2884,7 +2883,7 @@ static void D3D11_UploadToBuffer(
     ERROR_CHECK_RETURN("Could not create staging buffer", )
 
     /* Copy from staging buffer to buffer */
-    ID3D11DeviceContext1_CopySubresourceRegion1(
+    ID3D11DeviceContext1_CopySubresourceRegion(
         d3d11CommandBuffer->context,
         (ID3D11Resource *)d3d11Buffer->handle,
         0,
@@ -2893,9 +2892,7 @@ static void D3D11_UploadToBuffer(
         0,
         (ID3D11Resource *)stagingBuffer,
         0,
-        NULL,
-        D3D11_COPY_NO_OVERWRITE /* always no overwrite because we manually discard */
-    );
+        NULL);
 
     ID3D11Buffer_Release(stagingBuffer);
 
@@ -3090,7 +3087,7 @@ static void D3D11_CopyTextureToTexture(
         destination->textureSlice.mipLevel,
         cycle);
 
-    ID3D11DeviceContext1_CopySubresourceRegion1(
+    ID3D11DeviceContext1_CopySubresourceRegion(
         d3d11CommandBuffer->context,
         dstSubresource->parent->handle,
         dstSubresource->index,
@@ -3099,8 +3096,7 @@ static void D3D11_CopyTextureToTexture(
         destination->z,
         srcSubresource->parent->handle,
         srcSubresource->index,
-        &srcBox,
-        D3D11_COPY_NO_OVERWRITE);
+        &srcBox);
 
     D3D11_INTERNAL_TrackTextureSubresource(d3d11CommandBuffer, srcSubresource);
     D3D11_INTERNAL_TrackTextureSubresource(d3d11CommandBuffer, dstSubresource);
@@ -3125,7 +3121,7 @@ static void D3D11_CopyBufferToBuffer(
         dstBufferContainer,
         cycle);
 
-    ID3D11DeviceContext1_CopySubresourceRegion1(
+    ID3D11DeviceContext1_CopySubresourceRegion(
         d3d11CommandBuffer->context,
         (ID3D11Resource *)dstBuffer->handle,
         0,
@@ -3134,9 +3130,7 @@ static void D3D11_CopyBufferToBuffer(
         0,
         (ID3D11Resource *)srcBuffer->handle,
         0,
-        &srcBox,
-        D3D11_COPY_NO_OVERWRITE /* always no overwrite because we either manually discard or the write is unsafe */
-    );
+        &srcBox);
 
     D3D11_INTERNAL_TrackBuffer(d3d11CommandBuffer, srcBuffer);
     D3D11_INTERNAL_TrackBuffer(d3d11CommandBuffer, dstBuffer);
