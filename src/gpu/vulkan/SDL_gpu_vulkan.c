@@ -7803,6 +7803,21 @@ static void VULKAN_BindGraphicsPipeline(
         1,
         &vulkanCommandBuffer->currentScissor);
 
+    /* Acquire uniform buffers if necessary */
+    for (Uint32 i = 0; i < pipeline->resourceLayout.vertexUniformBufferCount; i += 1) {
+        if (vulkanCommandBuffer->vertexUniformBuffers[i] == NULL ) {
+            vulkanCommandBuffer->vertexUniformBuffers[i] = VULKAN_INTERNAL_AcquireUniformBufferFromPool(
+                vulkanCommandBuffer->renderer);
+        }
+    }
+
+    for (Uint32 i = 0; i < pipeline->resourceLayout.fragmentUniformBufferCount; i += 1) {
+        if (vulkanCommandBuffer->fragmentUniformBuffers[i] == NULL) {
+            vulkanCommandBuffer->fragmentUniformBuffers[i] = VULKAN_INTERNAL_AcquireUniformBufferFromPool(
+                vulkanCommandBuffer->renderer);
+        }
+    }
+
     /* Mark bindings as needed */
     vulkanCommandBuffer->needNewVertexResourceDescriptorSet = SDL_TRUE;
     vulkanCommandBuffer->needNewFragmentResourceDescriptorSet = SDL_TRUE;
@@ -7995,6 +8010,14 @@ static void VULKAN_BindComputePipeline(
     vulkanCommandBuffer->currentComputePipeline = vulkanComputePipeline;
 
     VULKAN_INTERNAL_TrackComputePipeline(vulkanCommandBuffer, vulkanComputePipeline);
+
+    /* Acquire uniform buffers if necessary */
+    for (Uint32 i = 0; i < vulkanComputePipeline->resourceLayout.uniformBufferCount; i += 1) {
+        if (vulkanCommandBuffer->computeUniformBuffers[i] == NULL) {
+            vulkanCommandBuffer->computeUniformBuffers[i] = VULKAN_INTERNAL_AcquireUniformBufferFromPool(
+                vulkanCommandBuffer->renderer);
+        }
+    }
 
     /* Mark binding as needed */
     vulkanCommandBuffer->needNewComputeReadWriteDescriptorSet = SDL_TRUE;

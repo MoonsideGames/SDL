@@ -2188,14 +2188,14 @@ static void METAL_BindGraphicsPipeline(
             setStencilReferenceValue:metalGraphicsPipeline->stencilReference];
     }
 
-    for (Uint32 i = 0; i < metalGraphicsPipeline->fragmentUniformBufferCount; i += 1) {
+    for (Uint32 i = 0; i < metalGraphicsPipeline->vertexUniformBufferCount; i += 1) {
         if (metalCommandBuffer->vertexUniformBuffers[i] == NULL) {
             metalCommandBuffer->vertexUniformBuffers[i] = METAL_INTERNAL_AcquireUniformBufferFromPool(
                 metalCommandBuffer->renderer);
         }
     }
 
-    for (Uint32 i = 0; i < metalGraphicsPipeline->vertexUniformBufferCount; i += 1) {
+    for (Uint32 i = 0; i < metalGraphicsPipeline->fragmentUniformBufferCount; i += 1) {
         if (metalCommandBuffer->fragmentUniformBuffers[i] == NULL) {
             metalCommandBuffer->fragmentUniformBuffers[i] = METAL_INTERNAL_AcquireUniformBufferFromPool(
                 metalCommandBuffer->renderer);

@@ -3707,6 +3707,21 @@ static void D3D11_BindGraphicsPipeline(
         NULL,
         0);
 
+    /* Acquire uniform buffers if necessary */
+    for (Uint32 i = 0; i < pipeline->vertexUniformBufferCount; i += 1) {
+        if (d3d11CommandBuffer->vertexUniformBuffers[i] == NULL) {
+            d3d11CommandBuffer->vertexUniformBuffers[i] = D3D11_INTERNAL_AcquireUniformBufferFromPool(
+                d3d11CommandBuffer->renderer);
+        }
+    }
+
+    for (Uint32 i = 0; i < pipeline->fragmentUniformBufferCount; i += 1) {
+        if (d3d11CommandBuffer->fragmentUniformBuffers[i] == NULL) {
+            d3d11CommandBuffer->fragmentUniformBuffers[i] = D3D11_INTERNAL_AcquireUniformBufferFromPool(
+                d3d11CommandBuffer->renderer);
+        }
+    }
+
     /* Mark that uniform bindings are needed */
     d3d11CommandBuffer->needVertexUniformBufferBind = SDL_TRUE;
     d3d11CommandBuffer->needFragmentUniformBufferBind = SDL_TRUE;
@@ -4401,6 +4416,14 @@ static void D3D11_BindComputePipeline(
         pipeline->computeShader,
         NULL,
         0);
+
+    /* Acquire uniform buffers if necessary */
+    for (Uint32 i = 0; i < pipeline->uniformBufferCount; i += 1) {
+        if (d3d11CommandBuffer->computeUniformBuffers[i] == NULL) {
+            d3d11CommandBuffer->computeUniformBuffers[i] = D3D11_INTERNAL_AcquireUniformBufferFromPool(
+                d3d11CommandBuffer->renderer);
+        }
+    }
 
     d3d11CommandBuffer->needComputeUniformBufferBind = SDL_TRUE;
 }
