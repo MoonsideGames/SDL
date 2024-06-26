@@ -1940,10 +1940,11 @@ extern SDL_DECLSPEC void SDLCALL SDL_GpuUnclaimWindow(
  * \param window an SDL_Window that has been claimed
  * \param swapchainComposition the desired composition of the swapchain
  * \param presentMode the desired present mode for the swapchain
+ * \returns SDL_TRUE if successful, SDL_FALSE on error
  *
  * \since This function is available since SDL 3.x.x
  */
-extern SDL_DECLSPEC void SDLCALL SDL_GpuSetSwapchainParameters(
+extern SDL_DECLSPEC SDL_bool SDLCALL SDL_GpuSetSwapchainParameters(
     SDL_GpuDevice *device,
     SDL_Window *window,
     SDL_GpuSwapchainComposition swapchainComposition,

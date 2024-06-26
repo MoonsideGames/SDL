@@ -4181,7 +4181,7 @@ static SDL_bool VULKAN_INTERNAL_VerifySwapPresentMode(
     return SDL_FALSE;
 }
 
-static Uint8 VULKAN_INTERNAL_CreateSwapchain(
+static SDL_bool VULKAN_INTERNAL_CreateSwapchain(
     VulkanRenderer *renderer,
     WindowData *windowData)
 {
@@ -4214,7 +4214,7 @@ static Uint8 VULKAN_INTERNAL_CreateSwapchain(
             SDL_LOG_CATEGORY_APPLICATION,
             "Vulkan_CreateSurface failed: %s",
             SDL_GetError());
-        return 0;
+        return SDL_FALSE;
     }
 
     if (!VULKAN_INTERNAL_QuerySwapchainSupport(
@@ -4234,7 +4234,7 @@ static Uint8 VULKAN_INTERNAL_CreateSwapchain(
         }
         SDL_free(swapchainData);
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Device does not support swap chain creation");
-        return 0;
+        return SDL_FALSE;
     }
 
     if (swapchainSupportDetails.capabilities.currentExtent.width == 0 ||
@@ -4251,7 +4251,7 @@ static Uint8 VULKAN_INTERNAL_CreateSwapchain(
             SDL_free(swapchainSupportDetails.presentModes);
         }
         SDL_free(swapchainData);
-        return 0;
+        return SDL_FALSE;
     }
 
     swapchainData->format = SwapchainCompositionToFormat[windowData->swapchainComposition];
@@ -4284,7 +4284,7 @@ static Uint8 VULKAN_INTERNAL_CreateSwapchain(
 
             SDL_free(swapchainData);
             SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Device does not support requested colorspace!");
-            return 0;
+            return SDL_FALSE;
         }
 
         if (!VULKAN_INTERNAL_VerifySwapSurfaceFormat(
@@ -4307,7 +4307,7 @@ static Uint8 VULKAN_INTERNAL_CreateSwapchain(
 
             SDL_free(swapchainData);
             SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Device does not support requested colorspace!");
-            return 0;
+            return SDL_FALSE;
         }
     }
 
@@ -4330,7 +4330,7 @@ static Uint8 VULKAN_INTERNAL_CreateSwapchain(
 
         SDL_free(swapchainData);
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Device does not support requested present mode!");
-        return 0;
+        return SDL_FALSE;
     }
 
     swapchainData->presentMode = SDLToVK_PresentMode[windowData->presentMode];
@@ -4368,7 +4368,7 @@ static Uint8 VULKAN_INTERNAL_CreateSwapchain(
             }
             SDL_free(swapchainData);
             SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "No fallback swapchain size available!");
-            return 0;
+            return SDL_FALSE;
         }
     }
 
@@ -4434,7 +4434,7 @@ static Uint8 VULKAN_INTERNAL_CreateSwapchain(
             NULL);
         SDL_free(swapchainData);
         LogVulkanResultAsError("vkCreateSwapchainKHR", vulkanResult);
-        return 0;
+        return SDL_FALSE;
     }
 
     renderer->vkGetSwapchainImagesKHR(
@@ -4453,7 +4453,7 @@ static Uint8 VULKAN_INTERNAL_CreateSwapchain(
             swapchainData->surface,
             NULL);
         SDL_free(swapchainData);
-        return 0;
+        return SDL_FALSE;
     }
 
     swapchainImages = SDL_stack_alloc(VkImage, swapchainData->imageCount);
@@ -4505,7 +4505,7 @@ static Uint8 VULKAN_INTERNAL_CreateSwapchain(
             SDL_free(swapchainData->textureContainers);
             SDL_free(swapchainData);
             LogVulkanResultAsError("vkCreateImageView", vulkanResult);
-            return 0;
+            return SDL_FALSE;
         }
 
         /* Swapchain memory is managed by the driver */
@@ -4569,7 +4569,7 @@ static Uint8 VULKAN_INTERNAL_CreateSwapchain(
     }
 
     windowData->swapchainData = swapchainData;
-    return 1;
+    return SDL_TRUE;
 }
 
 /* Command Buffers */
@@ -9578,7 +9578,7 @@ static void VULKAN_UnclaimWindow(
     SDL_ClearProperty(SDL_GetWindowProperties(window), WINDOW_PROPERTY_DATA);
 }
 
-static void VULKAN_INTERNAL_RecreateSwapchain(
+static SDL_bool VULKAN_INTERNAL_RecreateSwapchain(
     VulkanRenderer *renderer,
     WindowData *windowData)
 {
@@ -9597,7 +9597,7 @@ static void VULKAN_INTERNAL_RecreateSwapchain(
     }
 
     VULKAN_INTERNAL_DestroySwapchain(renderer, windowData);
-    VULKAN_INTERNAL_CreateSwapchain(renderer, windowData);
+    return VULKAN_INTERNAL_CreateSwapchain(renderer, windowData);
 }
 
 static SDL_GpuTexture *VULKAN_AcquireSwapchainTexture(
@@ -9819,7 +9819,7 @@ static SDL_GpuTextureFormat VULKAN_GetSwapchainTextureFormat(
     }
 }
 
-static void VULKAN_SetSwapchainParameters(
+static SDL_bool VULKAN_SetSwapchainParameters(
     SDL_GpuRenderer *driverData,
     SDL_Window *window,
     SDL_GpuSwapchainComposition swapchainComposition,
@@ -9828,15 +9828,21 @@ static void VULKAN_SetSwapchainParameters(
     WindowData *windowData = VULKAN_INTERNAL_FetchWindowData(window);
 
     if (windowData == NULL) {
-        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Cannot set present mode, window has not been claimed!");
-        return;
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Cannot set swapchain parameters on unclaimed window!");
+        return SDL_FALSE;
     }
 
-    /* The window size may have changed, always update even if these params are the same */
-    windowData->presentMode = presentMode;
-    windowData->swapchainComposition = swapchainComposition;
+    if (!VULKAN_SupportsSwapchainComposition(driverData, window, swapchainComposition)) {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Swapchain composition not supported!");
+        return SDL_FALSE;
+    }
 
-    VULKAN_INTERNAL_RecreateSwapchain(
+    if (!VULKAN_SupportsPresentMode(driverData, window, presentMode)) {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Present mode not supported!");
+        return SDL_FALSE;
+    }
+
+    return VULKAN_INTERNAL_RecreateSwapchain(
         (VulkanRenderer *)driverData,
         windowData);
 }
@@ -11288,7 +11294,7 @@ static void VULKAN_INTERNAL_LoadEntryPoints(void)
 #include "SDL_gpu_vulkan_vkfuncs.h"
 }
 
-static Uint8 VULKAN_INTERNAL_PrepareVulkan(
+static SDL_bool VULKAN_INTERNAL_PrepareVulkan(
     VulkanRenderer *renderer)
 {
     SDL_Window *dummyWindowHandle;
@@ -11305,13 +11311,13 @@ static Uint8 VULKAN_INTERNAL_PrepareVulkan(
 
     if (dummyWindowHandle == NULL) {
         SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Vulkan: Could not create dummy window");
-        return 0;
+        return SDL_FALSE;
     }
 
     if (!VULKAN_INTERNAL_CreateInstance(renderer, dummyWindowHandle)) {
         SDL_DestroyWindow(dummyWindowHandle);
         SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Vulkan: Could not create Vulkan instance");
-        return 0;
+        return SDL_FALSE;
     }
 
     if (!SDL_Vulkan_CreateSurface(
@@ -11324,7 +11330,7 @@ static Uint8 VULKAN_INTERNAL_PrepareVulkan(
             SDL_LOG_CATEGORY_APPLICATION,
             "SDL_Vulkan_CreateSurface failed: %s",
             SDL_GetError());
-        return 0;
+        return SDL_FALSE;
     }
 
 #define VULKAN_INSTANCE_FUNCTION(ext, ret, func, params) \
@@ -11340,7 +11346,7 @@ static Uint8 VULKAN_INTERNAL_PrepareVulkan(
             NULL);
 
         SDL_DestroyWindow(dummyWindowHandle);
-        return 0;
+        return SDL_FALSE;
     }
 
     if (!VULKAN_INTERNAL_QuerySwapchainSupport(
@@ -11354,7 +11360,7 @@ static Uint8 VULKAN_INTERNAL_PrepareVulkan(
             NULL);
 
         SDL_DestroyWindow(dummyWindowHandle);
-        return 0;
+        return SDL_FALSE;
     }
 
     SDL_free(swapchainSupportDetails.formats);
@@ -11366,21 +11372,21 @@ static Uint8 VULKAN_INTERNAL_PrepareVulkan(
         NULL);
 
     SDL_DestroyWindow(dummyWindowHandle);
-    return 1;
+    return SDL_TRUE;
 }
 
-static Uint8 VULKAN_PrepareDriver(SDL_VideoDevice *_this)
+static SDL_bool VULKAN_PrepareDriver(SDL_VideoDevice *_this)
 {
     /* Set up dummy VulkanRenderer */
     VulkanRenderer *renderer;
     Uint8 result;
 
     if (_this->Vulkan_CreateSurface == NULL) {
-        return 0;
+        return SDL_FALSE;
     }
 
     if (SDL_Vulkan_LoadLibrary(NULL) < 0) {
-        return 0;
+        return SDL_FALSE;
     }
 
     renderer = (VulkanRenderer *)SDL_malloc(sizeof(VulkanRenderer));
