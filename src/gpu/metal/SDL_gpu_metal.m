@@ -3387,7 +3387,7 @@ static SDL_bool METAL_SetSwapchainParameters(
 
     if (windowData == NULL) {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Cannot set swapchain parameters, window has not been claimed!");
-        return;
+        return SDL_FALSE;
     }
 
     if (!METAL_SupportsSwapchainComposition(driverData, window, swapchainComposition)) {
