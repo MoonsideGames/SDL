@@ -2687,7 +2687,7 @@ static void METAL_INTERNAL_PushUniformData(
     Uint32 dataLengthInBytes)
 {
     MetalUniformBuffer *metalUniformBuffer;
-    Uint32 alignedDataLength, drawOffset;
+    Uint32 alignedDataLength;
 
     if (shaderStage == SDL_GPU_SHADERSTAGE_VERTEX) {
         if (metalCommandBuffer->vertexUniformBuffers[slotIndex] == NULL) {
