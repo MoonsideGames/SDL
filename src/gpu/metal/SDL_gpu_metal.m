@@ -2739,7 +2739,7 @@ static void METAL_INTERNAL_PushUniformData(
         }
     }
 
-    drawOffset = metalUniformBuffer->writeOffset;
+    metalUniformBuffer->drawOffset = metalUniformBuffer->writeOffset;
 
     SDL_memcpy(
         (metalUniformBuffer->handle).contents + metalUniformBuffer->writeOffset,
