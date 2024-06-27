@@ -742,8 +742,7 @@ static MetalLibraryFunction METAL_INTERNAL_CompileShader(
             "Creating MTLLibrary failed: %s",
             [[error description] cStringUsingEncoding:[NSString defaultCStringEncoding]]);
         return libraryFunction;
-    } else if (error != nil)
-    {
+    } else if (error != nil) {
         SDL_LogWarn(
             SDL_LOG_CATEGORY_APPLICATION,
             "Creating MTLLibrary failed: %s",
@@ -1997,6 +1996,14 @@ static SDL_GpuCommandBuffer *METAL_AcquireCommandBuffer(
     commandBuffer = METAL_INTERNAL_GetInactiveCommandBufferFromPool(renderer);
     commandBuffer->handle = [renderer->queue commandBuffer];
 
+    commandBuffer->graphicsPipeline = NULL;
+    commandBuffer->computePipeline = NULL;
+    for (Uint32 i = 0; i < MAX_UNIFORM_BUFFERS_PER_STAGE; i += 1) {
+        commandBuffer->vertexUniformBuffers[i] = NULL;
+        commandBuffer->fragmentUniformBuffers[i] = NULL;
+        commandBuffer->computeUniformBuffers[i] = NULL;
+    }
+
     /* FIXME: Do we actually need to set this? */
     commandBuffer->needVertexSamplerBind = SDL_TRUE;
     commandBuffer->needVertexStorageTextureBind = SDL_TRUE;
@@ -2018,7 +2025,7 @@ static SDL_GpuCommandBuffer *METAL_AcquireCommandBuffer(
     return (SDL_GpuCommandBuffer *)commandBuffer;
 }
 
-static MetalUniformBuffer* METAL_INTERNAL_AcquireUniformBufferFromPool(
+static MetalUniformBuffer *METAL_INTERNAL_AcquireUniformBufferFromPool(
     MetalRenderer *renderer)
 {
     MetalUniformBuffer *uniformBuffer;
@@ -2047,7 +2054,7 @@ static void METAL_INTERNAL_ReturnUniformBufferToPool(
         renderer->uniformBufferPoolCapacity *= 2;
         renderer->uniformBufferPool = SDL_realloc(
             renderer->uniformBufferPool,
-            renderer->uniformBufferPoolCapacity * sizeof(MetalUniformBuffer*));
+            renderer->uniformBufferPoolCapacity * sizeof(MetalUniformBuffer *));
     }
 
     renderer->uniformBufferPool[renderer->uniformBufferPoolCount] = uniformBuffer;
@@ -2506,9 +2513,9 @@ static void METAL_INTERNAL_BindGraphicsResources(
     if (graphicsPipeline->fragmentUniformBufferCount > 0 && commandBuffer->needFragmentUniformBind) {
         for (Uint32 i = 0; i < graphicsPipeline->fragmentUniformBufferCount; i += 1) {
             [commandBuffer->renderEncoder
-                setVertexBuffer:commandBuffer->fragmentUniformBuffers[i]->handle
-                         offset:commandBuffer->fragmentUniformBuffers[i]->drawOffset
-                        atIndex:i];
+                setFragmentBuffer:commandBuffer->fragmentUniformBuffers[i]->handle
+                           offset:commandBuffer->fragmentUniformBuffers[i]->drawOffset
+                          atIndex:i];
 
             METAL_INTERNAL_TrackUniformBuffer(
                 commandBuffer,
@@ -3860,7 +3867,7 @@ static SDL_GpuDevice *METAL_CreateDevice(SDL_bool debugMode)
     renderer->uniformBufferPoolCapacity = 32;
     renderer->uniformBufferPoolCount = 32;
     renderer->uniformBufferPool = SDL_malloc(
-        renderer->uniformBufferPoolCapacity * sizeof(MetalUniformBuffer*));
+        renderer->uniformBufferPoolCapacity * sizeof(MetalUniformBuffer *));
 
     for (Uint32 i = 0; i < renderer->uniformBufferPoolCount; i += 1) {
         renderer->uniformBufferPool[i] = METAL_INTERNAL_CreateUniformBuffer(
