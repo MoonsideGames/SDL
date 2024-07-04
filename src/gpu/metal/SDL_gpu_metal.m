@@ -276,7 +276,7 @@ static SDL_GpuTextureFormat SwapchainCompositionToFormat[] = {
     SDL_GPU_TEXTUREFORMAT_B8G8R8A8,            /* SDR */
     SDL_GPU_TEXTUREFORMAT_B8G8R8A8_SRGB,       /* SDR_LINEAR */
     SDL_GPU_TEXTUREFORMAT_R16G16B16A16_SFLOAT, /* HDR_EXTENDED_LINEAR */
-    SDL_GPU_TEXTUREFORMAT_A2B10G10R10,         /* HDR10_ST2048 */
+    SDL_GPU_TEXTUREFORMAT_R10G10B10A2,         /* HDR10_ST2048 */
 };
 
 static CFStringRef SwapchainCompositionToColorSpace[4]; /* initialized on device creation */
@@ -3688,7 +3688,7 @@ static SDL_bool METAL_IsTextureFormatSupported(
     switch (format) {
     /* Apple GPU exclusive */
     case SDL_GPU_TEXTUREFORMAT_B5G6R5:
-    case SDL_GPU_TEXTUREFORMAT_R5G5B5A1:
+    case SDL_GPU_TEXTUREFORMAT_B5G5R5A1:
     case SDL_GPU_TEXTUREFORMAT_B4G4R4A4:
         return ![renderer->device supportsFamily:MTLGPUFamilyMac2];
 
