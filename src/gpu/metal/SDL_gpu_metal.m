@@ -99,7 +99,7 @@ static MTLPixelFormat SDLToMetal_SurfaceFormat[] = {
     MTLPixelFormatBGRA8Unorm,                 /* B8G8R8A8 */
     MTLPixelFormatB5G6R5Unorm,                /* B5G6R5 */
     MTLPixelFormatBGR5A1Unorm,                /* B5G5R5A1 */
-    MTLPixelFormatABGR4Unorm,                 /* B4G4R4A4 */ /* FIXME: Swizzle! */
+    MTLPixelFormatABGR4Unorm,                 /* B4G4R4A4 */
     MTLPixelFormatRGB10A2Unorm,               /* A2R10G10B10 */
     MTLPixelFormatRG16Unorm,                  /* R16G16 */
     MTLPixelFormatRGBA16Unorm,                /* R16G16B16A16 */
@@ -1268,6 +1268,15 @@ static MetalTexture *METAL_INTERNAL_CreateTexture(
     textureDescriptor.arrayLength = 1; /* FIXME: Is this used outside of cubes? */
     textureDescriptor.resourceOptions = MTLResourceCPUCacheModeDefaultCache | MTLResourceStorageModePrivate | MTLResourceHazardTrackingModeDefault;
     textureDescriptor.allowGPUOptimizedContents = true;
+
+    /* This format isn't natively supported so let's swizzle! */
+    if (textureCreateInfo->format == SDL_GPU_TEXTUREFORMAT_B4G4R4A4) {
+        textureDescriptor.swizzle = MTLTextureSwizzleChannelsMake(
+                MTLTextureSwizzleBlue,
+                MTLTextureSwizzleGreen,
+                MTLTextureSwizzleRed,
+                MTLTextureSwizzleAlpha);
+    }
 
     textureDescriptor.usage = 0;
     if (textureCreateInfo->usageFlags & (SDL_GPU_TEXTUREUSAGE_COLOR_TARGET_BIT | SDL_GPU_TEXTUREUSAGE_DEPTH_STENCIL_TARGET_BIT)) {
