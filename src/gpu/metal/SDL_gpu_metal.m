@@ -97,11 +97,10 @@ static void METAL_INTERNAL_DestroyBlitResources(SDL_GpuRenderer *driverData);
 static MTLPixelFormat SDLToMetal_SurfaceFormat[] = {
     MTLPixelFormatRGBA8Unorm,                 /* R8G8B8A8 */
     MTLPixelFormatBGRA8Unorm,                 /* B8G8R8A8 */
-    MTLPixelFormatB5G6R5Unorm, /* R5G6B5 */   /* FIXME: Swizzle? */
-    MTLPixelFormatA1BGR5Unorm, /* A1R5G5B5 */ /* FIXME: Swizzle? */
-    MTLPixelFormatABGR4Unorm,                 /* B4G4R4A4 */
+    MTLPixelFormatB5G6R5Unorm,                /* B5G6R5 */
+    MTLPixelFormatBGR5A1Unorm,                /* B5G5R5A1 */
+    MTLPixelFormatABGR4Unorm,                 /* B4G4R4A4 */ /* FIXME: Swizzle! */
     MTLPixelFormatRGB10A2Unorm,               /* A2R10G10B10 */
-    MTLPixelFormatBGR10A2Unorm,               /* A2B10G10R10 */
     MTLPixelFormatRG16Unorm,                  /* R16G16 */
     MTLPixelFormatRGBA16Unorm,                /* R16G16B16A16 */
     MTLPixelFormatR8Unorm,                    /* R8 */
@@ -3688,8 +3687,8 @@ static SDL_bool METAL_IsTextureFormatSupported(
 
     switch (format) {
     /* Apple GPU exclusive */
-    case SDL_GPU_TEXTUREFORMAT_R5G6B5:
-    case SDL_GPU_TEXTUREFORMAT_A1R5G5B5:
+    case SDL_GPU_TEXTUREFORMAT_B5G6R5:
+    case SDL_GPU_TEXTUREFORMAT_R5G5B5A1:
     case SDL_GPU_TEXTUREFORMAT_B4G4R4A4:
         return ![renderer->device supportsFamily:MTLGPUFamilyMac2];
 
@@ -3698,6 +3697,8 @@ static SDL_bool METAL_IsTextureFormatSupported(
     case SDL_GPU_TEXTUREFORMAT_BC2:
     case SDL_GPU_TEXTUREFORMAT_BC3:
     case SDL_GPU_TEXTUREFORMAT_BC7:
+    case SDL_GPU_TEXTUREFORMAT_BC3_SRGB:
+    case SDL_GPU_TEXTUREFORMAT_BC7_SRGB:
 #ifdef SDL_PLATFORM_MACOS
         if (@available(macOS 11.0, *)) {
             return (
@@ -3707,6 +3708,7 @@ static SDL_bool METAL_IsTextureFormatSupported(
             return SDL_FALSE;
         }
 #else
+        /* FIXME: iOS 16.4+ allows these formats! */
         return SDL_FALSE;
 #endif
 
