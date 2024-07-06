@@ -84,9 +84,7 @@ static inline Sint32 Texture_GetBlockSize(
     case SDL_GPU_TEXTUREFORMAT_B8G8R8A8_SRGB:
         return 1;
     default:
-        SDL_LogError(
-            SDL_LOG_CATEGORY_APPLICATION,
-            "Unrecognized TextureFormat!");
+        SDL_assert_release(!"Unrecognized TextureFormat!");
         return 0;
     }
 }
@@ -136,9 +134,7 @@ static inline Uint32 PrimitiveVerts(
     case SDL_GPU_PRIMITIVETYPE_POINTLIST:
         return primitiveCount;
     default:
-        SDL_LogError(
-            SDL_LOG_CATEGORY_APPLICATION,
-            "Unrecognized primitive type!");
+        SDL_assert_release(!"Unrecognized primitive type!");
         return 0;
     }
 }
@@ -600,6 +596,9 @@ struct SDL_GpuDevice
 
     /* Store this for SDL_GpuGetBackend() */
     SDL_GpuBackend backend;
+
+    /* Store this for SDL_gpu.c's debug layer */
+    SDL_bool debugMode;
 };
 
 #define ASSIGN_DRIVER_FUNC(func, name) \
