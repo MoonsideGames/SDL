@@ -1734,6 +1734,7 @@ void SDL_GpuBlit(
     if (COMMAND_BUFFER_DEVICE->debugMode) {
         CHECK_COMMAND_BUFFER
     }
+
     COMMAND_BUFFER_DEVICE->Blit(
         commandBuffer,
         source,
@@ -1858,6 +1859,14 @@ SDL_GpuTexture *SDL_GpuAcquireSwapchainTexture(
     }
     if (window == NULL) {
         SDL_InvalidParamError("window");
+        return NULL;
+    }
+    if (pWidth == NULL) {
+        SDL_InvalidParamError("pWidth");
+        return NULL;
+    }
+    if (pHeight == NULL) {
+        SDL_InvalidParamError("pHeight");
         return NULL;
     }
 
