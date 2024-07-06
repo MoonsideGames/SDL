@@ -825,7 +825,7 @@ static void D3D11_INTERNAL_LogError(
 
     /* No message? Screw it, just post the code. */
     if (dwChars == 0) {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "%s! Error Code: " HRESULT_FMT, msg, res);
+        SDL_LogError(SDL_LOG_CATEGORY_GPU, "%s! Error Code: " HRESULT_FMT, msg, res);
         return;
     }
 
@@ -844,7 +844,7 @@ static void D3D11_INTERNAL_LogError(
     /* Ensure null-terminated string */
     wszMsgBuff[dwChars] = '\0';
 
-    SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "%s! Error Code: %s " HRESULT_FMT, msg, wszMsgBuff, res);
+    SDL_LogError(SDL_LOG_CATEGORY_GPU, "%s! Error Code: %s " HRESULT_FMT, msg, wszMsgBuff, res);
 }
 
 /* Helper Functions */
@@ -1382,7 +1382,7 @@ static Uint32 D3D11_INTERNAL_FindIndexOfVertexBinding(
         }
     }
 
-    SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Could not find vertex binding %u!", targetBinding);
+    SDL_LogError(SDL_LOG_CATEGORY_GPU, "Could not find vertex binding %u!", targetBinding);
     return 0;
 }
 
@@ -1433,7 +1433,7 @@ static ID3D11InputLayout *D3D11_INTERNAL_FetchInputLayout(
         shaderByteLength,
         &result);
     if (FAILED(res)) {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Could not create input layout! Error: " HRESULT_FMT, res);
+        SDL_LogError(SDL_LOG_CATEGORY_GPU, "Could not create input layout! Error: " HRESULT_FMT, res);
         SDL_stack_free(elementDescs);
         return NULL;
     }
@@ -1481,7 +1481,7 @@ static ID3D11DeviceChild *D3D11_INTERNAL_CreateID3D11Shader(
             &blob,
             &errorBlob);
         if (res < 0) {
-            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "%s", (const char *)ID3D10Blob_GetBufferPointer(errorBlob));
+            SDL_LogError(SDL_LOG_CATEGORY_GPU, "%s", (const char *)ID3D10Blob_GetBufferPointer(errorBlob));
             ID3D10Blob_Release(errorBlob);
             return NULL;
         }
@@ -1491,7 +1491,7 @@ static ID3D11DeviceChild *D3D11_INTERNAL_CreateID3D11Shader(
         bytecode = code;
         bytecodeSize = codeSize;
     } else {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Incompatible shader format for D3D11");
+        SDL_LogError(SDL_LOG_CATEGORY_GPU, "Incompatible shader format for D3D11");
         return NULL;
     }
 
@@ -1563,7 +1563,7 @@ static SDL_GpuComputePipeline *D3D11_CreateComputePipeline(
         NULL,
         NULL);
     if (shader == NULL) {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to create compute pipeline!");
+        SDL_LogError(SDL_LOG_CATEGORY_GPU, "Failed to create compute pipeline!");
         return NULL;
     }
 
@@ -1785,7 +1785,7 @@ static SDL_bool D3D11_INTERNAL_StrToWStr(
     case SDL_ICONV_E2BIG:
     case SDL_ICONV_EILSEQ:
     case SDL_ICONV_EINVAL:
-        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Failed to convert string to wchar_t!");
+        SDL_LogWarn(SDL_LOG_CATEGORY_GPU, "Failed to convert string to wchar_t!");
         return SDL_FALSE;
     default:
         break;
@@ -2294,7 +2294,7 @@ static SDL_GpuTexture *D3D11_CreateTexture(
         NULL);
 
     if (texture == NULL) {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to create texture!");
+        SDL_LogError(SDL_LOG_CATEGORY_GPU, "Failed to create texture!");
         return NULL;
     }
 
@@ -2509,7 +2509,7 @@ static SDL_GpuBuffer *D3D11_CreateBuffer(
         sizeInBytes);
 
     if (buffer == NULL) {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to create buffer!");
+        SDL_LogError(SDL_LOG_CATEGORY_GPU, "Failed to create buffer!");
         return NULL;
     }
 
@@ -2819,7 +2819,7 @@ static void D3D11_UploadToTexture(
         &initialData);
 
     if (stagingTexture == NULL) {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Staging texture creation failed");
+        SDL_LogError(SDL_LOG_CATEGORY_GPU, "Staging texture creation failed");
         return;
     }
 
@@ -3286,7 +3286,7 @@ static SDL_bool D3D11_INTERNAL_AcquireFence(
     if (renderer->availableFenceCount == 0) {
         if (!D3D11_INTERNAL_CreateFence(renderer)) {
             SDL_UnlockMutex(renderer->fenceLock);
-            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to create fence!");
+            SDL_LogError(SDL_LOG_CATEGORY_GPU, "Failed to create fence!");
             return SDL_FALSE;
         }
     }
@@ -3426,7 +3426,7 @@ static void D3D11_INTERNAL_PushUniformData(
         }
         d3d11UniformBuffer = d3d11CommandBuffer->computeUniformBuffers[slotIndex];
     } else {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Unrecognized shader stage!");
+        SDL_LogError(SDL_LOG_CATEGORY_GPU, "Unrecognized shader stage!");
         return;
     }
 
@@ -3455,7 +3455,7 @@ static void D3D11_INTERNAL_PushUniformData(
         } else if (shaderStage == SDL_GPU_SHADERSTAGE_COMPUTE) {
             d3d11CommandBuffer->computeUniformBuffers[slotIndex] = d3d11UniformBuffer;
         } else {
-            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Unrecognized shader stage!");
+            SDL_LogError(SDL_LOG_CATEGORY_GPU, "Unrecognized shader stage!");
         }
     }
 
@@ -3489,7 +3489,7 @@ static void D3D11_INTERNAL_PushUniformData(
     } else if (shaderStage == SDL_GPU_SHADERSTAGE_COMPUTE) {
         d3d11CommandBuffer->needComputeUniformBufferBind = SDL_TRUE;
     } else {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Unrecognized shader stage!");
+        SDL_LogError(SDL_LOG_CATEGORY_GPU, "Unrecognized shader stage!");
     }
 }
 
@@ -4246,7 +4246,7 @@ static void D3D11_Blit(
     SDL_GpuTextureSamplerBinding textureSamplerBinding;
 
     if (destinationTextureContainer->activeTexture->depth > 1) {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "3D blit destination not implemented!");
+        SDL_LogError(SDL_LOG_CATEGORY_GPU, "3D blit destination not implemented!");
         return;
     }
 
@@ -4310,7 +4310,7 @@ static void D3D11_Blit(
             &source->textureSlice.layer,
             sizeof(Uint32));
     } else {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "3D blit source not implemented!");
+        SDL_LogError(SDL_LOG_CATEGORY_GPU, "3D blit source not implemented!");
         return;
     }
 
@@ -4319,7 +4319,7 @@ static void D3D11_Blit(
         filterMode == SDL_GPU_FILTER_NEAREST ? renderer->blitNearestSampler : renderer->blitLinearSampler;
 
     if (((D3D11TextureContainer *)textureSamplerBinding.texture)->activeTexture->shaderView == NULL) {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Blit source texture must be created with SAMPLER bit!");
+        SDL_LogError(SDL_LOG_CATEGORY_GPU, "Blit source texture must be created with SAMPLER bit!");
     }
 
     D3D11_BindFragmentSamplers(
@@ -5138,7 +5138,7 @@ static SDL_bool D3D11_INTERNAL_CreateSwapchain(
         (void **)&pParent);
     if (FAILED(res)) {
         SDL_LogWarn(
-            SDL_LOG_CATEGORY_APPLICATION,
+            SDL_LOG_CATEGORY_GPU,
             "Could not get swapchain parent! Error Code: " HRESULT_FMT,
             res);
     } else {
@@ -5149,7 +5149,7 @@ static SDL_bool D3D11_INTERNAL_CreateSwapchain(
             DXGI_MWA_NO_WINDOW_CHANGES);
         if (FAILED(res)) {
             SDL_LogWarn(
-                SDL_LOG_CATEGORY_APPLICATION,
+                SDL_LOG_CATEGORY_GPU,
                 "MakeWindowAssociation failed! Error Code: " HRESULT_FMT,
                 res);
         }
@@ -5179,7 +5179,7 @@ static SDL_bool D3D11_INTERNAL_CreateSwapchain(
             &colorSpaceSupport);
 
         if (!(colorSpaceSupport & DXGI_SWAP_CHAIN_COLOR_SPACE_SUPPORT_FLAG_PRESENT)) {
-            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Requested colorspace is unsupported!");
+            SDL_LogError(SDL_LOG_CATEGORY_GPU, "Requested colorspace is unsupported!");
             return SDL_FALSE;
         }
 
@@ -5189,7 +5189,7 @@ static SDL_bool D3D11_INTERNAL_CreateSwapchain(
 
         IDXGISwapChain3_Release(swapchain3);
     } else {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "DXGI 1.4 not supported, cannot use colorspace other than SDL_GPU_COLORSPACE_NONLINEAR_SRGB!");
+        SDL_LogError(SDL_LOG_CATEGORY_GPU, "DXGI 1.4 not supported, cannot use colorspace other than SDL_GPU_COLORSPACE_NONLINEAR_SRGB!");
         return SDL_FALSE;
     }
 
@@ -5318,12 +5318,12 @@ static SDL_bool D3D11_ClaimWindow(
 
             return SDL_TRUE;
         } else {
-            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Could not create swapchain, failed to claim window!");
+            SDL_LogError(SDL_LOG_CATEGORY_GPU, "Could not create swapchain, failed to claim window!");
             SDL_free(windowData);
             return SDL_FALSE;
         }
     } else {
-        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Window already claimed!");
+        SDL_LogWarn(SDL_LOG_CATEGORY_GPU, "Window already claimed!");
         return SDL_FALSE;
     }
 }
@@ -5489,7 +5489,7 @@ static SDL_GpuTextureFormat D3D11_GetSwapchainTextureFormat(
     D3D11WindowData *windowData = D3D11_INTERNAL_FetchWindowData(window);
 
     if (windowData == NULL) {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Cannot get swapchain format, window has not been claimed!");
+        SDL_LogError(SDL_LOG_CATEGORY_GPU, "Cannot get swapchain format, window has not been claimed!");
         return 0;
     }
 
@@ -5507,7 +5507,7 @@ static SDL_GpuTextureFormat D3D11_GetSwapchainTextureFormat(
         return SDL_GPU_TEXTUREFORMAT_R10G10B10A2;
 
     default:
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Unrecognized swapchain format!");
+        SDL_LogError(SDL_LOG_CATEGORY_GPU, "Unrecognized swapchain format!");
         return 0;
     }
 }
@@ -5522,17 +5522,17 @@ static SDL_bool D3D11_SetSwapchainParameters(
     D3D11WindowData *windowData = D3D11_INTERNAL_FetchWindowData(window);
 
     if (windowData == NULL) {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Cannot set swapchain parameters on unclaimed window!");
+        SDL_LogError(SDL_LOG_CATEGORY_GPU, "Cannot set swapchain parameters on unclaimed window!");
         return SDL_FALSE;
     }
 
     if (!D3D11_SupportsSwapchainComposition(driverData, window, swapchainComposition)) {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Swapchain composition not supported!");
+        SDL_LogError(SDL_LOG_CATEGORY_GPU, "Swapchain composition not supported!");
         return SDL_FALSE;
     }
 
     if (!D3D11_SupportsPresentMode(driverData, window, presentMode)) {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Present mode not supported!");
+        SDL_LogError(SDL_LOG_CATEGORY_GPU, "Present mode not supported!");
         return SDL_FALSE;
     }
 
@@ -5794,7 +5794,7 @@ static SDL_bool D3D11_PrepareDriver(SDL_VideoDevice *_this)
 
     d3d11_dll = SDL_LoadObject(D3D11_DLL);
     if (d3d11_dll == NULL) {
-        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "D3D11: Could not find " D3D11_DLL);
+        SDL_LogWarn(SDL_LOG_CATEGORY_GPU, "D3D11: Could not find " D3D11_DLL);
         return SDL_FALSE;
     }
 
@@ -5802,7 +5802,7 @@ static SDL_bool D3D11_PrepareDriver(SDL_VideoDevice *_this)
         d3d11_dll,
         D3D11_CREATE_DEVICE_FUNC);
     if (D3D11CreateDeviceFunc == NULL) {
-        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "D3D11: Could not find function " D3D11_CREATE_DEVICE_FUNC " in " D3D11_DLL);
+        SDL_LogWarn(SDL_LOG_CATEGORY_GPU, "D3D11: Could not find function " D3D11_CREATE_DEVICE_FUNC " in " D3D11_DLL);
         SDL_UnloadObject(d3d11_dll);
         return SDL_FALSE;
     }
@@ -5824,7 +5824,7 @@ static SDL_bool D3D11_PrepareDriver(SDL_VideoDevice *_this)
     SDL_UnloadObject(d3d11_dll);
 
     if (FAILED(res)) {
-        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "D3D11: Could not create D3D11Device with feature level 11_1");
+        SDL_LogWarn(SDL_LOG_CATEGORY_GPU, "D3D11: Could not create D3D11Device with feature level 11_1");
         return SDL_FALSE;
     }
 
@@ -5832,7 +5832,7 @@ static SDL_bool D3D11_PrepareDriver(SDL_VideoDevice *_this)
 
     dxgi_dll = SDL_LoadObject(DXGI_DLL);
     if (dxgi_dll == NULL) {
-        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "D3D11: Could not find " DXGI_DLL);
+        SDL_LogWarn(SDL_LOG_CATEGORY_GPU, "D3D11: Could not find " DXGI_DLL);
         return SDL_FALSE;
     }
 
@@ -5841,7 +5841,7 @@ static SDL_bool D3D11_PrepareDriver(SDL_VideoDevice *_this)
         CREATE_DXGI_FACTORY1_FUNC);
     SDL_UnloadObject(dxgi_dll); /* We're not going to call this function, so we can just unload now. */
     if (CreateDXGIFactoryFunc == NULL) {
-        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "D3D11: Could not find function " CREATE_DXGI_FACTORY1_FUNC " in " DXGI_DLL);
+        SDL_LogWarn(SDL_LOG_CATEGORY_GPU, "D3D11: Could not find function " CREATE_DXGI_FACTORY1_FUNC " in " DXGI_DLL);
         return SDL_FALSE;
     }
 
@@ -5849,7 +5849,7 @@ static SDL_bool D3D11_PrepareDriver(SDL_VideoDevice *_this)
 
     d3dcompiler_dll = SDL_LoadObject(D3DCOMPILER_DLL);
     if (d3dcompiler_dll == NULL) {
-        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "D3D11: Could not find " D3DCOMPILER_DLL);
+        SDL_LogWarn(SDL_LOG_CATEGORY_GPU, "D3D11: Could not find " D3DCOMPILER_DLL);
         return SDL_FALSE;
     }
 
@@ -5858,7 +5858,7 @@ static SDL_bool D3D11_PrepareDriver(SDL_VideoDevice *_this)
         D3DCOMPILE_FUNC);
     SDL_UnloadObject(d3dcompiler_dll); /* We're not going to call this function, so we can just unload now. */
     if (D3DCompileFunc == NULL) {
-        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "D3D11: Could not find function D3DCompile in " D3DCOMPILER_DLL);
+        SDL_LogWarn(SDL_LOG_CATEGORY_GPU, "D3D11: Could not find function D3DCompile in " D3DCOMPILER_DLL);
         return SDL_FALSE;
     }
 
@@ -5872,7 +5872,7 @@ static void D3D11_INTERNAL_TryInitializeDXGIDebug(D3D11Renderer *renderer)
 
     renderer->dxgidebug_dll = SDL_LoadObject(DXGIDEBUG_DLL);
     if (renderer->dxgidebug_dll == NULL) {
-        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Could not find " DXGIDEBUG_DLL);
+        SDL_LogWarn(SDL_LOG_CATEGORY_GPU, "Could not find " DXGIDEBUG_DLL);
         return;
     }
 
@@ -5880,19 +5880,19 @@ static void D3D11_INTERNAL_TryInitializeDXGIDebug(D3D11Renderer *renderer)
         renderer->dxgidebug_dll,
         DXGI_GET_DEBUG_INTERFACE_FUNC);
     if (DXGIGetDebugInterfaceFunc == NULL) {
-        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Could not load function: " DXGI_GET_DEBUG_INTERFACE_FUNC);
+        SDL_LogWarn(SDL_LOG_CATEGORY_GPU, "Could not load function: " DXGI_GET_DEBUG_INTERFACE_FUNC);
         return;
     }
 
     res = DXGIGetDebugInterfaceFunc(&D3D_IID_IDXGIDebug, (void **)&renderer->dxgiDebug);
     if (FAILED(res)) {
-        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Could not get IDXGIDebug interface");
+        SDL_LogWarn(SDL_LOG_CATEGORY_GPU, "Could not get IDXGIDebug interface");
     }
 
 #ifdef HAVE_IDXGIINFOQUEUE
     res = DXGIGetDebugInterfaceFunc(&D3D_IID_IDXGIInfoQueue, (void **)&renderer->dxgiInfoQueue);
     if (FAILED(res)) {
-        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Could not get IDXGIInfoQueue interface");
+        SDL_LogWarn(SDL_LOG_CATEGORY_GPU, "Could not get IDXGIInfoQueue interface");
     }
 #endif
 }
@@ -5923,7 +5923,7 @@ static void D3D11_INTERNAL_InitBlitPipelines(
         &shaderCreateInfo);
 
     if (fullscreenVertexShader == NULL) {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to compile fullscreen vertex shader!");
+        SDL_LogError(SDL_LOG_CATEGORY_GPU, "Failed to compile fullscreen vertex shader!");
     }
 
     /* Blit from 2D pixel shader */
@@ -5937,7 +5937,7 @@ static void D3D11_INTERNAL_InitBlitPipelines(
         &shaderCreateInfo);
 
     if (blitFrom2DPixelShader == NULL) {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to compile blit from 2D pixel shader!");
+        SDL_LogError(SDL_LOG_CATEGORY_GPU, "Failed to compile blit from 2D pixel shader!");
     }
 
     /* Blit from 2D array pixel shader */
@@ -5951,7 +5951,7 @@ static void D3D11_INTERNAL_InitBlitPipelines(
         &shaderCreateInfo);
 
     if (blitFrom2DArrayPixelShader == NULL) {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to compile blit from 2D array pixel shader!");
+        SDL_LogError(SDL_LOG_CATEGORY_GPU, "Failed to compile blit from 2D array pixel shader!");
     }
 
     /* Blit from 2D pipeline */
@@ -5999,7 +5999,7 @@ static void D3D11_INTERNAL_InitBlitPipelines(
         &blitPipelineCreateInfo);
 
     if (renderer->blitFrom2DPipeline == NULL) {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to create blit pipeline!");
+        SDL_LogError(SDL_LOG_CATEGORY_GPU, "Failed to create blit pipeline!");
     }
 
     /* Blit from 2D array pipeline */
@@ -6026,7 +6026,7 @@ static void D3D11_INTERNAL_InitBlitPipelines(
         &samplerCreateInfo);
 
     if (renderer->blitNearestSampler == NULL) {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to create blit nearest sampler!");
+        SDL_LogError(SDL_LOG_CATEGORY_GPU, "Failed to create blit nearest sampler!");
     }
 
     samplerCreateInfo.magFilter = SDL_GPU_FILTER_LINEAR;
@@ -6038,7 +6038,7 @@ static void D3D11_INTERNAL_InitBlitPipelines(
         &samplerCreateInfo);
 
     if (renderer->blitLinearSampler == NULL) {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to create blit linear sampler!");
+        SDL_LogError(SDL_LOG_CATEGORY_GPU, "Failed to create blit linear sampler!");
     }
 
     /* Clean up */
@@ -6079,20 +6079,20 @@ static SDL_GpuDevice *D3D11_CreateDevice(SDL_bool debugMode, SDL_bool preferLowP
     /* Load the D3DCompiler library */
     renderer->d3dcompiler_dll = SDL_LoadObject(D3DCOMPILER_DLL);
     if (renderer->d3dcompiler_dll == NULL) {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Could not find " D3DCOMPILER_DLL);
+        SDL_LogError(SDL_LOG_CATEGORY_GPU, "Could not find " D3DCOMPILER_DLL);
         return NULL;
     }
 
     renderer->D3DCompile_func = (PFN_D3DCOMPILE)SDL_LoadFunction(renderer->d3dcompiler_dll, D3DCOMPILE_FUNC);
     if (renderer->D3DCompile_func == NULL) {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Could not load function: " D3DCOMPILE_FUNC);
+        SDL_LogError(SDL_LOG_CATEGORY_GPU, "Could not load function: " D3DCOMPILE_FUNC);
         return NULL;
     }
 
     /* Load the DXGI library */
     renderer->dxgi_dll = SDL_LoadObject(DXGI_DLL);
     if (renderer->dxgi_dll == NULL) {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Could not find " DXGI_DLL);
+        SDL_LogError(SDL_LOG_CATEGORY_GPU, "Could not find " DXGI_DLL);
         return NULL;
     }
 
@@ -6101,7 +6101,7 @@ static SDL_GpuDevice *D3D11_CreateDevice(SDL_bool debugMode, SDL_bool preferLowP
         renderer->dxgi_dll,
         CREATE_DXGI_FACTORY1_FUNC);
     if (CreateDXGIFactoryFunc == NULL) {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Could not load function: " CREATE_DXGI_FACTORY1_FUNC);
+        SDL_LogError(SDL_LOG_CATEGORY_GPU, "Could not load function: " CREATE_DXGI_FACTORY1_FUNC);
         return NULL;
     }
 
@@ -6169,7 +6169,7 @@ static SDL_GpuDevice *D3D11_CreateDevice(SDL_bool debugMode, SDL_bool preferLowP
     /* Load the D3D library */
     renderer->d3d11_dll = SDL_LoadObject(D3D11_DLL);
     if (renderer->d3d11_dll == NULL) {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Could not find " D3D11_DLL);
+        SDL_LogError(SDL_LOG_CATEGORY_GPU, "Could not find " D3D11_DLL);
         return NULL;
     }
 
@@ -6178,7 +6178,7 @@ static SDL_GpuDevice *D3D11_CreateDevice(SDL_bool debugMode, SDL_bool preferLowP
         renderer->d3d11_dll,
         D3D11_CREATE_DEVICE_FUNC);
     if (D3D11CreateDeviceFunc == NULL) {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Could not load function: " D3D11_CREATE_DEVICE_FUNC);
+        SDL_LogError(SDL_LOG_CATEGORY_GPU, "Could not load function: " D3D11_CREATE_DEVICE_FUNC);
         return NULL;
     }
 
@@ -6204,7 +6204,7 @@ tryCreateDevice:
         &renderer->immediateContext);
     if (FAILED(res) && debugMode) {
         /* If device creation failed, and we're in debug mode, remove the debug flag and try again. */
-        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Creating device in debug mode failed with error " HRESULT_FMT ". Trying non-debug.", res);
+        SDL_LogWarn(SDL_LOG_CATEGORY_GPU, "Creating device in debug mode failed with error " HRESULT_FMT ". Trying non-debug.", res);
         flags &= ~D3D11_CREATE_DEVICE_DEBUG;
         debugMode = 0;
         goto tryCreateDevice;
@@ -6244,8 +6244,8 @@ tryCreateDevice:
 #endif
 
     /* Print driver info */
-    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "SDL GPU Driver: D3D11");
-    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "D3D11 Adapter: %S", adapterDesc.Description);
+    SDL_LogInfo(SDL_LOG_CATEGORY_GPU, "SDL GPU Driver: D3D11");
+    SDL_LogInfo(SDL_LOG_CATEGORY_GPU, "D3D11 Adapter: %S", adapterDesc.Description);
 
     /* Create mutexes */
     renderer->contextLock = SDL_CreateMutex();
