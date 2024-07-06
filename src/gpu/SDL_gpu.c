@@ -131,7 +131,7 @@ static SDL_GpuBackend SDL_GpuSelectBackend(SDL_VideoDevice *_this, SDL_GpuBacken
             }
         }
 
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SDL_HINT_GPU_BACKEND %s unsupported!", gpudriver);
+        SDL_LogError(SDL_LOG_CATEGORY_GPU, "SDL_HINT_GPU_BACKEND %s unsupported!", gpudriver);
         return SDL_GPU_BACKEND_INVALID;
     }
 
@@ -142,7 +142,7 @@ static SDL_GpuBackend SDL_GpuSelectBackend(SDL_VideoDevice *_this, SDL_GpuBacken
                 return backends[i]->backendflag;
             }
         }
-        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "No preferred SDL_Gpu backend found!");
+        SDL_LogWarn(SDL_LOG_CATEGORY_GPU, "No preferred SDL_Gpu backend found!");
     }
 
     /* ... Fallback backends */
@@ -152,7 +152,7 @@ static SDL_GpuBackend SDL_GpuSelectBackend(SDL_VideoDevice *_this, SDL_GpuBacken
         }
     }
 
-    SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "No supported SDL_Gpu backend found!");
+    SDL_LogError(SDL_LOG_CATEGORY_GPU, "No supported SDL_Gpu backend found!");
     return SDL_GPU_BACKEND_INVALID;
 }
 
@@ -349,7 +349,7 @@ SDL_GpuGraphicsPipeline *SDL_GpuCreateGraphicsPipeline(
         }
 
         SDL_LogWarn(
-            SDL_LOG_CATEGORY_APPLICATION,
+            SDL_LOG_CATEGORY_GPU,
             "Requested unsupported depth format %d, falling back to format %d!",
             graphicsPipelineCreateInfo->attachmentInfo.depthStencilFormat,
             newFormat);
@@ -440,7 +440,7 @@ SDL_GpuTexture *SDL_GpuCreateTexture(
             }
 
             SDL_LogWarn(
-                SDL_LOG_CATEGORY_APPLICATION,
+                SDL_LOG_CATEGORY_GPU,
                 "Requested unsupported depth format %d, falling back to format %d!",
                 textureCreateInfo->format,
                 newFormat);
