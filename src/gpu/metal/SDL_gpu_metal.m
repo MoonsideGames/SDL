@@ -1260,10 +1260,10 @@ static MetalTexture *METAL_INTERNAL_CreateTexture(
     MetalTexture *metalTexture;
 
     if (textureCreateInfo->depth <= 1) {
-        if (textureCreateInfo->layerCount > 1) {
-            textureDescriptor.textureType = MTLTextureType2DArray;
-        } else if (textureCreateInfo->isCube) {
+        if (textureCreateInfo->isCube) {
             textureDescriptor.textureType = MTLTextureTypeCube;
+        } else if (textureCreateInfo->layerCount > 1) {
+            textureDescriptor.textureType = MTLTextureType2DArray;
         } else {
             textureDescriptor.textureType = MTLTextureType2D;
         }
@@ -1286,7 +1286,7 @@ static MetalTexture *METAL_INTERNAL_CreateTexture(
     textureDescriptor.depth = textureCreateInfo->depth;
     textureDescriptor.mipmapLevelCount = textureCreateInfo->levelCount;
     textureDescriptor.sampleCount = 1;
-    textureDescriptor.arrayLength = textureCreateInfo->layerCount; /* FIXME: What does this need to be for cubes? */
+    textureDescriptor.arrayLength = (textureCreateInfo->isCube) ? 1 : textureCreateInfo->layerCount; /* FIXME: Cube arrays? */
     textureDescriptor.storageMode = MTLStorageModePrivate;
 
     textureDescriptor.usage = 0;
