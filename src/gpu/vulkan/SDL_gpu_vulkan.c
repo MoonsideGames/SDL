@@ -2418,12 +2418,28 @@ static Uint8 VULKAN_INTERNAL_BindMemoryForBuffer(
     /* Buffers need to be optimally bound to a memory type
      * based on their use case and the architecture of the system.
      *
+     * It is important to understand the distinction between device and host.
+     *
+     * On a traditional high-performance desktop computer,
+     * the "device" would be the GPU, and the "host" would be the CPU.
+     * Memory being copied between these two must cross the PCI bus.
+     * On these systems we have to be concerned about bandwidth limitations
+     * and causing memory stalls, so we have taken a great deal of care
+     * to structure this API to guide the client towards optimal usage.
+     *
+     * Other kinds of devices do not necessarily have this distinction.
+     * On an iPhone or Nintendo Switch, all memory is accessible both to the
+     * GPU and the CPU at all times. These kinds of systems are known as
+     * UMA, or Unified Memory Architecture. A desktop computer using the
+     * CPU's integrated graphics can also be thought of as UMA.
+     *
      * Vulkan memory types have several memory properties.
      * The relevant memory properties are as follows:
      *
      * DEVICE_LOCAL:
      *   This memory is on-device and most efficient for device access.
-     *   On UMA systems like iPhone or Nintendo Switch all memory is device-local.
+     *   On UMA systems all memory is device-local.
+     *   If memory is not device-local, then it is host-local.
      *
      * HOST_VISIBLE:
      *   This memory can be mapped for host access, meaning we can obtain
@@ -2448,7 +2464,7 @@ static Uint8 VULKAN_INTERNAL_BindMemoryForBuffer(
      * We prefer uniform buffers to also be device-local because
      * they are accessed by shaders, but the amount of memory
      * that is both device-local and host-visible
-     * is often constrained, particularly on low-level devices.
+     * is often constrained, particularly on low-end devices.
      *
      * Transfer buffers must be host-visible and coherent because
      * the client uses them to stage data to be transferred
