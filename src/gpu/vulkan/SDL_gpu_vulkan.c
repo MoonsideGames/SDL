@@ -1786,9 +1786,13 @@ static Uint32* VULKAN_INTERNAL_FindBestMemoryTypes(
     Uint32 *pCount)
 {
     Uint32 i;
-    Uint32 count = 0;
     Uint32 index = 0;
     Uint32 *result = NULL;
+
+    /* Initialize array */
+    result = SDL_malloc(sizeof(Uint32) * renderer->memoryProperties.memoryTypeCount);
+
+    /* Set array values in order of preference */
 
     /* required + preferred + !allowed */
     for (i = 0; i < renderer->memoryProperties.memoryTypeCount; i += 1) {
@@ -1796,7 +1800,14 @@ static Uint32* VULKAN_INTERNAL_FindBestMemoryTypes(
             (renderer->memoryProperties.memoryTypes[i].propertyFlags & requiredProperties) == requiredProperties &&
             (renderer->memoryProperties.memoryTypes[i].propertyFlags & preferredProperties) == preferredProperties &&
             (renderer->memoryProperties.memoryTypes[i].propertyFlags & allowedProperties) == 0) {
-            count += 1;
+            if (VULKAN_INTERNAL_CheckMemoryTypeArrayUnique(
+                i,
+                result,
+                index
+            )) {
+                result[index] = i;
+                index += 1;
+            }
         }
     }
 
@@ -1806,7 +1817,14 @@ static Uint32* VULKAN_INTERNAL_FindBestMemoryTypes(
             (renderer->memoryProperties.memoryTypes[i].propertyFlags & requiredProperties) == requiredProperties &&
             (renderer->memoryProperties.memoryTypes[i].propertyFlags & preferredProperties) == 0 &&
             (renderer->memoryProperties.memoryTypes[i].propertyFlags & allowedProperties) == 0) {
-            count += 1;
+            if (VULKAN_INTERNAL_CheckMemoryTypeArrayUnique(
+                i,
+                result,
+                index
+            )) {
+                result[index] = i;
+                index += 1;
+            }
         }
     }
 
@@ -1816,72 +1834,18 @@ static Uint32* VULKAN_INTERNAL_FindBestMemoryTypes(
             (renderer->memoryProperties.memoryTypes[i].propertyFlags & requiredProperties) == requiredProperties &&
             (renderer->memoryProperties.memoryTypes[i].propertyFlags & preferredProperties) == preferredProperties &&
             (renderer->memoryProperties.memoryTypes[i].propertyFlags & allowedProperties) == allowedProperties) {
-            count += 1;
+            if (VULKAN_INTERNAL_CheckMemoryTypeArrayUnique(
+                i,
+                result,
+                index
+            )) {
+                result[index] = i;
+                index += 1;
+            }
         }
     }
 
     /* required + !preferred + allowed */
-    for (i = 0; i < renderer->memoryProperties.memoryTypeCount; i += 1) {
-        if ((typeFilter & (1 << i)) &&
-            (renderer->memoryProperties.memoryTypes[i].propertyFlags & requiredProperties) == requiredProperties &&
-            (renderer->memoryProperties.memoryTypes[i].propertyFlags & preferredProperties) == 0 &&
-            (renderer->memoryProperties.memoryTypes[i].propertyFlags & allowedProperties) == allowedProperties) {
-            count += 1;
-        }
-    }
-
-    /* Initialize array */
-    result = SDL_malloc(sizeof(Uint32) * count);
-
-    /* Set array values in order of preference */
-    for (i = 0; i < renderer->memoryProperties.memoryTypeCount; i += 1) {
-        if ((typeFilter & (1 << i)) &&
-            (renderer->memoryProperties.memoryTypes[i].propertyFlags & requiredProperties) == requiredProperties &&
-            (renderer->memoryProperties.memoryTypes[i].propertyFlags & preferredProperties) == preferredProperties &&
-            (renderer->memoryProperties.memoryTypes[i].propertyFlags & allowedProperties) == 0) {
-            if (VULKAN_INTERNAL_CheckMemoryTypeArrayUnique(
-                i,
-                result,
-                index
-            )) {
-                result[index] = i;
-                index += 1;
-            }
-        }
-    }
-
-    for (i = 0; i < renderer->memoryProperties.memoryTypeCount; i += 1) {
-        if ((typeFilter & (1 << i)) &&
-            (renderer->memoryProperties.memoryTypes[i].propertyFlags & requiredProperties) == requiredProperties &&
-            (renderer->memoryProperties.memoryTypes[i].propertyFlags & preferredProperties) == 0 &&
-            (renderer->memoryProperties.memoryTypes[i].propertyFlags & allowedProperties) == 0) {
-            if (VULKAN_INTERNAL_CheckMemoryTypeArrayUnique(
-                i,
-                result,
-                index
-            )) {
-                result[index] = i;
-                index += 1;
-            }
-        }
-    }
-
-    for (i = 0; i < renderer->memoryProperties.memoryTypeCount; i += 1) {
-        if ((typeFilter & (1 << i)) &&
-            (renderer->memoryProperties.memoryTypes[i].propertyFlags & requiredProperties) == requiredProperties &&
-            (renderer->memoryProperties.memoryTypes[i].propertyFlags & preferredProperties) == preferredProperties &&
-            (renderer->memoryProperties.memoryTypes[i].propertyFlags & allowedProperties) == allowedProperties) {
-            if (VULKAN_INTERNAL_CheckMemoryTypeArrayUnique(
-                i,
-                result,
-                index
-            )) {
-                result[index] = i;
-                index += 1;
-            }
-        }
-    }
-
     for (i = 0; i < renderer->memoryProperties.memoryTypeCount; i += 1) {
         if ((typeFilter & (1 << i)) &&
             (renderer->memoryProperties.memoryTypes[i].propertyFlags & requiredProperties) == requiredProperties &&
