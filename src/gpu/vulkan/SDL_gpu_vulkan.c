@@ -1785,7 +1785,7 @@ static Uint32* VULKAN_INTERNAL_FindBestMemoryTypes(
     VkMemoryPropertyFlags allowedProperties,
     Uint32 *pCount)
 {
-    Uint32 i, j;
+    Uint32 i;
     Uint32 count = 0;
     Uint32 index = 0;
     Uint32 *result = NULL;
@@ -1833,7 +1833,6 @@ static Uint32* VULKAN_INTERNAL_FindBestMemoryTypes(
     /* Initialize array */
     result = SDL_malloc(sizeof(Uint32) * count);
 
-    SDL_bool unique;
     /* Set array values in order of preference */
     for (i = 0; i < renderer->memoryProperties.memoryTypeCount; i += 1) {
         if ((typeFilter & (1 << i)) &&
@@ -2396,7 +2395,7 @@ static Uint8 VULKAN_INTERNAL_BindMemoryForImage(
             image,
             usedRegion);
 
-        if (bindResult = 1) {
+        if (bindResult == 1) {
             selectedMemoryTypeIndex = memoryTypesToTry[i];
             break;
         }
