@@ -2345,7 +2345,14 @@ static Uint8 VULKAN_INTERNAL_BindMemoryForImage(
         NULL
     };
 
-    /* Prefer GPU allocation for textures */
+    /* Vulkan memory types have several memory properties.
+     *
+     * Unlike buffers, images are always optimally stored device-local,
+     * so that is the only property we prefer here.
+     *
+     * If memory is constrained, it is fine for the texture to not
+     * be device-local.
+     */
     preferredMemoryPropertyFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
 
     memoryTypesToTry = VULKAN_INTERNAL_FindBestImageMemoryTypes(
@@ -2408,6 +2415,51 @@ static Uint8 VULKAN_INTERNAL_BindMemoryForBuffer(
         NULL
     };
 
+    /* Buffers need to be optimally bound to a memory type
+     * based on their use case and the architecture of the system.
+     *
+     * Vulkan memory types have several memory properties.
+     * The relevant memory properties are as follows:
+     *
+     * DEVICE_LOCAL:
+     *   This memory is on-device and most efficient for device access.
+     *   On UMA systems like iPhone or Nintendo Switch all memory is device-local.
+     *
+     * HOST_VISIBLE:
+     *   This memory can be mapped for host access, meaning we can write
+     *   directly to the memory with pointer access.
+     *
+     * HOST_COHERENT:
+     *   Host-coherent memory does not require cache management operations
+     *   when mapped, so we generally set this alongside HOST_VISIBLE
+     *   to avoid extra record keeping.
+     *
+     * HOST_CACHED:
+     *   Host-cached memory is faster to access than uncached memory
+     *   but memory of this type might not always be available.
+     *
+     * GPU buffers, like vertex buffers, indirect buffers, etc
+     * are optimally stored in device-local memory.
+     * However, if device-local memory is low, these buffers
+     * can be accessed from host-local memory with a performance penalty.
+     *
+     * Uniform buffers must be host-visible and coherent because
+     * the client uses them to quickly push small amounts of data.
+     * We prefer uniform buffers to also be device-local because
+     * they are accessed by shaders, but the amount of memory
+     * that is both device-local and host-visible
+     * is often constrained, particularly on low-level devices.
+     *
+     * Transfer buffers must be host-visible and coherent because
+     * the client uses them to stage data to be transferred
+     * to device-local memory, or to read back data transferred
+     * from the device. We prefer the cache bit for performance
+     * but it isn't strictly necessary. We tolerate device-local
+     * memory in this situation because, as mentioned above,
+     * on certain devices all memory is device-local, and even
+     * though the transfer isn't strictly necessary it is still
+     * useful for correctly timelining transfers.
+     */
     if (type == VULKAN_BUFFER_TYPE_GPU) {
         preferredMemoryPropertyFlags |=
             VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
