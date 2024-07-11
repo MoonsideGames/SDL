@@ -2474,7 +2474,7 @@ static Uint8 VULKAN_INTERNAL_BindMemoryForBuffer(
      * memory in this situation because, as mentioned above,
      * on certain devices all memory is device-local, and even
      * though the transfer isn't strictly necessary it is still
-     * useful for correctly timelining transfers.
+     * useful for correctly timelining data.
      */
     if (type == VULKAN_BUFFER_TYPE_GPU) {
         preferredMemoryPropertyFlags |=
