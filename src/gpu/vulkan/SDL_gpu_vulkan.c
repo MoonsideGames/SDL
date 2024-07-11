@@ -2426,12 +2426,12 @@ static Uint8 VULKAN_INTERNAL_BindMemoryForBuffer(
      *   On UMA systems like iPhone or Nintendo Switch all memory is device-local.
      *
      * HOST_VISIBLE:
-     *   This memory can be mapped for host access, meaning we can write
-     *   directly to the memory with pointer access.
+     *   This memory can be mapped for host access, meaning we can obtain
+     *   a pointer to directly access the memory.
      *
      * HOST_COHERENT:
      *   Host-coherent memory does not require cache management operations
-     *   when mapped, so we generally set this alongside HOST_VISIBLE
+     *   when mapped, so we always set this alongside HOST_VISIBLE
      *   to avoid extra record keeping.
      *
      * HOST_CACHED:
