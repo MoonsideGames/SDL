@@ -11030,9 +11030,7 @@ static Uint8 VULKAN_INTERNAL_CheckValidationLayers(
     return layerFound;
 }
 
-static Uint8 VULKAN_INTERNAL_CreateInstance(
-    VulkanRenderer *renderer,
-    SDL_Window *deviceWindowHandle)
+static Uint8 VULKAN_INTERNAL_CreateInstance(VulkanRenderer *renderer)
 {
     VkResult vulkanResult;
     VkApplicationInfo appInfo;
@@ -11154,15 +11152,12 @@ static Uint8 VULKAN_INTERNAL_IsDeviceSuitable(
     VulkanRenderer *renderer,
     VkPhysicalDevice physicalDevice,
     VulkanExtensions *physicalDeviceExtensions,
-    VkSurfaceKHR surface,
     Uint32 *queueFamilyIndex,
     Uint8 *deviceRank)
 {
     Uint32 queueFamilyCount, queueFamilyRank, queueFamilyBest;
-    SwapchainSupportDetails swapchainSupportDetails;
     VkQueueFamilyProperties *queueProps;
-    VkBool32 supportsPresent;
-    Uint8 querySuccess;
+    SDL_bool supportsPresent;
     VkPhysicalDeviceProperties deviceProperties;
     Uint32 i;
 
@@ -11213,11 +11208,11 @@ static Uint8 VULKAN_INTERNAL_IsDeviceSuitable(
     queueFamilyBest = 0;
     *queueFamilyIndex = UINT32_MAX;
     for (i = 0; i < queueFamilyCount; i += 1) {
-        renderer->vkGetPhysicalDeviceSurfaceSupportKHR(
+        supportsPresent = SDL_Vulkan_GetPresentationSupport(
+            renderer->instance,
             physicalDevice,
-            i,
-            surface,
-            &supportsPresent);
+            i
+        );
         if (!supportsPresent ||
             !(queueProps[i].queueFlags & VK_QUEUE_GRAPHICS_BIT)) {
             /* Not a graphics family, ignore. */
@@ -11272,27 +11267,11 @@ static Uint8 VULKAN_INTERNAL_IsDeviceSuitable(
         return 0;
     }
 
-    /* FIXME: Need better structure for checking vs storing support details */
-    querySuccess = VULKAN_INTERNAL_QuerySwapchainSupport(
-        renderer,
-        physicalDevice,
-        surface,
-        &swapchainSupportDetails);
-    if (querySuccess && swapchainSupportDetails.formatsLength > 0) {
-        SDL_free(swapchainSupportDetails.formats);
-    }
-    if (querySuccess && swapchainSupportDetails.presentModesLength > 0) {
-        SDL_free(swapchainSupportDetails.presentModes);
-    }
-
-    return (querySuccess &&
-            swapchainSupportDetails.formatsLength > 0 &&
-            swapchainSupportDetails.presentModesLength > 0);
+    /* FIXME: Need better structure for checking vs storing swapchain support details */
+    return 1;
 }
 
-static Uint8 VULKAN_INTERNAL_DeterminePhysicalDevice(
-    VulkanRenderer *renderer,
-    VkSurfaceKHR surface)
+static Uint8 VULKAN_INTERNAL_DeterminePhysicalDevice(VulkanRenderer *renderer)
 {
     VkResult vulkanResult;
     VkPhysicalDevice *physicalDevices;
@@ -11350,7 +11329,6 @@ static Uint8 VULKAN_INTERNAL_DeterminePhysicalDevice(
                 renderer,
                 physicalDevices[i],
                 &physicalDeviceExtensions[i],
-                surface,
                 &queueFamilyIndex,
                 &deviceRank)) {
             /* Use this for rendering.
@@ -11557,39 +11535,10 @@ static void VULKAN_INTERNAL_LoadEntryPoints(void)
 static SDL_bool VULKAN_INTERNAL_PrepareVulkan(
     VulkanRenderer *renderer)
 {
-    SDL_Window *dummyWindowHandle;
-    VkSurfaceKHR surface;
-    SwapchainSupportDetails swapchainSupportDetails;
-
     VULKAN_INTERNAL_LoadEntryPoints();
 
-    dummyWindowHandle = SDL_CreateWindow(
-        "SDL_Gpu Vulkan",
-        128,
-        128,
-        SDL_WINDOW_VULKAN | SDL_WINDOW_HIDDEN);
-
-    if (dummyWindowHandle == NULL) {
-        SDL_LogWarn(SDL_LOG_CATEGORY_GPU, "Vulkan: Could not create dummy window");
-        return SDL_FALSE;
-    }
-
-    if (!VULKAN_INTERNAL_CreateInstance(renderer, dummyWindowHandle)) {
-        SDL_DestroyWindow(dummyWindowHandle);
+    if (!VULKAN_INTERNAL_CreateInstance(renderer)) {
         SDL_LogWarn(SDL_LOG_CATEGORY_GPU, "Vulkan: Could not create Vulkan instance");
-        return SDL_FALSE;
-    }
-
-    if (SDL_Vulkan_CreateSurface(
-            dummyWindowHandle,
-            renderer->instance,
-            NULL, /* FIXME: VAllocationCallbacks */
-            &surface) < 0) {
-        SDL_DestroyWindow(dummyWindowHandle);
-        SDL_LogWarn(
-            SDL_LOG_CATEGORY_GPU,
-            "SDL_Vulkan_CreateSurface failed: %s",
-            SDL_GetError());
         return SDL_FALSE;
     }
 
@@ -11597,41 +11546,10 @@ static SDL_bool VULKAN_INTERNAL_PrepareVulkan(
     renderer->func = (vkfntype_##func)vkGetInstanceProcAddr(renderer->instance, #func);
 #include "SDL_gpu_vulkan_vkfuncs.h"
 
-    if (!VULKAN_INTERNAL_DeterminePhysicalDevice(renderer, surface)) {
+    if (!VULKAN_INTERNAL_DeterminePhysicalDevice(renderer)) {
         SDL_LogWarn(SDL_LOG_CATEGORY_GPU, "Vulkan: Failed to determine a suitable physical device");
-
-        SDL_Vulkan_DestroySurface(
-            renderer->instance,
-            surface,
-            NULL);
-
-        SDL_DestroyWindow(dummyWindowHandle);
         return SDL_FALSE;
     }
-
-    if (!VULKAN_INTERNAL_QuerySwapchainSupport(
-            renderer,
-            renderer->physicalDevice,
-            surface,
-            &swapchainSupportDetails)) {
-        SDL_Vulkan_DestroySurface(
-            renderer->instance,
-            surface,
-            NULL);
-
-        SDL_DestroyWindow(dummyWindowHandle);
-        return SDL_FALSE;
-    }
-
-    SDL_free(swapchainSupportDetails.formats);
-    SDL_free(swapchainSupportDetails.presentModes);
-
-    SDL_Vulkan_DestroySurface(
-        renderer->instance,
-        surface,
-        NULL);
-
-    SDL_DestroyWindow(dummyWindowHandle);
     return SDL_TRUE;
 }
 
