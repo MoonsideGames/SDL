@@ -1776,30 +1776,37 @@ static SDL_bool VULKAN_INTERNAL_CheckMemoryTypeArrayUnique(
     return SDL_TRUE;
 }
 
-/* Returns an array of allowed memory indices in order of preference. */
+/* Returns an array of memory type indices in order of preference.
+ * Memory types are requested with the following three guidelines:
+ *
+ * Required: Absolutely necessary
+ * Preferred: Nice to have, but not necessary
+ * Tolerable: Can be allowed if there are no other options
+ *
+ * We return memory types in this order:
+ * 1. Required and preferred. This is the best category.
+ * 2. Required only.
+ * 3. Required, preferred, and tolerable.
+ * 4. Required and tolerable. This is the worst category.
+ */
 static Uint32* VULKAN_INTERNAL_FindBestMemoryTypes(
     VulkanRenderer *renderer,
     Uint32 typeFilter,
     VkMemoryPropertyFlags requiredProperties,
     VkMemoryPropertyFlags preferredProperties,
-    VkMemoryPropertyFlags allowedProperties,
+    VkMemoryPropertyFlags tolerableProperties,
     Uint32 *pCount)
 {
     Uint32 i;
     Uint32 index = 0;
-    Uint32 *result = NULL;
+    Uint32 *result = SDL_malloc(sizeof(Uint32) * renderer->memoryProperties.memoryTypeCount);
 
-    /* Initialize array */
-    result = SDL_malloc(sizeof(Uint32) * renderer->memoryProperties.memoryTypeCount);
-
-    /* Set array values in order of preference */
-
-    /* required + preferred + !allowed */
+    /* required + preferred + !tolerable */
     for (i = 0; i < renderer->memoryProperties.memoryTypeCount; i += 1) {
         if ((typeFilter & (1 << i)) &&
             (renderer->memoryProperties.memoryTypes[i].propertyFlags & requiredProperties) == requiredProperties &&
             (renderer->memoryProperties.memoryTypes[i].propertyFlags & preferredProperties) == preferredProperties &&
-            (renderer->memoryProperties.memoryTypes[i].propertyFlags & allowedProperties) == 0) {
+            (renderer->memoryProperties.memoryTypes[i].propertyFlags & tolerableProperties) == 0) {
             if (VULKAN_INTERNAL_CheckMemoryTypeArrayUnique(
                 i,
                 result,
@@ -1811,12 +1818,12 @@ static Uint32* VULKAN_INTERNAL_FindBestMemoryTypes(
         }
     }
 
-    /* required + !preferred + !allowed */
+    /* required + !preferred + !tolerable */
     for (i = 0; i < renderer->memoryProperties.memoryTypeCount; i += 1) {
         if ((typeFilter & (1 << i)) &&
             (renderer->memoryProperties.memoryTypes[i].propertyFlags & requiredProperties) == requiredProperties &&
             (renderer->memoryProperties.memoryTypes[i].propertyFlags & preferredProperties) == 0 &&
-            (renderer->memoryProperties.memoryTypes[i].propertyFlags & allowedProperties) == 0) {
+            (renderer->memoryProperties.memoryTypes[i].propertyFlags & tolerableProperties) == 0) {
             if (VULKAN_INTERNAL_CheckMemoryTypeArrayUnique(
                 i,
                 result,
@@ -1828,12 +1835,12 @@ static Uint32* VULKAN_INTERNAL_FindBestMemoryTypes(
         }
     }
 
-    /* required + preferred + allowed */
+    /* required + preferred + tolerable */
     for (i = 0; i < renderer->memoryProperties.memoryTypeCount; i += 1) {
         if ((typeFilter & (1 << i)) &&
             (renderer->memoryProperties.memoryTypes[i].propertyFlags & requiredProperties) == requiredProperties &&
             (renderer->memoryProperties.memoryTypes[i].propertyFlags & preferredProperties) == preferredProperties &&
-            (renderer->memoryProperties.memoryTypes[i].propertyFlags & allowedProperties) == allowedProperties) {
+            (renderer->memoryProperties.memoryTypes[i].propertyFlags & tolerableProperties) == tolerableProperties) {
             if (VULKAN_INTERNAL_CheckMemoryTypeArrayUnique(
                 i,
                 result,
@@ -1845,12 +1852,12 @@ static Uint32* VULKAN_INTERNAL_FindBestMemoryTypes(
         }
     }
 
-    /* required + !preferred + allowed */
+    /* required + !preferred + tolerable */
     for (i = 0; i < renderer->memoryProperties.memoryTypeCount; i += 1) {
         if ((typeFilter & (1 << i)) &&
             (renderer->memoryProperties.memoryTypes[i].propertyFlags & requiredProperties) == requiredProperties &&
             (renderer->memoryProperties.memoryTypes[i].propertyFlags & preferredProperties) == 0 &&
-            (renderer->memoryProperties.memoryTypes[i].propertyFlags & allowedProperties) == allowedProperties) {
+            (renderer->memoryProperties.memoryTypes[i].propertyFlags & tolerableProperties) == tolerableProperties) {
             if (VULKAN_INTERNAL_CheckMemoryTypeArrayUnique(
                 i,
                 result,
@@ -1871,7 +1878,7 @@ static Uint32* VULKAN_INTERNAL_FindBestBufferMemoryTypes(
     VkBuffer buffer,
     VkMemoryPropertyFlags requiredMemoryProperties,
     VkMemoryPropertyFlags preferredMemoryProperties,
-    VkMemoryPropertyFlags allowedMemoryProperties,
+    VkMemoryPropertyFlags tolerableMemoryProperties,
     VkMemoryRequirements2KHR *pMemoryRequirements,
     Uint32 *pCount)
 {
@@ -1891,7 +1898,7 @@ static Uint32* VULKAN_INTERNAL_FindBestBufferMemoryTypes(
         pMemoryRequirements->memoryRequirements.memoryTypeBits,
         requiredMemoryProperties,
         preferredMemoryProperties,
-        allowedMemoryProperties,
+        tolerableMemoryProperties,
         pCount);
 }
 
@@ -2393,12 +2400,9 @@ static Uint8 VULKAN_INTERNAL_BindMemoryForBuffer(
     Uint32 *memoryTypesToTry = NULL;
     Uint32 selectedMemoryTypeIndex = 0;
     Uint32 i;
-    /* These are absolutely necessary */
     VkMemoryPropertyFlags requiredMemoryPropertyFlags = 0;
-    /* Would be nice to have, but not required */
     VkMemoryPropertyFlags preferredMemoryPropertyFlags = 0;
-    /* Would be nice to not have, but ok as a last resort */
-    VkMemoryPropertyFlags allowedMemoryPropertyFlags = 0;
+    VkMemoryPropertyFlags tolerableMemoryPropertyFlags = 0;
     VkMemoryRequirements2KHR memoryRequirements = {
         VK_STRUCTURE_TYPE_MEMORY_REQUIREMENTS_2_KHR,
         NULL
@@ -2408,12 +2412,12 @@ static Uint8 VULKAN_INTERNAL_BindMemoryForBuffer(
         preferredMemoryPropertyFlags |=
             VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
     } else if (type == VULKAN_BUFFER_TYPE_UNIFORM) {
-        preferredMemoryPropertyFlags |=
-            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
-
         requiredMemoryPropertyFlags |=
             VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
             VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+
+        preferredMemoryPropertyFlags |=
+            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
     } else if (type == VULKAN_BUFFER_TYPE_TRANSFER) {
         requiredMemoryPropertyFlags |=
             VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
@@ -2422,7 +2426,7 @@ static Uint8 VULKAN_INTERNAL_BindMemoryForBuffer(
         preferredMemoryPropertyFlags |=
             VK_MEMORY_PROPERTY_HOST_CACHED_BIT;
 
-        allowedMemoryPropertyFlags |=
+        tolerableMemoryPropertyFlags |=
             VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
     } else {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Unrecognized buffer type!");
@@ -2434,7 +2438,7 @@ static Uint8 VULKAN_INTERNAL_BindMemoryForBuffer(
         buffer,
         requiredMemoryPropertyFlags,
         preferredMemoryPropertyFlags,
-        allowedMemoryPropertyFlags,
+        tolerableMemoryPropertyFlags,
         &memoryRequirements,
         &memoryTypeCount
     );
