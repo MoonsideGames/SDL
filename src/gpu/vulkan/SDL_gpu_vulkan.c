@@ -46,12 +46,16 @@ static PFN_vkGetInstanceProcAddr vkGetInstanceProcAddr = NULL;
 
 typedef struct VulkanExtensions
 {
+    /* These extensions are required! */
+
     /* Globally supported */
     Uint8 KHR_swapchain;
-    /* Core since 1.1 */
+    /* Core since 1.1, needed for negative VkViewport::height */
     Uint8 KHR_maintenance1;
 
-    /* Core since 1.2 */
+    /* These extensions are optional! */
+
+    /* Core since 1.2, but requires annoying paperwork to implement */
     Uint8 KHR_driver_properties;
     /* EXT, probably not going to be Core */
     Uint8 EXT_vertex_attribute_divisor;
