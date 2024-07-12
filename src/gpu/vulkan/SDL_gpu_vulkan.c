@@ -244,7 +244,6 @@ static VkComponentMapping SDLToVK_SurfaceSwizzle[] = {
     IDENTITY_SWIZZLE, /* D32_SFLOAT_S8_UINT */
 };
 
-/* from SWAPCHAINCOMPOSITION */
 static VkFormat SwapchainCompositionToFormat[] = {
     VK_FORMAT_B8G8R8A8_UNORM,          /* SDR */
     VK_FORMAT_B8G8R8A8_SRGB,           /* SDR_SRGB */
@@ -252,7 +251,13 @@ static VkFormat SwapchainCompositionToFormat[] = {
     VK_FORMAT_A2B10G10R10_UNORM_PACK32 /* HDR_ADVANCED */
 };
 
-/* from SWAPCHAINCOMPOSITION */
+static VkFormat SwapchainCompositionToFallbackFormat[] = {
+    VK_FORMAT_R8G8B8A8_UNORM,
+    VK_FORMAT_R8G8B8A8_SRGB,
+    VK_FORMAT_UNDEFINED,               /* no fallback */
+    VK_FORMAT_UNDEFINED                /* no fallback */
+};
+
 static VkColorSpaceKHR SwapchainCompositionToColorSpace[] = {
     VK_COLOR_SPACE_SRGB_NONLINEAR_KHR,
     VK_COLOR_SPACE_SRGB_NONLINEAR_KHR,
@@ -4353,7 +4358,6 @@ static SDL_bool VULKAN_INTERNAL_VerifySwapSurfaceFormat(
             return SDL_TRUE;
         }
     }
-
     return SDL_FALSE;
 }
 
@@ -4363,13 +4367,11 @@ static SDL_bool VULKAN_INTERNAL_VerifySwapPresentMode(
     Uint32 availablePresentModesLength)
 {
     Uint32 i;
-
     for (i = 0; i < availablePresentModesLength; i += 1) {
         if (availablePresentModes[i] == presentMode) {
             return SDL_TRUE;
         }
     }
-
     return SDL_FALSE;
 }
 
@@ -4384,6 +4386,7 @@ static SDL_bool VULKAN_INTERNAL_CreateSwapchain(
     VkImageViewCreateInfo imageViewCreateInfo;
     VkSemaphoreCreateInfo semaphoreCreateInfo;
     SwapchainSupportDetails swapchainSupportDetails;
+    SDL_bool hasValidSwapchainComposition, hasValidPresentMode;
     Sint32 drawableWidth, drawableHeight;
     Uint32 i;
     SDL_VideoDevice *_this = SDL_GetVideoDevice();
@@ -4446,52 +4449,35 @@ static SDL_bool VULKAN_INTERNAL_CreateSwapchain(
         return SDL_FALSE;
     }
 
+    /* Verify that we can use the requested composition and present mode */
+
     swapchainData->format = SwapchainCompositionToFormat[windowData->swapchainComposition];
     swapchainData->colorSpace = SwapchainCompositionToColorSpace[windowData->swapchainComposition];
     swapchainData->swapchainSwizzle = SwapchainCompositionSwizzle[windowData->swapchainComposition];
 
-    if (!VULKAN_INTERNAL_VerifySwapSurfaceFormat(
+    hasValidSwapchainComposition = VULKAN_INTERNAL_VerifySwapSurfaceFormat(
+        swapchainData->format,
+        swapchainData->colorSpace,
+        swapchainSupportDetails.formats,
+        swapchainSupportDetails.formatsLength);
+
+    if (!hasValidSwapchainComposition) {
+        /* Let's try again with the fallback format... */
+        swapchainData->format = SwapchainCompositionToFallbackFormat[windowData->swapchainComposition];
+        hasValidSwapchainComposition = VULKAN_INTERNAL_VerifySwapSurfaceFormat(
             swapchainData->format,
             swapchainData->colorSpace,
             swapchainSupportDetails.formats,
-            swapchainSupportDetails.formatsLength)) {
-
-        /* Try an RGB format instead? */
-        VkFormat oldFormat = swapchainData->format;
-        if (oldFormat == VK_FORMAT_B8G8R8A8_UNORM) {
-            swapchainData->format = VK_FORMAT_R8G8B8A8_UNORM;
-        } else if (oldFormat == VK_FORMAT_B8G8R8A8_SRGB) {
-            swapchainData->format = VK_FORMAT_R8G8B8A8_SRGB;
-        }
-
-        if (oldFormat == swapchainData->format || !VULKAN_INTERNAL_VerifySwapSurfaceFormat(
-                                                      swapchainData->format,
-                                                      swapchainData->colorSpace,
-                                                      swapchainSupportDetails.formats,
-                                                      swapchainSupportDetails.formatsLength)) {
-            renderer->vkDestroySurfaceKHR(
-                renderer->instance,
-                swapchainData->surface,
-                NULL);
-
-            if (swapchainSupportDetails.formatsLength > 0) {
-                SDL_free(swapchainSupportDetails.formats);
-            }
-
-            if (swapchainSupportDetails.presentModesLength > 0) {
-                SDL_free(swapchainSupportDetails.presentModes);
-            }
-
-            SDL_free(swapchainData);
-            SDL_LogError(SDL_LOG_CATEGORY_GPU, "Device does not support requested colorspace!");
-            return SDL_FALSE;
-        }
+            swapchainSupportDetails.formatsLength);
     }
 
-    if (!VULKAN_INTERNAL_VerifySwapPresentMode(
-            SDLToVK_PresentMode[windowData->presentMode],
-            swapchainSupportDetails.presentModes,
-            swapchainSupportDetails.presentModesLength)) {
+    swapchainData->presentMode = SDLToVK_PresentMode[windowData->presentMode];
+    hasValidPresentMode = VULKAN_INTERNAL_VerifySwapPresentMode(
+        swapchainData->presentMode,
+        swapchainSupportDetails.presentModes,
+        swapchainSupportDetails.presentModesLength);
+
+    if (!hasValidSwapchainComposition || !hasValidPresentMode) {
         renderer->vkDestroySurfaceKHR(
             renderer->instance,
             swapchainData->surface,
@@ -4506,11 +4492,15 @@ static SDL_bool VULKAN_INTERNAL_CreateSwapchain(
         }
 
         SDL_free(swapchainData);
-        SDL_LogError(SDL_LOG_CATEGORY_GPU, "Device does not support requested present mode!");
+
+        if (!hasValidSwapchainComposition) {
+            SDL_LogError(SDL_LOG_CATEGORY_GPU, "Device does not support requested swapchain composition!");
+        }
+        if (!hasValidPresentMode) {
+            SDL_LogError(SDL_LOG_CATEGORY_GPU, "Device does not support requested presentMode!");
+        }
         return SDL_FALSE;
     }
-
-    swapchainData->presentMode = SDLToVK_PresentMode[windowData->presentMode];
 
     /* Sync now to be sure that our swapchain size is correct */
     SDL_SyncWindow(windowData->window);
@@ -9628,10 +9618,9 @@ static SDL_bool VULKAN_SupportsSwapchainComposition(
     SwapchainSupportDetails supportDetails;
     SDL_bool destroySurface = SDL_FALSE;
     SDL_bool result = SDL_FALSE;
-    Uint32 i;
 
     if (windowData == NULL || windowData->swapchainData == NULL) {
-        /* Create a dummy surface is the window is not claimed */
+        /* Create a dummy surface if the window is not claimed */
         destroySurface = SDL_TRUE;
         _this = SDL_GetVideoDevice();
         if (_this->Vulkan_CreateSurface(
@@ -9651,12 +9640,20 @@ static SDL_bool VULKAN_SupportsSwapchainComposition(
             renderer->physicalDevice,
             surface,
             &supportDetails)) {
-        for (i = 0; i < supportDetails.formatsLength; i += 1) {
-            if (supportDetails.formats[i].format == SwapchainCompositionToFormat[swapchainComposition] &&
-                supportDetails.formats[i].colorSpace == SwapchainCompositionToColorSpace[swapchainComposition]) {
-                result = SDL_TRUE;
-                break;
-            }
+
+        result = VULKAN_INTERNAL_VerifySwapSurfaceFormat(
+            SwapchainCompositionToFormat[swapchainComposition],
+            SwapchainCompositionToColorSpace[swapchainComposition],
+            supportDetails.formats,
+            supportDetails.formatsLength);
+
+        if (!result) {
+            /* Let's try again with the fallback format... */
+            result = VULKAN_INTERNAL_VerifySwapSurfaceFormat(
+                SwapchainCompositionToFallbackFormat[swapchainComposition],
+                SwapchainCompositionToColorSpace[swapchainComposition],
+                supportDetails.formats,
+                supportDetails.formatsLength);
         }
 
         SDL_free(supportDetails.formats);
@@ -9685,10 +9682,9 @@ static SDL_bool VULKAN_SupportsPresentMode(
     SwapchainSupportDetails supportDetails;
     SDL_bool destroySurface = SDL_FALSE;
     SDL_bool result = SDL_FALSE;
-    Uint32 i;
 
     if (windowData == NULL || windowData->swapchainData == NULL) {
-        /* Create a dummy surface is the window is not claimed */
+        /* Create a dummy surface if the window is not claimed */
         destroySurface = SDL_TRUE;
         _this = SDL_GetVideoDevice();
         if (_this->Vulkan_CreateSurface(
@@ -9709,12 +9705,10 @@ static SDL_bool VULKAN_SupportsPresentMode(
             surface,
             &supportDetails)) {
 
-        for (i = 0; i < supportDetails.presentModesLength; i += 1) {
-            if (supportDetails.presentModes[i] == SDLToVK_PresentMode[presentMode]) {
-                result = SDL_TRUE;
-                break;
-            }
-        }
+        result = VULKAN_INTERNAL_VerifySwapPresentMode(
+            SDLToVK_PresentMode[presentMode],
+            supportDetails.presentModes,
+            supportDetails.presentModesLength);
 
         SDL_free(supportDetails.formats);
         SDL_free(supportDetails.presentModes);
