@@ -4354,6 +4354,9 @@ static void D3D11_BeginComputePass(
 
     for (i = 0; i < storageTextureBindingCount; i += 1) {
         textureContainer = (D3D11TextureContainer *)storageTextureBindings[i].textureSlice.texture;
+        if (!(textureContainer->createInfo.usageFlags & SDL_GPU_TEXTUREUSAGE_COMPUTE_STORAGE_WRITE_BIT)) {
+            SDL_LogError(SDL_LOG_CATEGORY_GPU, "Attempted to bind read-only texture as compute write texture");
+        }
 
         textureSubresource = D3D11_INTERNAL_PrepareTextureSubresourceForWrite(
             d3d11CommandBuffer->renderer,
