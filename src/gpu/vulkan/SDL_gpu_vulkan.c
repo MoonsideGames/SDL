@@ -44,21 +44,12 @@ static PFN_vkGetInstanceProcAddr vkGetInstanceProcAddr = NULL;
     static PFN_##name name = NULL;
 #include "SDL_gpu_vulkan_vkfuncs.h"
 
-/* vkInstance/vkDevice function typedefs */
-
-#define VULKAN_INSTANCE_FUNCTION(ext, ret, func, params) \
-    typedef ret(VKAPI_CALL *vkfntype_##func) params;
-#define VULKAN_DEVICE_FUNCTION(ext, ret, func, params) \
-    typedef ret(VKAPI_CALL *vkfntype_##func) params;
-#include "SDL_gpu_vulkan_vkfuncs.h"
-
 typedef struct VulkanExtensions
 {
     /* Globally supported */
     Uint8 KHR_swapchain;
     /* Core since 1.1 */
     Uint8 KHR_maintenance1;
-    Uint8 KHR_get_memory_requirements2;
 
     /* Core since 1.2 */
     Uint8 KHR_driver_properties;
@@ -254,8 +245,8 @@ static VkFormat SwapchainCompositionToFormat[] = {
 static VkFormat SwapchainCompositionToFallbackFormat[] = {
     VK_FORMAT_R8G8B8A8_UNORM,
     VK_FORMAT_R8G8B8A8_SRGB,
-    VK_FORMAT_UNDEFINED,               /* no fallback */
-    VK_FORMAT_UNDEFINED                /* no fallback */
+    VK_FORMAT_UNDEFINED, /* no fallback */
+    VK_FORMAT_UNDEFINED  /* no fallback */
 };
 
 static VkColorSpaceKHR SwapchainCompositionToColorSpace[] = {
@@ -1281,7 +1272,7 @@ struct VulkanRenderer
 {
     VkInstance instance;
     VkPhysicalDevice physicalDevice;
-    VkPhysicalDeviceProperties2 physicalDeviceProperties;
+    VkPhysicalDeviceProperties2KHR physicalDeviceProperties;
     VkPhysicalDeviceDriverPropertiesKHR physicalDeviceDriverProperties;
     VkDevice logicalDevice;
     Uint8 integratedMemoryNotification;
@@ -1371,10 +1362,10 @@ struct VulkanRenderer
     Uint32 allocationsToDefragCount;
     Uint32 allocationsToDefragCapacity;
 
-#define VULKAN_INSTANCE_FUNCTION(ext, ret, func, params) \
-    vkfntype_##func func;
-#define VULKAN_DEVICE_FUNCTION(ext, ret, func, params) \
-    vkfntype_##func func;
+#define VULKAN_INSTANCE_FUNCTION(func) \
+    PFN_##func func;
+#define VULKAN_DEVICE_FUNCTION(func) \
+    PFN_##func func;
 #include "SDL_gpu_vulkan_vkfuncs.h"
 };
 
@@ -1784,8 +1775,8 @@ static void VULKAN_INTERNAL_RemoveMemoryUsedRegion(
 static SDL_bool VULKAN_INTERNAL_CheckMemoryTypeArrayUnique(
     Uint32 memoryTypeIndex,
     Uint32 *memoryTypeIndexArray,
-    Uint32 count
-) {
+    Uint32 count)
+{
     Uint32 i = 0;
 
     for (i = 0; i < count; i += 1) {
@@ -1810,7 +1801,7 @@ static SDL_bool VULKAN_INTERNAL_CheckMemoryTypeArrayUnique(
  * 3. Required, preferred, and tolerable.
  * 4. Required and tolerable. This is the worst category.
  */
-static Uint32* VULKAN_INTERNAL_FindBestMemoryTypes(
+static Uint32 *VULKAN_INTERNAL_FindBestMemoryTypes(
     VulkanRenderer *renderer,
     Uint32 typeFilter,
     VkMemoryPropertyFlags requiredProperties,
@@ -1829,10 +1820,9 @@ static Uint32* VULKAN_INTERNAL_FindBestMemoryTypes(
             (renderer->memoryProperties.memoryTypes[i].propertyFlags & preferredProperties) == preferredProperties &&
             (renderer->memoryProperties.memoryTypes[i].propertyFlags & tolerableProperties) == 0) {
             if (VULKAN_INTERNAL_CheckMemoryTypeArrayUnique(
-                i,
-                result,
-                index
-            )) {
+                    i,
+                    result,
+                    index)) {
                 result[index] = i;
                 index += 1;
             }
@@ -1846,10 +1836,9 @@ static Uint32* VULKAN_INTERNAL_FindBestMemoryTypes(
             (renderer->memoryProperties.memoryTypes[i].propertyFlags & preferredProperties) == 0 &&
             (renderer->memoryProperties.memoryTypes[i].propertyFlags & tolerableProperties) == 0) {
             if (VULKAN_INTERNAL_CheckMemoryTypeArrayUnique(
-                i,
-                result,
-                index
-            )) {
+                    i,
+                    result,
+                    index)) {
                 result[index] = i;
                 index += 1;
             }
@@ -1863,10 +1852,9 @@ static Uint32* VULKAN_INTERNAL_FindBestMemoryTypes(
             (renderer->memoryProperties.memoryTypes[i].propertyFlags & preferredProperties) == preferredProperties &&
             (renderer->memoryProperties.memoryTypes[i].propertyFlags & tolerableProperties) == tolerableProperties) {
             if (VULKAN_INTERNAL_CheckMemoryTypeArrayUnique(
-                i,
-                result,
-                index
-            )) {
+                    i,
+                    result,
+                    index)) {
                 result[index] = i;
                 index += 1;
             }
@@ -1880,10 +1868,9 @@ static Uint32* VULKAN_INTERNAL_FindBestMemoryTypes(
             (renderer->memoryProperties.memoryTypes[i].propertyFlags & preferredProperties) == 0 &&
             (renderer->memoryProperties.memoryTypes[i].propertyFlags & tolerableProperties) == tolerableProperties) {
             if (VULKAN_INTERNAL_CheckMemoryTypeArrayUnique(
-                i,
-                result,
-                index
-            )) {
+                    i,
+                    result,
+                    index)) {
                 result[index] = i;
                 index += 1;
             }
@@ -1894,56 +1881,44 @@ static Uint32* VULKAN_INTERNAL_FindBestMemoryTypes(
     return result;
 }
 
-static Uint32* VULKAN_INTERNAL_FindBestBufferMemoryTypes(
+static Uint32 *VULKAN_INTERNAL_FindBestBufferMemoryTypes(
     VulkanRenderer *renderer,
     VkBuffer buffer,
     VkMemoryPropertyFlags requiredMemoryProperties,
     VkMemoryPropertyFlags preferredMemoryProperties,
     VkMemoryPropertyFlags tolerableMemoryProperties,
-    VkMemoryRequirements2KHR *pMemoryRequirements,
+    VkMemoryRequirements *pMemoryRequirements,
     Uint32 *pCount)
 {
-    VkBufferMemoryRequirementsInfo2KHR bufferRequirementsInfo;
-    bufferRequirementsInfo.sType =
-        VK_STRUCTURE_TYPE_BUFFER_MEMORY_REQUIREMENTS_INFO_2_KHR;
-    bufferRequirementsInfo.pNext = NULL;
-    bufferRequirementsInfo.buffer = buffer;
-
-    renderer->vkGetBufferMemoryRequirements2KHR(
+    renderer->vkGetBufferMemoryRequirements(
         renderer->logicalDevice,
-        &bufferRequirementsInfo,
+        buffer,
         pMemoryRequirements);
 
     return VULKAN_INTERNAL_FindBestMemoryTypes(
         renderer,
-        pMemoryRequirements->memoryRequirements.memoryTypeBits,
+        pMemoryRequirements->memoryTypeBits,
         requiredMemoryProperties,
         preferredMemoryProperties,
         tolerableMemoryProperties,
         pCount);
 }
 
-static Uint32* VULKAN_INTERNAL_FindBestImageMemoryTypes(
+static Uint32 *VULKAN_INTERNAL_FindBestImageMemoryTypes(
     VulkanRenderer *renderer,
     VkImage image,
     VkMemoryPropertyFlags preferredMemoryPropertyFlags,
-    VkMemoryRequirements2KHR *pMemoryRequirements,
+    VkMemoryRequirements *pMemoryRequirements,
     Uint32 *pCount)
 {
-    VkImageMemoryRequirementsInfo2KHR imageRequirementsInfo;
-    imageRequirementsInfo.sType =
-        VK_STRUCTURE_TYPE_IMAGE_MEMORY_REQUIREMENTS_INFO_2_KHR;
-    imageRequirementsInfo.pNext = NULL;
-    imageRequirementsInfo.image = image;
-
-    renderer->vkGetImageMemoryRequirements2KHR(
+    renderer->vkGetImageMemoryRequirements(
         renderer->logicalDevice,
-        &imageRequirementsInfo,
+        image,
         pMemoryRequirements);
 
     return VULKAN_INTERNAL_FindBestMemoryTypes(
         renderer,
-        pMemoryRequirements->memoryRequirements.memoryTypeBits,
+        pMemoryRequirements->memoryTypeBits,
         0,
         preferredMemoryPropertyFlags,
         0,
@@ -2138,7 +2113,7 @@ static Uint8 VULKAN_INTERNAL_BindImageMemory(
 static Uint8 VULKAN_INTERNAL_BindResourceMemory(
     VulkanRenderer *renderer,
     Uint32 memoryTypeIndex,
-    VkMemoryRequirements2KHR *memoryRequirements,
+    VkMemoryRequirements *memoryRequirements,
     VkDeviceSize resourceSize, /* may be different from requirements size! */
     VkBuffer buffer,           /* may be VK_NULL_HANDLE */
     VkImage image,             /* may be VK_NULL_HANDLE */
@@ -2161,7 +2136,7 @@ static Uint8 VULKAN_INTERNAL_BindResourceMemory(
          VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) != 0;
 
     allocator = &renderer->memoryAllocator->subAllocators[memoryTypeIndex];
-    requiredSize = memoryRequirements->memoryRequirements.size;
+    requiredSize = memoryRequirements->size;
     smallAllocation = requiredSize <= SMALL_ALLOCATION_THRESHOLD;
 
     if ((buffer == VK_NULL_HANDLE && image == VK_NULL_HANDLE) ||
@@ -2189,7 +2164,7 @@ static Uint8 VULKAN_INTERNAL_BindResourceMemory(
 
         alignedOffset = VULKAN_INTERNAL_NextHighestAlignment(
             region->offset,
-            memoryRequirements->memoryRequirements.alignment);
+            memoryRequirements->alignment);
 
         if (alignedOffset + requiredSize <= region->offset + region->size) {
             selectedRegion = region;
@@ -2208,7 +2183,7 @@ static Uint8 VULKAN_INTERNAL_BindResourceMemory(
             requiredSize + (alignedOffset - region->offset),
             alignedOffset,
             resourceSize,
-            memoryRequirements->memoryRequirements.alignment);
+            memoryRequirements->alignment);
 
         usedRegion->isBuffer = buffer != VK_NULL_HANDLE;
 
@@ -2299,7 +2274,7 @@ static Uint8 VULKAN_INTERNAL_BindResourceMemory(
         requiredSize,
         0,
         resourceSize,
-        memoryRequirements->memoryRequirements.alignment);
+        memoryRequirements->alignment);
 
     usedRegion->isBuffer = buffer != VK_NULL_HANDLE;
 
@@ -2361,10 +2336,7 @@ static Uint8 VULKAN_INTERNAL_BindMemoryForImage(
     Uint32 selectedMemoryTypeIndex = 0;
     Uint32 i;
     VkMemoryPropertyFlags preferredMemoryPropertyFlags;
-    VkMemoryRequirements2KHR memoryRequirements = {
-        VK_STRUCTURE_TYPE_MEMORY_REQUIREMENTS_2_KHR,
-        NULL
-    };
+    VkMemoryRequirements memoryRequirements;
 
     /* Vulkan memory types have several memory properties.
      *
@@ -2381,15 +2353,14 @@ static Uint8 VULKAN_INTERNAL_BindMemoryForImage(
         image,
         preferredMemoryPropertyFlags,
         &memoryRequirements,
-        &memoryTypeCount
-    );
+        &memoryTypeCount);
 
     for (i = 0; i < memoryTypeCount; i += 1) {
         bindResult = VULKAN_INTERNAL_BindResourceMemory(
             renderer,
             memoryTypesToTry[i],
             &memoryRequirements,
-            memoryRequirements.memoryRequirements.size,
+            memoryRequirements.size,
             VK_NULL_HANDLE,
             image,
             usedRegion);
@@ -2403,8 +2374,7 @@ static Uint8 VULKAN_INTERNAL_BindMemoryForImage(
     SDL_free(memoryTypesToTry);
 
     /* Check for warnings on success */
-    if (bindResult == 1)
-    {
+    if (bindResult == 1) {
         if (!renderer->outOfDeviceLocalMemoryWarning) {
             if ((renderer->memoryProperties.memoryTypes[selectedMemoryTypeIndex].propertyFlags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) == 0) {
                 SDL_LogWarn(SDL_LOG_CATEGORY_GPU, "Out of device-local memory, allocating textures on host-local memory!");
@@ -2431,10 +2401,7 @@ static Uint8 VULKAN_INTERNAL_BindMemoryForBuffer(
     VkMemoryPropertyFlags requiredMemoryPropertyFlags = 0;
     VkMemoryPropertyFlags preferredMemoryPropertyFlags = 0;
     VkMemoryPropertyFlags tolerableMemoryPropertyFlags = 0;
-    VkMemoryRequirements2KHR memoryRequirements = {
-        VK_STRUCTURE_TYPE_MEMORY_REQUIREMENTS_2_KHR,
-        NULL
-    };
+    VkMemoryRequirements memoryRequirements;
 
     /* Buffers need to be optimally bound to a memory type
      * based on their use case and the architecture of the system.
@@ -2529,8 +2496,7 @@ static Uint8 VULKAN_INTERNAL_BindMemoryForBuffer(
         preferredMemoryPropertyFlags,
         tolerableMemoryPropertyFlags,
         &memoryRequirements,
-        &memoryTypeCount
-    );
+        &memoryTypeCount);
 
     for (i = 0; i < memoryTypeCount; i += 1) {
         bindResult = VULKAN_INTERNAL_BindResourceMemory(
@@ -2551,26 +2517,22 @@ static Uint8 VULKAN_INTERNAL_BindMemoryForBuffer(
     SDL_free(memoryTypesToTry);
 
     /* Check for warnings on success */
-    if (bindResult == 1)
-    {
-        if (type == VULKAN_BUFFER_TYPE_GPU)
-        {
+    if (bindResult == 1) {
+        if (type == VULKAN_BUFFER_TYPE_GPU) {
             if (!renderer->outOfDeviceLocalMemoryWarning) {
                 if ((renderer->memoryProperties.memoryTypes[selectedMemoryTypeIndex].propertyFlags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) == 0) {
                     SDL_LogWarn(SDL_LOG_CATEGORY_GPU, "Out of device-local memory, allocating buffers on host-local memory, expect degraded performance!");
                     renderer->outOfDeviceLocalMemoryWarning = 1;
                 }
             }
-        }
-        else if (type == VULKAN_BUFFER_TYPE_UNIFORM) {
+        } else if (type == VULKAN_BUFFER_TYPE_UNIFORM) {
             if (!renderer->outofBARMemoryWarning) {
                 if ((renderer->memoryProperties.memoryTypes[selectedMemoryTypeIndex].propertyFlags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) == 0) {
                     SDL_LogWarn(SDL_LOG_CATEGORY_GPU, "Out of BAR memory, allocating uniform buffers on host-local memory, expect degraded performance!");
                     renderer->outofBARMemoryWarning = 1;
                 }
             }
-        }
-        else if (type == VULKAN_BUFFER_TYPE_TRANSFER) {
+        } else if (type == VULKAN_BUFFER_TYPE_TRANSFER) {
             if (!renderer->integratedMemoryNotification) {
                 if ((renderer->memoryProperties.memoryTypes[selectedMemoryTypeIndex].propertyFlags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) == VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) {
                     SDL_LogInfo(SDL_LOG_CATEGORY_GPU, "Integrated memory detected, allocating TransferBuffers on device-local memory!");
@@ -10861,13 +10823,12 @@ static inline Uint8 CheckDeviceExtensions(
         supports->ext = 1;                   \
     }
         CHECK(KHR_swapchain)
-        else CHECK(KHR_maintenance1) else CHECK(KHR_get_memory_requirements2) else CHECK(KHR_driver_properties) else CHECK(EXT_vertex_attribute_divisor) else CHECK(KHR_portability_subset)
+        else CHECK(KHR_maintenance1) else CHECK(KHR_driver_properties) else CHECK(EXT_vertex_attribute_divisor) else CHECK(KHR_portability_subset)
 #undef CHECK
     }
 
     return (supports->KHR_swapchain &&
-            supports->KHR_maintenance1 &&
-            supports->KHR_get_memory_requirements2);
+            supports->KHR_maintenance1);
 }
 
 static inline Uint32 GetDeviceExtensionCount(VulkanExtensions *supports)
@@ -10875,7 +10836,6 @@ static inline Uint32 GetDeviceExtensionCount(VulkanExtensions *supports)
     return (
         supports->KHR_swapchain +
         supports->KHR_maintenance1 +
-        supports->KHR_get_memory_requirements2 +
         supports->KHR_driver_properties +
         supports->EXT_vertex_attribute_divisor +
         supports->KHR_portability_subset);
@@ -10892,7 +10852,6 @@ static inline void CreateDeviceExtensionArray(
     }
     CHECK(KHR_swapchain)
     CHECK(KHR_maintenance1)
-    CHECK(KHR_get_memory_requirements2)
     CHECK(KHR_driver_properties)
     CHECK(EXT_vertex_attribute_divisor)
     CHECK(KHR_portability_subset)
@@ -11205,8 +11164,7 @@ static Uint8 VULKAN_INTERNAL_IsDeviceSuitable(
         supportsPresent = SDL_Vulkan_GetPresentationSupport(
             renderer->instance,
             physicalDevice,
-            i
-        );
+            i);
         if (!supportsPresent ||
             !(queueProps[i].queueFlags & VK_QUEUE_GRAPHICS_BIT)) {
             /* Not a graphics family, ignore. */
@@ -11365,13 +11323,17 @@ static Uint8 VULKAN_INTERNAL_DeterminePhysicalDevice(VulkanRenderer *renderer)
 
         renderer->physicalDeviceProperties.pNext =
             &renderer->physicalDeviceDriverProperties;
+
+        renderer->vkGetPhysicalDeviceProperties2KHR(
+            renderer->physicalDevice,
+            &renderer->physicalDeviceProperties);
     } else {
         renderer->physicalDeviceProperties.pNext = NULL;
-    }
 
-    renderer->vkGetPhysicalDeviceProperties2KHR(
-        renderer->physicalDevice,
-        &renderer->physicalDeviceProperties);
+        renderer->vkGetPhysicalDeviceProperties(
+            renderer->physicalDevice,
+            &renderer->physicalDeviceProperties.properties);
+    }
 
     renderer->vkGetPhysicalDeviceMemoryProperties(
         renderer->physicalDevice,
@@ -11474,8 +11436,8 @@ static Uint8 VULKAN_INTERNAL_CreateLogicalDevice(
 
     /* Load vkDevice entry points */
 
-#define VULKAN_DEVICE_FUNCTION(ext, ret, func, params)  \
-    renderer->func = (vkfntype_##func)                  \
+#define VULKAN_DEVICE_FUNCTION(func)                    \
+    renderer->func = (PFN_##func)                       \
                          renderer->vkGetDeviceProcAddr( \
                              renderer->logicalDevice,   \
                              #func);
@@ -11536,8 +11498,8 @@ static SDL_bool VULKAN_INTERNAL_PrepareVulkan(
         return SDL_FALSE;
     }
 
-#define VULKAN_INSTANCE_FUNCTION(ext, ret, func, params) \
-    renderer->func = (vkfntype_##func)vkGetInstanceProcAddr(renderer->instance, #func);
+#define VULKAN_INSTANCE_FUNCTION(func) \
+    renderer->func = (PFN_##func)vkGetInstanceProcAddr(renderer->instance, #func);
 #include "SDL_gpu_vulkan_vkfuncs.h"
 
     if (!VULKAN_INTERNAL_DeterminePhysicalDevice(renderer)) {
@@ -11607,17 +11569,21 @@ static SDL_GpuDevice *VULKAN_CreateDevice(SDL_bool debugMode, SDL_bool preferLow
         SDL_LOG_CATEGORY_GPU,
         "Vulkan Device: %s",
         renderer->physicalDeviceProperties.properties.deviceName);
-    SDL_LogInfo(
-        SDL_LOG_CATEGORY_GPU,
-        "Vulkan Driver: %s %s",
-        renderer->physicalDeviceDriverProperties.driverName,
-        renderer->physicalDeviceDriverProperties.driverInfo);
-    SDL_LogInfo(
-        SDL_LOG_CATEGORY_GPU,
-        "Vulkan Conformance: %u.%u.%u",
-        renderer->physicalDeviceDriverProperties.conformanceVersion.major,
-        renderer->physicalDeviceDriverProperties.conformanceVersion.minor,
-        renderer->physicalDeviceDriverProperties.conformanceVersion.patch);
+    if (renderer->supports.KHR_driver_properties) {
+        SDL_LogInfo(
+            SDL_LOG_CATEGORY_GPU,
+            "Vulkan Driver: %s %s",
+            renderer->physicalDeviceDriverProperties.driverName,
+            renderer->physicalDeviceDriverProperties.driverInfo);
+        SDL_LogInfo(
+            SDL_LOG_CATEGORY_GPU,
+            "Vulkan Conformance: %u.%u.%u",
+            renderer->physicalDeviceDriverProperties.conformanceVersion.major,
+            renderer->physicalDeviceDriverProperties.conformanceVersion.minor,
+            renderer->physicalDeviceDriverProperties.conformanceVersion.patch);
+    } else {
+        SDL_LogWarn(SDL_LOG_CATEGORY_GPU, "KHR_driver_properties unsupported! Bother your vendor about this!");
+    }
 
     if (!VULKAN_INTERNAL_CreateLogicalDevice(
             renderer)) {
