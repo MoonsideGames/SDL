@@ -3356,7 +3356,7 @@ static SDL_bool METAL_QueryFence(
 static MetalWindowData *METAL_INTERNAL_FetchWindowData(SDL_Window *window)
 {
     SDL_PropertiesID properties = SDL_GetWindowProperties(window);
-    return (MetalWindowData *)SDL_GetProperty(properties, WINDOW_PROPERTY_DATA, NULL);
+    return (MetalWindowData *)SDL_GetPointerProperty(properties, WINDOW_PROPERTY_DATA, NULL);
 }
 
 static SDL_bool METAL_SupportsSwapchainComposition(
@@ -3455,7 +3455,7 @@ static SDL_bool METAL_ClaimWindow(
         windowData->window = window;
 
         if (METAL_INTERNAL_CreateSwapchain(renderer, windowData, swapchainComposition, presentMode)) {
-            SDL_SetProperty(SDL_GetWindowProperties(window), WINDOW_PROPERTY_DATA, windowData);
+            SDL_SetPointerProperty(SDL_GetWindowProperties(window), WINDOW_PROPERTY_DATA, windowData);
 
             SDL_LockMutex(renderer->windowLock);
 

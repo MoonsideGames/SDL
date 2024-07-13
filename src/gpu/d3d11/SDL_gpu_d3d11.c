@@ -4952,7 +4952,7 @@ static D3D11WindowData *D3D11_INTERNAL_FetchWindowData(
     SDL_Window *window)
 {
     SDL_PropertiesID properties = SDL_GetWindowProperties(window);
-    return (D3D11WindowData *)SDL_GetProperty(properties, WINDOW_PROPERTY_DATA, NULL);
+    return (D3D11WindowData *)SDL_GetPointerProperty(properties, WINDOW_PROPERTY_DATA, NULL);
 }
 
 static SDL_bool D3D11_INTERNAL_InitializeSwapchainTexture(
@@ -5304,7 +5304,7 @@ static SDL_bool D3D11_ClaimWindow(
         windowData->window = window;
 
         if (D3D11_INTERNAL_CreateSwapchain(renderer, windowData, swapchainComposition, presentMode)) {
-            SDL_SetProperty(SDL_GetWindowProperties(window), WINDOW_PROPERTY_DATA, windowData);
+            SDL_SetPointerProperty(SDL_GetWindowProperties(window), WINDOW_PROPERTY_DATA, windowData);
 
             SDL_LockMutex(renderer->windowLock);
 
