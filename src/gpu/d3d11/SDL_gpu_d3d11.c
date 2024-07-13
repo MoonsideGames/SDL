@@ -117,14 +117,14 @@ static const GUID D3D_IID_DXGI_DEBUG_ALL = { 0xe48ae283, 0xda80, 0x490b, { 0x87,
 #define DXGI_DLL      "dxgi.dll"
 #define DXGIDEBUG_DLL "dxgidebug.dll"
 #elif defined(__APPLE__)
-#define D3D11_DLL       "libdxvk_d3d11.dylib"
-#define DXGI_DLL        "libdxvk_dxgi.dylib"
-#define DXGIDEBUG_DLL   "libdxvk_dxgidebug.dylib"
+#define D3D11_DLL       "libdxvk_d3d11.0.dylib"
+#define DXGI_DLL        "libdxvk_dxgi.0.dylib"
+#define DXGIDEBUG_DLL   "libdxvk_dxgidebug.0.dylib"
 #define D3DCOMPILER_DLL "libvkd3d-utils.1.dylib"
 #else
-#define D3D11_DLL       "libdxvk_d3d11.so"
-#define DXGI_DLL        "libdxvk_dxgi.so"
-#define DXGIDEBUG_DLL   "libdxvk_dxgidebug.so"
+#define D3D11_DLL       "libdxvk_d3d11.so.0"
+#define DXGI_DLL        "libdxvk_dxgi.so.0"
+#define DXGIDEBUG_DLL   "libdxvk_dxgidebug.so.0"
 #define D3DCOMPILER_DLL "libvkd3d-utils.so.1"
 #endif
 
