@@ -5084,7 +5084,7 @@ static SDL_bool D3D11_INTERNAL_CreateSwapchain(
 
     /* Get the DXGI handle */
 #ifdef _WIN32
-    dxgiHandle = (HWND)SDL_GetProperty(SDL_GetWindowProperties(windowData->window), SDL_PROP_WINDOW_WIN32_HWND_POINTER, NULL);
+    dxgiHandle = (HWND)SDL_GetPointerProperty(SDL_GetWindowProperties(windowData->window), SDL_PROP_WINDOW_WIN32_HWND_POINTER, NULL);
 #else
     dxgiHandle = (HWND)windowData->window;
 #endif
