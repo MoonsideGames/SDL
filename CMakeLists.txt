@@ -371,12 +371,6 @@ if(VITA)
   set_option(VIDEO_VITA_PVR  "Build with PSVita PVR gles/gles2 support" OFF)
 endif()
 
-# FIXME: Eventually this will use pkgconfig:
-# https://github.com/doitsujin/dxvk/pull/3834
-if(LINUX)
-  option(SDL_USE_DXVK "Build with dxvk-native support" OFF)
-endif()
-
 if(NOT (SDL_SHARED OR SDL_STATIC))
   message(FATAL_ERROR "SDL_SHARED and SDL_STATIC cannot both be disabled")
 endif()
@@ -1708,6 +1702,16 @@ elseif(UNIX AND NOT APPLE AND NOT RISCOS AND NOT HAIKU)
       )
     endif()
 
+    if(SDL_GPU)
+      if(PKG_CONFIG_FOUND)
+        pkg_search_module(DXVK_NATIVE dxvk-dxgi)
+        if(DXVK_NATIVE_FOUND)
+          set(HAVE_D3D11_H TRUE)
+          sdl_include_directories(PRIVATE SYSTEM ${DXVK_NATIVE_INCLUDE_DIRS})
+        endif()
+      endif()
+    endif()
+
     # Always compiled for Linux, unconditionally:
     sdl_sources(
       "${SDL3_SOURCE_DIR}/src/core/linux/SDL_evdev_capabilities.c"
@@ -2933,7 +2937,7 @@ if(SDL_VIDEO)
 endif()
 
 if(SDL_GPU)
-  if(SDL_VIDEO_RENDER_D3D11 OR SDL_USE_DXVK)
+  if(HAVE_D3D11_H)
     set(SDL_GPU_D3D11 1)
     set(HAVE_SDL_GPU TRUE)
   endif()
@@ -3344,16 +3348,6 @@ if(SDL_SHARED)
       "$<BUILD_INTERFACE:${SDL3_BINARY_DIR}/include-config-$<LOWER_CASE:$<CONFIG>>>/build_config"
       "$<BUILD_INTERFACE:${SDL3_SOURCE_DIR}/src>"
   )
-  if(SDL_USE_DXVK)
-    # FIXME: Eventually this will use pkgconfig:
-    # https://github.com/doitsujin/dxvk/pull/3834
-    target_include_directories(SDL3-shared
-      PRIVATE
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../dxvk/include/native/directx>
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../dxvk/include/native/windows>
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../dxvk/include/native/wsi>
-    )
-  endif()
   target_link_libraries(SDL3-shared PUBLIC $<TARGET_NAME:SDL3::Headers>)
   if(MINGW OR CYGWIN)
     target_link_options(SDL3-shared PRIVATE -static-libgcc)
@@ -3381,16 +3375,6 @@ if(SDL_STATIC)
       "$<BUILD_INTERFACE:${SDL3_BINARY_DIR}/include-config-$<LOWER_CASE:$<CONFIG>>>/build_config"
       "$<BUILD_INTERFACE:${SDL3_SOURCE_DIR}/src>"
   )
-  if(SDL_USE_DXVK)
-    # FIXME: Eventually this will use pkgconfig:
-    # https://github.com/doitsujin/dxvk/pull/3834
-    target_include_directories(SDL3-static
-      PRIVATE
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../dxvk/include/native/directx>
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../dxvk/include/native/windows>
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../dxvk/include/native/wsi>
-    )
-  endif()
   target_link_libraries(SDL3-static PUBLIC $<TARGET_NAME:SDL3::Headers>)
   # Use `Compatible Interface Properties` to:
   # - allow consumers to enforce a shared/static library
