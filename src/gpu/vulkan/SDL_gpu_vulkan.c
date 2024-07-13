@@ -9572,7 +9572,7 @@ static WindowData *VULKAN_INTERNAL_FetchWindowData(
     SDL_Window *window)
 {
     SDL_PropertiesID properties = SDL_GetWindowProperties(window);
-    return (WindowData *)SDL_GetProperty(properties, WINDOW_PROPERTY_DATA, NULL);
+    return (WindowData *)SDL_GetPointerProperty(properties, WINDOW_PROPERTY_DATA, NULL);
 }
 
 static SDL_bool VULKAN_SupportsSwapchainComposition(
@@ -9709,7 +9709,7 @@ static SDL_bool VULKAN_ClaimWindow(
         windowData->swapchainComposition = swapchainComposition;
 
         if (VULKAN_INTERNAL_CreateSwapchain(renderer, windowData)) {
-            SDL_SetProperty(SDL_GetWindowProperties(window), WINDOW_PROPERTY_DATA, windowData);
+            SDL_SetPointerProperty(SDL_GetWindowProperties(window), WINDOW_PROPERTY_DATA, windowData);
 
             if (renderer->claimedWindowCount >= renderer->claimedWindowCapacity) {
                 renderer->claimedWindowCapacity *= 2;
