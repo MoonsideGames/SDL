@@ -9806,6 +9806,7 @@ static SDL_GpuTexture *VULKAN_AcquireSwapchainTexture(
     VulkanRenderer *renderer = (VulkanRenderer *)vulkanCommandBuffer->renderer;
     Uint32 swapchainImageIndex;
     WindowData *windowData;
+    int currentWindowWidth, currentWindowHeight;
     VulkanSwapchainData *swapchainData;
     VkResult acquireResult = VK_SUCCESS;
     VulkanTextureContainer *swapchainTextureContainer = NULL;
@@ -9862,6 +9863,19 @@ static SDL_GpuTexture *VULKAN_AcquireSwapchainTexture(
         swapchainData->inFlightFences[swapchainData->frameCounter] = NULL;
     }
 
+    /* If swapchain size is out of date, try to recreate */
+    SDL_GetWindowSizeInPixels(windowData->window, &currentWindowWidth, &currentWindowHeight);
+    if (swapchainData->extent.width != currentWindowWidth || swapchainData->extent.height != currentWindowHeight) {
+        VULKAN_INTERNAL_RecreateSwapchain(renderer, windowData);
+        swapchainData = windowData->swapchainData;
+
+        if (swapchainData == NULL) {
+            SDL_LogWarn(SDL_LOG_CATEGORY_GPU, "Failed to recreate swapchain!");
+            return NULL;
+        }
+    }
+
+    /* Finally, try to acquire! */
     acquireResult = renderer->vkAcquireNextImageKHR(
         renderer->logicalDevice,
         swapchainData->swapchain,
