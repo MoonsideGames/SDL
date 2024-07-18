@@ -707,6 +707,7 @@ typedef struct WindowData
     SDL_GpuSwapchainComposition swapchainComposition;
     SDL_GpuPresentMode presentMode;
     VulkanSwapchainData *swapchainData;
+    SDL_bool needsSwapchainRecreate;
 } WindowData;
 
 typedef struct SwapchainSupportDetails
@@ -4702,6 +4703,7 @@ static SDL_bool VULKAN_INTERNAL_CreateSwapchain(
     }
 
     windowData->swapchainData = swapchainData;
+    windowData->needsSwapchainRecreate = SDL_FALSE;
     return SDL_TRUE;
 }
 
@@ -9575,6 +9577,18 @@ static WindowData *VULKAN_INTERNAL_FetchWindowData(
     return (WindowData *)SDL_GetPointerProperty(properties, WINDOW_PROPERTY_DATA, NULL);
 }
 
+static int VULKAN_INTERNAL_OnWindowResize(void* userdata, SDL_Event *e) {
+    SDL_Window *w = (SDL_Window*) userdata;
+    WindowData *data;
+    if (e->type == SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED)
+    {
+        data = VULKAN_INTERNAL_FetchWindowData(w);
+        data->needsSwapchainRecreate = SDL_TRUE;
+    }
+
+    return 0;
+}
+
 static SDL_bool VULKAN_SupportsSwapchainComposition(
     SDL_GpuRenderer *driverData,
     SDL_Window *window,
@@ -9721,6 +9735,8 @@ static SDL_bool VULKAN_ClaimWindow(
             renderer->claimedWindows[renderer->claimedWindowCount] = windowData;
             renderer->claimedWindowCount += 1;
 
+            SDL_AddEventWatch(VULKAN_INTERNAL_OnWindowResize, window);
+
             return 1;
         } else {
             SDL_LogError(SDL_LOG_CATEGORY_GPU, "Could not create swapchain, failed to claim window!");
@@ -9772,6 +9788,7 @@ static void VULKAN_UnclaimWindow(
     SDL_free(windowData);
 
     SDL_ClearProperty(SDL_GetWindowProperties(window), WINDOW_PROPERTY_DATA);
+    SDL_DelEventWatch(VULKAN_INTERNAL_OnWindowResize, window);
 }
 
 static SDL_bool VULKAN_INTERNAL_RecreateSwapchain(
@@ -9806,7 +9823,6 @@ static SDL_GpuTexture *VULKAN_AcquireSwapchainTexture(
     VulkanRenderer *renderer = (VulkanRenderer *)vulkanCommandBuffer->renderer;
     Uint32 swapchainImageIndex;
     WindowData *windowData;
-    int currentWindowWidth, currentWindowHeight;
     VulkanSwapchainData *swapchainData;
     VkResult acquireResult = VK_SUCCESS;
     VulkanTextureContainer *swapchainTextureContainer = NULL;
@@ -9863,9 +9879,9 @@ static SDL_GpuTexture *VULKAN_AcquireSwapchainTexture(
         swapchainData->inFlightFences[swapchainData->frameCounter] = NULL;
     }
 
-    /* If swapchain size is out of date, try to recreate */
-    SDL_GetWindowSizeInPixels(windowData->window, &currentWindowWidth, &currentWindowHeight);
-    if (swapchainData->extent.width != currentWindowWidth || swapchainData->extent.height != currentWindowHeight) {
+    /* If window data marked as needing swapchain recreate, try to recreate */
+    if (windowData->needsSwapchainRecreate)
+    {
         VULKAN_INTERNAL_RecreateSwapchain(renderer, windowData);
         swapchainData = windowData->swapchainData;
 
