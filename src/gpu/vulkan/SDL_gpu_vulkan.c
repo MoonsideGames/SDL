@@ -8557,6 +8557,26 @@ static void VULKAN_DispatchCompute(
         groupCountZ);
 }
 
+static void VULKAN_DispatchComputeIndirect(
+    SDL_GpuCommandBuffer *commandBuffer,
+    SDL_GpuBuffer *buffer,
+    Uint32 offsetInBytes)
+{
+    VulkanCommandBuffer *vulkanCommandBuffer = (VulkanCommandBuffer *)commandBuffer;
+    VulkanRenderer *renderer = (VulkanRenderer *)vulkanCommandBuffer->renderer;
+    VulkanBuffer *vulkanBuffer = ((VulkanBufferContainer *)buffer)->activeBufferHandle->vulkanBuffer;
+
+    VULKAN_INTERNAL_BindComputeDescriptorSets(renderer, vulkanCommandBuffer);
+
+    renderer->vkCmdDispatchIndirect(
+        vulkanCommandBuffer->commandBuffer,
+        vulkanBuffer->buffer,
+        offsetInBytes
+    );
+
+    VULKAN_INTERNAL_TrackBuffer(vulkanCommandBuffer, vulkanBuffer);
+}
+
 static void VULKAN_EndComputePass(
     SDL_GpuCommandBuffer *commandBuffer)
 {

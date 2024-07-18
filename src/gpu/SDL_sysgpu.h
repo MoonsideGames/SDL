@@ -431,6 +431,11 @@ struct SDL_GpuDevice
         Uint32 groupCountY,
         Uint32 groupCountZ);
 
+    void (*DispatchComputeIndirect)(
+        SDL_GpuCommandBuffer *commandBuffer,
+        SDL_GpuBuffer *buffer,
+        Uint32 offsetInBytes);
+
     void (*EndComputePass)(
         SDL_GpuCommandBuffer *commandBuffer);
 
@@ -649,6 +654,7 @@ struct SDL_GpuDevice
     ASSIGN_DRIVER_FUNC(BindComputeStorageBuffers, name)     \
     ASSIGN_DRIVER_FUNC(PushComputeUniformData, name)        \
     ASSIGN_DRIVER_FUNC(DispatchCompute, name)               \
+    ASSIGN_DRIVER_FUNC(DispatchComputeIndirect, name)       \
     ASSIGN_DRIVER_FUNC(EndComputePass, name)                \
     ASSIGN_DRIVER_FUNC(MapTransferBuffer, name)             \
     ASSIGN_DRIVER_FUNC(UnmapTransferBuffer, name)           \

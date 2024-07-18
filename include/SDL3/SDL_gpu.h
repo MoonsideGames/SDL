@@ -487,6 +487,13 @@ typedef struct SDL_GpuIndexedIndirectDrawCommand
     Uint32 firstInstance; /* ID of the first instance to draw */
 } SDL_GpuIndexedIndirectDrawCommand;
 
+typedef struct SDL_GpuIndirectDispatchCommand
+{
+    Uint32 groupCountX;
+    Uint32 groupCountY;
+    Uint32 groupCountZ;
+} SDL_GpuIndirectDispatchCommand;
+
 /* State structures */
 
 typedef struct SDL_GpuSamplerCreateInfo
@@ -1716,6 +1723,29 @@ extern SDL_DECLSPEC void SDLCALL SDL_GpuDispatchCompute(
     Uint32 groupCountX,
     Uint32 groupCountY,
     Uint32 groupCountZ);
+
+/**
+ * Dispatches compute work with parameters set from a buffer.
+ * The buffer layout should match the layout of SDL_GpuIndirectDispatchCommand.
+ * You must not call this function before binding a compute pipeline.
+ *
+ * A VERY IMPORTANT NOTE
+ * If you dispatch multiple times in a compute pass,
+ * and the dispatches write to the same resource region as each other,
+ * there is no guarantee of which order the writes will occur.
+ * If the write order matters, you MUST end the compute pass and begin another one.
+ *
+ * \param computePass a compute pass handle
+ * \param buffer a buffer containing dispatch parameters
+ * \param offsetInBytes the offset to start reading from the dispatch buffer
+ *
+ * \since This function is available since SDL 3.x.x
+ */
+extern SDL_DECLSPEC void SDLCALL SDL_GpuDispatchComputeIndirect(
+    SDL_GpuComputePass *computePass,
+    SDL_GpuBuffer *buffer,
+    Uint32 offsetInBytes
+);
 
 /**
  * Ends the current compute pass.
