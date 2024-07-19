@@ -20,7 +20,6 @@
 */
 #include "SDL_internal.h"
 #include "SDL_gpu_driver.h"
-#include "SDL_gpu_spirv_c.h"
 
 /* FIXME: This could probably use SDL_ObjectValid */
 #define CHECK_DEVICE_MAGIC(device, retval)  \
@@ -104,16 +103,16 @@
 /* Drivers */
 
 static const SDL_GpuDriver *backends[] = {
-#if SDL_GPU_METAL
+#ifdef SDL_GPU_METAL
     &MetalDriver,
 #endif
-#if SDL_GPU_D3D12
+#ifdef SDL_GPU_D3D12
     &D3D12Driver,
 #endif
-#if SDL_GPU_VULKAN
+#ifdef SDL_GPU_VULKAN
     &VulkanDriver,
 #endif
-#if SDL_GPU_D3D11
+#ifdef SDL_GPU_D3D11
     &D3D11Driver,
 #endif
     NULL
@@ -301,10 +300,6 @@ SDL_GpuComputePipeline *SDL_GpuCreateComputePipeline(
         }
     }
 
-    if (computePipelineCreateInfo->format == SDL_GPU_SHADERFORMAT_SPIRV &&
-        device->backend != SDL_GPU_BACKEND_VULKAN) {
-        return SDL_CompileFromSPIRV(device, computePipelineCreateInfo, SDL_TRUE);
-    }
     return device->CreateComputePipeline(
         device->driverData,
         computePipelineCreateInfo);
@@ -389,10 +384,6 @@ SDL_GpuShader *SDL_GpuCreateShader(
         return NULL;
     }
 
-    if (shaderCreateInfo->format == SDL_GPU_SHADERFORMAT_SPIRV &&
-        device->backend != SDL_GPU_BACKEND_VULKAN) {
-        return SDL_CompileFromSPIRV(device, shaderCreateInfo, SDL_FALSE);
-    }
     return device->CreateShader(
         device->driverData,
         shaderCreateInfo);
