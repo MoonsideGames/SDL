@@ -26,7 +26,7 @@
 #include <Metal/Metal.h>
 #include <QuartzCore/CoreAnimation.h>
 
-#include "../SDL_gpu_driver.h"
+#include "../SDL_sysgpu.h"
 
 /* Defines */
 
@@ -593,7 +593,7 @@ static Uint32 METAL_INTERNAL_GetVertexBufferIndex(Uint32 binding)
     return METAL_MAX_BUFFER_COUNT - 1 - binding;
 }
 
-/* FIXME: This should be moved into SDL_gpu_driver.h */
+/* FIXME: This should be moved into SDL_sysgpu.h */
 static inline Uint32 METAL_INTERNAL_NextHighestAlignment(
     Uint32 n,
     Uint32 align)

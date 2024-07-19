@@ -19,7 +19,7 @@
   3. This notice may not be removed or altered from any source distribution.
 */
 #include "SDL_internal.h"
-#include "SDL_gpu_driver.h"
+#include "SDL_sysgpu.h"
 
 /* FIXME: This could probably use SDL_ObjectValid */
 #define CHECK_DEVICE_MAGIC(device, retval)  \

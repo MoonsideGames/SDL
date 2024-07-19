@@ -34,7 +34,7 @@
 #include <dxgi1_6.h>
 #include <dxgidebug.h>
 
-#include "../SDL_gpu_driver.h"
+#include "../SDL_sysgpu.h"
 
 /* __stdcall declaration, largely taken from vkd3d_windows.h */
 #ifdef _WIN32
