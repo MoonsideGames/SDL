@@ -26,7 +26,6 @@
 #define D3D12_NO_HELPERS
 #define CINTERFACE
 #define COBJMACROS
-#define WIDL_C_INLINE_WRAPPERS
 
 #include <d3d12.h>
 #include <d3dcompiler.h>
@@ -1865,7 +1864,7 @@ static SDL_bool D3D12_INTERNAL_InitializeSwapchainTexture(
 
     D3D12_CPU_DESCRIPTOR_HANDLE rtvDescriptor;
     SDL_zero(rtvDescriptor);
-    rtvDescriptor = ID3D12DescriptorHeap_GetCPUDescriptorHandleForHeapStart(windowData->rtvHeap);
+    windowData->rtvHeap->lpVtbl->GetCPUDescriptorHandleForHeapStart(windowData->rtvHeap, &rtvDescriptor);
 
     SDL_zero(windowData->renderTargets);
 
@@ -1887,7 +1886,7 @@ static SDL_bool D3D12_INTERNAL_InitializeSwapchainTexture(
         windowData->renderTexture[i] = SDL_calloc(1, sizeof(D3D12Texture));
         SDL_assert(windowData->renderTexture[i]);
         SDL_zerop(windowData->renderTexture[i]);
-        windowData->renderTexture[i]->desc = ID3D12Resource_GetDesc(windowData->renderTargets[i]);
+        windowData->renderTargets[i]->lpVtbl->GetDesc(windowData->renderTargets[i], &windowData->renderTexture[i]->desc);
         windowData->renderTexture[i]->rtvHandle = rtvDescriptor;
         windowData->renderTexture[i]->resource = windowData->renderTargets[i];
         windowData->renderTexture[i]->isRenderTarget = SDL_TRUE;
@@ -2738,7 +2737,7 @@ static SDL_GpuDevice *D3D12_CreateDevice(SDL_bool debugMode, SDL_bool preferLowP
             D3D12_INTERNAL_DestroyRendererAndFree(&renderer);
             ERROR_CHECK_RETURN("Could not create ID3D12DescriptorHeap", NULL);
         }
-        renderer->commandBuffer->descriptorHeapHandle = ID3D12DescriptorHeap_GetGPUDescriptorHandleForHeapStart(renderer->commandBuffer->descriptorHeap);
+        renderer->commandBuffer->descriptorHeap->lpVtbl->GetGPUDescriptorHandleForHeapStart(renderer->commandBuffer->descriptorHeap, &renderer->commandBuffer->descriptorHeapHandle);
     }
 
     {
@@ -2755,7 +2754,7 @@ static SDL_GpuDevice *D3D12_CreateDevice(SDL_bool debugMode, SDL_bool preferLowP
             D3D12_INTERNAL_DestroyRendererAndFree(&renderer);
             ERROR_CHECK_RETURN("Could not create ID3D12DescriptorHeap for vertex samplers", NULL);
         }
-        renderer->commandBuffer->vertexSamplerDescriptorHeapHandle = ID3D12DescriptorHeap_GetGPUDescriptorHandleForHeapStart(renderer->commandBuffer->vertexSamplerDescriptorHeap);
+        renderer->commandBuffer->vertexSamplerDescriptorHeap->lpVtbl->GetGPUDescriptorHandleForHeapStart(renderer->commandBuffer->vertexSamplerDescriptorHeap, &renderer->commandBuffer->vertexSamplerDescriptorHeapHandle);
     }
 
     {
@@ -2772,7 +2771,7 @@ static SDL_GpuDevice *D3D12_CreateDevice(SDL_bool debugMode, SDL_bool preferLowP
             D3D12_INTERNAL_DestroyRendererAndFree(&renderer);
             ERROR_CHECK_RETURN("Could not create ID3D12DescriptorHeap for fragment samplers", NULL);
         }
-        renderer->commandBuffer->fragmentSamplerDescriptorHeapHandle = ID3D12DescriptorHeap_GetGPUDescriptorHandleForHeapStart(renderer->commandBuffer->fragmentSamplerDescriptorHeap);
+        renderer->commandBuffer->fragmentSamplerDescriptorHeap->lpVtbl->GetGPUDescriptorHandleForHeapStart(renderer->commandBuffer->fragmentSamplerDescriptorHeap, &renderer->commandBuffer->fragmentSamplerDescriptorHeapHandle);
     }
     {
         D3D12_DESCRIPTOR_HEAP_DESC srvHeapDesc = { 0 };
@@ -2789,7 +2788,7 @@ static SDL_GpuDevice *D3D12_CreateDevice(SDL_bool debugMode, SDL_bool preferLowP
             D3D12_INTERNAL_DestroyRendererAndFree(&renderer);
             ERROR_CHECK_RETURN("Could not create ID3D12DescriptorHeap for vertex shader resources", NULL);
         }
-        renderer->commandBuffer->vertexShaderResourceDescriptorHeapHandle = ID3D12DescriptorHeap_GetGPUDescriptorHandleForHeapStart(renderer->commandBuffer->vertexShaderResourceDescriptorHeap);
+        renderer->commandBuffer->vertexShaderResourceDescriptorHeap->lpVtbl->GetGPUDescriptorHandleForHeapStart(renderer->commandBuffer->vertexShaderResourceDescriptorHeap, &renderer->commandBuffer->vertexShaderResourceDescriptorHeapHandle);
     }
     {
         D3D12_DESCRIPTOR_HEAP_DESC srvHeapDesc = { 0 };
@@ -2806,7 +2805,7 @@ static SDL_GpuDevice *D3D12_CreateDevice(SDL_bool debugMode, SDL_bool preferLowP
             D3D12_INTERNAL_DestroyRendererAndFree(&renderer);
             ERROR_CHECK_RETURN("Could not create ID3D12DescriptorHeap for fragment shader resources", NULL);
         }
-        renderer->commandBuffer->fragmentShaderResourceDescriptorHeapHandle = ID3D12DescriptorHeap_GetGPUDescriptorHandleForHeapStart(renderer->commandBuffer->fragmentShaderResourceDescriptorHeap);
+        renderer->commandBuffer->fragmentShaderResourceDescriptorHeap->lpVtbl->GetGPUDescriptorHandleForHeapStart(renderer->commandBuffer->fragmentShaderResourceDescriptorHeap, &renderer->commandBuffer->fragmentShaderResourceDescriptorHeapHandle);
     }
 
     /* Create the SDL_Gpu Device */
