@@ -194,13 +194,13 @@ typedef enum SDL_GpuShaderStage
 typedef enum SDL_GpuShaderFormat
 {
     SDL_GPU_SHADERFORMAT_INVALID,
+    SDL_GPU_SHADERFORMAT_SECRET,   /* NDA'd platforms */
     SDL_GPU_SHADERFORMAT_SPIRV,    /* Vulkan */
     SDL_GPU_SHADERFORMAT_HLSL,     /* D3D11, D3D12 */
     SDL_GPU_SHADERFORMAT_DXBC,     /* D3D11, D3D12 */
     SDL_GPU_SHADERFORMAT_DXIL,     /* D3D12 */
     SDL_GPU_SHADERFORMAT_MSL,      /* Metal */
     SDL_GPU_SHADERFORMAT_METALLIB, /* Metal */
-    SDL_GPU_SHADERFORMAT_SECRET    /* NDA'd platforms */
 } SDL_GpuShaderFormat;
 
 typedef enum SDL_GpuVertexElementFormat
