@@ -107,6 +107,9 @@ static const SDL_GpuDriver *backends[] = {
 #if SDL_GPU_METAL
     &MetalDriver,
 #endif
+#if SDL_GPU_D3D12
+    &D3D12Driver,
+#endif
 #if SDL_GPU_VULKAN
     &VulkanDriver,
 #endif
@@ -809,6 +812,11 @@ SDL_GpuRenderPass *SDL_GpuBeginRenderPass(
     }
     if (colorAttachmentInfos == NULL && colorAttachmentCount > 0) {
         SDL_InvalidParamError("colorAttachmentInfos");
+        return NULL;
+    }
+
+    if (colorAttachmentCount > MAX_COLOR_TARGET_BINDINGS) {
+        SDL_SetError("colorAttachmentCount exceeds MAX_COLOR_TARGET_BINDINGS");
         return NULL;
     }
 
