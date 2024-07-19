@@ -351,6 +351,7 @@ set_option(SDL_LIBUDEV             "Enable libudev support" ON)
 set_option(SDL_ASAN                "Use AddressSanitizer to detect memory errors" OFF)
 set_option(SDL_CCACHE              "Use Ccache to speed up build" OFF)
 set_option(SDL_CLANG_TIDY          "Run clang-tidy static analysis" OFF)
+set_option(SDL_GPU_DXVK            "Build SDL_Gpu with DXVK support" OFF)
 
 set(SDL_VENDOR_INFO "" CACHE STRING "Vendor name and/or version to add to SDL_REVISION")
 
@@ -481,7 +482,6 @@ sdl_glob_sources(
   "${SDL3_SOURCE_DIR}/src/file/*.c"
   "${SDL3_SOURCE_DIR}/src/filesystem/*.c"
   "${SDL3_SOURCE_DIR}/src/gpu/*.c"
-  "${SDL3_SOURCE_DIR}/src/gpu/*/*.c"
   "${SDL3_SOURCE_DIR}/src/joystick/*.c"
   "${SDL3_SOURCE_DIR}/src/haptic/*.c"
   "${SDL3_SOURCE_DIR}/src/hidapi/*.c"
@@ -1691,7 +1691,7 @@ elseif(UNIX AND NOT APPLE AND NOT RISCOS AND NOT HAIKU)
       )
     endif()
 
-    if(SDL_GPU)
+    if(SDL_GPU AND SDL_GPU_DXVK)
       if(PKG_CONFIG_FOUND)
         pkg_search_module(DXVK_NATIVE dxvk-dxgi)
         if(DXVK_NATIVE_FOUND)
@@ -2916,14 +2916,17 @@ endif()
 
 if(SDL_GPU)
   if(HAVE_D3D11_H)
+    sdl_glob_sources("${SDL3_SOURCE_DIR}/src/gpu/d3d11/*.c")
     set(SDL_GPU_D3D11 1)
     set(HAVE_SDL_GPU TRUE)
   endif()
-  if(SDL_VIDEO_RENDER_D3D12)
+  if(HAVE_D3D12_H)
+    sdl_glob_sources("${SDL3_SOURCE_DIR}/src/gpu/d3d12/*.c")
     set(SDL_GPU_D3D12 1)
     set(HAVE_SDL_GPU TRUE)
   endif()
   if(SDL_VIDEO_VULKAN)
+    sdl_glob_sources("${SDL3_SOURCE_DIR}/src/gpu/vulkan/*.c")
     set(SDL_GPU_VULKAN 1)
     set(HAVE_SDL_GPU TRUE)
   endif()
