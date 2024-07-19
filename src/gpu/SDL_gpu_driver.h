@@ -691,6 +691,7 @@ typedef struct SDL_GpuDriver
 
 extern SDL_GpuDriver VulkanDriver;
 extern SDL_GpuDriver D3D11Driver;
+extern SDL_GpuDriver D3D12Driver;
 extern SDL_GpuDriver MetalDriver;
 extern SDL_GpuDriver PS5Driver;
 

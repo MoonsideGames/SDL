@@ -447,6 +447,7 @@
 
 /* Enable GPU support */
 #cmakedefine01 SDL_GPU_D3D11
+#cmakedefine01 SDL_GPU_D3D12
 #cmakedefine01 SDL_GPU_VULKAN
 #cmakedefine01 SDL_GPU_METAL
 

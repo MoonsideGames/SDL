@@ -18,9 +18,9 @@
     misrepresented as being the original software.
  3. This notice may not be removed or altered from any source distribution.
 */
-#include "SDL_internal.h"
 #include "SDL_gpu_driver.h"
 #include "SDL_gpu_spirv_c.h"
+#include "SDL_internal.h"
 #include "spirv_cross_c.h"
 
 #if defined(_WIN32)
@@ -85,6 +85,7 @@ void *SDL_CompileFromSPIRV(
 
     switch (SDL_GpuGetBackend(device)) {
     case SDL_GPU_BACKEND_D3D11:
+    case SDL_GPU_BACKEND_D3D12:
         backend = SPVC_BACKEND_HLSL;
         format = SDL_GPU_SHADERFORMAT_HLSL;
         break;
