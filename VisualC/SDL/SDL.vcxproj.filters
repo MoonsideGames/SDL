@@ -1575,9 +1575,6 @@
     <ClCompile Include="..\..\src\gpu\SDL_gpu.c">
       <Filter>gpu</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\src\gpu\SDL_gpu_spirv.c">
-      <Filter>gpu</Filter>
-    </ClCompile>
     <ClCompile Include="..\..\src\gpu\vulkan\SDL_gpu_vulkan.c">
       <Filter>gpu</Filter>
     </ClCompile>
