@@ -134,6 +134,8 @@ static const GUID D3D_IID_DXGI_DEBUG_ALL = { 0xe48ae283, 0xda80, 0x490b, { 0x87,
 #define DXGI_GET_DEBUG_INTERFACE_FUNC "DXGIGetDebugInterface"
 #define WINDOW_PROPERTY_DATA          "SDL_GpuD3D11WindowPropertyData"
 
+#define SDL_GPU_SHADERSTAGE_COMPUTE 2
+
 #ifdef _WIN32
 #define HRESULT_FMT "(0x%08lX)"
 #else
