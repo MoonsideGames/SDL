@@ -1379,6 +1379,27 @@ void SDL_GpuDispatchCompute(
         groupCountZ);
 }
 
+void SDL_GpuDispatchComputeIndirect(
+    SDL_GpuComputePass *computePass,
+    SDL_GpuBuffer *buffer,
+    Uint32 offsetInBytes
+) {
+    if (computePass == NULL) {
+        SDL_InvalidParamError("computePass");
+        return;
+    }
+
+    if (COMPUTEPASS_DEVICE->debugMode) {
+        CHECK_COMPUTEPASS
+        CHECK_COMPUTE_PIPELINE_BOUND
+    }
+
+    COMPUTEPASS_DEVICE->DispatchComputeIndirect(
+        COMPUTEPASS_COMMAND_BUFFER,
+        buffer,
+        offsetInBytes);
+}
+
 void SDL_GpuEndComputePass(
     SDL_GpuComputePass *computePass)
 {

@@ -1107,6 +1107,7 @@ SDL3_0.0.0 {
     SDL_GpuBindComputeStorageBuffers;
     SDL_GpuPushComputeUniformData;
     SDL_GpuDispatchCompute;
+    SDL_GpuDispatchComputeIndirect;
     SDL_GpuEndComputePass;
     SDL_GpuMapTransferBuffer;
     SDL_GpuUnmapTransferBuffer;
