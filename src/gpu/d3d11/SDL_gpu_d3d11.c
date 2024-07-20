@@ -4563,6 +4563,24 @@ static void D3D11_DispatchCompute(
         groupCountZ);
 }
 
+static void D3D11_DispatchComputeIndirect(
+    SDL_GpuCommandBuffer *commandBuffer,
+    SDL_GpuBuffer *buffer,
+    Uint32 offsetInBytes)
+{
+    D3D11CommandBuffer *d3d11CommandBuffer = (D3D11CommandBuffer *)commandBuffer;
+    D3D11Buffer *d3d11Buffer = ((D3D11BufferContainer *)buffer)->activeBuffer;
+
+    D3D11_INTERNAL_BindComputeResources(d3d11CommandBuffer);
+
+    ID3D11DeviceContext_DispatchIndirect(
+        d3d11CommandBuffer->context,
+        d3d11Buffer->handle,
+        offsetInBytes);
+
+    D3D11_INTERNAL_TrackBuffer(d3d11CommandBuffer, d3d11Buffer);
+}
+
 static void D3D11_EndComputePass(
     SDL_GpuCommandBuffer *commandBuffer)
 {

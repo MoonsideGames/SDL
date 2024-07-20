@@ -1727,6 +1727,11 @@ void D3D12_DispatchCompute(
     Uint32 groupCountY,
     Uint32 groupCountZ) { SDL_assert(SDL_FALSE); }
 
+static void D3D12_DispatchComputeIndirect(
+    SDL_GpuCommandBuffer *commandBuffer,
+    SDL_GpuBuffer *buffer,
+    Uint32 offsetInBytes) { SDL_assert(SDL_FALSE); }
+
 void D3D12_EndComputePass(
     SDL_GpuCommandBuffer *commandBuffer) { SDL_assert(SDL_FALSE); }
 
