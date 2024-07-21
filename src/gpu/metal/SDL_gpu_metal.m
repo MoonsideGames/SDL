@@ -3842,7 +3842,7 @@ static SDL_bool METAL_IsTextureFormatSupported(
         case SDL_GPU_TEXTUREFORMAT_B5G6R5:
         case SDL_GPU_TEXTUREFORMAT_B5G5R5A1:
         case SDL_GPU_TEXTUREFORMAT_B4G4R4A4:
-            return ![renderer->device supportsFamily:MTLGPUFamilyMac2];
+            return [renderer->device supportsFamily:MTLGPUFamilyApple1];
 
         /* Requires BC compression support */
         case SDL_GPU_TEXTUREFORMAT_BC1:
