@@ -4981,7 +4981,6 @@ static SDL_bool D3D11_INTERNAL_InitializeSwapchainTexture(
     D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc;
     D3D11_RENDER_TARGET_VIEW_DESC rtvDesc;
     D3D11_UNORDERED_ACCESS_VIEW_DESC uavDesc;
-    D3D11_TEXTURE2D_DESC textureDesc;
     ID3D11ShaderResourceView *srv;
     ID3D11RenderTargetView *rtv;
     ID3D11UnorderedAccessView *uav;
