@@ -393,53 +393,10 @@ SDL_GpuTexture *SDL_GpuCreateTexture(
     SDL_GpuDevice *device,
     SDL_GpuTextureCreateInfo *textureCreateInfo)
 {
-    SDL_GpuTextureFormat newFormat;
-
     CHECK_DEVICE_MAGIC(device, NULL);
     if (textureCreateInfo == NULL) {
         SDL_InvalidParamError("textureCreateInfo");
         return NULL;
-    }
-
-    /* Automatically swap out the depth format if it's unsupported.
-     * All backends have universal support for D16.
-     * Vulkan always supports at least one of { D24, D32 } and one of { D24_S8, D32_S8 }.
-     * D3D11 always supports all depth formats.
-     * Metal always supports D32 and D32_S8.
-     * So if D32/_S8 is not supported, we can safely fall back to D24/_S8, and vice versa.
-     */
-    if (IsDepthFormat(textureCreateInfo->format)) {
-        if (!device->IsTextureFormatSupported(
-                device->driverData,
-                textureCreateInfo->format,
-                SDL_GPU_TEXTURETYPE_2D, /* assuming that driver support for 2D implies support for Cube */
-                textureCreateInfo->usageFlags)) {
-            switch (textureCreateInfo->format) {
-            case SDL_GPU_TEXTUREFORMAT_D24_UNORM:
-                newFormat = SDL_GPU_TEXTUREFORMAT_D32_SFLOAT;
-                break;
-            case SDL_GPU_TEXTUREFORMAT_D32_SFLOAT:
-                newFormat = SDL_GPU_TEXTUREFORMAT_D24_UNORM;
-                break;
-            case SDL_GPU_TEXTUREFORMAT_D24_UNORM_S8_UINT:
-                newFormat = SDL_GPU_TEXTUREFORMAT_D32_SFLOAT_S8_UINT;
-                break;
-            case SDL_GPU_TEXTUREFORMAT_D32_SFLOAT_S8_UINT:
-                newFormat = SDL_GPU_TEXTUREFORMAT_D24_UNORM_S8_UINT;
-                break;
-            default:
-                /* This should never happen, but just in case... */
-                newFormat = SDL_GPU_TEXTUREFORMAT_D16_UNORM;
-                break;
-            }
-
-            SDL_LogWarn(
-                SDL_LOG_CATEGORY_GPU,
-                "Requested unsupported depth format %d, falling back to format %d!",
-                textureCreateInfo->format,
-                newFormat);
-            textureCreateInfo->format = newFormat;
-        }
     }
 
     return device->CreateTexture(
