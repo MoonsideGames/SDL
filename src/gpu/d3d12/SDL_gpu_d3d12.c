@@ -34,6 +34,7 @@
 #include <dxgidebug.h>
 
 #include "../SDL_sysgpu.h"
+#include "SDL_hashtable.h"
 
 /* Macros */
 
@@ -82,16 +83,32 @@
 #define D3D_FEATURE_LEVEL_CHOICE            D3D_FEATURE_LEVEL_11_1
 #define D3D_FEATURE_LEVEL_CHOICE_STR        "11_1"
 /* FIXME: just use sysgpu.h defines */
-#define SWAPCHAIN_BUFFER_COUNT              2
-#define MAX_ROOT_SIGNATURE_PARAMETERS       64
-#define MAX_VERTEX_UNIFORM_BUFFERS          14
-#define MAX_FRAGMENT_UNIFORM_BUFFERS        14
-#define MAX_VERTEX_SAMPLERS                 16
-#define MAX_FRAGMENT_SAMPLERS               16
-#define MAX_VERTEX_RESOURCE_COUNT           (128 + 14 + 8)
-#define MAX_FRAGMENT_RESOURCE_COUNT         (128 + 14 + 8)
+#define SWAPCHAIN_BUFFER_COUNT                2
+#define MAX_ROOT_SIGNATURE_PARAMETERS         64
+#define MAX_VERTEX_UNIFORM_BUFFERS            14
+#define MAX_FRAGMENT_UNIFORM_BUFFERS          14
+#define MAX_VERTEX_SAMPLERS                   16
+#define MAX_FRAGMENT_SAMPLERS                 16
+#define MAX_VERTEX_RESOURCE_COUNT             (128 + 14 + 8)
+#define MAX_FRAGMENT_RESOURCE_COUNT           (128 + 14 + 8)
+#define VIEW_SAMPLER_GPU_DESCRIPTOR_COUNT     65536
+#define TARGET_GPU_DESCRIPTOR_COUNT           16384
+#define VIEW_SAMPLER_STAGING_DESCRIPTOR_COUNT 1000000
+#define TARGET_STAGING_DESCRIPTOR_COUNT       1000000
 
 #define SDL_GPU_SHADERSTAGE_COMPUTE 2
+
+#define EXPAND_ELEMENTS_IF_NEEDED(arr, initialValue, type) \
+    if (arr->count == arr->capacity) {                     \
+        if (arr->capacity == 0) {                          \
+            arr->capacity = initialValue;                  \
+        } else {                                           \
+            arr->capacity *= 2;                            \
+        }                                                  \
+        arr->elements = (type *)SDL_realloc(               \
+            arr->elements,                                 \
+            arr->capacity * sizeof(type));                 \
+    }
 
 #ifdef _WIN32
 #define HRESULT_FMT "(0x%08lX)"
@@ -314,6 +331,7 @@ typedef enum D3D12BufferType
 
 /* Structures */
 typedef struct D3D12Renderer D3D12Renderer;
+typedef struct D3D12CommandBufferPool D3D12CommandBufferPool;
 typedef struct D3D12CommandBuffer D3D12CommandBuffer;
 typedef struct D3D12WindowData D3D12WindowData;
 typedef struct D3D12Texture D3D12Texture;
@@ -323,6 +341,7 @@ typedef struct D3D12Buffer D3D12Buffer;
 typedef struct D3D12BufferContainer D3D12BufferContainer;
 typedef struct D3D12UniformBuffer D3D12UniformBuffer;
 typedef struct D3D12DescriptorHeap D3D12DescriptorHeap;
+typedef struct D3D12DescriptorHeapPool D3D12DescriptorHeapPool;
 
 struct D3D12WindowData
 {
@@ -366,18 +385,36 @@ struct D3D12Renderer
     IDXGIAdapter1 *adapter;
     void *d3d12_dll;
     ID3D12Device *device;
-    D3D12CommandBuffer *commandBuffer; /* FIXME: this should not be here */
     SDL_PFN_D3D12_SERIALIZE_ROOT_SIGNATURE D3D12SerializeRootSignature_func;
 
+    ID3D12CommandQueue *commandQueue;
+
     SDL_bool UMA;
+
+    /* Resources */
+
+    SDL_HashTable *commandBufferPoolHashTable;
 
     D3D12UniformBuffer **uniformBufferPool;
     Uint32 uniformBufferPoolCount;
     Uint32 uniformBufferPoolCapacity;
 
-    D3D12DescriptorHeap **descriptorHeapPool;
-    Uint32 descriptorHeapPoolCount;
-    Uint32 descriptorHeapPoolCapacity;
+    D3D12DescriptorHeap *stagingDescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES];
+    D3D12DescriptorHeapPool descriptorHeapPools[D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES];
+
+    D3D12CommandBuffer **submittedCommandBuffers;
+    Uint32 submittedCommandBufferCount;
+    Uint32 submittedCommandBufferCapacity;
+};
+
+struct D3D12CommandBufferPool
+{
+    SDL_ThreadID threadID;
+    ID3D12CommandAllocator *commandAllocator;
+
+    D3D12CommandBuffer **inactiveCommandBuffers;
+    Uint32 inactiveCommandBufferCapacity;
+    Uint32 inactiveCommandBufferCount;
 };
 
 struct D3D12CommandBuffer
@@ -388,14 +425,10 @@ struct D3D12CommandBuffer
     // non owning parent reference
     D3D12Renderer *renderer;
 
-    ID3D12CommandQueue *commandQueue;
-    ID3D12CommandAllocator *commandAllocator;
-    ID3D12GraphicsCommandList2 *graphicsCommandList;
-    ID3D12Fence *fence;
+    D3D12CommandBufferPool *pool;
 
-    SDL_Mutex *fenceLock;
-    UINT64 fenceValue;
-    HANDLE fenceEvent;
+    ID3D12GraphicsCommandList2 *graphicsCommandList;
+    ID3D12Fence *inFlightFence;
 
     // not owned, head of chain of active windows
     D3D12WindowData *nextWindow;
@@ -404,8 +437,8 @@ struct D3D12CommandBuffer
     D3D12Texture *colorAttachmentTexture[MAX_COLOR_TARGET_BINDINGS];
     D3D12GraphicsPipeline *currentGraphicsPipeline;
 
-    ID3D12DescriptorHeap *descriptorHeap;
-    D3D12_GPU_DESCRIPTOR_HANDLE descriptorHeapHandle;
+    /* Set at acquire time */
+    D3D12DescriptorHeap *gpuDescriptorHeap;
 
     // cleanup
     D3D12UniformBuffer *vertexUniformBuffers[MAX_VERTEX_UNIFORM_BUFFERS];
@@ -499,6 +532,13 @@ struct D3D12DescriptorHeap
     SDL_bool staging;
 };
 
+struct D3D12DescriptorHeapPool
+{
+    Uint32 capacity;
+    Uint32 count;
+    D3D12DescriptorHeap **heaps;
+};
+
 /* Logging */
 
 static void
@@ -531,7 +571,7 @@ D3D12_INTERNAL_LogError(
 
     /* No message? Screw it, just post the code. */
     if (dwChars == 0) {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "%s! Error Code: " HRESULT_FMT, msg, res);
+        SDL_LogError(SDL_LOG_CATEGORY_GPU, "%s! Error Code: " HRESULT_FMT, msg, res);
         return;
     }
 
@@ -550,7 +590,24 @@ D3D12_INTERNAL_LogError(
     /* Ensure null-terminated string */
     wszMsgBuff[dwChars] = '\0';
 
-    SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "%s! Error Code: %s " HRESULT_FMT, msg, wszMsgBuff, res);
+    SDL_LogError(SDL_LOG_CATEGORY_GPU, "%s! Error Code: %s " HRESULT_FMT, msg, wszMsgBuff, res);
+}
+
+/* Hashing */
+
+Uint32 D3D12_INTERNAL_HashThreadID(const void *key, void *unused)
+{
+    return (Uint32)(Uint64)key;
+}
+
+SDL_bool D3D12_INTERNAL_MatchThreadID(const void *a, const void *b, void *unused)
+{
+    return a == b;
+}
+
+void D3D12_INTERNAL_NukeThreadID(const void *key, const void *value, void *unused)
+{
+    /* no-op */
 }
 
 static void D3D12_INTERNAL_DestroyCommandBuffer(D3D12CommandBuffer *commandBuffer)
@@ -684,9 +741,44 @@ static D3D12DescriptorHeap *D3D12_INTERNAL_CreateDescriptorHeap(
 }
 
 D3D12DescriptorHeap *D3D12_INTERNAL_AcquireDescriptorHeapFromPool(
-    D3D12CommandBuffer *commandBuffer)
+    D3D12CommandBuffer *commandBuffer,
+    D3D12_DESCRIPTOR_HEAP_TYPE descriptorHeapType)
 {
+    D3D12DescriptorHeap *result;
+    D3D12Renderer *renderer = commandBuffer->renderer;
+    D3D12DescriptorHeapPool *pool = &renderer->descriptorHeapPools[descriptorHeapType];
 
+    if (pool->count > 0)
+    {
+        result = pool->heaps[pool->count - 1];
+        pool->count -= 1;
+        return result;
+    }
+
+    return D3D12_INTERNAL_CreateDescriptorHeap(
+        renderer,
+        descriptorHeapType,
+        (descriptorHeapType <= D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER) ? VIEW_SAMPLER_GPU_DESCRIPTOR_COUNT : TARGET_GPU_DESCRIPTOR_COUNT,
+        SDL_FALSE
+    );
+}
+
+void D3D12_INTERNAL_ReturnDescriptorHeapToPool(
+    D3D12Renderer *renderer,
+    D3D12DescriptorHeap *heap)
+{
+    D3D12DescriptorHeapPool *pool = &renderer->descriptorHeapPools[heap->heapType];
+
+    if (pool->count >= pool->capacity)
+    {
+        pool->capacity *= 2;
+        pool->heaps = SDL_realloc(
+            pool->heaps,
+            pool->capacity * sizeof(D3D12DescriptorHeap*));
+    }
+
+    pool->heaps[pool->count] = heap;
+    pool->count += 1;
 }
 
 ID3D12RootSignature *D3D12_INTERNAL_CreateRootSignature(D3D12Renderer *renderer, ID3D12Device *device, Uint32 samplerCount, Uint32 uniformBufferCount, Uint32 storageBufferCount, Uint32 storageTextureCount)
@@ -2346,13 +2438,141 @@ SDL_GpuTextureFormat D3D12_GetSwapchainTextureFormat(
     }
 }
 
+static void D3D12_INTERNAL_AllocateCommandBuffers(
+    D3D12Renderer *renderer,
+    D3D12CommandBufferPool *commandBufferPool,
+    Uint32 allocateCount)
+{
+    D3D12CommandBuffer *commandBuffer;
+    HRESULT res;
+    ID3D12CommandList **commandLists = SDL_stack_alloc(ID3D12CommandList*, allocateCount);
+
+    for (Uint32 i = 0; i < allocateCount; i += 1) {
+        res = ID3D12Device_CreateCommandList(
+            renderer->device,
+            0,
+            D3D12_COMMAND_LIST_TYPE_DIRECT,
+            commandBufferPool->commandAllocator,
+            NULL,
+            &D3D_IID_ID3D12GraphicsCommandList2,
+            (void **)&commandLists[i]
+        );
+
+        if (FAILED(res)) {
+            for (Uint32 j = 0; j < i; j += 1) {
+                ID3D12GraphicsCommandList2_Release(commandLists[j]);
+            }
+            SDL_stack_free(commandLists);
+            SDL_LogError(SDL_LOG_CATEGORY_GPU, "Failed to create ID3D12CommandList");
+            return;
+        }
+    }
+
+    commandBufferPool->inactiveCommandBufferCapacity += allocateCount;
+
+    commandBufferPool->inactiveCommandBuffers = SDL_realloc(
+        commandBufferPool->inactiveCommandBuffers,
+        sizeof(D3D12CommandBuffer*) * commandBufferPool->inactiveCommandBufferCapacity);
+
+
+    for (Uint32 i = 0; i < allocateCount; i += 1) {
+        commandBuffer = SDL_malloc(sizeof(D3D12CommandBuffer));
+        commandBuffer->renderer = renderer;
+        commandBuffer->pool = commandBufferPool;
+        commandBuffer->graphicsCommandList = commandLists[i];
+        commandBuffer->inFlightFence = NULL;
+
+        commandBufferPool->inactiveCommandBuffers[commandBufferPool->inactiveCommandBufferCount] = commandBuffer;
+        commandBufferPool->inactiveCommandBufferCount += 1;
+    }
+
+    SDL_stack_free(commandLists);
+}
+
+D3D12CommandBufferPool *D3D12_INTERNAL_FetchCommandBufferPool(
+    D3D12Renderer *renderer,
+    SDL_ThreadID threadID)
+{
+    D3D12CommandBufferPool *commandBufferPool;
+    ID3D12CommandAllocator *allocator;
+    HRESULT res;
+
+    if (SDL_FindInHashTable(
+        renderer->commandBufferPoolHashTable,
+        threadID,
+        &commandBufferPool))
+    {
+        return commandBufferPool;
+    }
+
+    res = ID3D12Device_CreateCommandAllocator(
+        renderer->device,
+        D3D12_COMMAND_LIST_TYPE_DIRECT,
+        &D3D_IID_ID3D12CommandAllocator,
+        (void **) &allocator);
+
+    ERROR_CHECK_RETURN("Failed to create command allocator!", NULL);
+
+    commandBufferPool = (D3D12CommandBufferPool *) SDL_malloc(sizeof(D3D12CommandBufferPool));
+    commandBufferPool->threadID = threadID;
+    commandBufferPool->commandAllocator = allocator;
+    commandBufferPool->inactiveCommandBufferCapacity = 0;
+    commandBufferPool->inactiveCommandBufferCount = 0;
+    commandBufferPool->inactiveCommandBuffers = NULL;
+
+    D3D12_INTERNAL_AllocateCommandBuffers(renderer, commandBufferPool, 2);
+
+    SDL_InsertIntoHashTable(
+        renderer->commandBufferPoolHashTable,
+        threadID,
+        commandBufferPool);
+
+    return commandBufferPool;
+}
+
+static D3D12CommandBuffer *D3D12_INTERNAL_AcquireCommandBufferFromPool(
+    D3D12Renderer *renderer,
+    SDL_ThreadID threadID)
+{
+    D3D12CommandBufferPool *commandBufferPool =
+        D3D12_INTERNAL_FetchCommandBufferPool(renderer, threadID);
+    D3D12CommandBuffer *commandBuffer;
+
+    if (commandBufferPool->inactiveCommandBufferCount == 0) {
+        D3D12_INTERNAL_AllocateCommandBuffers(
+            renderer,
+            commandBufferPool,
+            commandBufferPool->inactiveCommandBufferCapacity);
+    }
+
+    commandBuffer = commandBufferPool->inactiveCommandBuffers[commandBufferPool->inactiveCommandBufferCount - 1];
+    commandBufferPool->inactiveCommandBufferCount -= 1;
+
+    return commandBuffer;
+}
+
 SDL_GpuCommandBuffer *D3D12_AcquireCommandBuffer(
     SDL_GpuRenderer *driverData)
 {
-    SDL_assert(driverData);
     D3D12Renderer *renderer = (D3D12Renderer *)driverData;
-    SDL_assert(renderer->commandBuffer);
-    return (SDL_GpuCommandBuffer *)renderer->commandBuffer;
+    D3D12CommandBuffer *commandBuffer;
+
+    SDL_ThreadID threadID = SDL_GetCurrentThreadID();
+
+    SDL_LockMutex(renderer->acquireCommandBufferLock);
+
+    commandBuffer = D3D12_INTERNAL_AcquireCommandBufferFromPool(
+        renderer,
+        threadID);
+
+    SDL_UnlockMutex(renderer->acquireCommandBufferLock);
+
+    if (commandBuffer == NULL) {
+        SDL_LogError(SDL_LOG_CATEGORY_GPU, "Failed to acquire command buffer!");
+        return NULL;
+    }
+
+    return (SDL_GpuCommandBuffer *) commandBuffer;
 }
 
 SDL_GpuTexture *D3D12_AcquireSwapchainTexture(
@@ -2835,13 +3055,6 @@ static SDL_GpuDevice *D3D12_CreateDevice(SDL_bool debugMode, SDL_bool preferLowP
         ERROR_CHECK_RETURN("Could not create D3D12Device", NULL);
     }
 
-    /* FIXME: move all this stuff to AcquireCommandBuffer and relevant pooling system */
-    renderer->commandBuffer = (D3D12CommandBuffer *)SDL_malloc(sizeof(D3D12CommandBuffer));
-    SDL_zerop(renderer->commandBuffer);
-    renderer->commandBuffer->renderer = renderer;
-
-    renderer->commandBuffer->fenceLock = SDL_CreateMutex();
-
     SDL_zero(queueDesc);
     queueDesc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
     queueDesc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
@@ -2850,154 +3063,59 @@ static SDL_GpuDevice *D3D12_CreateDevice(SDL_bool debugMode, SDL_bool preferLowP
         renderer->device,
         &queueDesc,
         &D3D_IID_ID3D12CommandQueue,
-        (void **)&renderer->commandBuffer->commandQueue);
+        (void **)&renderer->commandQueue);
 
     if (FAILED(res)) {
         D3D12_INTERNAL_DestroyRendererAndFree(&renderer);
         ERROR_CHECK_RETURN("Could not create D3D12CommandQueue", NULL);
     }
 
-    // Create the command allocator
-    res = ID3D12Device_CreateCommandAllocator(
-        renderer->device,
-        D3D12_COMMAND_LIST_TYPE_DIRECT,
-        &D3D_IID_ID3D12CommandAllocator,
-        (void **)&renderer->commandBuffer->commandAllocator);
+    /* Initialize pools */
 
-    if (FAILED(res)) {
-        D3D12_INTERNAL_DestroyRendererAndFree(&renderer);
-        ERROR_CHECK_RETURN("Could not create ID3D12CommandAllocator", NULL);
-    }
-
-    // Create the command list
-    res = ID3D12Device_CreateCommandList(
-        renderer->device,
-        0,
-        D3D12_COMMAND_LIST_TYPE_DIRECT,
-        renderer->commandBuffer->commandAllocator,
+    renderer->commandBufferPoolHashTable = SDL_CreateHashTable(
         NULL,
-        &D3D_IID_ID3D12GraphicsCommandList2,
-        (void **)&renderer->commandBuffer->graphicsCommandList);
-    if (FAILED(res)) {
-        D3D12_INTERNAL_DestroyRendererAndFree(&renderer);
-        ERROR_CHECK_RETURN("Could not create ID3D12CommandList", NULL);
+        4,
+        D3D12_INTERNAL_HashThreadID,
+        D3D12_INTERNAL_MatchThreadID,
+        D3D12_INTERNAL_NukeThreadID,
+        SDL_FALSE
+    );
+
+    renderer->submittedCommandBufferCapacity = 4;
+    renderer->submittedCommandBufferCount = 0;
+    renderer->submittedCommandBuffers = SDL_malloc(
+        renderer->submittedCommandBufferCapacity * sizeof(D3D12CommandBuffer*));
+
+    renderer->uniformBufferPoolCapacity = 4;
+    renderer->uniformBufferPoolCount = 0;
+    renderer->uniformBufferPool = SDL_malloc(
+        renderer->uniformBufferPoolCapacity * sizeof(D3D12UniformBuffer*));
+
+    /* Initialize CPU descriptor heaps */
+    for (Uint32 i = 0; i < D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES; i += 1) {
+        renderer->stagingDescriptorHeaps[i] = D3D12_INTERNAL_CreateDescriptorHeap(
+            renderer,
+            i,
+            (i <= D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER) ? VIEW_SAMPLER_STAGING_DESCRIPTOR_COUNT : TARGET_STAGING_DESCRIPTOR_COUNT,
+            SDL_TRUE
+        );
     }
 
-    res = ID3D12GraphicsCommandList2_Close(renderer->commandBuffer->graphicsCommandList);
-    if (FAILED(res)) {
-        D3D12_INTERNAL_DestroyRendererAndFree(&renderer);
-        ERROR_CHECK_RETURN("Could not close ID3D12CommandList", NULL);
-    }
+    /* Initialize GPU descriptor heaps */
+    for (Uint32 i = 0; i < D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES; i += 1) {
+        renderer->descriptorHeapPools[i].capacity = 4;
+        renderer->descriptorHeapPools[i].count = 4;
+        renderer->descriptorHeapPools[i].heaps = SDL_malloc(
+            renderer->descriptorHeapPools[i].capacity * sizeof(D3D12DescriptorHeap*));
 
-    res = ID3D12CommandAllocator_Reset(renderer->commandBuffer->commandAllocator);
-    if (FAILED(res)) {
-        D3D12_INTERNAL_DestroyRendererAndFree(&renderer);
-        ERROR_CHECK_RETURN("Could not reset commandAllocator", NULL);
-    }
-    res = ID3D12GraphicsCommandList2_Reset(renderer->commandBuffer->graphicsCommandList, renderer->commandBuffer->commandAllocator, NULL);
-    if (FAILED(res)) {
-        D3D12_INTERNAL_DestroyRendererAndFree(&renderer);
-        ERROR_CHECK_RETURN("Could not reset graphicsCommandList", NULL);
-    }
-
-    // Create fence
-    ID3D12Device_CreateFence(
-        renderer->device,
-        0,
-        D3D12_FENCE_FLAG_NONE,
-        &D3D_IID_ID3D12Fence,
-        (void **)&renderer->commandBuffer->fence);
-    if (FAILED(res)) {
-        D3D12_INTERNAL_DestroyRendererAndFree(&renderer);
-        ERROR_CHECK_RETURN("Could not create ID3D12Fence", NULL);
-    }
-    renderer->commandBuffer->fenceValue = 1;
-    renderer->commandBuffer->fenceEvent = CreateEvent(NULL, FALSE, FALSE, NULL);
-
-    /* FIXME: all of this can go */
-    {
-        D3D12_DESCRIPTOR_HEAP_DESC heapDesc = { 0 };
-        heapDesc.NumDescriptors = 1;
-        heapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-        heapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-        res = ID3D12Device_CreateDescriptorHeap(
-            renderer->device,
-            &heapDesc,
-            &D3D_IID_ID3D12DescriptorHeap,
-            (void **)&renderer->commandBuffer->descriptorHeap);
-        if (FAILED(res)) {
-            D3D12_INTERNAL_DestroyRendererAndFree(&renderer);
-            ERROR_CHECK_RETURN("Could not create ID3D12DescriptorHeap", NULL);
+        for (Uint32 j = 0; j < renderer->descriptorHeapPools[i].capacity; j += 1) {
+            renderer->descriptorHeapPools[i].heaps[j] = D3D12_INTERNAL_CreateDescriptorHeap(
+                renderer,
+                i,
+                (i <= D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER) ? VIEW_SAMPLER_GPU_DESCRIPTOR_COUNT : TARGET_GPU_DESCRIPTOR_COUNT,
+                SDL_FALSE
+            );
         }
-        renderer->commandBuffer->descriptorHeap->lpVtbl->GetGPUDescriptorHandleForHeapStart(renderer->commandBuffer->descriptorHeap, &renderer->commandBuffer->descriptorHeapHandle);
-    }
-
-    {
-        D3D12_DESCRIPTOR_HEAP_DESC samplerHeapDesc = { 0 };
-        samplerHeapDesc.NumDescriptors = MAX_VERTEX_SAMPLERS;
-        samplerHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER;
-        samplerHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-        res = ID3D12Device_CreateDescriptorHeap(
-            renderer->device,
-            &samplerHeapDesc,
-            &D3D_IID_ID3D12DescriptorHeap,
-            (void **)&renderer->commandBuffer->vertexSamplerDescriptorHeap);
-        if (FAILED(res)) {
-            D3D12_INTERNAL_DestroyRendererAndFree(&renderer);
-            ERROR_CHECK_RETURN("Could not create ID3D12DescriptorHeap for vertex samplers", NULL);
-        }
-        renderer->commandBuffer->vertexSamplerDescriptorHeap->lpVtbl->GetGPUDescriptorHandleForHeapStart(renderer->commandBuffer->vertexSamplerDescriptorHeap, &renderer->commandBuffer->vertexSamplerDescriptorHeapHandle);
-    }
-
-    {
-        D3D12_DESCRIPTOR_HEAP_DESC samplerHeapDesc = { 0 };
-        samplerHeapDesc.NumDescriptors = MAX_FRAGMENT_SAMPLERS;
-        samplerHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER;
-        samplerHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-        res = ID3D12Device_CreateDescriptorHeap(
-            renderer->device,
-            &samplerHeapDesc,
-            &D3D_IID_ID3D12DescriptorHeap,
-            (void **)&renderer->commandBuffer->fragmentSamplerDescriptorHeap);
-        if (FAILED(res)) {
-            D3D12_INTERNAL_DestroyRendererAndFree(&renderer);
-            ERROR_CHECK_RETURN("Could not create ID3D12DescriptorHeap for fragment samplers", NULL);
-        }
-        renderer->commandBuffer->fragmentSamplerDescriptorHeap->lpVtbl->GetGPUDescriptorHandleForHeapStart(renderer->commandBuffer->fragmentSamplerDescriptorHeap, &renderer->commandBuffer->fragmentSamplerDescriptorHeapHandle);
-    }
-    {
-        D3D12_DESCRIPTOR_HEAP_DESC srvHeapDesc = { 0 };
-        srvHeapDesc.NumDescriptors = MAX_VERTEX_RESOURCE_COUNT;
-        srvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-        srvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-
-        res = ID3D12Device_CreateDescriptorHeap(
-            renderer->device,
-            &srvHeapDesc,
-            &D3D_IID_ID3D12DescriptorHeap,
-            (void **)&renderer->commandBuffer->vertexShaderResourceDescriptorHeap);
-        if (FAILED(res)) {
-            D3D12_INTERNAL_DestroyRendererAndFree(&renderer);
-            ERROR_CHECK_RETURN("Could not create ID3D12DescriptorHeap for vertex shader resources", NULL);
-        }
-        renderer->commandBuffer->vertexShaderResourceDescriptorHeap->lpVtbl->GetGPUDescriptorHandleForHeapStart(renderer->commandBuffer->vertexShaderResourceDescriptorHeap, &renderer->commandBuffer->vertexShaderResourceDescriptorHeapHandle);
-    }
-    {
-        D3D12_DESCRIPTOR_HEAP_DESC srvHeapDesc = { 0 };
-        srvHeapDesc.NumDescriptors = MAX_FRAGMENT_RESOURCE_COUNT;
-        srvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-        srvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-
-        res = ID3D12Device_CreateDescriptorHeap(
-            renderer->device,
-            &srvHeapDesc,
-            &D3D_IID_ID3D12DescriptorHeap,
-            (void **)&renderer->commandBuffer->fragmentShaderResourceDescriptorHeap);
-        if (FAILED(res)) {
-            D3D12_INTERNAL_DestroyRendererAndFree(&renderer);
-            ERROR_CHECK_RETURN("Could not create ID3D12DescriptorHeap for fragment shader resources", NULL);
-        }
-        renderer->commandBuffer->fragmentShaderResourceDescriptorHeap->lpVtbl->GetGPUDescriptorHandleForHeapStart(renderer->commandBuffer->fragmentShaderResourceDescriptorHeap, &renderer->commandBuffer->fragmentShaderResourceDescriptorHeapHandle);
     }
 
     /* Create the SDL_Gpu Device */
