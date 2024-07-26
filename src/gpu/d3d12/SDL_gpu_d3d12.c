@@ -84,10 +84,6 @@
 #define D3D_FEATURE_LEVEL_CHOICE_STR        "11_1"
 /* FIXME: just use sysgpu.h defines */
 #define MAX_ROOT_SIGNATURE_PARAMETERS         64
-#define MAX_VERTEX_SAMPLERS                   16
-#define MAX_FRAGMENT_SAMPLERS                 16
-#define MAX_VERTEX_RESOURCE_COUNT             (128 + 14 + 8)
-#define MAX_FRAGMENT_RESOURCE_COUNT           (128 + 14 + 8)
 #define VIEW_SAMPLER_GPU_DESCRIPTOR_COUNT     65536
 #define TARGET_GPU_DESCRIPTOR_COUNT           16384
 #define VIEW_SAMPLER_STAGING_DESCRIPTOR_COUNT 1000000
@@ -451,17 +447,25 @@ struct D3D12CommandBuffer
 
     /* Resource slot state */
     SDL_bool needVertexSamplerBind;
-    SDL_bool needVertexResourceBind;
-    SDL_bool needVertexUniformBufferBind;
+    SDL_bool needVertexStorageTextureBind;
+    SDL_bool needVertexStorageBufferBind;
+    SDL_bool needVertexUniformBufferBind[MAX_UNIFORM_BUFFERS_PER_STAGE];
     SDL_bool needFragmentSamplerBind;
-    SDL_bool needFragmentResourceBind;
-    SDL_bool needFragmentUniformBufferBind;
+    SDL_bool needFragmentStorageTextureBind;
+    SDL_bool needFragmentStorageBufferBind;
+    SDL_bool needFragmentUniformBufferBind[MAX_UNIFORM_BUFFERS_PER_STAGE];
 
     D3D12Texture *vertexSamplerTextures[MAX_TEXTURE_SAMPLERS_PER_STAGE];
     D3D12Sampler *vertexSamplers[MAX_TEXTURE_SAMPLERS_PER_STAGE];
 
+    D3D12TextureSlice *vertexStorageTextureSlices[MAX_STORAGE_TEXTURES_PER_STAGE];
+    D3D12Buffer *vertexStorageBuffers[MAX_STORAGE_BUFFERS_PER_STAGE];
+
     D3D12Texture *fragmentSamplerTextures[MAX_TEXTURE_SAMPLERS_PER_STAGE];
     D3D12Sampler *fragmentSamplers[MAX_TEXTURE_SAMPLERS_PER_STAGE];
+
+    D3D12TextureSlice *fragmentStorageTextureSlices[MAX_STORAGE_TEXTURES_PER_STAGE];
+    D3D12Buffer *fragmentStorageBuffers[MAX_STORAGE_BUFFERS_PER_STAGE];
 
     D3D12UniformBuffer *vertexUniformBuffers[MAX_UNIFORM_BUFFERS_PER_STAGE];
     D3D12UniformBuffer *fragmentUniformBuffers[MAX_UNIFORM_BUFFERS_PER_STAGE];
@@ -516,7 +520,7 @@ struct D3D12DescriptorHeap
 
     Uint32 currentDescriptorIndex;
 
-    Uint32 *inactiveDescriptorIndices;
+    Uint32 *inactiveDescriptorIndices; /* only exists if staging is SDL_TRUE */
     Uint32 inactiveDescriptorCount;
 };
 
@@ -786,9 +790,11 @@ static D3D12DescriptorHeap *D3D12_INTERNAL_CreateDescriptorHeap(
         ID3D12DescriptorHeap_GetGPUDescriptorHandleForHeapStart(handle, &heap->descriptorHeapGPUStart);
     }
 
+    heap->currentDescriptorIndex = 0;
+    heap->inactiveDescriptorCount = 0;
+    heap->inactiveDescriptorIndices = NULL;
+
     if (staging) {
-        heap->currentDescriptorIndex = 0;
-        heap->inactiveDescriptorCount = 0;
         heap->inactiveDescriptorIndices = SDL_malloc(sizeof(Uint32) * descriptorCount);
     }
 
@@ -824,6 +830,8 @@ void D3D12_INTERNAL_ReturnDescriptorHeapToPool(
 {
     D3D12DescriptorHeapPool *pool = &renderer->descriptorHeapPools[heap->heapType];
 
+    heap->currentDescriptorIndex = 0;
+
     if (pool->count >= pool->capacity)
     {
         pool->capacity *= 2;
@@ -836,6 +844,36 @@ void D3D12_INTERNAL_ReturnDescriptorHeapToPool(
     pool->count += 1;
 }
 
+/*
+ * The root signature lets us define "root parameters" which are essentially bind points for resources.
+ * These let us define the register ranges as well as the register "space".
+ * The register space is akin to the descriptor set index in Vulkan, which allows us to group resources
+ * by stage so that the registers from the vertex and fragment shaders don't clobber each other.
+ *
+ * Most of our root parameters are implemented as "descriptor tables" so we can
+ * copy and then point to contiguous descriptor regions.
+ * Uniform buffers are the exception - these have to be implemented as raw "root descriptors" so
+ * that we can dynamically update the address that the constant buffer view points to.
+ *
+ * The root signature has a maximum size of 64 DWORDs.
+ * A descriptor table uses 1 DWORD.
+ * A root descriptor uses 2 DWORDS.
+ *
+ * The root parameter indices for graphics pipelines are as follows:
+ *
+ *     0: vertex samplers
+ *     1: vertex sampled textures
+ *     2: vertex storage textures
+ *     3: vertex storage buffers
+ *   4-7: vertex uniform buffers
+ *     8: fragment samplers
+ *     9: fragment sampled textures
+ *    10: fragment storage textures
+ *    11: fragment storage buffers
+ * 12-15: fragment uniform buffers
+ *
+ * This means our root signature uses 24 DWORDs total, well under the limit.
+ */
 ID3D12RootSignature *D3D12_INTERNAL_CreateGraphicsRootSignature(
     D3D12Renderer *renderer,
     D3D12Shader *vertexShader,
@@ -846,120 +884,148 @@ ID3D12RootSignature *D3D12_INTERNAL_CreateGraphicsRootSignature(
     Uint32 rangeCount = 0;
     Uint32 parameterCount = 0;
 
-    /* Define descriptor ranges for samplers
-     * NOTE: samplers live on their own descriptor heap!
-     */
-    if (vertexShader->samplerCount > 0) {
-        D3D12_DESCRIPTOR_RANGE descriptorRange = { 0 };
-        descriptorRange.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER;
-        descriptorRange.NumDescriptors = vertexShader->samplerCount;
-        descriptorRange.BaseShaderRegister = 0;
-        descriptorRange.RegisterSpace = 0;
-        descriptorRange.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
-        descriptorRanges[rangeCount] = descriptorRange;
-        rangeCount += 1;
+    /* Vertex Samplers */
+    D3D12_DESCRIPTOR_RANGE descriptorRange = { 0 };
+    descriptorRange.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER;
+    descriptorRange.NumDescriptors = vertexShader->samplerCount;
+    descriptorRange.BaseShaderRegister = 0;
+    descriptorRange.RegisterSpace = 0;
+    descriptorRange.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+    descriptorRanges[rangeCount] = descriptorRange;
+    rangeCount += 1;
 
-        D3D12_ROOT_PARAMETER rootParameter = { 0 };
-        rootParameter.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-        rootParameter.DescriptorTable.NumDescriptorRanges = 1;
-        rootParameter.DescriptorTable.pDescriptorRanges = &descriptorRanges[parameterCount];
-        rootParameter.ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
-        rootParameters[parameterCount] = rootParameter;
-        parameterCount += 1;
-    }
+    D3D12_ROOT_PARAMETER rootParameter = { 0 };
+    rootParameter.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+    rootParameter.DescriptorTable.NumDescriptorRanges = 1;
+    rootParameter.DescriptorTable.pDescriptorRanges = &descriptorRanges[parameterCount];
+    rootParameter.ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
+    rootParameters[parameterCount] = rootParameter;
+    parameterCount += 1;
 
-    if (fragmentShader->samplerCount > 0 ) {
-        D3D12_DESCRIPTOR_RANGE descriptorRange = { 0 };
-        descriptorRange.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER;
-        descriptorRange.NumDescriptors = fragmentShader->samplerCount;
-        descriptorRange.BaseShaderRegister = 0;
-        descriptorRange.RegisterSpace = 2;
-        descriptorRange.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
-        descriptorRanges[rangeCount] = descriptorRange;
-        rangeCount += 1;
+    D3D12_DESCRIPTOR_RANGE descriptorRange = { 0 };
+    descriptorRange.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+    descriptorRange.NumDescriptors = vertexShader->samplerCount;
+    descriptorRange.BaseShaderRegister = 0;
+    descriptorRange.RegisterSpace = 0;
+    descriptorRange.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+    descriptorRanges[rangeCount] = descriptorRange;
+    rangeCount += 1;
 
-        D3D12_ROOT_PARAMETER rootParameter = { 0 };
-        rootParameter.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-        rootParameter.DescriptorTable.NumDescriptorRanges = 1;
-        rootParameter.DescriptorTable.pDescriptorRanges = &descriptorRanges[parameterCount];
-        rootParameter.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-        rootParameters[parameterCount] = rootParameter;
-        parameterCount += 1;
-    }
+    D3D12_ROOT_PARAMETER rootParameter = { 0 };
+    rootParameter.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+    rootParameter.DescriptorTable.NumDescriptorRanges = 1;
+    rootParameter.DescriptorTable.pDescriptorRanges = &descriptorRanges[parameterCount];
+    rootParameter.ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
+    rootParameters[parameterCount] = rootParameter;
+    parameterCount += 1;
 
-    /* Vertex storage resources */
-    if (vertexShader->storageTextureCount + vertexShader->storageBufferCount > 0) {
-        D3D12_DESCRIPTOR_RANGE descriptorRange = { 0 };
-        descriptorRange.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
-        descriptorRange.NumDescriptors = vertexShader->storageTextureCount + vertexShader->storageBufferCount;
-        descriptorRange.BaseShaderRegister = 0;
-        descriptorRange.RegisterSpace = 0;
-        descriptorRange.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
-        descriptorRanges[rangeCount] = descriptorRange;
-        rangeCount += 1;
+    /* Vertex storage textures */
+    D3D12_DESCRIPTOR_RANGE descriptorRange = { 0 };
+    descriptorRange.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+    descriptorRange.NumDescriptors = vertexShader->storageTextureCount;
+    descriptorRange.BaseShaderRegister = vertexShader->samplerCount;
+    descriptorRange.RegisterSpace = 0;
+    descriptorRange.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+    descriptorRanges[rangeCount] = descriptorRange;
+    rangeCount += 1;
 
-        D3D12_ROOT_PARAMETER rootParameter = { 0 };
-        rootParameter.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-        rootParameter.DescriptorTable.NumDescriptorRanges = 1;
-        rootParameter.DescriptorTable.pDescriptorRanges = &descriptorRanges[parameterCount];
-        rootParameter.ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
-        rootParameters[parameterCount] = rootParameter;
-        parameterCount += 1;
-    }
+    D3D12_ROOT_PARAMETER rootParameter = { 0 };
+    rootParameter.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+    rootParameter.DescriptorTable.NumDescriptorRanges = 1;
+    rootParameter.DescriptorTable.pDescriptorRanges = &descriptorRanges[parameterCount];
+    rootParameter.ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
+    rootParameters[parameterCount] = rootParameter;
+    parameterCount += 1;
 
-    /* Fragment storage resources */
-    if (fragmentShader->storageTextureCount + fragmentShader->storageBufferCount > 0) {
-        D3D12_DESCRIPTOR_RANGE descriptorRange = { 0 };
-        descriptorRange.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
-        descriptorRange.NumDescriptors = fragmentShader->storageTextureCount + fragmentShader->storageBufferCount;
-        descriptorRange.BaseShaderRegister = 0;
-        descriptorRange.RegisterSpace = 2;
-        descriptorRange.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
-        descriptorRanges[rangeCount] = descriptorRange;
-        rangeCount += 1;
+    /* Vertex storage buffers */
+    D3D12_DESCRIPTOR_RANGE descriptorRange = { 0 };
+    descriptorRange.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+    descriptorRange.NumDescriptors = vertexShader->storageBufferCount;
+    descriptorRange.BaseShaderRegister = vertexShader->samplerCount + vertexShader->storageTextureCount;
+    descriptorRange.RegisterSpace = 0;
+    descriptorRange.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+    descriptorRanges[rangeCount] = descriptorRange;
+    rangeCount += 1;
 
-        D3D12_ROOT_PARAMETER rootParameter = { 0 };
-        rootParameter.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-        rootParameter.DescriptorTable.NumDescriptorRanges = 1;
-        rootParameter.DescriptorTable.pDescriptorRanges = &descriptorRanges[parameterCount];
-        rootParameter.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-        rootParameters[parameterCount] = rootParameter;
-        parameterCount += 1;
-    }
+    D3D12_ROOT_PARAMETER rootParameter = { 0 };
+    rootParameter.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+    rootParameter.DescriptorTable.NumDescriptorRanges = 1;
+    rootParameter.DescriptorTable.pDescriptorRanges = &descriptorRanges[parameterCount];
+    rootParameter.ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
+    rootParameters[parameterCount] = rootParameter;
+    parameterCount += 1;
 
     /* Vertex Uniforms */
-    if (vertexShader->uniformBufferCount > 0) {
-        D3D12_DESCRIPTOR_RANGE descriptorRange = { 0 };
-        descriptorRange.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_CBV;
-        descriptorRange.NumDescriptors = vertexShader->uniformBufferCount;
-        descriptorRange.BaseShaderRegister = 0;
-        descriptorRange.RegisterSpace = 1;
-        descriptorRange.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
-        descriptorRanges[parameterCount] = descriptorRange;
-
+    for (Uint32 i = 0; i < MAX_UNIFORM_BUFFERS_PER_STAGE; i += 1) {
         D3D12_ROOT_PARAMETER rootParameter = { 0 };
-        rootParameter.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-        rootParameter.DescriptorTable.NumDescriptorRanges = 1;
-        rootParameter.DescriptorTable.pDescriptorRanges = &descriptorRanges[parameterCount];
+        rootParameter.ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+        rootParameter.Descriptor.ShaderRegister = i;
+        rootParameter.Descriptor.RegisterSpace = 1;
         rootParameter.ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
         rootParameters[parameterCount] = rootParameter;
         parameterCount++;
     }
 
-    /* Fragment Uniforms */
-    if (fragmentShader->uniformBufferCount > 0) {
-        D3D12_DESCRIPTOR_RANGE descriptorRange = { 0 };
-        descriptorRange.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_CBV;
-        descriptorRange.NumDescriptors = fragmentShader->uniformBufferCount;
-        descriptorRange.BaseShaderRegister = 0;
-        descriptorRange.RegisterSpace = 3;
-        descriptorRange.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
-        descriptorRanges[parameterCount] = descriptorRange;
+    /* Fragment Samplers */
+    D3D12_DESCRIPTOR_RANGE descriptorRange = { 0 };
+    descriptorRange.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER;
+    descriptorRange.NumDescriptors = fragmentShader->samplerCount;
+    descriptorRange.BaseShaderRegister = 0;
+    descriptorRange.RegisterSpace = 2;
+    descriptorRange.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+    descriptorRanges[rangeCount] = descriptorRange;
+    rangeCount += 1;
 
+    D3D12_ROOT_PARAMETER rootParameter = { 0 };
+    rootParameter.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+    rootParameter.DescriptorTable.NumDescriptorRanges = 1;
+    rootParameter.DescriptorTable.pDescriptorRanges = &descriptorRanges[parameterCount];
+    rootParameter.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+    rootParameters[parameterCount] = rootParameter;
+    parameterCount += 1;
+
+    D3D12_DESCRIPTOR_RANGE descriptorRange = { 0 };
+    descriptorRange.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+    descriptorRange.NumDescriptors = vertexShader->samplerCount;
+    descriptorRange.BaseShaderRegister = 0;
+    descriptorRange.RegisterSpace = 2;
+    descriptorRange.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+    descriptorRanges[rangeCount] = descriptorRange;
+    rangeCount += 1;
+
+    D3D12_ROOT_PARAMETER rootParameter = { 0 };
+    rootParameter.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+    rootParameter.DescriptorTable.NumDescriptorRanges = 1;
+    rootParameter.DescriptorTable.pDescriptorRanges = &descriptorRanges[parameterCount];
+    rootParameter.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+    rootParameters[parameterCount] = rootParameter;
+    parameterCount += 1;
+
+    /* Fragment storage resources */
+    D3D12_DESCRIPTOR_RANGE descriptorRange = { 0 };
+    descriptorRange.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+    descriptorRange.NumDescriptors = fragmentShader->storageTextureCount + fragmentShader->storageBufferCount;
+    descriptorRange.BaseShaderRegister = fragmentShader->samplerCount;
+    descriptorRange.RegisterSpace = 2;
+    descriptorRange.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+    descriptorRanges[rangeCount] = descriptorRange;
+    rangeCount += 1;
+
+    D3D12_ROOT_PARAMETER rootParameter = { 0 };
+    rootParameter.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+    rootParameter.DescriptorTable.NumDescriptorRanges = 1;
+    rootParameter.DescriptorTable.pDescriptorRanges = &descriptorRanges[parameterCount];
+    rootParameter.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+    rootParameters[parameterCount] = rootParameter;
+    parameterCount += 1;
+
+    /* Fragment Uniforms */
+    for (Uint32 i = 0; i < 4; i += 1) {
         D3D12_ROOT_PARAMETER rootParameter = { 0 };
-        rootParameter.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-        rootParameter.DescriptorTable.NumDescriptorRanges = 1;
-        rootParameter.DescriptorTable.pDescriptorRanges = &descriptorRanges[parameterCount];
+        rootParameter.ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+        rootParameter.Descriptor.ShaderRegister = i;
+        rootParameter.Descriptor.RegisterSpace = 3;
+
         rootParameter.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
         rootParameters[parameterCount] = rootParameter;
         parameterCount++;
@@ -1878,34 +1944,18 @@ void D3D12_BindGraphicsPipeline(
 
     ID3D12GraphicsCommandList_OMSetStencilRef(d3d12CommandBuffer->graphicsCommandList, pipeline->stencilRef);
 
-    /* TODO: need to do the descriptor copy from staging to GPU-visible here */
+    // Mark that bindings are needed
+    d3d12CommandBuffer->needVertexSamplerBind = SDL_TRUE;
+    d3d12CommandBuffer->needVertexStorageTextureBind = SDL_TRUE;
+    d3d12CommandBuffer->needVertexStorageBufferBind = SDL_TRUE;
+    d3d12CommandBuffer->needFragmentSamplerBind = SDL_TRUE;
+    d3d12CommandBuffer->needFragmentStorageTextureBind = SDL_TRUE;
+    d3d12CommandBuffer->needFragmentStorageBufferBind = SDL_TRUE;
 
-    // Bind the uniform buffers (descriptor tables)
-    for (i = 0; i < pipeline->vertexUniformBufferCount; i++) {
-        if (d3d12CommandBuffer->vertexUniformBuffers[i] == NULL) {
-            d3d12CommandBuffer->vertexUniformBuffers[i] = D3D12_INTERNAL_AcquireUniformBufferFromPool(
-                d3d12CommandBuffer);
-        }
-        ID3D12GraphicsCommandList_SetGraphicsRootDescriptorTable(
-            d3d12CommandBuffer->graphicsCommandList,
-            i,
-            d3d12CommandBuffer->vertexUniformBuffers[i]->gpuDescriptorHandle);
+    for (i = 0; i < MAX_UNIFORM_BUFFERS_PER_STAGE; i += 1) {
+        d3d12CommandBuffer->needVertexUniformBufferBind[i] = SDL_TRUE;
+        d3d12CommandBuffer->needFragmentUniformBufferBind[i] = SDL_TRUE;
     }
-
-    for (i = 0; i < pipeline->fragmentUniformBufferCount; i++) {
-        if (d3d12CommandBuffer->fragmentUniformBuffers[i] == NULL) {
-            d3d12CommandBuffer->fragmentUniformBuffers[i] = D3D12_INTERNAL_AcquireUniformBufferFromPool(
-                d3d12CommandBuffer);
-        }
-        ID3D12GraphicsCommandList_SetGraphicsRootDescriptorTable(
-            d3d12CommandBuffer->graphicsCommandList,
-            pipeline->vertexUniformBufferCount + i,
-            d3d12CommandBuffer->fragmentUniformBuffers[i]->gpuDescriptorHandle);
-    }
-
-    // Mark that uniform bindings are needed
-    d3d12CommandBuffer->needVertexUniformBufferBind = SDL_TRUE;
-    d3d12CommandBuffer->needFragmentUniformBufferBind = SDL_TRUE;
 }
 
 void D3D12_BindVertexBuffers(
@@ -1974,7 +2024,32 @@ void D3D12_DrawIndexedPrimitives(
     Uint32 primitiveCount,
     Uint32 instanceCount) { SDL_assert(SDL_FALSE); }
 
+static void D3D12_INTERNAL_WriteGPUDescriptors(
+    D3D12CommandBuffer *commandBuffer,
+    D3D12_DESCRIPTOR_HEAP_TYPE heapType,
+    D3D12_CPU_DESCRIPTOR_HANDLE *resourceDescriptorHandles,
+    Uint32 resourceHandleCount,
+    D3D12_GPU_DESCRIPTOR_HANDLE *gpuBaseDescriptor)
+{
+    D3D12DescriptorHeap *heap = commandBuffer->gpuDescriptorHeaps[heapType];
+    D3D12_CPU_DESCRIPTOR_HANDLE gpuHeapCpuHandle;
 
+    /* FIXME: need to error on overflow */
+    gpuHeapCpuHandle.ptr = heap->descriptorHeapCPUStart.ptr + (heap->currentDescriptorIndex + heap->descriptorSize);
+    gpuBaseDescriptor->ptr = heap->descriptorHeapGPUStart.ptr + (heap->currentDescriptorIndex + heap->descriptorSize);
+
+    for (Uint32 i = 0; i < resourceHandleCount; i += 1) {
+        ID3D12Device_CopyDescriptorsSimple(
+            commandBuffer->renderer->device,
+            1,
+            gpuHeapCpuHandle,
+            resourceDescriptorHandles[i],
+            heapType);
+
+        heap->currentDescriptorIndex += 1;
+        gpuHeapCpuHandle.ptr += heap->descriptorSize;
+    }
+}
 
 static void D3D12_INTERNAL_BindGraphicsResources(
     D3D12CommandBuffer *commandBuffer)
@@ -1982,81 +2057,197 @@ static void D3D12_INTERNAL_BindGraphicsResources(
     D3D12Renderer *renderer = commandBuffer->renderer;
     D3D12GraphicsPipeline *graphicsPipeline = commandBuffer->currentGraphicsPipeline;
 
-    /* TODO: maybe have some GPU descriptor heap management function helpers for this */
+    D3D12_CPU_DESCRIPTOR_HANDLE cpuHandles[MAX_TEXTURE_SAMPLERS_PER_STAGE];
+    D3D12_GPU_DESCRIPTOR_HANDLE gpuDescriptorHandle;
 
     if (commandBuffer->needVertexSamplerBind) {
         if (graphicsPipeline->vertexSamplerCount > 0) {
             for (Uint32 i = 0; i < graphicsPipeline->vertexSamplerCount; i += 1) {
-                ID3D12Device_CopyDescriptorsSimple(
-                    renderer->device,
-                    1,
-                    commandBuffer->gpuDescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV]->descriptorHeapCPUStart,
-                    commandBuffer->vertexSamplerTextures[i]->srvHandle,
-                    D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV
-                );
+                cpuHandles[i] = commandBuffer->vertexSamplers[i]->descriptorHandle;
             }
-            ID3D12Device_CopyDescriptorsSimple(
-                renderer->device,
-                graphicsPipeline->vertexSamplerCount,
 
-            )
+            D3D12_INTERNAL_WriteGPUDescriptors(
+                commandBuffer,
+                D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER,
+                cpuHandles,
+                graphicsPipeline->vertexSamplerCount,
+                &gpuDescriptorHandle);
 
             ID3D12GraphicsCommandList_SetGraphicsRootDescriptorTable(
                 commandBuffer->graphicsCommandList,
                 0,
-                commandBuffer->vertexSamplerDescriptorHeapHandle);
+                gpuDescriptorHandle
+            );
+
+            for (Uint32 i = 0; i < graphicsPipeline->vertexSamplerCount; i += 1) {
+                cpuHandles[i] = commandBuffer->vertexSamplerTextures[i]->srvHandle;
+            }
+
+            D3D12_INTERNAL_WriteGPUDescriptors(
+                commandBuffer,
+                D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
+                cpuHandles,
+                graphicsPipeline->vertexSamplerCount,
+                &gpuDescriptorHandle);
+
+            ID3D12GraphicsCommandList_SetGraphicsRootDescriptorTable(
+                commandBuffer->graphicsCommandList,
+                1,
+                gpuDescriptorHandle);
         }
         commandBuffer->needVertexSamplerBind = SDL_FALSE;
     }
 
-    if (commandBuffer->needVertexResourceBind) {
-        if (vertexResourceCount > 0) {
+    if (commandBuffer->needVertexStorageTextureBind) {
+        if (graphicsPipeline->vertexStorageTextureCount > 0) {
+            for (Uint32 i = 0; i < graphicsPipeline->vertexStorageTextureCount; i += 1) {
+                cpuHandles[i] = commandBuffer->vertexStorageTextureSlices[i]->srvHandle;
+            }
+
+            D3D12_INTERNAL_WriteGPUDescriptors(
+                commandBuffer,
+                D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
+                cpuHandles,
+                graphicsPipeline->vertexStorageTextureCount,
+                &gpuDescriptorHandle);
+
             ID3D12GraphicsCommandList_SetGraphicsRootDescriptorTable(
                 commandBuffer->graphicsCommandList,
-                1,
-                commandBuffer->vertexShaderResourceDescriptorHeapHandle);
+                2,
+                gpuDescriptorHandle);
         }
-        commandBuffer->needVertexResourceBind = SDL_FALSE;
+        commandBuffer->needVertexStorageTextureBind = SDL_FALSE;
     }
 
-    if (commandBuffer->needVertexUniformBufferBind) {
-        for (Uint32 i = 0; i < graphicsPipeline->vertexUniformBufferCount; ++i) {
-            ID3D12GraphicsCommandList_SetGraphicsRootConstantBufferView(
+    if (commandBuffer->needVertexStorageBufferBind) {
+        if (graphicsPipeline->vertexStorageBufferCount > 0) {
+            for (Uint32 i = 0; i < graphicsPipeline->vertexStorageBufferCount; i += 1) {
+                cpuHandles[i] = commandBuffer->vertexStorageBuffers[i]->srvDescriptor.cpuHandle;
+            }
+
+            D3D12_INTERNAL_WriteGPUDescriptors(
+                commandBuffer,
+                D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
+                cpuHandles,
+                graphicsPipeline->vertexStorageBufferCount,
+                &gpuDescriptorHandle);
+
+            ID3D12GraphicsCommandList_SetGraphicsRootDescriptorTable(
                 commandBuffer->graphicsCommandList,
-                i + 2,
-                commandBuffer->vertexUniformBuffers[i]->bufferLocation);
+                3,
+                gpuDescriptorHandle);
         }
-        commandBuffer->needVertexUniformBufferBind = SDL_FALSE;
+        commandBuffer->needVertexStorageBufferBind = SDL_FALSE;
+    }
+
+    for (Uint32 i = 0; i < MAX_UNIFORM_BUFFERS_PER_STAGE; i += 1) {
+        if (commandBuffer->needVertexUniformBufferBind[i]) {
+            if (graphicsPipeline->vertexUniformBufferCount > i) {
+                ID3D12GraphicsCommandList_SetGraphicsRootConstantBufferView(
+                    commandBuffer->graphicsCommandList,
+                    4 + i,
+                    commandBuffer->vertexUniformBuffers[i]->gpuVirtualAddress
+                );
+            }
+            commandBuffer->needVertexUniformBufferBind[i] = SDL_FALSE;
+        }
     }
 
     if (commandBuffer->needFragmentSamplerBind) {
         if (graphicsPipeline->fragmentSamplerCount > 0) {
+            for (Uint32 i = 0; i < graphicsPipeline->fragmentSamplerCount; i += 1) {
+                cpuHandles[i] = commandBuffer->fragmentSamplers[i]->descriptorHandle;
+            }
+
+            D3D12_INTERNAL_WriteGPUDescriptors(
+                commandBuffer,
+                D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER,
+                cpuHandles,
+                graphicsPipeline->fragmentSamplerCount,
+                &gpuDescriptorHandle);
+
             ID3D12GraphicsCommandList_SetGraphicsRootDescriptorTable(
                 commandBuffer->graphicsCommandList,
-                graphicsPipeline->vertexSamplerCount + 2,
-                commandBuffer->fragmentSamplerDescriptorHeapHandle);
+                5,
+                gpuDescriptorHandle);
+
+            for (Uint32 i = 0; i < graphicsPipeline->fragmentSamplerCount; i += 1) {
+                cpuHandles[i] = commandBuffer->fragmentSamplerTextures[i]->srvHandle;
+            }
+
+            D3D12_INTERNAL_WriteGPUDescriptors(
+                commandBuffer,
+                D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
+                cpuHandles,
+                graphicsPipeline->fragmentSamplerCount,
+                &gpuDescriptorHandle
+            );
+
+            ID3D12GraphicsCommandList_SetGraphicsRootDescriptorTable(
+                commandBuffer->graphicsCommandList,
+                6,
+                gpuDescriptorHandle
+            );
         }
         commandBuffer->needFragmentSamplerBind = SDL_FALSE;
     }
 
-    if (commandBuffer->needFragmentResourceBind) {
-        if (fragmentResourceCount > 0) {
+    if (commandBuffer->needFragmentStorageTextureBind) {
+        if (graphicsPipeline->fragmentStorageTextureCount > 0) {
+            for (Uint32 i = 0; i < graphicsPipeline->fragmentStorageTextureCount; i += 1) {
+                cpuHandles[i] = commandBuffer->fragmentStorageTextureSlices[i]->srvHandle;
+            }
+
+            D3D12_INTERNAL_WriteGPUDescriptors(
+                commandBuffer,
+                D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
+                cpuHandles,
+                graphicsPipeline->fragmentStorageTextureCount,
+                &gpuDescriptorHandle);
+
             ID3D12GraphicsCommandList_SetGraphicsRootDescriptorTable(
                 commandBuffer->graphicsCommandList,
-                graphicsPipeline->vertexSamplerCount + 3,
-                commandBuffer->fragmentShaderResourceDescriptorHeapHandle);
+                7,
+                gpuDescriptorHandle
+            );
         }
-        commandBuffer->needFragmentResourceBind = SDL_FALSE;
+        commandBuffer->needFragmentStorageTextureBind = SDL_FALSE;
     }
 
-    if (commandBuffer->needFragmentUniformBufferBind) {
-        for (Uint32 i = 0; i < graphicsPipeline->fragmentUniformBufferCount; ++i) {
-            ID3D12GraphicsCommandList_SetGraphicsRootConstantBufferView(
+    if (commandBuffer->needFragmentStorageBufferBind) {
+        if (graphicsPipeline->fragmentStorageBufferCount > 0) {
+            for (Uint32 i = 0; i < graphicsPipeline->fragmentStorageBufferCount; i += 1) {
+                cpuHandles[i] = commandBuffer->fragmentStorageBuffers[i]->srvDescriptor.cpuHandle;
+            }
+
+            D3D12_INTERNAL_WriteGPUDescriptors(
+                commandBuffer,
+                D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
+                cpuHandles,
+                graphicsPipeline->fragmentStorageBufferCount,
+                &gpuDescriptorHandle
+            );
+
+            ID3D12GraphicsCommandList_SetGraphicsRootDescriptorTable(
                 commandBuffer->graphicsCommandList,
-                graphicsPipeline->vertexUniformBufferCount + 2 + i,
-                commandBuffer->fragmentUniformBuffers[i]->bufferLocation);
+                8,
+                gpuDescriptorHandle
+            );
         }
-        commandBuffer->needFragmentUniformBufferBind = SDL_FALSE;
+        commandBuffer->needFragmentStorageBufferBind = SDL_FALSE;
+    }
+
+    for (Uint32 i = 0; i < MAX_UNIFORM_BUFFERS_PER_STAGE; i += 1) {
+        if (commandBuffer->needFragmentUniformBufferBind[i]) {
+            if (graphicsPipeline->fragmentUniformBufferCount > i) {
+                ID3D12GraphicsCommandList_SetGraphicsRootConstantBufferView(
+                    commandBuffer->graphicsCommandList,
+                    12 + i,
+                    commandBuffer->fragmentUniformBuffers[i]->gpuVirtualAddress
+                );
+            }
+            commandBuffer->needFragmentUniformBufferBind[i] = SDL_FALSE;
+        }
     }
 }
 
@@ -2875,6 +3066,20 @@ void D3D12_INTERNAL_CleanCommandBuffer(
     D3D12CommandBuffer *commandBuffer)
 {
     Uint32 i, j;
+    HRESULT res;
+
+    res = ID3D12GraphicsCommandList_Reset(
+        commandBuffer->graphicsCommandList,
+        commandBuffer->pool->commandAllocator,
+        NULL);
+    ERROR_CHECK("Could not reset graphicsCommandList");
+
+    /* Return descriptor heaps to pool */
+    for (Uint32 i = 0; i < D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES; i += 1) {
+        D3D12_INTERNAL_ReturnDescriptorHeapToPool(
+            renderer,
+            commandBuffer->gpuDescriptorHeaps[i]);
+    }
 
     /* Uniform buffers are now available */
     SDL_LockMutex(renderer->acquireUniformBufferLock);
@@ -3005,9 +3210,6 @@ void D3D12_Submit(
     }
 
     D3D12_INTERNAL_PerformPendingDestroys(renderer);
-
-    res = ID3D12GraphicsCommandList_Reset(d3d12CommandBuffer->graphicsCommandList, d3d12CommandBuffer->pool->commandAllocator, NULL);
-    ERROR_CHECK("Could not reset graphicsCommandList");
 
     SDL_UnlockMutex(renderer->submitLock);
 }
