@@ -1474,7 +1474,7 @@ static ID3D11DeviceChild *D3D11_INTERNAL_CreateID3D11Shader(
             NULL,
             NULL,
             NULL,
-            "main", /* entry point name ignored */
+            entryPointName,
             profiles[stage],
             0,
             0,
