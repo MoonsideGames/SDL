@@ -55,6 +55,12 @@
 #define D3D12_DLL     "d3d12.dll"
 #define DXGI_DLL      "dxgi.dll"
 #define DXGIDEBUG_DLL "dxgidebug.dll"
+
+/* FIXME: Reuse the d3dcompiler loader in SDL_egl.c */
+#ifdef D3DCOMPILER_DLL
+#undef D3DCOMPILER_DLL
+#endif
+#define D3DCOMPILER_DLL "d3dcompiler_47.dll"
 #elif defined(__APPLE__)
 #define D3D12_DLL       "libdxvk_d3d12.dylib"
 #define DXGI_DLL        "libdxvk_dxgi.dylib"
@@ -476,7 +482,7 @@ D3D12_INTERNAL_LogError(
     }
 
     /* Try to get the message from the system errors. */
-    dwChars = FormatMessage(
+    dwChars = FormatMessageA(
         FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
         NULL,
         res,
