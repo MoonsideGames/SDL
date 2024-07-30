@@ -2108,6 +2108,63 @@ void D3D12_SetScissor(
     ID3D12GraphicsCommandList_RSSetScissorRects(d3d12CommandBuffer->graphicsCommandList, 1, &scissorRect);
 }
 
+static inline Uint32 D3D12_INTERNAL_CalcSubresource(
+    Uint32 mipLevel,
+    Uint32 arraySlice,
+    Uint32 numLevels)
+{
+    return mipLevel * (arraySlice * numLevels);
+}
+
+D3D12TextureSubresource *D3D12_INTERNAL_FetchTextureSubresource(
+    D3D12TextureContainer *container,
+    Uint32 layer,
+    Uint32 level)
+{
+    Uint32 index = D3D12_INTERNAL_CalcSubresource(
+        level,
+        layer,
+        container->createInfo.levelCount);
+    return &container->activeTexture->subresources[index];
+}
+
+void D3D12_INTERNAL_PrepareTextureSubresourceForWrite(
+    D3D12CommandBuffer *commandBuffer,
+    D3D12TextureContainer *container,
+    Uint32 layer,
+    Uint32 level,
+    SDL_bool cycle,
+    D3D12TextureUsageMode destinationUsageMode)
+{
+    D3D12TextureSubresource *subresource = D3D12_INTERNAL_FetchTextureSubresource(
+        container,
+        layer,
+        level);
+
+    if (
+        container->canBeCycled &&
+        cycle &&
+        SDL_AtomicGet(&subresource->referenceCount) > 0)
+    {
+        D3D12_INTERNAL_CycleActiveTexture(
+            commandBuffer->renderer,
+            container);
+
+        subresource = D3D12_INTERNAL_FetchTextureSubresource(
+            container,
+            layer,
+            level);
+    }
+
+    D3D12_INTERNAL_TextureSubresourceTransitionFromDefaultUsage(
+        renderer,
+        commandBuffer,
+        destinationUsageMode,
+        subresource);
+
+    return subresource;
+}
+
 void D3D12_BeginRenderPass(
     SDL_GpuCommandBuffer *commandBuffer,
     SDL_GpuColorAttachmentInfo *colorAttachmentInfos,
@@ -2169,9 +2226,19 @@ void D3D12_BeginRenderPass(
 
     for (Uint32 i = 0; i < colorAttachmentCount; i += 1) {
 
-        D3D12Texture *texture = (D3D12Texture *)colorAttachmentInfos[i].textureSlice.texture;
-        d3d12CommandBuffer->colorAttachmentTexture[i] = texture;
+        D3D12TextureContainer *container = (D3D12TextureContainer *)colorAttachmentInfos[i].textureSlice.texture;
+        D3D12TextureSubresource *subresource =
+            D3D12_INTERNAL_PrepareTextureSubresourceForWrite(
+                d3d12CommandBuffer,
+                container,
+                colorAttachmentInfos[i].textureSlice.layer,
+                colorAttachmentInfos[i].textureSlice.mipLevel,
+                colorAttachmentInfos[i].cycle,
+                D3D12_TEXTURE_USAGE_MODE_COLOR_ATTACHMENT);
 
+        d3d12CommandBuffer->colorAttachmentTexture[i] = container->activeTexture;
+
+        /* TODO: move this into Transition function */
         D3D12_RESOURCE_BARRIER barrierDesc;
         SDL_zero(barrierDesc);
 
@@ -2184,6 +2251,7 @@ void D3D12_BeginRenderPass(
 
         ID3D12GraphicsCommandList_ResourceBarrier(d3d12CommandBuffer->graphicsCommandList, 1, &barrierDesc);
 
+        /* TODO: perform RTV copy to GPU heap */
         D3D12_CPU_DESCRIPTOR_HANDLE rtvDescriptor = texture->rtvHandle.cpuHandle;
 
         ID3D12GraphicsCommandList_OMSetRenderTargets(d3d12CommandBuffer->graphicsCommandList, 1, &rtvDescriptor, SDL_FALSE, NULL);
