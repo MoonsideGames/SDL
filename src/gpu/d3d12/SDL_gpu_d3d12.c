@@ -348,6 +348,7 @@ struct D3D12WindowData
 {
     SDL_Window *window;
     IDXGISwapChain3 *swapchain;
+    D3D12TextureContainer textureContainer;
     D3D12Texture texture;
     SDL_GpuPresentMode presentMode;
     SDL_GpuSwapchainComposition swapchainComposition;
@@ -425,6 +426,7 @@ struct D3D12CommandBuffer
 
     Uint32 colorAttachmentCount;
     D3D12Texture *colorAttachmentTexture[MAX_COLOR_TARGET_BINDINGS];
+    Uint32 colorAttachmentSubresourceIndex[MAX_COLOR_TARGET_BINDINGS];
     D3D12GraphicsPipeline *currentGraphicsPipeline;
 
     /* Set at acquire time */
@@ -1300,6 +1302,8 @@ void D3D12_INTERNAL_AssignCpuDescriptorHandle(
 
     cpuDescriptor->heap = heap;
 
+    SDL_LockMutex(renderer->stagingDescriptorHeapLock);
+
     if (heap->inactiveDescriptorCount > 0) {
         descriptorIndex = heap->inactiveDescriptorIndices[heap->inactiveDescriptorCount - 1];
         heap->inactiveDescriptorCount -= 1;
@@ -1310,8 +1314,11 @@ void D3D12_INTERNAL_AssignCpuDescriptorHandle(
         cpuDescriptor->cpuHandleIndex = SDL_MAX_UINT32;
         cpuDescriptor->cpuHandle.ptr = NULL;
         SDL_LogError(SDL_LOG_CATEGORY_GPU, "Out of CPU descriptor handles, many bad things are going to happen!");
+        SDL_UnlockMutex(renderer->stagingDescriptorHeapLock);
         return;
     }
+
+    SDL_UnlockMutex(renderer->stagingDescriptorHeapLock);
 
     cpuDescriptor->cpuHandleIndex = descriptorIndex;
     cpuDescriptor->cpuHandle.ptr = heap->descriptorHeapCPUStart.ptr + (descriptorIndex * heap->descriptorSize);
@@ -1324,8 +1331,10 @@ void D3D12_INTERNAL_ReleaseCpuDescriptorHandle(
 {
     D3D12DescriptorHeap *heap = cpuDescriptor->heap;
 
+    SDL_LockMutex(renderer->stagingDescriptorHeapLock);
     heap->inactiveDescriptorIndices[heap->inactiveDescriptorCount] = cpuDescriptor->cpuHandleIndex;
     heap->inactiveDescriptorCount += 1;
+    SDL_UnlockMutex(renderer->stagingDescriptorHeapLock);
 }
 
 SDL_GpuGraphicsPipeline *D3D12_CreateGraphicsPipeline(
@@ -2135,8 +2144,8 @@ void D3D12_BeginRenderPass(
     if (depthStencilAttachmentInfo != NULL) {
         D3D12Texture *texture = (D3D12Texture *)depthStencilAttachmentInfo->textureSlice.texture;
 
-        int h = texture->desc.Height >> depthStencilAttachmentInfo->textureSlice.mipLevel;
-        int w = (int)texture->desc.Width >> depthStencilAttachmentInfo->textureSlice.mipLevel;
+        int h = texture->container->createInfo.height >> depthStencilAttachmentInfo->textureSlice.mipLevel;
+        int w = (int)texture->container->createInfo.width >> depthStencilAttachmentInfo->textureSlice.mipLevel;
 
         /* The framebuffer cannot be larger than the smallest attachment. */
 
@@ -2808,29 +2817,32 @@ static D3D12WindowData *D3D12_INTERNAL_FetchWindowData(
     return (D3D12WindowData *)SDL_GetPointerProperty(properties, WINDOW_PROPERTY_DATA, NULL);
 }
 
-static void D3D12_INTERNAL_DestroyWindowData(
+static void D3D12_INTERNAL_DestroySwapchain(
     D3D12Renderer *renderer,
     D3D12WindowData *windowData)
 {
-    for (int i = SWAPCHAIN_BUFFER_COUNT - 1; i >= 0; --i) {
-        D3D12Texture *texture = windowData->renderTexture[i];
-        windowData->renderTargets[i] = NULL;
-        windowData->renderTexture[i] = NULL;
-        if (texture) {
-            ID3D12Resource *resource = texture->resource;
-            SDL_free(texture);
-            if (resource) {
-                ID3D12Resource_Release(resource);
-            }
+    D3D12_Wait((SDL_GpuRenderer *)renderer);
+    D3D12_INTERNAL_ReleaseCpuDescriptorHandle(
+        renderer,
+        &windowData->texture.srvHandle);
+    D3D12_INTERNAL_ReleaseCpuDescriptorHandle(
+        renderer,
+        &windowData->texture.subresources[0].rtvHandle);
+
+    SDL_free(windowData->texture.subresources);
+    SDL_free(windowData->textureContainer.textures);
+
+    IDXGISwapChain_Release(windowData->swapchain);
+    windowData->swapchain = NULL;
+
+    /* TODO: do we need to flush state here like in D3D11? */
+
+    for (Uint32 i = 0; i < MAX_FRAMES_IN_FLIGHT; i += 1) {
+        if (windowData->inFlightFences[i] != NULL) {
+            D3D12_ReleaseFence(
+                (SDL_GpuRenderer *)renderer,
+                (SDL_GpuFence *)windowData->inFlightFences[i]);
         }
-    }
-    if (windowData->rtvHeap) {
-        ID3D12DescriptorHeap_Release(windowData->rtvHeap);
-        windowData->rtvHeap = NULL;
-    }
-    if (windowData->swapchain) {
-        IDXGISwapChain3_Release(windowData->swapchain);
-        windowData->swapchain = NULL;
     }
 }
 
@@ -2839,14 +2851,14 @@ static SDL_bool D3D12_INTERNAL_InitializeSwapchainTexture(
     IDXGISwapChain *swapchain,
     DXGI_FORMAT swapchainFormat,
     DXGI_FORMAT rtvFormat,
+    D3D12TextureContainer *pTextureContainer,
     D3D12Texture *pTexture)
 {
     ID3D12Resource *swapchainTexture;
+    D3D12_RESOURCE_DESC textureDesc;
     D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc;
     D3D12_RENDER_TARGET_VIEW_DESC rtvDesc;
     HRESULT res;
-
-    SDL_zerop(pTexture);
 
     res = IDXGISwapChain_GetBuffer(
         swapchain,
@@ -2867,6 +2879,26 @@ static SDL_bool D3D12_INTERNAL_InitializeSwapchainTexture(
     pTexture->subresources[0].layer = 0;
     pTexture->subresources[0].level = 0;
     SDL_AtomicSet(&pTexture->subresources[0].referenceCount, 0);
+
+    ID3D12Resource_GetDesc(swapchainTexture, &textureDesc);
+    pTextureContainer->createInfo.width = textureDesc.Width;
+    pTextureContainer->createInfo.height = textureDesc.Height;
+    pTextureContainer->createInfo.depth = 1;
+    pTextureContainer->createInfo.layerCount = 1;
+    pTextureContainer->createInfo.levelCount = 1;
+    pTextureContainer->createInfo.isCube = 0;
+    pTextureContainer->createInfo.usageFlags =
+        SDL_GPU_TEXTUREUSAGE_COLOR_TARGET_BIT |
+        SDL_GPU_TEXTUREUSAGE_SAMPLER_BIT;
+    pTextureContainer->createInfo.sampleCount = SDL_GPU_SAMPLECOUNT_1;
+    pTextureContainer->createInfo.format = 0; /* this is never used */
+
+    pTextureContainer->debugName = NULL;
+    pTextureContainer->textures = SDL_malloc(sizeof(D3D12Texture*));
+    pTextureContainer->textureCapacity = 1;
+    pTextureContainer->textureCount = 1;
+    pTextureContainer->textures[0] = pTexture;
+    pTextureContainer->activeTexture = pTexture;
 
     /* Create the SRV for the swapchain */
     D3D12_INTERNAL_AssignCpuDescriptorHandle(
@@ -2891,7 +2923,7 @@ static SDL_bool D3D12_INTERNAL_InitializeSwapchainTexture(
         D3D12_DESCRIPTOR_HEAP_TYPE_RTV,
         &pTexture->subresources[0].rtvHandle);
 
-    rtvDesc.Format = swapchainFormat;
+    rtvDesc.Format = rtvFormat;
     rtvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
     rtvDesc.Texture2D.MipSlice = 0;
     rtvDesc.Texture2D.PlaneSlice = 0;
@@ -3048,10 +3080,6 @@ static SDL_bool D3D12_INTERNAL_CreateSwapchain(
     windowData->swapchainColorSpace = SwapchainCompositionToColorSpace[swapchainComposition];
     windowData->frameCounter = 0;
 
-    //    for (i = 0; i < MAX_FRAMES_IN_FLIGHT; i += 1) {
-    //        windowData->inFlightFences[i] = NULL;
-    //    }
-
     /* If a you are using a FLIP model format you can't create the swapchain as DXGI_FORMAT_B8G8R8A8_UNORM_SRGB.
      * You have to create the swapchain as DXGI_FORMAT_B8G8R8A8_UNORM and then set the render target view's format to DXGI_FORMAT_B8G8R8A8_UNORM_SRGB
      */
@@ -3060,6 +3088,7 @@ static SDL_bool D3D12_INTERNAL_CreateSwapchain(
             swapchain3,
             swapchainFormat,
             (swapchainComposition == SDL_GPU_SWAPCHAINCOMPOSITION_SDR_LINEAR) ? DXGI_FORMAT_B8G8R8A8_UNORM_SRGB : windowData->swapchainFormat,
+            &windowData->textureContainer,
             &windowData->texture)) {
         IDXGISwapChain3_Release(swapchain3);
         return SDL_FALSE;
@@ -3126,11 +3155,20 @@ void D3D12_UnclaimWindow(
         return;
     }
 
-    SDL_assert(!windowData->activeWindow);
+    D3D12_INTERNAL_DestroySwapchain(renderer, windowData);
 
-    D3D12_INTERNAL_DestroyWindowData(renderer, windowData);
-    SDL_ClearProperty(SDL_GetWindowProperties(window), WINDOW_PROPERTY_DATA);
+    SDL_LockMutex(renderer->windowLock);
+    for (Uint32 i = 0; i < renderer->claimedWindowCount; i += 1) {
+        if (renderer->claimedWindows[i]->window == window) {
+            renderer->claimedWindows[i] = renderer->claimedWindows[renderer->claimedWindowCount - 1];
+            renderer->claimedWindowCount -= 1;
+            break;
+        }
+    }
+    SDL_UnlockMutex(renderer->windowLock);
+
     SDL_free(windowData);
+    SDL_ClearProperty(SDL_GetWindowProperties(window), WINDOW_PROPERTY_DATA);
 }
 
 SDL_bool D3D12_SetSwapchainParameters(
@@ -3330,13 +3368,51 @@ SDL_GpuCommandBuffer *D3D12_AcquireCommandBuffer(
         2,
         heaps);
 
-    /* Set the state */
+    /* Set the bind state */
+    commandBuffer->currentGraphicsPipeline = NULL;
+
+    for (Uint32 i = 0; i < MAX_COLOR_TARGET_BINDINGS; i += 1) {
+        commandBuffer->colorAttachmentTexture[i] = NULL;
+        commandBuffer->colorAttachmentSubresourceIndex[i] = 0;
+    }
+    commandBuffer->colorAttachmentCount = 0;
+
+    for (Uint32 i = 0; i < MAX_TEXTURE_SAMPLERS_PER_STAGE; i += 1) {
+        commandBuffer->vertexSamplerTextures[i] = NULL;
+        commandBuffer->vertexSamplers[i] = NULL;
+        commandBuffer->fragmentSamplerTextures[i] = NULL;
+        commandBuffer->fragmentSamplers[i] = NULL;
+    }
+
+    for (Uint32 i = 0; i < MAX_STORAGE_TEXTURES_PER_STAGE; i += 1) {
+        commandBuffer->vertexStorageTextureSlices[i] = NULL;
+        commandBuffer->fragmentStorageTextureSlices[i] = NULL;
+    }
+
+    for (Uint32 i = 0; i < MAX_STORAGE_BUFFERS_PER_STAGE; i += 1) {
+        commandBuffer->vertexStorageBuffers[i] = NULL;
+        commandBuffer->fragmentStorageBuffers[i] = NULL;
+    }
+
+    for (Uint32 i = 0; i < MAX_UNIFORM_BUFFERS_PER_STAGE; i += 1) {
+        commandBuffer->vertexUniformBuffers[i] = NULL;
+        commandBuffer->fragmentUniformBuffers[i] = NULL;
+    }
+
     commandBuffer->needVertexSamplerBind = SDL_TRUE;
-    commandBuffer->needVertexResourceBind = SDL_TRUE;
-    commandBuffer->needVertexUniformBufferBind = SDL_TRUE;
+    commandBuffer->needVertexStorageTextureBind = SDL_TRUE;
+    commandBuffer->needVertexStorageBufferBind = SDL_TRUE;
+    commandBuffer->needVertexUniformBufferBind[0] = SDL_TRUE;
+    commandBuffer->needVertexUniformBufferBind[1] = SDL_TRUE;
+    commandBuffer->needVertexUniformBufferBind[2] = SDL_TRUE;
+    commandBuffer->needVertexUniformBufferBind[3] = SDL_TRUE;
     commandBuffer->needFragmentSamplerBind = SDL_TRUE;
-    commandBuffer->needFragmentResourceBind = SDL_TRUE;
-    commandBuffer->needFragmentUniformBufferBind = SDL_TRUE;
+    commandBuffer->needFragmentStorageTextureBind = SDL_TRUE;
+    commandBuffer->needFragmentStorageBufferBind = SDL_TRUE;
+    commandBuffer->needFragmentUniformBufferBind[0] = SDL_TRUE;
+    commandBuffer->needFragmentUniformBufferBind[1] = SDL_TRUE;
+    commandBuffer->needFragmentUniformBufferBind[2] = SDL_TRUE;
+    commandBuffer->needFragmentUniformBufferBind[3] = SDL_TRUE;
 
     return (SDL_GpuCommandBuffer *) commandBuffer;
 }
@@ -3347,14 +3423,14 @@ SDL_GpuTexture *D3D12_AcquireSwapchainTexture(
     Uint32 *pWidth,
     Uint32 *pHeight)
 {
-    D3D12Texture *texture;
     D3D12CommandBuffer *d3d12CommandBuffer = (D3D12CommandBuffer *)commandBuffer;
     D3D12Renderer *renderer = d3d12CommandBuffer->renderer;
-    D3D12WindowData *windowData = D3D12_INTERNAL_FetchWindowData(window);
+    D3D12WindowData *windowData;
     DXGI_SWAP_CHAIN_DESC swapchainDesc;
     int w, h;
     HRESULT res;
 
+    windowData = D3D12_INTERNAL_FetchWindowData(window);
     if (windowData == NULL) {
         return NULL;
     }
@@ -3408,8 +3484,8 @@ SDL_GpuTexture *D3D12_AcquireSwapchainTexture(
     ERROR_CHECK_RETURN("Could not acquire swapchain!", NULL);
 
     /* Send the dimensions to the out parameters. */
-    *pWidth = windowData->texture.desc.Width;
-    *pHeight = windowData->texture.desc.Height;
+    *pWidth = windowData->textureContainer.createInfo.width;
+    *pHeight = windowData->textureContainer.createInfo.height;
 
     /* TODO: Set up the texture container */
 
