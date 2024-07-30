@@ -116,6 +116,12 @@ static const GUID D3D_IID_DXGI_DEBUG_ALL = { 0xe48ae283, 0xda80, 0x490b, { 0x87,
 #define D3D11_DLL     "d3d11.dll"
 #define DXGI_DLL      "dxgi.dll"
 #define DXGIDEBUG_DLL "dxgidebug.dll"
+
+/* FIXME: Reuse the d3dcompiler loader in SDL_egl.c */
+#ifdef D3DCOMPILER_DLL
+#undef D3DCOMPILER_DLL
+#endif
+#define D3DCOMPILER_DLL "d3dcompiler_47.dll"
 #elif defined(__APPLE__)
 #define D3D11_DLL       "libdxvk_d3d11.0.dylib"
 #define DXGI_DLL        "libdxvk_dxgi.0.dylib"
@@ -810,7 +816,7 @@ static void D3D11_INTERNAL_LogError(
 
     /* Try to get the message from the system errors. */
 #ifdef _WIN32
-    dwChars = FormatMessage(
+    dwChars = FormatMessageA(
         FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
         NULL,
         res,
