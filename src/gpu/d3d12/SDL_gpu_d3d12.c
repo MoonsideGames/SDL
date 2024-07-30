@@ -323,6 +323,32 @@ static D3D12_PRIMITIVE_TOPOLOGY SDLToD3D12_PrimitiveType[] = {
     D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP // TRIANGLESTRIP
 };
 
+static D3D12_TEXTURE_ADDRESS_MODE SDLToD3D12_SamplerAddressMode[] = {
+    D3D12_TEXTURE_ADDRESS_MODE_WRAP,   /* REPEAT */
+    D3D12_TEXTURE_ADDRESS_MODE_MIRROR, /* MIRRORED_REPEAT */
+    D3D12_TEXTURE_ADDRESS_MODE_CLAMP   /* CLAMP_TO_EDGE */
+};
+
+static D3D12_FILTER SDLToD3D12_Filter(
+    SDL_GpuFilter minFilter,
+    SDL_GpuFilter magFilter,
+    SDL_GpuSamplerMipmapMode mipmapMode,
+    SDL_bool comparisonEnabled,
+    SDL_bool anisotropyEnabled)
+{
+    D3D12_FILTER result = D3D12_ENCODE_BASIC_FILTER(
+        minFilter == SDL_GPU_FILTER_LINEAR,
+        magFilter == SDL_GPU_FILTER_LINEAR,
+        mipmapMode == SDL_GPU_SAMPLERMIPMAPMODE_LINEAR,
+        comparisonEnabled);
+
+    if (anisotropyEnabled) {
+        result |= D3D12_ANISOTROPIC_FILTERING_BIT;
+    }
+
+    return result;
+}
+
 /* Structures */
 typedef struct D3D12Renderer D3D12Renderer;
 typedef struct D3D12CommandBufferPool D3D12CommandBufferPool;
@@ -568,6 +594,12 @@ struct D3D12Texture
     D3D12CPUDescriptor srvHandle;
     SDL_bool isRenderTarget;
 };
+
+typedef struct D3D12Sampler
+{
+    SDL_GpuSamplerCreateInfo createInfo;
+    D3D12CPUDescriptor handle;
+} D3D12Sampler;
 
 struct D3D12Buffer
 {
@@ -1562,8 +1594,42 @@ SDL_GpuSampler *D3D12_CreateSampler(
     SDL_GpuRenderer *driverData,
     SDL_GpuSamplerCreateInfo *samplerCreateInfo)
 {
-    SDL_assert(SDL_FALSE);
-    return NULL;
+    D3D12Renderer *renderer = (D3D12Renderer *)driverData;
+    D3D12Sampler *sampler = (D3D12Sampler *)SDL_malloc(sizeof(D3D12Sampler));
+    D3D12_SAMPLER_DESC samplerDesc;
+
+    samplerDesc.Filter = SDLToD3D12_Filter(
+        samplerCreateInfo->minFilter,
+        samplerCreateInfo->magFilter,
+        samplerCreateInfo->mipmapMode,
+        samplerCreateInfo->compareEnable,
+        samplerCreateInfo->anisotropyEnable);
+    samplerDesc.AddressU = SDLToD3D12_SamplerAddressMode[samplerCreateInfo->addressModeU];
+    samplerDesc.AddressV = SDLToD3D12_SamplerAddressMode[samplerCreateInfo->addressModeV];
+    samplerDesc.AddressW = SDLToD3D12_SamplerAddressMode[samplerCreateInfo->addressModeW];
+    samplerDesc.MaxAnisotropy = samplerCreateInfo->maxAnisotropy;
+    samplerDesc.ComparisonFunc = SDLToD3D12_CompareOp[samplerCreateInfo->compareOp];
+    samplerDesc.MinLOD = samplerCreateInfo->minLod;
+    samplerDesc.MaxLOD = samplerCreateInfo->maxLod;
+    samplerDesc.MipLODBias = samplerCreateInfo->mipLodBias;
+    samplerDesc.BorderColor[0] = 0;
+    samplerDesc.BorderColor[1] = 0;
+    samplerDesc.BorderColor[2] = 0;
+    samplerDesc.BorderColor[3] = 0;
+
+    D3D12_INTERNAL_AssignCpuDescriptorHandle(
+        renderer,
+        D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER,
+        &sampler->handle);
+
+    ID3D12Device_CreateSampler(
+        renderer->device,
+        &samplerDesc,
+        sampler->handle.cpuHandle
+    );
+
+    sampler->createInfo = *samplerCreateInfo;
+    return (SDL_GpuSampler *)sampler;
 }
 
 SDL_GpuShader *D3D12_CreateShader(
@@ -2880,27 +2946,35 @@ void D3D12_EndRenderPass(
     SDL_GpuCommandBuffer *commandBuffer)
 {
     D3D12CommandBuffer *d3d12CommandBuffer = (D3D12CommandBuffer *)commandBuffer;
-    /* D3D12Renderer *renderer = (D3D12Renderer *)d3d12CommandBuffer->renderer; */
     Uint32 i;
 
     for (i = 0; i < d3d12CommandBuffer->colorAttachmentCount; i += 1) {
+        D3D12_INTERNAL_TextureSubresourceTransitionToDefaultUsage(
+            d3d12CommandBuffer,
+            D3D12_RESOURCE_STATE_RENDER_TARGET,
+            d3d12CommandBuffer->colorAttachmentTextureSubresources[i]);
 
-        D3D12Texture *texture = d3d12CommandBuffer->colorAttachmentTexture[i];
-        d3d12CommandBuffer->colorAttachmentTexture[i] = NULL;
-        D3D12_RESOURCE_BARRIER barrierDesc;
-        SDL_zero(barrierDesc);
+        d3d12CommandBuffer->colorAttachmentTextureSubresources[i] = NULL;
+    }
+    d3d12CommandBuffer->colorAttachmentCount = 0;
 
-        barrierDesc.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-        barrierDesc.Transition.pResource = texture->resource;
-        barrierDesc.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-        barrierDesc.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET,
-        barrierDesc.Transition.StateAfter = D3D12_RESOURCE_STATE_PRESENT;
-        barrierDesc.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+    if (d3d12CommandBuffer->depthStencilTextureSubresource != NULL) {
+        D3D12_INTERNAL_TextureSubresourceTransitionToDefaultUsage(
+            d3d12CommandBuffer,
+            D3D12_RESOURCE_STATE_DEPTH_WRITE,
+            d3d12CommandBuffer->depthStencilTextureSubresource);
 
-        ID3D12GraphicsCommandList_ResourceBarrier(d3d12CommandBuffer->graphicsCommandList, 1, &barrierDesc);
+        d3d12CommandBuffer->depthStencilTextureSubresource = NULL;
     }
 
-    d3d12CommandBuffer->colorAttachmentCount = 0;
+    d3d12CommandBuffer->currentGraphicsPipeline = NULL;
+
+    ID3D12GraphicsCommandList_OMSetRenderTargets(
+        d3d12CommandBuffer->graphicsCommandList,
+        NULL,
+        0,
+        SDL_FALSE,
+        NULL);
 }
 
 /* Compute Pass */
@@ -3616,10 +3690,10 @@ SDL_GpuCommandBuffer *D3D12_AcquireCommandBuffer(
     commandBuffer->currentGraphicsPipeline = NULL;
 
     for (Uint32 i = 0; i < MAX_COLOR_TARGET_BINDINGS; i += 1) {
-        commandBuffer->colorAttachmentTexture[i] = NULL;
-        commandBuffer->colorAttachmentSubresourceIndex[i] = 0;
+        commandBuffer->colorAttachmentTextureSubresources[i] = NULL;
     }
     commandBuffer->colorAttachmentCount = 0;
+    commandBuffer->depthStencilTextureSubresource = NULL;
 
     for (Uint32 i = 0; i < MAX_TEXTURE_SAMPLERS_PER_STAGE; i += 1) {
         commandBuffer->vertexSamplerTextures[i] = NULL;
@@ -3642,21 +3716,6 @@ SDL_GpuCommandBuffer *D3D12_AcquireCommandBuffer(
         commandBuffer->vertexUniformBuffers[i] = NULL;
         commandBuffer->fragmentUniformBuffers[i] = NULL;
     }
-
-    commandBuffer->needVertexSamplerBind = SDL_TRUE;
-    commandBuffer->needVertexStorageTextureBind = SDL_TRUE;
-    commandBuffer->needVertexStorageBufferBind = SDL_TRUE;
-    commandBuffer->needVertexUniformBufferBind[0] = SDL_TRUE;
-    commandBuffer->needVertexUniformBufferBind[1] = SDL_TRUE;
-    commandBuffer->needVertexUniformBufferBind[2] = SDL_TRUE;
-    commandBuffer->needVertexUniformBufferBind[3] = SDL_TRUE;
-    commandBuffer->needFragmentSamplerBind = SDL_TRUE;
-    commandBuffer->needFragmentStorageTextureBind = SDL_TRUE;
-    commandBuffer->needFragmentStorageBufferBind = SDL_TRUE;
-    commandBuffer->needFragmentUniformBufferBind[0] = SDL_TRUE;
-    commandBuffer->needFragmentUniformBufferBind[1] = SDL_TRUE;
-    commandBuffer->needFragmentUniformBufferBind[2] = SDL_TRUE;
-    commandBuffer->needFragmentUniformBufferBind[3] = SDL_TRUE;
 
     return (SDL_GpuCommandBuffer *) commandBuffer;
 }
