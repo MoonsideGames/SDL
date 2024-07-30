@@ -7785,7 +7785,7 @@ static void VULKAN_BeginRenderPass(
 
     for (i = 0; i < colorAttachmentCount; i += 1) {
         SDL_bool cycle;
-        if (colorAttachmentInfos[i].loadOp) {
+        if (colorAttachmentInfos[i].loadOp == SDL_GPU_LOADOP_LOAD) {
             cycle = SDL_FALSE;
         } else {
             cycle = colorAttachmentInfos[i].cycle;
