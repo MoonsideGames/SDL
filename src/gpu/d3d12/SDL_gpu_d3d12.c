@@ -377,6 +377,7 @@ typedef struct D3D12DescriptorHeap D3D12DescriptorHeap;
 typedef struct D3D12Fence
 {
     ID3D12Fence *handle;
+    HANDLE event; /* used for blocking */
     SDL_AtomicInt referenceCount;
 } D3D12Fence;
 
@@ -784,6 +785,12 @@ static void D3D12_INTERNAL_DestroyRenderer(D3D12Renderer *renderer)
     /* Flush any remaining GPU work... */
     D3D12_Wait((SDL_GpuRenderer *)renderer);
 
+    /* Release window data */
+    for (Sint32 i = renderer->claimedWindowCount - 1; i >= 0; i -= 1) {
+        D3D12_UnclaimWindow((SDL_GpuRenderer*)renderer, renderer->claimedWindows[i]->window);
+    }
+    SDL_free(renderer->claimedWindows);
+
     /* Clean up descriptor heaps */
     for (Uint32 i = 0; i < D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES; i += 1) {
         SDL_free(renderer->stagingDescriptorHeaps[i]->inactiveDescriptorIndices);
@@ -799,12 +806,6 @@ static void D3D12_INTERNAL_DestroyRenderer(D3D12Renderer *renderer)
         SDL_DestroyMutex(renderer->descriptorHeapPools[i].lock);
     }
 
-    /* Release window data */
-    for (Sint32 i = renderer->claimedWindowCount - 1; i >= 0; i -= 1) {
-        D3D12_UnclaimWindow((SDL_GpuRenderer*)renderer, renderer->claimedWindows[i]->window);
-    }
-    SDL_free(renderer->claimedWindows);
-
     /* Release command buffers */
     for (Uint32 i = 0; i < renderer->availableCommandBufferCount; i += 1) {
         ID3D12GraphicsCommandList_Release(renderer->availableCommandBuffers[i]->graphicsCommandList);
@@ -814,9 +815,17 @@ static void D3D12_INTERNAL_DestroyRenderer(D3D12Renderer *renderer)
         SDL_free(renderer->availableCommandBuffers[i]);
     }
 
+    /* Release fences */
+    for (Uint32 i = 0; i < renderer->availableFenceCount; i += 1) {
+        ID3D12Fence_Release(renderer->availableFences[i]->handle);
+        CloseHandle(renderer->availableFences[i]->event);
+        SDL_free(renderer->availableFences[i]);
+    }
+
     /* Clean up allocations */
     SDL_free(renderer->availableCommandBuffers);
     SDL_free(renderer->submittedCommandBuffers);
+    SDL_free(renderer->availableFences);
     SDL_free(renderer->uniformBufferPool);
 
     /* Tear down D3D12 objects */
@@ -3793,6 +3802,7 @@ static D3D12Fence *D3D12_INTERNAL_AcquireFence(
 
         fence = SDL_malloc(sizeof(D3D12Fence));
         fence->handle = handle;
+        fence->event = CreateEventEx(NULL, 0, 0, EVENT_ALL_ACCESS);
         SDL_AtomicSet(&fence->referenceCount, 0);
     }
     else
@@ -4162,7 +4172,7 @@ static void D3D12_Submit(
     ERROR_CHECK("Failed to enqueue fence signal!");
 
     /* Mark the command buffer as submitted */
-    if (renderer->submittedCommandBufferCount >= renderer->submittedCommandBufferCapacity) {
+    if (renderer->submittedCommandBufferCount + 1 >= renderer->submittedCommandBufferCapacity) {
         renderer->submittedCommandBufferCapacity = renderer->submittedCommandBufferCount + 1;
 
         renderer->submittedCommandBuffers = SDL_realloc(
@@ -4228,21 +4238,43 @@ static SDL_GpuFence *D3D12_SubmitAndAcquireFence(
 }
 
 static void D3D12_Wait(
-    SDL_GpuRenderer *driverData) { SDL_assert(SDL_FALSE); }
-
-
-static void D3D12_INTERNAL_WaitForFence(
-    D3D12Renderer *renderer,
-    D3D12Fence *fence)
+    SDL_GpuRenderer *driverData)
 {
-    Uint64 fenceValue;
+    D3D12Renderer *renderer = (D3D12Renderer *)driverData;
+    D3D12Fence *fence = D3D12_INTERNAL_AcquireFence(renderer);
+    HRESULT res;
 
-    /* Spin until we get signal value...
-     * FIXME: There's probably a less stupid way to do this.
-     */
-    do {
-        fenceValue = ID3D12Fence_GetCompletedValue(fence->handle);
-    } while (fenceValue != D3D12_FENCE_SIGNAL_VALUE);
+    SDL_LockMutex(renderer->submitLock);
+
+    /* Insert a signal into the end of the command queue... */
+    ID3D12CommandQueue_Signal(
+        renderer->commandQueue,
+        fence->handle,
+        D3D12_FENCE_SIGNAL_VALUE);
+
+    /* ...and then block on it. */
+    if (ID3D12Fence_GetCompletedValue(fence->handle) != D3D12_FENCE_SIGNAL_VALUE) {
+        res = ID3D12Fence_SetEventOnCompletion(
+            fence->handle,
+            D3D12_FENCE_SIGNAL_VALUE,
+            fence->event);
+        ERROR_CHECK_RETURN("Setting fence event failed", )
+
+        WaitForSingleObject(fence->event, INFINITE);
+    }
+
+    D3D12_ReleaseFence(
+        (SDL_GpuRenderer *)renderer,
+        (SDL_GpuFence *)fence);
+
+    /* Clean up */
+    for (Sint32 i = renderer->submittedCommandBufferCount - 1; i >= 0; i -= 1) {
+        D3D12_INTERNAL_CleanCommandBuffer(renderer, renderer->submittedCommandBuffers[i]);
+    }
+
+    D3D12_INTERNAL_PerformPendingDestroys(renderer);
+
+    SDL_UnlockMutex(renderer->submitLock);
 }
 
 static void D3D12_WaitForFences(
@@ -4253,27 +4285,28 @@ static void D3D12_WaitForFences(
 {
     D3D12Renderer *renderer = (D3D12Renderer *)driverData;
     D3D12Fence *fence;
-    Uint64 fenceValue = D3D12_FENCE_UNSIGNALED_VALUE;
+    HANDLE *events = SDL_stack_alloc(HANDLE, fenceCount);
+    HRESULT res;
 
-    if (waitAll) {
-        for (Uint32 i = 0; i < fenceCount; i += 1) {
-            fence = (D3D12Fence *)pFences[i];
-            D3D12_INTERNAL_WaitForFence(renderer, fence);
-        }
-    } else {
-        /* Spin until one fence is signaled...
-        * FIXME: There's probably a less stupid way to do this.
-        */
-        while (fenceValue != D3D12_FENCE_SIGNAL_VALUE) {
-            for (Uint32 i = 0; i < fenceCount; i += 1) {
-                fence = (D3D12Fence *)pFences[i];
-                fenceValue = ID3D12Fence_GetCompletedValue(fence->handle);
-                if (fenceValue == D3D12_FENCE_SIGNAL_VALUE) {
-                    break;
-                }
-            }
-        }
+    for (Uint32 i = 0; i < fenceCount; i += 1) {
+        fence = (D3D12Fence *)pFences[i];
+
+        res = ID3D12Fence_SetEventOnCompletion(
+            fence->handle,
+            D3D12_FENCE_SIGNAL_VALUE,
+            fence->event);
+        ERROR_CHECK_RETURN("Setting fence event failed", )
+
+        events[i] = fence->event;
     }
+
+    WaitForMultipleObjects(
+        fenceCount,
+        events,
+        waitAll,
+        INFINITE);
+
+    SDL_stack_free(events);
 }
 
 /* Feature Queries */
