@@ -135,10 +135,10 @@ static const IID D3D_IID_IDXGIAdapter1 = { 0x29038f61, 0x3839, 0x4626, { 0x91, 0
 static const IID D3D_IID_IDXGISwapChain3 = { 0x94d99bdb, 0xf1f8, 0x4ab0, { 0xb2, 0x36, 0x7d, 0xa0, 0x17, 0x0e, 0xda, 0xb1 } };
 static const IID D3D_IID_IDXGIDebug = { 0x119e7452, 0xde9e, 0x40fe, { 0x88, 0x06, 0x88, 0xf9, 0x0c, 0x12, 0xb4, 0x41 } };
 static const IID D3D_IID_IDXGIInfoQueue = { 0xd67441c7, 0x672a, 0x476f, { 0x9e, 0x82, 0xcd, 0x55, 0xb4, 0x49, 0x49, 0xce } };
+static const GUID D3D_IID_DXGI_DEBUG_ALL = { 0xe48ae283, 0xda80, 0x490b, { 0x87, 0xe6, 0x43, 0xe9, 0xa9, 0xcf, 0xda, 0x08 } };
 static const GUID D3D_IID_D3DDebugObjectName = { 0x429b8c22, 0x9188, 0x4b0c, { 0x87, 0x42, 0xac, 0xb0, 0xbf, 0x85, 0xc2, 0x00 } };
 
 // static const IID D3D_IID_ID3DUserDefinedAnnotation = { 0xb2daad8b, 0x03d4, 0x4dbf, { 0x95, 0xeb, 0x32, 0xab, 0x4b, 0x63, 0xd0, 0xab } };
-// static const GUID D3D_IID_DXGI_DEBUG_ALL = { 0xe48ae283, 0xda80, 0x490b, { 0x87, 0xe6, 0x43, 0xe9, 0xa9, 0xcf, 0xda, 0x08 } };
 
 static const IID D3D_IID_ID3D12Device = { 0x189819f1, 0x1db6, 0x4b57, { 0xbe, 0x54, 0x18, 0x21, 0x33, 0x9b, 0x85, 0xf7 } };
 static const IID D3D_IID_ID3D12CommandQueue = { 0x0ec870a6, 0x5d7e, 0x4c22, { 0x8c, 0xfc, 0x5b, 0xaa, 0xe0, 0x76, 0x16, 0xed } };
@@ -798,7 +798,7 @@ static void D3D12_INTERNAL_DestroyRenderer(D3D12Renderer *renderer)
     }
 
     for (Uint32 i = 0; i < 2; i += 1) {
-        for (Uint32 j = 0; j < renderer->descriptorHeapPools[i].count; i += 1) {
+        for (Uint32 j = 0; j < renderer->descriptorHeapPools[i].count; j += 1) {
             SDL_free(renderer->descriptorHeapPools[i].heaps[j]->inactiveDescriptorIndices);
             ID3D12DescriptorHeap_Release(renderer->descriptorHeapPools[i].heaps[j]->handle);
         }
@@ -846,6 +846,10 @@ static void D3D12_INTERNAL_DestroyRenderer(D3D12Renderer *renderer)
         renderer->factory = NULL;
     }
     if (renderer->dxgiDebug) {
+        IDXGIDebug_ReportLiveObjects(
+            renderer->dxgiDebug,
+            D3D_IID_DXGI_DEBUG_ALL,
+            DXGI_DEBUG_RLO_SUMMARY | DXGI_DEBUG_RLO_DETAIL);
         IDXGIDebug_Release(renderer->dxgiDebug);
         renderer->dxgiDebug = NULL;
     }
@@ -3486,8 +3490,6 @@ static void D3D12_INTERNAL_DestroySwapchain(
     D3D12Renderer *renderer,
     D3D12WindowData *windowData)
 {
-    D3D12_Wait((SDL_GpuRenderer *)renderer);
-
     /* Release views and clean up */
     for (Uint32 i = 0; i < MAX_FRAMES_IN_FLIGHT; i += 1) {
         D3D12_INTERNAL_ReleaseCpuDescriptorHandle(
@@ -3504,16 +3506,6 @@ static void D3D12_INTERNAL_DestroySwapchain(
 
     IDXGISwapChain_Release(windowData->swapchain);
     windowData->swapchain = NULL;
-
-    /* TODO: do we need to flush state here like in D3D11? */
-
-    for (Uint32 i = 0; i < MAX_FRAMES_IN_FLIGHT; i += 1) {
-        if (windowData->inFlightFences[i] != NULL) {
-            D3D12_ReleaseFence(
-                (SDL_GpuRenderer *)renderer,
-                (SDL_GpuFence *)windowData->inFlightFences[i]);
-        }
-    }
 }
 
 static SDL_bool D3D12_INTERNAL_CreateSwapchain(
@@ -3726,6 +3718,16 @@ static void D3D12_UnclaimWindow(
         return;
     }
 
+    D3D12_Wait(driverData);
+
+    for (Uint32 i = 0; i < MAX_FRAMES_IN_FLIGHT; i += 1) {
+        if (windowData->inFlightFences[i] != NULL) {
+            D3D12_ReleaseFence(
+                driverData,
+                (SDL_GpuFence *)windowData->inFlightFences[i]);
+        }
+    }
+
     D3D12_INTERNAL_DestroySwapchain(renderer, windowData);
 
     SDL_LockMutex(renderer->windowLock);
@@ -3915,10 +3917,10 @@ static SDL_GpuCommandBuffer *D3D12_AcquireCommandBuffer(
     }
 
     /* Set the descriptor heaps! */
-    for (Uint32 i = 0; i < 2; i += 1) {
-        commandBuffer->gpuDescriptorHeaps[i] =
-            D3D12_INTERNAL_AcquireDescriptorHeapFromPool(commandBuffer, i);
-    }
+    commandBuffer->gpuDescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV] =
+        D3D12_INTERNAL_AcquireDescriptorHeapFromPool(commandBuffer, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+    commandBuffer->gpuDescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER] =
+        D3D12_INTERNAL_AcquireDescriptorHeapFromPool(commandBuffer, D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER);
 
     heaps[0] = commandBuffer->gpuDescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV]->handle;
     heaps[1] = commandBuffer->gpuDescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER]->handle;
@@ -4063,11 +4065,12 @@ static void D3D12_INTERNAL_CleanCommandBuffer(
     ERROR_CHECK("Could not reset graphicsCommandList")
 
     /* Return descriptor heaps to pool */
-    for (i = 0; i < 2; i += 1) {
-        D3D12_INTERNAL_ReturnDescriptorHeapToPool(
-            renderer,
-            commandBuffer->gpuDescriptorHeaps[i]);
-    }
+    D3D12_INTERNAL_ReturnDescriptorHeapToPool(
+        renderer,
+        commandBuffer->gpuDescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV]);
+    D3D12_INTERNAL_ReturnDescriptorHeapToPool(
+        renderer,
+        commandBuffer->gpuDescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER]);
 
     /* Uniform buffers are now available */
     SDL_LockMutex(renderer->acquireUniformBufferLock);
@@ -4096,6 +4099,8 @@ static void D3D12_INTERNAL_CleanCommandBuffer(
         D3D12_ReleaseFence(
             (SDL_GpuRenderer *)renderer,
             (SDL_GpuFence *)commandBuffer->inFlightFence);
+
+        commandBuffer->inFlightFence = NULL;
     }
 
     /* Return command buffer to pool */
@@ -4163,6 +4168,8 @@ static void D3D12_Submit(
 
     /* Acquire a fence and set it to the in-flight fence */
     d3d12CommandBuffer->inFlightFence = D3D12_INTERNAL_AcquireFence(renderer);
+    /* Command buffer has a reference to the in-flight fence */
+    (void)SDL_AtomicIncRef(&d3d12CommandBuffer->inFlightFence->referenceCount);
 
     /* Mark that a fence should be signaled after command list execution */
     res = ID3D12CommandQueue_Signal(
