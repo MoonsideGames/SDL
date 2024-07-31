@@ -27,7 +27,17 @@
 #define CINTERFACE
 #define COBJMACROS
 
-#include <d3d12.h>
+/* From the DirectX-Headers build system:
+ * "MinGW has RPC headers which define old versions, and complain if D3D
+ * headers are included before the RPC headers, since D3D headers were
+ * generated with new MIDL and "require" new RPC headers."
+ */
+#define __REQUIRED_RPCNDR_H_VERSION__ 475
+#ifndef WINAPI_PARTITION_GAMES
+#define WINAPI_PARTITION_GAMES 0
+#endif /* WINAPI_PARTITION_GAMES */
+#include "../../video/directx/d3d12.h"
+
 #include <d3dcompiler.h>
 #include <dxgi.h>
 #include <dxgi1_6.h>
@@ -152,13 +162,6 @@ static const IID D3D_IID_ID3D12RootSignature = { 0xc54a6b66, 0x72df, 0x4ee8, { 0
 static const IID D3D_IID_ID3D12PipelineState = { 0x765a30f3, 0xf624, 0x4c6f, { 0xa8, 0x28, 0xac, 0xe9, 0x48, 0x62, 0x24, 0x45 } };
 static const IID D3D_IID_ID3D12Debug = { 0x344488b7, 0x6846, 0x474b, { 0xb9, 0x89, 0xf0, 0x27, 0x44, 0x82, 0x45, 0xe0 } };
 static const IID D3D_IID_ID3D12InfoQueue = { 0x0742a90b, 0xc387, 0x483f, { 0xb9, 0x46, 0x30, 0xa7, 0xe4, 0xe6, 0x14, 0x58 } };
-
-/* MinGW is missing a few defines/typedefs */
-#ifndef D3D12_IA_VERTEX_INPUT_STRUCTURE_ELEMENT_COUNT
-#define D3D12_IA_VERTEX_INPUT_STRUCTURE_ELEMENT_COUNT 32
-#endif
-typedef HRESULT (__stdcall *SDL_PFN_D3D12_SERIALIZE_ROOT_SIGNATURE)(const D3D12_ROOT_SIGNATURE_DESC *root_signature_desc,D3D_ROOT_SIGNATURE_VERSION version,ID3DBlob **blob,ID3DBlob **error_blob);
-HRESULT __stdcall  D3D12SerializeRootSignature(const D3D12_ROOT_SIGNATURE_DESC *root_signature_desc,D3D_ROOT_SIGNATURE_VERSION version,ID3DBlob **blob,ID3DBlob **error_blob);
 
 static const char *D3D12ShaderProfiles[3] = { "vs_5_1", "ps_5_1", "cs_5_1" };
 
@@ -496,7 +499,7 @@ struct D3D12Renderer
     IDXGIAdapter1 *adapter;
     void *d3d12_dll;
     ID3D12Device *device;
-    SDL_PFN_D3D12_SERIALIZE_ROOT_SIGNATURE D3D12SerializeRootSignature_func;
+    PFN_D3D12_SERIALIZE_ROOT_SIGNATURE D3D12SerializeRootSignature_func;
 
     ID3D12CommandQueue *commandQueue;
 
@@ -4768,7 +4771,7 @@ static SDL_GpuDevice *D3D12_CreateDevice(SDL_bool debugMode, SDL_bool preferLowP
         return NULL;
     }
 
-    renderer->D3D12SerializeRootSignature_func = (SDL_PFN_D3D12_SERIALIZE_ROOT_SIGNATURE)SDL_LoadFunction(
+    renderer->D3D12SerializeRootSignature_func = (PFN_D3D12_SERIALIZE_ROOT_SIGNATURE)SDL_LoadFunction(
         renderer->d3d12_dll,
         D3D12_SERIALIZE_ROOT_SIGNATURE_FUNC);
     if (renderer->D3D12SerializeRootSignature_func == NULL) {
