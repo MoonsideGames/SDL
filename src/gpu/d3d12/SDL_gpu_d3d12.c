@@ -1168,7 +1168,7 @@ static ID3D12RootSignature *D3D12_INTERNAL_CreateGraphicsRootSignature(
     rangeCount += 1;
 
     rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-    rootParameters[0].DescriptorTable.NumDescriptorRanges = 1;
+    rootParameters[0].DescriptorTable.NumDescriptorRanges = vertexShader->samplerCount > 0;
     rootParameters[0].DescriptorTable.pDescriptorRanges = &descriptorRanges[rangeCount];
     rootParameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
 
@@ -1181,7 +1181,7 @@ static ID3D12RootSignature *D3D12_INTERNAL_CreateGraphicsRootSignature(
     rangeCount += 1;
 
     rootParameters[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-    rootParameters[1].DescriptorTable.NumDescriptorRanges = 1;
+    rootParameters[1].DescriptorTable.NumDescriptorRanges = vertexShader->samplerCount > 0;
     rootParameters[1].DescriptorTable.pDescriptorRanges = &descriptorRanges[rangeCount];
     rootParameters[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
 
@@ -1195,7 +1195,7 @@ static ID3D12RootSignature *D3D12_INTERNAL_CreateGraphicsRootSignature(
     rangeCount += 1;
 
     rootParameters[2].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-    rootParameters[2].DescriptorTable.NumDescriptorRanges = 1;
+    rootParameters[2].DescriptorTable.NumDescriptorRanges = vertexShader->storageTextureCount > 0;
     rootParameters[2].DescriptorTable.pDescriptorRanges = &descriptorRanges[rangeCount];
     rootParameters[2].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
 
@@ -1209,7 +1209,7 @@ static ID3D12RootSignature *D3D12_INTERNAL_CreateGraphicsRootSignature(
     rangeCount += 1;
 
     rootParameters[3].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-    rootParameters[3].DescriptorTable.NumDescriptorRanges = 1;
+    rootParameters[3].DescriptorTable.NumDescriptorRanges = vertexShader->storageBufferCount > 0;
     rootParameters[3].DescriptorTable.pDescriptorRanges = &descriptorRanges[rangeCount];
     rootParameters[3].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
 
@@ -1231,7 +1231,7 @@ static ID3D12RootSignature *D3D12_INTERNAL_CreateGraphicsRootSignature(
     rangeCount += 1;
 
     rootParameters[8].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-    rootParameters[8].DescriptorTable.NumDescriptorRanges = 1;
+    rootParameters[8].DescriptorTable.NumDescriptorRanges = fragmentShader->samplerCount > 0;
     rootParameters[8].DescriptorTable.pDescriptorRanges = &descriptorRanges[rangeCount];
     rootParameters[8].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 
@@ -1244,7 +1244,7 @@ static ID3D12RootSignature *D3D12_INTERNAL_CreateGraphicsRootSignature(
     rangeCount += 1;
 
     rootParameters[9].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-    rootParameters[9].DescriptorTable.NumDescriptorRanges = 1;
+    rootParameters[9].DescriptorTable.NumDescriptorRanges = fragmentShader->samplerCount > 0;
     rootParameters[9].DescriptorTable.pDescriptorRanges = &descriptorRanges[rangeCount];
     rootParameters[9].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 
@@ -1258,7 +1258,7 @@ static ID3D12RootSignature *D3D12_INTERNAL_CreateGraphicsRootSignature(
     rangeCount += 1;
 
     rootParameters[10].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-    rootParameters[10].DescriptorTable.NumDescriptorRanges = 1;
+    rootParameters[10].DescriptorTable.NumDescriptorRanges = fragmentShader->storageTextureCount > 0;
     rootParameters[10].DescriptorTable.pDescriptorRanges = &descriptorRanges[rangeCount];
     rootParameters[10].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 
@@ -1272,7 +1272,7 @@ static ID3D12RootSignature *D3D12_INTERNAL_CreateGraphicsRootSignature(
     rangeCount += 1;
 
     rootParameters[11].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-    rootParameters[11].DescriptorTable.NumDescriptorRanges = 1;
+    rootParameters[11].DescriptorTable.NumDescriptorRanges = fragmentShader->storageBufferCount > 0;
     rootParameters[11].DescriptorTable.pDescriptorRanges = &descriptorRanges[rangeCount];
     rootParameters[11].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 
