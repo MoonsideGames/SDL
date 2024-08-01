@@ -171,7 +171,8 @@ typedef enum D3D12BufferType
 {
     D3D12_BUFFER_TYPE_GPU,
     D3D12_BUFFER_TYPE_UNIFORM,
-    D3D12_BUFFER_TYPE_TRANSFER
+    D3D12_BUFFER_TYPE_UPLOAD,
+    D3D12_BUFFER_TYPE_DOWNLOAD
 } D3D12BufferType;
 
 /* Conversions */
@@ -633,17 +634,24 @@ struct D3D12GraphicsPipeline
 
 struct D3D12Buffer
 {
+    D3D12BufferContainer *container;
+    Uint32 containerIndex;
+
     ID3D12Resource *handle;
     D3D12CPUDescriptor uavDescriptor;
     D3D12CPUDescriptor srvDescriptor;
     D3D12CPUDescriptor cbvDescriptor;
     D3D12_GPU_VIRTUAL_ADDRESS virtualAddress;
-    Uint32 size;
+    Uint8 *mapPointer; /* NULL except for upload buffers */
     SDL_AtomicInt referenceCount;
 };
 
 struct D3D12BufferContainer
 {
+    SDL_GpuBufferUsageFlags usageFlags;
+    Uint32 size;
+    D3D12BufferType type;
+
     D3D12Buffer *activeBuffer;
 
     D3D12Buffer **buffers;
@@ -726,14 +734,14 @@ D3D12_INTERNAL_LogError(
 
 /* Debug Naming */
 
-static void D3D12_INTERNAL_SetTextureName(
+static void D3D12_INTERNAL_SetResourceName(
     D3D12Renderer *renderer,
-    D3D12Texture *texture,
+    ID3D12Resource *resource,
     const char *text)
 {
     if (renderer->debugMode) {
         ID3D12DeviceChild_SetPrivateData(
-            texture->resource,
+            resource,
             &D3D_IID_D3DDebugObjectName,
             (UINT)SDL_strlen(text),
             text);
@@ -2094,7 +2102,7 @@ static D3D12Buffer *D3D12_INTERNAL_CreateBuffer(
     heapProperties.VisibleNodeMask = 0;  /* We don't do multi-adapter operation */
 
     if (type == D3D12_BUFFER_TYPE_GPU) {
-        heapProperties.Type = D3D12_HEAP_TYPE_DEFAULT;
+        heapProperties.Type = D3D12_HEAP_TYPE_CUSTOM; /* FIXME: should we just use HEAP_TYPE_UPLOAD? */
         heapProperties.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_NOT_AVAILABLE;
         heapProperties.MemoryPoolPreference = renderer->UMA ? D3D12_MEMORY_POOL_L0 : D3D12_MEMORY_POOL_L1;
         heapFlags = D3D12_HEAP_FLAG_NONE;
@@ -2116,14 +2124,20 @@ static D3D12Buffer *D3D12_INTERNAL_CreateBuffer(
             SDL_LogError(SDL_LOG_CATEGORY_GPU, "Creating GPU buffer with no usage flags is invalid!");
             return NULL;
         }
-    } else if (type == D3D12_BUFFER_TYPE_TRANSFER) {
-        heapProperties.Type = D3D12_HEAP_TYPE_UPLOAD;
-        heapProperties.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_WRITE_COMBINE;
+    } else if (type == D3D12_BUFFER_TYPE_UPLOAD) {
+        heapProperties.Type = D3D12_HEAP_TYPE_CUSTOM; /* FIXME: should we just use HEAP_TYPE_UPLOAD? */
+        heapProperties.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_WRITE_COMBINE; /* FIXME: is this right? */
         heapProperties.MemoryPoolPreference = D3D12_MEMORY_POOL_L0;
         heapFlags = D3D12_HEAP_FLAG_NONE;
         initialState = D3D12_RESOURCE_STATE_GENERIC_READ;
+    } else if (type == D3D12_BUFFER_TYPE_DOWNLOAD) {
+        heapProperties.Type = D3D12_HEAP_TYPE_READBACK; /* FIXME: is this right? */
+        heapProperties.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
+        heapProperties.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
+        heapFlags = D3D12_HEAP_FLAG_NONE;
+        initialState = D3D12_RESOURCE_STATE_COPY_DEST;
     } else if (type == D3D12_BUFFER_TYPE_UNIFORM) {
-        heapProperties.Type = D3D12_HEAP_TYPE_UPLOAD;
+        heapProperties.Type = D3D12_HEAP_TYPE_CUSTOM; /* FIXME: should we just use HEAP_TYPE_UPLOAD? */
         heapProperties.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_WRITE_COMBINE;
         heapProperties.MemoryPoolPreference = renderer->UMA ? D3D12_MEMORY_POOL_L0 : D3D12_MEMORY_POOL_L1;
         heapFlags = D3D12_HEAP_FLAG_ALLOW_ONLY_BUFFERS;
@@ -2159,7 +2173,6 @@ static D3D12Buffer *D3D12_INTERNAL_CreateBuffer(
 
     buffer = SDL_malloc(sizeof(D3D12Buffer));
     buffer->handle = handle;
-    buffer->size = sizeInBytes;
     SDL_AtomicSet(&buffer->referenceCount, 0);
 
     if (usageFlags & SDL_GPU_BUFFERUSAGE_COMPUTE_STORAGE_WRITE_BIT) {
@@ -2228,6 +2241,16 @@ static D3D12Buffer *D3D12_INTERNAL_CreateBuffer(
         buffer->virtualAddress = ID3D12Resource_GetGPUVirtualAddress(buffer->handle);
     }
 
+    buffer->mapPointer = NULL;
+    /* Persistently map upload buffers */
+    if (type == D3D12_BUFFER_TYPE_UPLOAD) {
+        ID3D12Resource_Map(
+            buffer->handle,
+            0,
+            NULL,
+            (void **)&buffer->mapPointer);
+    }
+
     SDL_AtomicSet(&buffer->referenceCount, 0);
     return buffer;
 }
@@ -2254,6 +2277,10 @@ static D3D12BufferContainer *D3D12_INTERNAL_CreateBufferContainer(
     }
 
     container = SDL_malloc(sizeof(D3D12BufferContainer));
+
+    container->usageFlags = usageFlags;
+    container->size = sizeInBytes;
+    container->type = type;
 
     container->activeBuffer = buffer;
     container->bufferCapacity = 1;
@@ -2287,7 +2314,8 @@ static SDL_GpuTransferBuffer *D3D12_CreateTransferBuffer(
         (D3D12Renderer *)driverData,
         0,
         sizeInBytes,
-        D3D12_BUFFER_TYPE_TRANSFER);
+        usage == SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD ?
+            D3D12_BUFFER_TYPE_UPLOAD : D3D12_BUFFER_TYPE_DOWNLOAD);
 }
 
 /* Debug Naming */
@@ -2449,9 +2477,9 @@ static void D3D12_INTERNAL_CycleActiveTexture(
     container->activeTexture = texture;
 
     if (renderer->debugMode && container->debugName != NULL) {
-        D3D12_INTERNAL_SetTextureName(
+        D3D12_INTERNAL_SetResourceName(
             renderer,
-            container->activeTexture,
+            container->activeTexture->resource,
             container->debugName);
     }
 }
@@ -2490,6 +2518,48 @@ static D3D12TextureSubresource *D3D12_INTERNAL_PrepareTextureSubresourceForWrite
         subresource);
 
     return subresource;
+}
+
+static void D3D12_INTERNAL_CycleActiveBuffer(
+    D3D12Renderer *renderer,
+    D3D12BufferContainer *container)
+{
+    /* If a previously-cycled buffer is available, we can use that. */
+    for (Uint32 i = 0; i < container->bufferCount; i += 1) {
+        D3D12Buffer *buffer = container->buffers[i];
+        if (SDL_AtomicGet(&buffer->referenceCount) == 0) {
+            container->activeBuffer = buffer;
+            return;
+        }
+    }
+
+    /* No buffer handle is available, create a new one. */
+    D3D12Buffer *buffer = D3D12_INTERNAL_CreateBuffer(
+        renderer,
+        container->usageFlags,
+        container->size,
+        container->type);
+
+    EXPAND_ARRAY_IF_NEEDED(
+        container->buffers,
+        D3D12Buffer *,
+        container->bufferCount + 1,
+        container->bufferCapacity,
+        container->bufferCapacity * 2);
+
+    container->buffers[container->bufferCount] = buffer;
+    buffer->container = container;
+    buffer->containerIndex = container->bufferCount;
+    container->bufferCount += 1;
+
+    container->activeBuffer = buffer;
+
+    if (renderer->debugMode && container->debugName != NULL) {
+        D3D12_INTERNAL_SetResourceName(
+            renderer,
+            container->activeBuffer->handle,
+            container->debugName);
+    }
 }
 
 static void D3D12_BeginRenderPass(
@@ -3203,14 +3273,49 @@ static void D3D12_EndComputePass(
 /* TransferBuffer Data */
 
 static void D3D12_MapTransferBuffer(
-    SDL_GpuRenderer *device,
+    SDL_GpuRenderer *driverData,
     SDL_GpuTransferBuffer *transferBuffer,
     SDL_bool cycle,
-    void **ppData) { SDL_assert(SDL_FALSE); }
+    void **ppData)
+{
+    D3D12Renderer *renderer = (D3D12Renderer *)driverData;
+    D3D12BufferContainer *container = (D3D12BufferContainer *)transferBuffer;
+
+    if (
+        cycle &&
+        SDL_AtomicGet(&container->activeBuffer->referenceCount) > 0) {
+        D3D12_INTERNAL_CycleActiveBuffer(
+            renderer,
+            container);
+    }
+
+    /* Upload buffers are persistently mapped, download buffers are not */
+    if (container->type == D3D12_BUFFER_TYPE_UPLOAD) {
+        *ppData = container->activeBuffer->mapPointer;
+    } else {
+        ID3D12Resource_Map(
+            container->activeBuffer->handle,
+            0,
+            NULL,
+            ppData);
+    }
+}
 
 static void D3D12_UnmapTransferBuffer(
-    SDL_GpuRenderer *device,
-    SDL_GpuTransferBuffer *transferBuffer) { SDL_assert(SDL_FALSE); }
+    SDL_GpuRenderer *driverData,
+    SDL_GpuTransferBuffer *transferBuffer)
+{
+    (void)driverData;
+    D3D12BufferContainer *container = (D3D12BufferContainer *)transferBuffer;
+
+    /* Upload buffers are persistently mapped, download buffers are not */
+    if (container->type == D3D12_BUFFER_TYPE_DOWNLOAD) {
+        ID3D12Resource_Unmap(
+            container->activeBuffer->handle,
+            0,
+            NULL);
+    }
+}
 
 static void D3D12_SetTransferData(
     SDL_GpuRenderer *driverData,
