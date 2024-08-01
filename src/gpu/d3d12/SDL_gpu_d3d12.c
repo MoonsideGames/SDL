@@ -3251,7 +3251,23 @@ static void D3D12_BindVertexBuffers(
 static void D3D12_BindIndexBuffer(
     SDL_GpuCommandBuffer *commandBuffer,
     SDL_GpuBufferBinding *pBinding,
-    SDL_GpuIndexElementSize indexElementSize) { SDL_assert(SDL_FALSE); }
+    SDL_GpuIndexElementSize indexElementSize)
+{
+    D3D12CommandBuffer *d3d12CommandBuffer = (D3D12CommandBuffer *)commandBuffer;
+    D3D12Buffer *buffer = ((D3D12BufferContainer *)pBinding->buffer)->activeBuffer;
+    D3D12_INDEX_BUFFER_VIEW view;
+
+    D3D12_INTERNAL_TrackBuffer(d3d12CommandBuffer, buffer);
+
+    view.BufferLocation = buffer->virtualAddress + pBinding->offset;
+    view.SizeInBytes = buffer->container->size - pBinding->offset;
+    view.Format =
+        indexElementSize == SDL_GPU_INDEXELEMENTSIZE_16BIT ? DXGI_FORMAT_R16_UINT : DXGI_FORMAT_R32_UINT;
+
+    ID3D12GraphicsCommandList_IASetIndexBuffer(
+        d3d12CommandBuffer->graphicsCommandList,
+        &view);
+}
 
 static void D3D12_BindVertexSamplers(
     SDL_GpuCommandBuffer *commandBuffer,
@@ -3300,13 +3316,6 @@ static void D3D12_PushFragmentUniformData(
     Uint32 slotIndex,
     const void *data,
     Uint32 dataLengthInBytes) { SDL_assert(SDL_FALSE); }
-
-static void D3D12_DrawIndexedPrimitives(
-    SDL_GpuCommandBuffer *commandBuffer,
-    Uint32 baseVertex,
-    Uint32 startIndex,
-    Uint32 primitiveCount,
-    Uint32 instanceCount) { SDL_assert(SDL_FALSE); }
 
 static void D3D12_INTERNAL_WriteGPUDescriptors(
     D3D12CommandBuffer *commandBuffer,
@@ -3526,6 +3535,25 @@ static void D3D12_INTERNAL_BindGraphicsResources(
     }
 }
 
+static void D3D12_DrawIndexedPrimitives(
+    SDL_GpuCommandBuffer *commandBuffer,
+    Uint32 baseVertex,
+    Uint32 startIndex,
+    Uint32 primitiveCount,
+    Uint32 instanceCount)
+{
+    D3D12CommandBuffer *d3d12CommandBuffer = (D3D12CommandBuffer *)commandBuffer;
+    D3D12_INTERNAL_BindGraphicsResources(d3d12CommandBuffer);
+
+    ID3D12GraphicsCommandList_DrawIndexedInstanced(
+        d3d12CommandBuffer->graphicsCommandList,
+        PrimitiveVerts(d3d12CommandBuffer->currentGraphicsPipeline->primitiveType, primitiveCount),
+        instanceCount,
+        startIndex,
+        baseVertex,
+        0);
+}
+
 static void D3D12_DrawPrimitives(
     SDL_GpuCommandBuffer *commandBuffer,
     Uint32 vertexStart,
@@ -3534,17 +3562,12 @@ static void D3D12_DrawPrimitives(
     D3D12CommandBuffer *d3d12CommandBuffer = (D3D12CommandBuffer *)commandBuffer;
     D3D12_INTERNAL_BindGraphicsResources(d3d12CommandBuffer);
 
-    // Record the draw call
-    ID3D12GraphicsCommandList_IASetPrimitiveTopology(
-        d3d12CommandBuffer->graphicsCommandList,
-        SDLToD3D12_PrimitiveType[d3d12CommandBuffer->currentGraphicsPipeline->primitiveType]);
-
     ID3D12GraphicsCommandList_DrawInstanced(
         d3d12CommandBuffer->graphicsCommandList,
         PrimitiveVerts(d3d12CommandBuffer->currentGraphicsPipeline->primitiveType, primitiveCount),
-        1, // Instance count
+        1, /* Instance count */
         vertexStart,
-        0 // Start instance location
+        0 /* Start instance location */
     );
 }
 
