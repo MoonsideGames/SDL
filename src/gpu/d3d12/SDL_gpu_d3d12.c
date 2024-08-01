@@ -1200,6 +1200,13 @@ static ID3D12RootSignature *D3D12_INTERNAL_CreateGraphicsRootSignature(
     Uint32 rangeCount = 0;
     D3D12_DESCRIPTOR_RANGE descriptorRange;
 
+    for (int i = 0; i < MAX_ROOT_SIGNATURE_PARAMETERS; i += 1) {
+        SDL_zero(rootParameters[i]);
+        SDL_zero(descriptorRanges[i]);
+    }
+
+    SDL_zero(descriptorRange);
+
     /* Vertex Samplers */
     descriptorRange.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER;
     descriptorRange.NumDescriptors = vertexShader->samplerCount;
@@ -1207,12 +1214,12 @@ static ID3D12RootSignature *D3D12_INTERNAL_CreateGraphicsRootSignature(
     descriptorRange.RegisterSpace = 0;
     descriptorRange.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
     descriptorRanges[rangeCount] = descriptorRange;
-    rangeCount += 1;
 
     rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
     rootParameters[0].DescriptorTable.NumDescriptorRanges = vertexShader->samplerCount > 0;
     rootParameters[0].DescriptorTable.pDescriptorRanges = &descriptorRanges[rangeCount];
     rootParameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
+    rangeCount += 1;
 
     descriptorRange.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
     descriptorRange.NumDescriptors = vertexShader->samplerCount;
@@ -1220,12 +1227,12 @@ static ID3D12RootSignature *D3D12_INTERNAL_CreateGraphicsRootSignature(
     descriptorRange.RegisterSpace = 0;
     descriptorRange.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
     descriptorRanges[rangeCount] = descriptorRange;
-    rangeCount += 1;
 
     rootParameters[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
     rootParameters[1].DescriptorTable.NumDescriptorRanges = vertexShader->samplerCount > 0;
     rootParameters[1].DescriptorTable.pDescriptorRanges = &descriptorRanges[rangeCount];
     rootParameters[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
+    rangeCount += 1;
 
     /* Vertex storage textures */
     descriptorRange.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
@@ -1234,12 +1241,12 @@ static ID3D12RootSignature *D3D12_INTERNAL_CreateGraphicsRootSignature(
     descriptorRange.RegisterSpace = 0;
     descriptorRange.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
     descriptorRanges[rangeCount] = descriptorRange;
-    rangeCount += 1;
 
     rootParameters[2].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
     rootParameters[2].DescriptorTable.NumDescriptorRanges = vertexShader->storageTextureCount > 0;
     rootParameters[2].DescriptorTable.pDescriptorRanges = &descriptorRanges[rangeCount];
     rootParameters[2].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
+    rangeCount += 1;
 
     /* Vertex storage buffers */
     descriptorRange.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
@@ -1248,12 +1255,12 @@ static ID3D12RootSignature *D3D12_INTERNAL_CreateGraphicsRootSignature(
     descriptorRange.RegisterSpace = 0;
     descriptorRange.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
     descriptorRanges[rangeCount] = descriptorRange;
-    rangeCount += 1;
 
     rootParameters[3].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
     rootParameters[3].DescriptorTable.NumDescriptorRanges = vertexShader->storageBufferCount > 0;
     rootParameters[3].DescriptorTable.pDescriptorRanges = &descriptorRanges[rangeCount];
     rootParameters[3].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
+    rangeCount += 1;
 
     /* Vertex Uniforms */
     for (Uint32 i = 0; i < MAX_UNIFORM_BUFFERS_PER_STAGE; i += 1) {
@@ -1270,12 +1277,12 @@ static ID3D12RootSignature *D3D12_INTERNAL_CreateGraphicsRootSignature(
     descriptorRange.RegisterSpace = 2;
     descriptorRange.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
     descriptorRanges[rangeCount] = descriptorRange;
-    rangeCount += 1;
 
     rootParameters[8].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
     rootParameters[8].DescriptorTable.NumDescriptorRanges = fragmentShader->samplerCount > 0;
     rootParameters[8].DescriptorTable.pDescriptorRanges = &descriptorRanges[rangeCount];
     rootParameters[8].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+    rangeCount += 1;
 
     descriptorRange.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
     descriptorRange.NumDescriptors = vertexShader->samplerCount;
@@ -1283,12 +1290,12 @@ static ID3D12RootSignature *D3D12_INTERNAL_CreateGraphicsRootSignature(
     descriptorRange.RegisterSpace = 2;
     descriptorRange.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
     descriptorRanges[rangeCount] = descriptorRange;
-    rangeCount += 1;
 
     rootParameters[9].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
     rootParameters[9].DescriptorTable.NumDescriptorRanges = fragmentShader->samplerCount > 0;
     rootParameters[9].DescriptorTable.pDescriptorRanges = &descriptorRanges[rangeCount];
     rootParameters[9].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+    rangeCount += 1;
 
     /* Fragment Storage Textures */
     descriptorRange.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
@@ -1297,12 +1304,12 @@ static ID3D12RootSignature *D3D12_INTERNAL_CreateGraphicsRootSignature(
     descriptorRange.RegisterSpace = 2;
     descriptorRange.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
     descriptorRanges[rangeCount] = descriptorRange;
-    rangeCount += 1;
 
     rootParameters[10].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
     rootParameters[10].DescriptorTable.NumDescriptorRanges = fragmentShader->storageTextureCount > 0;
     rootParameters[10].DescriptorTable.pDescriptorRanges = &descriptorRanges[rangeCount];
     rootParameters[10].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+    rangeCount += 1;
 
     /* Fragment Storage Buffers */
     descriptorRange.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
@@ -1311,12 +1318,12 @@ static ID3D12RootSignature *D3D12_INTERNAL_CreateGraphicsRootSignature(
     descriptorRange.RegisterSpace = 2;
     descriptorRange.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
     descriptorRanges[rangeCount] = descriptorRange;
-    rangeCount += 1;
 
     rootParameters[11].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
     rootParameters[11].DescriptorTable.NumDescriptorRanges = fragmentShader->storageBufferCount > 0;
     rootParameters[11].DescriptorTable.pDescriptorRanges = &descriptorRanges[rangeCount];
     rootParameters[11].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+    rangeCount += 1;
 
     /* Fragment Uniforms */
     for (Uint32 i = 0; i < MAX_UNIFORM_BUFFERS_PER_STAGE; i += 1) {
@@ -1325,6 +1332,8 @@ static ID3D12RootSignature *D3D12_INTERNAL_CreateGraphicsRootSignature(
         rootParameters[12 + i].Descriptor.RegisterSpace = 3;
         rootParameters[12 + i].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
     }
+
+    SDL_assert(rangeCount <= MAX_ROOT_SIGNATURE_PARAMETERS);
 
     // Create the root signature description
     D3D12_ROOT_SIGNATURE_DESC rootSignatureDesc;
@@ -4923,6 +4932,7 @@ static SDL_GpuDevice *D3D12_CreateDevice(SDL_bool debugMode, SDL_bool preferLowP
     }
 
     /* Check UMA */
+    /* Call seems to currently go to the wrong vtbl entry
     res = ID3D12Device_CheckFeatureSupport(
         renderer->device,
         D3D12_FEATURE_ARCHITECTURE,
@@ -4934,6 +4944,8 @@ static SDL_GpuDevice *D3D12_CreateDevice(SDL_bool debugMode, SDL_bool preferLowP
     }
 
     renderer->UMA = (SDL_bool)architecture.UMA;
+    */
+    renderer->UMA = SDL_FALSE;
 
     SDL_zero(queueDesc);
     queueDesc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
