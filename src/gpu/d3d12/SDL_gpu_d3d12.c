@@ -613,8 +613,12 @@ struct D3D12GraphicsPipeline
     ID3D12PipelineState *pipelineState;
     ID3D12RootSignature *rootSignature;
     SDL_GpuPrimitiveType primitiveType;
+
+    Uint32 vertexStrides[MAX_BUFFER_BINDINGS];
+
     float blendConstants[4];
     Uint32 stencilRef;
+
     Uint32 vertexSamplerCount;
     Uint32 vertexUniformBufferCount;
     Uint32 vertexStorageBufferCount;
@@ -1700,7 +1704,7 @@ static SDL_bool D3D12_INTERNAL_ConvertBlendState(SDL_GpuGraphicsPipelineCreateIn
     blendDesc->AlphaToCoverageEnable = FALSE;
     blendDesc->IndependentBlendEnable = FALSE;
 
-    for (UINT i = 0; i < D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT; ++i) {
+    for (UINT i = 0; i < MAX_COLOR_TARGET_BINDINGS; i += 1) {
         D3D12_RENDER_TARGET_BLEND_DESC rtBlendDesc = { 0 };
         rtBlendDesc.BlendEnable = FALSE;
         rtBlendDesc.LogicOpEnable = FALSE;
@@ -1770,7 +1774,7 @@ static SDL_bool D3D12_INTERNAL_ConvertVertexInputState(SDL_GpuVertexInputState v
         return SDL_FALSE;
     }
 
-    for (Uint32 i = 0; i < vertexInputState.vertexAttributeCount; ++i) {
+    for (Uint32 i = 0; i < vertexInputState.vertexAttributeCount; i += 1) {
         SDL_GpuVertexAttribute attribute = vertexInputState.vertexAttributes[i];
 
         desc[i].SemanticName = "TEXCOORD"; // Default to TEXCOORD, can be adjusted as needed
@@ -1854,7 +1858,7 @@ static SDL_GpuGraphicsPipeline *D3D12_CreateGraphicsPipeline(
 
     psoDesc.DSVFormat = SDLToD3D12_TextureFormat[pipelineCreateInfo->attachmentInfo.depthStencilFormat];
     psoDesc.NumRenderTargets = pipelineCreateInfo->attachmentInfo.colorAttachmentCount;
-    for (uint32_t i = 0; i < pipelineCreateInfo->attachmentInfo.colorAttachmentCount; ++i) {
+    for (uint32_t i = 0; i < pipelineCreateInfo->attachmentInfo.colorAttachmentCount; i += 1) {
         psoDesc.RTVFormats[i] = SDLToD3D12_TextureFormat[pipelineCreateInfo->attachmentInfo.colorAttachmentDescriptions[i].format];
     }
 
@@ -1888,6 +1892,10 @@ static SDL_GpuGraphicsPipeline *D3D12_CreateGraphicsPipeline(
     SDL_zerop(pipeline);
     pipeline->pipelineState = pipelineState;
     pipeline->rootSignature = rootSignature;
+
+    for (Uint32 i = 0; i < pipelineCreateInfo->vertexInputState.vertexBindingCount; i += 1) {
+        pipeline->vertexStrides[i] = pipelineCreateInfo->vertexInputState.vertexBindings[i].stride;
+    }
 
     pipeline->primitiveType = pipelineCreateInfo->primitiveType;
     pipeline->blendConstants[0] = pipelineCreateInfo->blendConstants[0];
@@ -2399,6 +2407,10 @@ static D3D12Buffer *D3D12_INTERNAL_CreateBuffer(
     buffer->handle = handle;
     SDL_AtomicSet(&buffer->referenceCount, 0);
 
+    buffer->uavDescriptor.heap = NULL;
+    buffer->srvDescriptor.heap = NULL;
+    buffer->cbvDescriptor.heap = NULL;
+
     if (usageFlags & SDL_GPU_BUFFERUSAGE_COMPUTE_STORAGE_WRITE_BIT) {
         D3D12_INTERNAL_AssignCpuDescriptorHandle(
             renderer,
@@ -2444,6 +2456,7 @@ static D3D12Buffer *D3D12_INTERNAL_CreateBuffer(
             buffer->srvDescriptor.cpuHandle);
     }
 
+    /* FIXME: we may not need a CBV since we use root descriptors */
     if (type == D3D12_BUFFER_TYPE_UNIFORM) {
         D3D12_INTERNAL_AssignCpuDescriptorHandle(
             renderer,
@@ -2461,7 +2474,7 @@ static D3D12Buffer *D3D12_INTERNAL_CreateBuffer(
     }
 
     buffer->virtualAddress = 0;
-    if (type == D3D12_BUFFER_TYPE_UNIFORM) {
+    if (type == D3D12_BUFFER_TYPE_GPU || type == D3D12_BUFFER_TYPE_UNIFORM) {
         buffer->virtualAddress = ID3D12Resource_GetGPUVirtualAddress(buffer->handle);
     }
 
@@ -2579,7 +2592,15 @@ static void D3D12_ReleaseSampler(
 
 static void D3D12_ReleaseBuffer(
     SDL_GpuRenderer *driverData,
-    SDL_GpuBuffer *buffer) { SDL_assert(SDL_FALSE); }
+    SDL_GpuBuffer *buffer)
+{
+    D3D12Renderer *renderer = (D3D12Renderer *)driverData;
+    D3D12BufferContainer *bufferContainer = (D3D12BufferContainer *)buffer;
+
+    D3D12_INTERNAL_ReleaseBufferContainer(
+        renderer,
+        bufferContainer);
+}
 
 static void D3D12_ReleaseTransferBuffer(
     SDL_GpuRenderer *driverData,
@@ -2830,7 +2851,7 @@ static void D3D12_BeginRenderPass(
     Uint32 framebufferWidth = SDL_MAX_UINT32;
     Uint32 framebufferHeight = SDL_MAX_UINT32;
 
-    for (Uint32 i = 0; i < colorAttachmentCount; ++i) {
+    for (Uint32 i = 0; i < colorAttachmentCount; i += 1) {
         D3D12TextureContainer *container = (D3D12TextureContainer *)colorAttachmentInfos[i].textureSlice.texture;
         Uint32 h = container->createInfo.height >> colorAttachmentInfos[i].textureSlice.mipLevel;
         Uint32 w = container->createInfo.width >> colorAttachmentInfos[i].textureSlice.mipLevel;
@@ -3011,7 +3032,7 @@ static void D3D12_INTERNAL_TrackUniformBuffer(
         commandBuffer->usedUniformBuffers = SDL_realloc(
             commandBuffer->usedUniformBuffers,
             commandBuffer->usedUniformBufferCapacity * sizeof(D3D12UniformBuffer *));
-        for (i = commandBuffer->usedUniformBufferCount; i < commandBuffer->usedUniformBufferCapacity; ++i)
+        for (i = commandBuffer->usedUniformBufferCount; i < commandBuffer->usedUniformBufferCapacity; i += 1)
             SDL_zerop(commandBuffer->usedUniformBuffers[i]);
     }
 
@@ -3124,7 +3145,26 @@ static void D3D12_BindVertexBuffers(
     SDL_GpuCommandBuffer *commandBuffer,
     Uint32 firstBinding,
     SDL_GpuBufferBinding *pBindings,
-    Uint32 bindingCount) { SDL_assert(SDL_FALSE); }
+    Uint32 bindingCount)
+{
+    D3D12CommandBuffer *d3d12CommandBuffer = (D3D12CommandBuffer *)commandBuffer;
+    D3D12_VERTEX_BUFFER_VIEW views[MAX_BUFFER_BINDINGS];
+
+    for (Uint32 i = 0; i < bindingCount; i += 1) {
+        D3D12Buffer *currentBuffer = ((D3D12BufferContainer *)pBindings[i].buffer)->activeBuffer;
+        views[i].BufferLocation = currentBuffer->virtualAddress + pBindings[i].offset;
+        views[i].SizeInBytes = currentBuffer->container->size - pBindings[i].offset;
+        views[i].StrideInBytes = d3d12CommandBuffer->currentGraphicsPipeline->vertexStrides[i];
+
+        D3D12_INTERNAL_TrackBuffer(d3d12CommandBuffer, currentBuffer);
+    }
+
+    ID3D12GraphicsCommandList_IASetVertexBuffers(
+        d3d12CommandBuffer->graphicsCommandList,
+        firstBinding,
+        bindingCount,
+        views);
+}
 
 static void D3D12_BindIndexBuffer(
     SDL_GpuCommandBuffer *commandBuffer,
