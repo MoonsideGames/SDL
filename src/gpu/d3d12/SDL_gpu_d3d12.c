@@ -1182,16 +1182,13 @@ static ID3D12RootSignature *D3D12_INTERNAL_CreateGraphicsRootSignature(
     D3D12_DESCRIPTOR_RANGE descriptorRanges[MAX_ROOT_SIGNATURE_PARAMETERS];
     Uint32 parameterCount = 0;
     Uint32 rangeCount = 0;
-    D3D12_DESCRIPTOR_RANGE descriptorRange;
-    D3D12_ROOT_PARAMETER rootParameter;
+    D3D12_DESCRIPTOR_RANGE descriptorRange = { 0 };
+    D3D12_ROOT_PARAMETER rootParameter = { 0 };
 
     for (int i = 0; i < MAX_ROOT_SIGNATURE_PARAMETERS; i += 1) {
         SDL_zero(rootParameters[i]);
         SDL_zero(descriptorRanges[i]);
     }
-
-    SDL_zero(descriptorRange);
-    SDL_zero(rootParameter);
 
     if (vertexShader->samplerCount > 0) {
         /* Vertex Samplers */
@@ -4744,7 +4741,7 @@ static void D3D12_INTERNAL_TryInitializeD3D12DebugInfoQueue(D3D12Renderer *rende
 {
     ID3D12InfoQueue *infoQueue = NULL;
     D3D12_MESSAGE_SEVERITY severities[] = { D3D12_MESSAGE_SEVERITY_INFO };
-    D3D12_INFO_QUEUE_FILTER filter;
+    D3D12_INFO_QUEUE_FILTER filter = { 0 };
     HRESULT res;
 
     res = ID3D12Device_QueryInterface(
@@ -4755,7 +4752,6 @@ static void D3D12_INTERNAL_TryInitializeD3D12DebugInfoQueue(D3D12Renderer *rende
         ERROR_CHECK_RETURN("Failed to convert ID3D12Device to ID3D12InfoQueue", );
     }
 
-    SDL_zero(filter);
     filter.DenyList.NumSeverities = 1;
     filter.DenyList.pSeverityList = severities;
     ID3D12InfoQueue_PushStorageFilter(
@@ -4777,16 +4773,17 @@ static void D3D12_INTERNAL_TryInitializeD3D12DebugInfoQueue(D3D12Renderer *rende
 
 static SDL_GpuDevice *D3D12_CreateDevice(SDL_bool debugMode, SDL_bool preferLowPower)
 {
-    SDL_GpuDevice *result;
-    D3D12Renderer *renderer;
-    PFN_CREATE_DXGI_FACTORY1 CreateDXGIFactoryFunc;
+    SDL_GpuDevice *result = NULL;
+    D3D12Renderer *renderer = NULL;
+    PFN_CREATE_DXGI_FACTORY1 CreateDXGIFactoryFunc = { 0 };
     HRESULT res;
-    IDXGIFactory1 *factory1;
-    IDXGIFactory5 *factory5;
-    IDXGIFactory6 *factory6;
-    DXGI_ADAPTER_DESC1 adapterDesc;
-    PFN_D3D12_CREATE_DEVICE D3D12CreateDeviceFunc;
-    D3D12_COMMAND_QUEUE_DESC queueDesc;
+    IDXGIFactory1 *factory1 = NULL;
+    IDXGIFactory5 *factory5 = NULL;
+    IDXGIFactory6 *factory6 = NULL;
+    DXGI_ADAPTER_DESC1 adapterDesc = { 0 };
+    PFN_D3D12_CREATE_DEVICE D3D12CreateDeviceFunc = { 0 };
+    D3D12_FEATURE_DATA_ARCHITECTURE architecture = { 0 };
+    D3D12_COMMAND_QUEUE_DESC queueDesc = { 0 };
 
     renderer = (D3D12Renderer *)SDL_malloc(sizeof(D3D12Renderer));
     SDL_zerop(renderer);
@@ -4951,8 +4948,6 @@ static SDL_GpuDevice *D3D12_CreateDevice(SDL_bool debugMode, SDL_bool preferLowP
     }
 
     /* Check UMA */
-    /* Call seems to currently go to the wrong vtbl entry
-    D3D12_FEATURE_DATA_ARCHITECTURE architecture;
     res = ID3D12Device_CheckFeatureSupport(
         renderer->device,
         D3D12_FEATURE_ARCHITECTURE,
@@ -4964,10 +4959,7 @@ static SDL_GpuDevice *D3D12_CreateDevice(SDL_bool debugMode, SDL_bool preferLowP
     }
 
     renderer->UMA = (SDL_bool)architecture.UMA;
-    */
-    renderer->UMA = SDL_FALSE;
 
-    SDL_zero(queueDesc);
     queueDesc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
     queueDesc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
 
