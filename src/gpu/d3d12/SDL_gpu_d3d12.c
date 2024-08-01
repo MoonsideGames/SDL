@@ -4765,7 +4765,6 @@ static SDL_GpuDevice *D3D12_CreateDevice(SDL_bool debugMode, SDL_bool preferLowP
     IDXGIFactory5 *factory5;
     IDXGIFactory6 *factory6;
     DXGI_ADAPTER_DESC1 adapterDesc;
-    D3D12_FEATURE_DATA_ARCHITECTURE architecture;
     PFN_D3D12_CREATE_DEVICE D3D12CreateDeviceFunc;
     D3D12_COMMAND_QUEUE_DESC queueDesc;
 
@@ -4933,6 +4932,7 @@ static SDL_GpuDevice *D3D12_CreateDevice(SDL_bool debugMode, SDL_bool preferLowP
 
     /* Check UMA */
     /* Call seems to currently go to the wrong vtbl entry
+    D3D12_FEATURE_DATA_ARCHITECTURE architecture;
     res = ID3D12Device_CheckFeatureSupport(
         renderer->device,
         D3D12_FEATURE_ARCHITECTURE,
