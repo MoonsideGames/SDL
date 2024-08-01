@@ -521,6 +521,10 @@ struct D3D12Renderer
     Uint32 buffersToDestroyCount;
     Uint32 buffersToDestroyCapacity;
 
+    D3D12Texture **texturesToDestroy;
+    Uint32 texturesToDestroyCount;
+    Uint32 texturesToDestroyCapacity;
+
     /* Locks */
     SDL_Mutex *stagingDescriptorHeapLock;
     SDL_Mutex *acquireCommandBufferLock;
@@ -834,6 +838,77 @@ static void D3D12_INTERNAL_ReleaseBufferContainer(
     SDL_UnlockMutex(renderer->disposeLock);
 }
 
+static void D3D12_INTERNAL_DestroyTexture(
+    D3D12Renderer *renderer,
+    D3D12Texture *texture)
+{
+    for (Uint32 i = 0; i < texture->subresourceCount; i += 1) {
+        D3D12TextureSubresource *subresource = &texture->subresources[i];
+        D3D12_INTERNAL_ReleaseCpuDescriptorHandle(
+            renderer,
+            &subresource->rtvHandle);
+        D3D12_INTERNAL_ReleaseCpuDescriptorHandle(
+            renderer,
+            &subresource->dsvHandle);
+        D3D12_INTERNAL_ReleaseCpuDescriptorHandle(
+            renderer,
+            &subresource->srvHandle);
+        D3D12_INTERNAL_ReleaseCpuDescriptorHandle(
+            renderer,
+            &subresource->uavHandle);
+    }
+    SDL_free(texture->subresources);
+
+    D3D12_INTERNAL_ReleaseCpuDescriptorHandle(
+        renderer,
+        &texture->srvHandle);
+
+    ID3D12Resource_Release(texture->resource);
+
+    SDL_free(texture);
+}
+
+static void D3D12_INTERNAL_ReleaseTexture(
+    D3D12Renderer *renderer,
+    D3D12Texture *texture)
+{
+    SDL_LockMutex(renderer->disposeLock);
+
+    EXPAND_ARRAY_IF_NEEDED(
+        renderer->texturesToDestroy,
+        D3D12Texture *,
+        renderer->texturesToDestroyCount + 1,
+        renderer->texturesToDestroyCapacity,
+        renderer->texturesToDestroyCapacity * 2)
+
+    renderer->texturesToDestroy[renderer->texturesToDestroyCount] = texture;
+    renderer->texturesToDestroyCount += 1;
+
+    SDL_UnlockMutex(renderer->disposeLock);
+}
+
+static void D3D12_INTERNAL_ReleaseTextureContainer(
+    D3D12Renderer *renderer,
+    D3D12TextureContainer *container)
+{
+    SDL_LockMutex(renderer->disposeLock);
+
+    for (Uint32 i = 0; i < container->textureCount; i += 1) {
+        D3D12_INTERNAL_ReleaseTexture(
+            renderer,
+            container->textures[i]);
+    }
+
+    /* Containers are just client handles, so we can destroy immediately */
+    if (container->debugName) {
+        SDL_free(container->debugName);
+    }
+    SDL_free(container->textures);
+    SDL_free(container);
+
+    SDL_UnlockMutex(renderer->disposeLock);
+}
+
 static void D3D12_INTERNAL_ReleaseFenceToPool(
     D3D12Renderer *renderer,
     D3D12Fence *fence)
@@ -1048,29 +1123,35 @@ static void D3D12_INTERNAL_ResourceBarrier(
     Uint32 subresourceIndex,
     SDL_bool needsUavBarrier)
 {
-    /* 0: transition barrier, 1: UAV barrier (optional) */
     D3D12_RESOURCE_BARRIER barrierDesc[2];
-    Uint32 numBarriers = 1;
+    Uint32 numBarriers = 0;
 
-    barrierDesc[0].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-    barrierDesc[0].Flags = 0;
-    barrierDesc[0].Transition.StateBefore = sourceState;
-    barrierDesc[0].Transition.StateAfter = destinationState;
-    barrierDesc[0].Transition.pResource = resource;
-    barrierDesc[0].Transition.Subresource = subresourceIndex;
-
-    if (needsUavBarrier) {
-        barrierDesc[1].Type = D3D12_RESOURCE_BARRIER_TYPE_UAV;
-        barrierDesc[1].Flags = 0;
-        barrierDesc[1].UAV.pResource = resource;
+    /* No transition barrier is needed if the state is not changing. */
+    if (sourceState != destinationState) {
+        barrierDesc[numBarriers].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+        barrierDesc[numBarriers].Flags = 0;
+        barrierDesc[numBarriers].Transition.StateBefore = sourceState;
+        barrierDesc[numBarriers].Transition.StateAfter = destinationState;
+        barrierDesc[numBarriers].Transition.pResource = resource;
+        barrierDesc[numBarriers].Transition.Subresource = subresourceIndex;
 
         numBarriers += 1;
     }
 
-    ID3D12GraphicsCommandList_ResourceBarrier(
-        commandBuffer->graphicsCommandList,
-        numBarriers,
-        barrierDesc);
+    if (needsUavBarrier) {
+        barrierDesc[numBarriers].Type = D3D12_RESOURCE_BARRIER_TYPE_UAV;
+        barrierDesc[numBarriers].Flags = 0;
+        barrierDesc[numBarriers].UAV.pResource = resource;
+
+        numBarriers += 1;
+    }
+
+    if (numBarriers > 0) {
+        ID3D12GraphicsCommandList_ResourceBarrier(
+            commandBuffer->graphicsCommandList,
+            numBarriers,
+            barrierDesc);
+    }
 }
 
 static void D3D12_INTERNAL_TextureSubresourceBarrier(
@@ -2008,11 +2089,19 @@ static D3D12Texture *D3D12_INTERNAL_CreateTexture(
     D3D12_RESOURCE_STATES initialState;
     HRESULT res;
 
+    if (textureCreateInfo->usageFlags & SDL_GPU_TEXTUREUSAGE_COLOR_TARGET_BIT) {
+        resourceFlags |= D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+    }
+
+    if (textureCreateInfo->usageFlags & SDL_GPU_TEXTUREUSAGE_DEPTH_STENCIL_TARGET_BIT) {
+        resourceFlags |= D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
+    }
+
     if (textureCreateInfo->usageFlags & SDL_GPU_TEXTUREUSAGE_COMPUTE_STORAGE_WRITE_BIT) {
         resourceFlags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
     }
 
-    heapProperties.Type = D3D12_HEAP_TYPE_DEFAULT;
+    heapProperties.Type = D3D12_HEAP_TYPE_CUSTOM; /* Should this just be HEAP_TYPE_DEFAULT? */
     heapProperties.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_NOT_AVAILABLE;
     heapProperties.MemoryPoolPreference = renderer->UMA ? D3D12_MEMORY_POOL_L0 : D3D12_MEMORY_POOL_L1;
     heapProperties.CreationNodeMask = 0; /* We don't do multi-adapter operation */
@@ -2046,22 +2135,7 @@ static D3D12Texture *D3D12_INTERNAL_CreateTexture(
         desc.Flags = resourceFlags;
     }
 
-    if (textureCreateInfo->usageFlags & SDL_GPU_TEXTUREUSAGE_SAMPLER_BIT) {
-        initialState = D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE;
-    } else if (textureCreateInfo->usageFlags & SDL_GPU_TEXTUREUSAGE_GRAPHICS_STORAGE_READ_BIT) {
-        initialState = D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE;
-    } else if (textureCreateInfo->usageFlags & SDL_GPU_TEXTUREUSAGE_COLOR_TARGET_BIT) {
-        initialState = D3D12_RESOURCE_STATE_RENDER_TARGET;
-    } else if (textureCreateInfo->usageFlags & SDL_GPU_TEXTUREUSAGE_DEPTH_STENCIL_TARGET_BIT) {
-        initialState = D3D12_RESOURCE_STATE_DEPTH_WRITE;
-    } else if (textureCreateInfo->usageFlags & SDL_GPU_TEXTUREUSAGE_COMPUTE_STORAGE_READ_BIT) {
-        initialState = D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE;
-    } else if (textureCreateInfo->usageFlags & SDL_GPU_TEXTUREUSAGE_COMPUTE_STORAGE_WRITE_BIT) {
-        initialState = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
-    } else {
-        SDL_LogError(SDL_LOG_CATEGORY_GPU, "Creating texture with no usage flags is invalid!");
-        return NULL;
-    }
+    initialState = D3D12_INTERNAL_DefaultTextureResourceState(textureCreateInfo->usageFlags);
 
     res = ID3D12Device_CreateCommittedResource(
         renderer->device,
@@ -2584,7 +2658,15 @@ static void D3D12_PopDebugGroup(
 
 static void D3D12_ReleaseTexture(
     SDL_GpuRenderer *driverData,
-    SDL_GpuTexture *texture) { SDL_assert(SDL_FALSE); }
+    SDL_GpuTexture *texture)
+{
+    D3D12Renderer *renderer = (D3D12Renderer *)driverData;
+    D3D12TextureContainer *container = (D3D12TextureContainer *)texture;
+
+    D3D12_INTERNAL_ReleaseTextureContainer(
+        renderer,
+        container);
+}
 
 static void D3D12_ReleaseSampler(
     SDL_GpuRenderer *driverData,
@@ -4497,6 +4579,22 @@ static void D3D12_INTERNAL_PerformPendingDestroys(D3D12Renderer *renderer)
         }
     }
 
+    for (Sint32 i = renderer->texturesToDestroyCount - 1; i >= 0; i -= 1) {
+        Sint32 refCountTotal = 0;
+        for (Sint32 subresourceIndex = 0; subresourceIndex < renderer->texturesToDestroy[i]->subresourceCount; subresourceIndex += 1) {
+            refCountTotal += SDL_AtomicGet(&renderer->texturesToDestroy[i]->subresources[subresourceIndex].referenceCount);
+        }
+
+        if (refCountTotal == 0) {
+            D3D12_INTERNAL_DestroyTexture(
+                renderer,
+                renderer->texturesToDestroy[i]);
+
+            renderer->texturesToDestroy[i] = renderer->texturesToDestroy[renderer->texturesToDestroyCount - 1];
+            renderer->texturesToDestroyCount -= 1;
+        }
+    }
+
     SDL_UnlockMutex(renderer->disposeLock);
 }
 
@@ -5337,6 +5435,11 @@ static SDL_GpuDevice *D3D12_CreateDevice(SDL_bool debugMode, SDL_bool preferLowP
     renderer->buffersToDestroyCount = 0;
     renderer->buffersToDestroy = SDL_malloc(
         renderer->buffersToDestroyCapacity * sizeof(D3D12Buffer *));
+
+    renderer->texturesToDestroyCapacity = 4;
+    renderer->texturesToDestroyCount = 0;
+    renderer->texturesToDestroy = SDL_malloc(
+        renderer->texturesToDestroyCapacity * sizeof(D3D12Texture *));
 
     /* Locks */
     renderer->stagingDescriptorHeapLock = SDL_CreateMutex();
