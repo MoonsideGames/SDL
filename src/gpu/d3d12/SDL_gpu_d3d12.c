@@ -489,7 +489,10 @@ struct D3D12Renderer
     ID3D12CommandQueue *commandQueue;
 
     SDL_bool debugMode;
+    SDL_bool GPUUploadHeapSupported;
+    /* FIXME: these might not be necessary since we're not using custom heaps */
     SDL_bool UMA;
+    SDL_bool UMACacheCoherent;
 
     /* Resources */
 
@@ -2213,9 +2216,9 @@ static D3D12Texture *D3D12_INTERNAL_CreateTexture(
         resourceFlags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
     }
 
-    heapProperties.Type = D3D12_HEAP_TYPE_CUSTOM; /* Should this just be HEAP_TYPE_DEFAULT? */
-    heapProperties.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_NOT_AVAILABLE;
-    heapProperties.MemoryPoolPreference = renderer->UMA ? D3D12_MEMORY_POOL_L0 : D3D12_MEMORY_POOL_L1;
+    heapProperties.Type = D3D12_HEAP_TYPE_DEFAULT;
+    heapProperties.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
+    heapProperties.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
     heapProperties.CreationNodeMask = 0; /* We don't do multi-adapter operation */
     heapProperties.VisibleNodeMask = 0;  /* We don't do multi-adapter operation */
 
@@ -2522,9 +2525,9 @@ static D3D12Buffer *D3D12_INTERNAL_CreateBuffer(
     heapProperties.VisibleNodeMask = 0;  /* We don't do multi-adapter operation */
 
     if (type == D3D12_BUFFER_TYPE_GPU) {
-        heapProperties.Type = D3D12_HEAP_TYPE_CUSTOM; /* FIXME: should we just use HEAP_TYPE_UPLOAD? */
-        heapProperties.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_NOT_AVAILABLE;
-        heapProperties.MemoryPoolPreference = renderer->UMA ? D3D12_MEMORY_POOL_L0 : D3D12_MEMORY_POOL_L1;
+        heapProperties.Type = D3D12_HEAP_TYPE_DEFAULT;
+        heapProperties.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
+        heapProperties.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
         heapFlags = D3D12_HEAP_FLAG_NONE;
 
         if (usageFlags & SDL_GPU_BUFFERUSAGE_VERTEX_BIT) {
@@ -2544,21 +2547,28 @@ static D3D12Buffer *D3D12_INTERNAL_CreateBuffer(
             return NULL;
         }
     } else if (type == D3D12_BUFFER_TYPE_UPLOAD) {
-        heapProperties.Type = D3D12_HEAP_TYPE_CUSTOM;                           /* FIXME: should we just use HEAP_TYPE_UPLOAD? */
-        heapProperties.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_WRITE_COMBINE; /* FIXME: is this right? */
-        heapProperties.MemoryPoolPreference = D3D12_MEMORY_POOL_L0;
+        heapProperties.Type = D3D12_HEAP_TYPE_UPLOAD;
+        heapProperties.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
+        heapProperties.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
         heapFlags = D3D12_HEAP_FLAG_NONE;
         initialState = D3D12_RESOURCE_STATE_GENERIC_READ;
     } else if (type == D3D12_BUFFER_TYPE_DOWNLOAD) {
-        heapProperties.Type = D3D12_HEAP_TYPE_READBACK; /* FIXME: is this right? */
+        heapProperties.Type = D3D12_HEAP_TYPE_READBACK;
         heapProperties.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
         heapProperties.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
         heapFlags = D3D12_HEAP_FLAG_NONE;
         initialState = D3D12_RESOURCE_STATE_COPY_DEST;
     } else if (type == D3D12_BUFFER_TYPE_UNIFORM) {
-        heapProperties.Type = D3D12_HEAP_TYPE_CUSTOM; /* FIXME: should we just use HEAP_TYPE_UPLOAD? */
-        heapProperties.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_WRITE_COMBINE;
-        heapProperties.MemoryPoolPreference = renderer->UMA ? D3D12_MEMORY_POOL_L0 : D3D12_MEMORY_POOL_L1;
+        /* D3D12 is badly designed, so we have to check if the fast path for uniform buffers is enabled */
+        if (renderer->GPUUploadHeapSupported) {
+            heapProperties.Type = D3D12_HEAP_TYPE_GPU_UPLOAD;
+            heapProperties.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
+            heapProperties.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
+        } else {
+            heapProperties.Type = D3D12_HEAP_TYPE_UPLOAD;
+            heapProperties.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
+            heapProperties.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
+        }
         heapFlags = D3D12_HEAP_FLAG_ALLOW_ONLY_BUFFERS;
         initialState = D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER;
     } else {
@@ -5748,6 +5758,20 @@ static SDL_GpuDevice *D3D12_CreateDevice(SDL_bool debugMode, SDL_bool preferLowP
     }
 
     renderer->UMA = (SDL_bool)architecture.UMA;
+    renderer->UMACacheCoherent = (SDL_bool)architecture.CacheCoherentUMA;
+
+    /* Check "GPU Upload Heap" support (for fast uniform buffers) */
+    D3D12_FEATURE_DATA_D3D12_OPTIONS16 options16 = { 0 }; /* 15 wasn't enough, huh? */
+    renderer->GPUUploadHeapSupported = SDL_FALSE;
+    res = ID3D12Device_CheckFeatureSupport(
+        renderer->device,
+        D3D12_FEATURE_D3D12_OPTIONS16,
+        &options16,
+        sizeof(options16));
+
+    if (SUCCEEDED(res)) {
+        renderer->GPUUploadHeapSupported = options16.GPUUploadHeapSupported;
+    }
 
     queueDesc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
     queueDesc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
