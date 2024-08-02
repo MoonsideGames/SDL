@@ -530,6 +530,10 @@ struct D3D12Renderer
     Uint32 samplersToDestroyCount;
     Uint32 samplersToDestroyCapacity;
 
+    D3D12GraphicsPipeline **graphicsPipelinesToDestroy;
+    Uint32 graphicsPipelinesToDestroyCount;
+    Uint32 graphicsPipelinesToDestroyCapacity;
+
     /* Locks */
     SDL_Mutex *stagingDescriptorHeapLock;
     SDL_Mutex *acquireCommandBufferLock;
@@ -607,6 +611,10 @@ struct D3D12CommandBuffer
     D3D12Sampler **usedSamplers;
     Uint32 usedSamplerCount;
     Uint32 usedSamplerCapacity;
+
+    D3D12GraphicsPipeline **usedGraphicsPipelines;
+    Uint32 usedGraphicsPipelineCount;
+    Uint32 usedGraphicsPipelineCapacity;
 };
 
 struct D3D12Shader
@@ -660,6 +668,8 @@ struct D3D12GraphicsPipeline
     Uint32 fragmentUniformBufferCount;
     Uint32 fragmentStorageBufferCount;
     Uint32 fragmentStorageTextureCount;
+
+    SDL_AtomicInt referenceCount;
 };
 
 struct D3D12Buffer
@@ -953,6 +963,16 @@ static void D3D12_INTERNAL_DestroySampler(
         &sampler->handle);
 
     SDL_free(sampler);
+}
+
+static void D3D12_INTERNAL_DestroyGraphicsPipeline(
+    D3D12Renderer *renderer,
+    D3D12GraphicsPipeline *graphicsPipeline)
+{
+    ID3D12PipelineState_Release(graphicsPipeline->pipelineState);
+    ID3D12RootSignature_Release(graphicsPipeline->rootSignature->handle);
+    SDL_free(graphicsPipeline->rootSignature);
+    SDL_free(graphicsPipeline);
 }
 
 static void D3D12_INTERNAL_ReleaseFenceToPool(
@@ -1376,6 +1396,18 @@ static void D3D12_INTERNAL_TrackSampler(
         usedSamplers,
         usedSamplerCount,
         usedSamplerCapacity)
+}
+
+static void D3D12_INTERNAL_TrackGraphicsPipeline(
+    D3D12CommandBuffer *commandBuffer,
+    D3D12GraphicsPipeline *graphicsPipeline)
+{
+    TRACK_RESOURCE(
+        graphicsPipeline,
+        D3D12GraphicsPipeline *,
+        usedGraphicsPipelines,
+        usedGraphicsPipelineCount,
+        usedGraphicsPipelineCapacity)
 }
 
 #undef TRACK_RESOURCE
@@ -2073,6 +2105,7 @@ static SDL_GpuGraphicsPipeline *D3D12_CreateGraphicsPipeline(
     pipeline->fragmentStorageBufferCount = fragShader->storageBufferCount;
     pipeline->fragmentUniformBufferCount = fragShader->uniformBufferCount;
 
+    SDL_AtomicSet(&pipeline->referenceCount, 0);
     return (SDL_GpuGraphicsPipeline *)pipeline;
 }
 
@@ -2864,17 +2897,22 @@ static void D3D12_ReleaseGraphicsPipeline(
     SDL_GpuRenderer *driverData,
     SDL_GpuGraphicsPipeline *graphicsPipeline)
 {
-    D3D12GraphicsPipeline *pipeline = (D3D12GraphicsPipeline *)graphicsPipeline;
-    if (pipeline->pipelineState) {
-        ID3D12PipelineState_Release(pipeline->pipelineState);
-        pipeline->pipelineState = NULL;
-    }
-    if (pipeline->rootSignature) {
-        ID3D12RootSignature_Release(pipeline->rootSignature->handle);
-        SDL_free(pipeline->rootSignature);
-        pipeline->rootSignature = NULL;
-    }
-    SDL_free(pipeline);
+    D3D12Renderer *renderer = (D3D12Renderer *)driverData;
+    D3D12GraphicsPipeline *d3d12GraphicsPipeline = (D3D12GraphicsPipeline *)graphicsPipeline;
+
+    SDL_LockMutex(renderer->disposeLock);
+
+    EXPAND_ARRAY_IF_NEEDED(
+        renderer->graphicsPipelinesToDestroy,
+        D3D12GraphicsPipeline *,
+        renderer->graphicsPipelinesToDestroyCount + 1,
+        renderer->graphicsPipelinesToDestroyCapacity,
+        renderer->graphicsPipelinesToDestroyCapacity * 2)
+
+    renderer->graphicsPipelinesToDestroy[renderer->graphicsPipelinesToDestroyCount] = d3d12GraphicsPipeline;
+    renderer->graphicsPipelinesToDestroyCount += 1;
+
+    SDL_UnlockMutex(renderer->disposeLock);
 }
 
 /* Render Pass */
@@ -3368,6 +3406,8 @@ static void D3D12_BindGraphicsPipeline(
                 d3d12CommandBuffer);
         }
     }
+
+    D3D12_INTERNAL_TrackGraphicsPipeline(d3d12CommandBuffer, pipeline);
 }
 
 static void D3D12_BindVertexBuffers(
@@ -4702,6 +4742,11 @@ static void D3D12_INTERNAL_AllocateCommandBuffer(
     commandBuffer->usedSamplers = SDL_malloc(
         commandBuffer->usedSamplerCapacity * sizeof(D3D12Sampler *));
 
+    commandBuffer->usedGraphicsPipelineCapacity = 4;
+    commandBuffer->usedGraphicsPipelineCount = 0;
+    commandBuffer->usedGraphicsPipelines = SDL_malloc(
+        commandBuffer->usedGraphicsPipelineCapacity * sizeof(D3D12GraphicsPipeline *));
+
     commandBuffer->usedUniformBufferCapacity = 4;
     commandBuffer->usedUniformBufferCount = 0;
     commandBuffer->usedUniformBuffers = SDL_malloc(
@@ -4911,6 +4956,17 @@ static void D3D12_INTERNAL_PerformPendingDestroys(D3D12Renderer *renderer)
         }
     }
 
+    for (Sint32 i = renderer->graphicsPipelinesToDestroyCount - 1; i >= 0; i -= 1) {
+        if (SDL_AtomicGet(&renderer->graphicsPipelinesToDestroy[i]->referenceCount) == 0) {
+            D3D12_INTERNAL_DestroyGraphicsPipeline(
+                renderer,
+                renderer->graphicsPipelinesToDestroy[i]);
+
+            renderer->graphicsPipelinesToDestroy[i] = renderer->graphicsPipelinesToDestroy[renderer->graphicsPipelinesToDestroyCount - 1];
+            renderer->graphicsPipelinesToDestroyCount -= 1;
+        }
+    }
+
     SDL_UnlockMutex(renderer->disposeLock);
 }
 
@@ -4966,6 +5022,11 @@ static void D3D12_INTERNAL_CleanCommandBuffer(
         (void)SDL_AtomicDecRef(&commandBuffer->usedSamplers[i]->referenceCount);
     }
     commandBuffer->usedSamplerCount = 0;
+
+    for (i = 0; i < commandBuffer->usedGraphicsPipelineCount; i += 1) {
+        (void)SDL_AtomicDecRef(&commandBuffer->usedGraphicsPipelines[i]->referenceCount);
+    }
+    commandBuffer->usedGraphicsPipelineCount = 0;
 
     /* Reset presentation */
     commandBuffer->presentDataCount = 0;
@@ -5766,6 +5827,11 @@ static SDL_GpuDevice *D3D12_CreateDevice(SDL_bool debugMode, SDL_bool preferLowP
     renderer->samplersToDestroyCount = 0;
     renderer->samplersToDestroy = SDL_malloc(
         renderer->samplersToDestroyCapacity * sizeof(D3D12Sampler *));
+
+    renderer->graphicsPipelinesToDestroyCapacity = 4;
+    renderer->graphicsPipelinesToDestroyCount = 0;
+    renderer->graphicsPipelinesToDestroy = SDL_malloc(
+        renderer->graphicsPipelinesToDestroyCapacity * sizeof(D3D12GraphicsPipeline *));
 
     /* Locks */
     renderer->stagingDescriptorHeapLock = SDL_CreateMutex();
