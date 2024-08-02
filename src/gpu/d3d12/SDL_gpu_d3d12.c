@@ -685,7 +685,7 @@ struct D3D12Buffer
     D3D12CPUDescriptor srvDescriptor;
     D3D12CPUDescriptor cbvDescriptor;
     D3D12_GPU_VIRTUAL_ADDRESS virtualAddress;
-    Uint8 *mapPointer; /* NULL except for upload buffers */
+    Uint8 *mapPointer; /* NULL except for upload buffers and fast uniform buffers */
     SDL_AtomicInt referenceCount;
     SDL_bool transitioned; /* used for initial resource barrier */
 };
@@ -1051,6 +1051,14 @@ static void D3D12_INTERNAL_DestroyRenderer(D3D12Renderer *renderer)
     }
     SDL_free(renderer->claimedWindows);
 
+    /* Release uniform buffers */
+    for (Uint32 i = 0; i < renderer->uniformBufferPoolCount; i += 1) {
+        D3D12_INTERNAL_DestroyBuffer(
+            renderer,
+            renderer->uniformBufferPool[i]->buffer);
+        SDL_free(renderer->uniformBufferPool[i]);
+    }
+
     /* Clean up descriptor heaps */
     for (Uint32 i = 0; i < D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES; i += 1) {
         if (renderer->stagingDescriptorHeaps[i]) {
@@ -1182,7 +1190,7 @@ static inline Uint32 D3D12_INTERNAL_CalcSubresource(
     Uint32 layer,
     Uint32 numLevels)
 {
-    return mipLevel * (layer * numLevels);
+    return mipLevel + (layer * numLevels);
 }
 
 static void D3D12_INTERNAL_ResourceBarrier(
@@ -3301,6 +3309,10 @@ static void D3D12_INTERNAL_TrackUniformBuffer(
 
     commandBuffer->usedUniformBuffers[commandBuffer->usedUniformBufferCount] = uniformBuffer;
     commandBuffer->usedUniformBufferCount += 1;
+
+    D3D12_INTERNAL_TrackBuffer(
+        commandBuffer,
+        uniformBuffer->buffer);
 }
 
 static D3D12UniformBuffer *D3D12_INTERNAL_AcquireUniformBufferFromPool(
@@ -3329,6 +3341,12 @@ static D3D12UniformBuffer *D3D12_INTERNAL_AcquireUniformBufferFromPool(
     uniformBuffer->drawOffset = 0;
     uniformBuffer->writeOffset = 0;
 
+    ID3D12Resource_Map(
+        uniformBuffer->buffer->handle,
+        0,
+        NULL,
+        (void **)&uniformBuffer->buffer->mapPointer);
+
     D3D12_INTERNAL_TrackUniformBuffer(commandBuffer, uniformBuffer);
 
     return uniformBuffer;
@@ -3347,6 +3365,80 @@ static void D3D12_INTERNAL_ReturnUniformBufferToPool(
 
     renderer->uniformBufferPool[renderer->uniformBufferPoolCount] = uniformBuffer;
     renderer->uniformBufferPoolCount += 1;
+}
+
+static void D3D12_INTERNAL_PushUniformData(
+    D3D12CommandBuffer *commandBuffer,
+    SDL_GpuShaderStage shaderStage,
+    Uint32 slotIndex,
+    const void *data,
+    Uint32 dataLengthInBytes)
+{
+    D3D12UniformBuffer *uniformBuffer;
+
+    /* TODO: compute uniforms */
+    if (shaderStage == SDL_GPU_SHADERSTAGE_VERTEX) {
+        if (commandBuffer->vertexUniformBuffers[slotIndex] == NULL) {
+            commandBuffer->vertexUniformBuffers[slotIndex] = D3D12_INTERNAL_AcquireUniformBufferFromPool(
+                commandBuffer);
+        }
+        uniformBuffer = commandBuffer->vertexUniformBuffers[slotIndex];
+    } else if (shaderStage == SDL_GPU_SHADERSTAGE_FRAGMENT) {
+        if (commandBuffer->fragmentUniformBuffers[slotIndex] == NULL) {
+            commandBuffer->fragmentUniformBuffers[slotIndex] = D3D12_INTERNAL_AcquireUniformBufferFromPool(
+                commandBuffer);
+        }
+        uniformBuffer = commandBuffer->fragmentUniformBuffers[slotIndex];
+    } else {
+        SDL_LogError(SDL_LOG_CATEGORY_GPU, "Unrecognized shader stage!");
+        return;
+    }
+
+    uniformBuffer->currentBlockSize =
+        D3D12_INTERNAL_Align(
+            dataLengthInBytes,
+            256);
+
+    /* If there is no more room, acquire a new uniform buffer */
+    if (uniformBuffer->writeOffset + uniformBuffer->currentBlockSize >= UNIFORM_BUFFER_SIZE) {
+        ID3D12Resource_Unmap(
+            uniformBuffer->buffer->handle,
+            0,
+            NULL);
+        uniformBuffer->buffer->mapPointer = NULL;
+
+        uniformBuffer = D3D12_INTERNAL_AcquireUniformBufferFromPool(commandBuffer);
+
+        uniformBuffer->drawOffset = 0;
+        uniformBuffer->writeOffset = 0;
+
+        /* TODO: compute uniforms */
+        if (shaderStage == SDL_GPU_SHADERSTAGE_VERTEX) {
+            commandBuffer->vertexUniformBuffers[slotIndex] = uniformBuffer;
+        } else if (shaderStage == SDL_GPU_SHADERSTAGE_FRAGMENT) {
+            commandBuffer->fragmentUniformBuffers[slotIndex] = uniformBuffer;
+        } else {
+            SDL_LogError(SDL_LOG_CATEGORY_GPU, "Unrecognized shader stage!");
+        }
+    }
+
+    uniformBuffer->drawOffset = uniformBuffer->writeOffset;
+
+    SDL_memcpy(
+        (Uint8 *)uniformBuffer->buffer->mapPointer + uniformBuffer->writeOffset,
+        data,
+        dataLengthInBytes);
+
+    uniformBuffer->writeOffset += uniformBuffer->currentBlockSize;
+
+    /* TODO: compute uniforms */
+    if (shaderStage == SDL_GPU_SHADERSTAGE_VERTEX) {
+        commandBuffer->needVertexUniformBufferBind[slotIndex] = SDL_TRUE;
+    } else if (shaderStage == SDL_GPU_SHADERSTAGE_FRAGMENT) {
+        commandBuffer->needFragmentUniformBufferBind[slotIndex] = SDL_TRUE;
+    } else {
+        SDL_LogError(SDL_LOG_CATEGORY_GPU, "Unrecognized shader stage!");
+    }
 }
 
 static void D3D12_BindGraphicsPipeline(
@@ -3515,13 +3607,33 @@ static void D3D12_PushVertexUniformData(
     SDL_GpuCommandBuffer *commandBuffer,
     Uint32 slotIndex,
     const void *data,
-    Uint32 dataLengthInBytes) { SDL_assert(SDL_FALSE); }
+    Uint32 dataLengthInBytes)
+{
+    D3D12CommandBuffer *d3d12CommandBuffer = (D3D12CommandBuffer *)commandBuffer;
+
+    D3D12_INTERNAL_PushUniformData(
+        d3d12CommandBuffer,
+        SDL_GPU_SHADERSTAGE_VERTEX,
+        slotIndex,
+        data,
+        dataLengthInBytes);
+}
 
 static void D3D12_PushFragmentUniformData(
     SDL_GpuCommandBuffer *commandBuffer,
     Uint32 slotIndex,
     const void *data,
-    Uint32 dataLengthInBytes) { SDL_assert(SDL_FALSE); }
+    Uint32 dataLengthInBytes)
+{
+    D3D12CommandBuffer *d3d12CommandBuffer = (D3D12CommandBuffer *)commandBuffer;
+
+    D3D12_INTERNAL_PushUniformData(
+        d3d12CommandBuffer,
+        SDL_GPU_SHADERSTAGE_FRAGMENT,
+        slotIndex,
+        data,
+        dataLengthInBytes);
+}
 
 static void D3D12_INTERNAL_WriteGPUDescriptors(
     D3D12CommandBuffer *commandBuffer,
@@ -3898,7 +4010,7 @@ static void D3D12_MapTransferBuffer(
             container->activeBuffer->handle,
             0,
             NULL,
-            ppData);
+            (void **)ppData);
     }
 }
 
@@ -5069,6 +5181,27 @@ static void D3D12_Submit(
 
     SDL_LockMutex(renderer->submitLock);
 
+    /* Unmap uniform buffers */
+    for (Uint32 i = 0; i < MAX_UNIFORM_BUFFERS_PER_STAGE; i += 1) {
+        if (d3d12CommandBuffer->vertexUniformBuffers[i] != NULL) {
+            ID3D12Resource_Unmap(
+                d3d12CommandBuffer->vertexUniformBuffers[i]->buffer->handle,
+                0,
+                NULL);
+            d3d12CommandBuffer->vertexUniformBuffers[i]->buffer->mapPointer = NULL;
+        }
+
+        if (d3d12CommandBuffer->fragmentUniformBuffers[i] != NULL) {
+            ID3D12Resource_Unmap(
+                d3d12CommandBuffer->fragmentUniformBuffers[i]->buffer->handle,
+                0,
+                NULL);
+            d3d12CommandBuffer->fragmentUniformBuffers[i]->buffer->mapPointer = NULL;
+        }
+
+        /* TODO: compute uniforms */
+    }
+
     /* Transition present textures to present mode */
     for (Uint32 i = 0; i < d3d12CommandBuffer->presentDataCount; i += 1) {
         Uint32 swapchainIndex = d3d12CommandBuffer->presentDatas[i].swapchainImageIndex;
@@ -5729,7 +5862,7 @@ static SDL_GpuDevice *D3D12_CreateDevice(SDL_bool debugMode, SDL_bool preferLowP
 
     /* Initialize the D3D12 debug info queue, if applicable */
     if (debugMode) {
-        D3D12_INTERNAL_TryInitializeD3D12DebugInfoQueue(renderer);
+        // D3D12_INTERNAL_TryInitializeD3D12DebugInfoQueue(renderer);
     }
 
     /* Check UMA */
