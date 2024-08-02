@@ -447,6 +447,7 @@ typedef struct D3D12Sampler
 {
     SDL_GpuSamplerCreateInfo createInfo;
     D3D12CPUDescriptor handle;
+    SDL_AtomicInt referenceCount;
 } D3D12Sampler;
 
 typedef struct D3D12WindowData
@@ -525,6 +526,10 @@ struct D3D12Renderer
     Uint32 texturesToDestroyCount;
     Uint32 texturesToDestroyCapacity;
 
+    D3D12Sampler **samplersToDestroy;
+    Uint32 samplersToDestroyCount;
+    Uint32 samplersToDestroyCapacity;
+
     /* Locks */
     SDL_Mutex *stagingDescriptorHeapLock;
     SDL_Mutex *acquireCommandBufferLock;
@@ -598,6 +603,10 @@ struct D3D12CommandBuffer
     D3D12Buffer **usedBuffers;
     Uint32 usedBufferCount;
     Uint32 usedBufferCapacity;
+
+    D3D12Sampler **usedSamplers;
+    Uint32 usedSamplerCount;
+    Uint32 usedSamplerCapacity;
 };
 
 struct D3D12Shader
@@ -933,6 +942,17 @@ static void D3D12_INTERNAL_ReleaseTextureContainer(
     SDL_free(container);
 
     SDL_UnlockMutex(renderer->disposeLock);
+}
+
+static void D3D12_INTERNAL_DestroySampler(
+    D3D12Renderer *renderer,
+    D3D12Sampler *sampler)
+{
+    D3D12_INTERNAL_ReleaseCpuDescriptorHandle(
+        renderer,
+        &sampler->handle);
+
+    SDL_free(sampler);
 }
 
 static void D3D12_INTERNAL_ReleaseFenceToPool(
@@ -1344,6 +1364,18 @@ static void D3D12_INTERNAL_TrackBuffer(
         usedBuffers,
         usedBufferCount,
         usedBufferCapacity)
+}
+
+static void D3D12_INTERNAL_TrackSampler(
+    D3D12CommandBuffer *commandBuffer,
+    D3D12Sampler *sampler)
+{
+    TRACK_RESOURCE(
+        sampler,
+        D3D12Sampler *,
+        usedSamplers,
+        usedSamplerCount,
+        usedSamplerCapacity)
 }
 
 #undef TRACK_RESOURCE
@@ -2082,6 +2114,7 @@ static SDL_GpuSampler *D3D12_CreateSampler(
         sampler->handle.cpuHandle);
 
     sampler->createInfo = *samplerCreateInfo;
+    SDL_AtomicSet(&sampler->referenceCount, 0);
     return (SDL_GpuSampler *)sampler;
 }
 
@@ -2765,7 +2798,25 @@ static void D3D12_ReleaseTexture(
 
 static void D3D12_ReleaseSampler(
     SDL_GpuRenderer *driverData,
-    SDL_GpuSampler *sampler) { SDL_assert(SDL_FALSE); }
+    SDL_GpuSampler *sampler)
+{
+    D3D12Renderer *renderer = (D3D12Renderer *)driverData;
+    D3D12Sampler *d3d12Sampler = (D3D12Sampler *)sampler;
+
+    SDL_LockMutex(renderer->disposeLock);
+
+    EXPAND_ARRAY_IF_NEEDED(
+        renderer->samplersToDestroy,
+        D3D12Sampler *,
+        renderer->samplersToDestroyCount + 1,
+        renderer->samplersToDestroyCapacity,
+        renderer->samplersToDestroyCapacity * 2)
+
+    renderer->samplersToDestroy[renderer->samplersToDestroyCount] = d3d12Sampler;
+    renderer->samplersToDestroyCount += 1;
+
+    SDL_UnlockMutex(renderer->disposeLock);
+}
 
 static void D3D12_ReleaseBuffer(
     SDL_GpuRenderer *driverData,
@@ -3401,12 +3452,9 @@ static void D3D12_BindFragmentSamplers(
                 &container->activeTexture->subresources[j]);
         }
 
-        /* FIXME: implement sampler refcount */
-        /*
         D3D12_INTERNAL_TrackSampler(
             d3d12CommandBuffer,
             sampler);
-        */
 
         d3d12CommandBuffer->fragmentSamplers[firstSlot + i] = sampler;
         d3d12CommandBuffer->fragmentSamplerTextures[firstSlot + i] = container->activeTexture;
@@ -4649,6 +4697,11 @@ static void D3D12_INTERNAL_AllocateCommandBuffer(
     commandBuffer->usedBuffers = SDL_malloc(
         commandBuffer->usedBufferCapacity * sizeof(D3D12Buffer *));
 
+    commandBuffer->usedSamplerCapacity = 4;
+    commandBuffer->usedSamplerCount = 0;
+    commandBuffer->usedSamplers = SDL_malloc(
+        commandBuffer->usedSamplerCapacity * sizeof(D3D12Sampler *));
+
     commandBuffer->usedUniformBufferCapacity = 4;
     commandBuffer->usedUniformBufferCount = 0;
     commandBuffer->usedUniformBuffers = SDL_malloc(
@@ -4847,6 +4900,17 @@ static void D3D12_INTERNAL_PerformPendingDestroys(D3D12Renderer *renderer)
         }
     }
 
+    for (Sint32 i = renderer->samplersToDestroyCount - 1; i >= 0; i -= 1) {
+        if (SDL_AtomicGet(&renderer->samplersToDestroy[i]->referenceCount) == 0) {
+            D3D12_INTERNAL_DestroySampler(
+                renderer,
+                renderer->samplersToDestroy[i]);
+
+            renderer->samplersToDestroy[i] = renderer->samplersToDestroy[renderer->samplersToDestroyCount - 1];
+            renderer->samplersToDestroyCount -= 1;
+        }
+    }
+
     SDL_UnlockMutex(renderer->disposeLock);
 }
 
@@ -4897,6 +4961,11 @@ static void D3D12_INTERNAL_CleanCommandBuffer(
         (void)SDL_AtomicDecRef(&commandBuffer->usedBuffers[i]->referenceCount);
     }
     commandBuffer->usedBufferCount = 0;
+
+    for (i = 0; i < commandBuffer->usedSamplerCount; i += 1) {
+        (void)SDL_AtomicDecRef(&commandBuffer->usedSamplers[i]->referenceCount);
+    }
+    commandBuffer->usedSamplerCount = 0;
 
     /* Reset presentation */
     commandBuffer->presentDataCount = 0;
@@ -5692,6 +5761,11 @@ static SDL_GpuDevice *D3D12_CreateDevice(SDL_bool debugMode, SDL_bool preferLowP
     renderer->texturesToDestroyCount = 0;
     renderer->texturesToDestroy = SDL_malloc(
         renderer->texturesToDestroyCapacity * sizeof(D3D12Texture *));
+
+    renderer->samplersToDestroyCapacity = 4;
+    renderer->samplersToDestroyCount = 0;
+    renderer->samplersToDestroy = SDL_malloc(
+        renderer->samplersToDestroyCapacity * sizeof(D3D12Sampler *));
 
     /* Locks */
     renderer->stagingDescriptorHeapLock = SDL_CreateMutex();
