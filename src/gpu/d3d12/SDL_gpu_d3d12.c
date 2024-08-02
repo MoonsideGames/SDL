@@ -687,6 +687,7 @@ struct D3D12Buffer
     D3D12_GPU_VIRTUAL_ADDRESS virtualAddress;
     Uint8 *mapPointer; /* NULL except for upload buffers */
     SDL_AtomicInt referenceCount;
+    SDL_bool transitioned; /* used for initial resource barrier */
 };
 
 struct D3D12BufferContainer
@@ -1313,11 +1314,13 @@ static void D3D12_INTERNAL_BufferBarrier(
 {
     D3D12_INTERNAL_ResourceBarrier(
         commandBuffer,
-        sourceState,
+        buffer->transitioned ? sourceState : D3D12_RESOURCE_STATE_COMMON,
         destinationState,
         buffer->handle,
         0,
         buffer->container->usageFlags & SDL_GPU_BUFFERUSAGE_COMPUTE_STORAGE_WRITE_BIT);
+
+    buffer->transitioned = SDL_TRUE;
 }
 
 static void D3D12_INTERNAL_BufferTransitionFromDefaultUsage(
@@ -2514,7 +2517,7 @@ static D3D12Buffer *D3D12_INTERNAL_CreateBuffer(
     D3D12_RESOURCE_DESC desc;
     D3D12_HEAP_FLAGS heapFlags = 0;
     D3D12_RESOURCE_FLAGS resourceFlags = 0;
-    D3D12_RESOURCE_STATES initialState;
+    D3D12_RESOURCE_STATES initialState = D3D12_RESOURCE_STATE_COMMON;
     HRESULT res;
 
     if (usageFlags & SDL_GPU_BUFFERUSAGE_COMPUTE_STORAGE_WRITE_BIT) {
@@ -2529,23 +2532,6 @@ static D3D12Buffer *D3D12_INTERNAL_CreateBuffer(
         heapProperties.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
         heapProperties.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
         heapFlags = D3D12_HEAP_FLAG_NONE;
-
-        if (usageFlags & SDL_GPU_BUFFERUSAGE_VERTEX_BIT) {
-            initialState = D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER;
-        } else if (usageFlags & SDL_GPU_BUFFERUSAGE_INDEX_BIT) {
-            initialState = D3D12_RESOURCE_STATE_INDEX_BUFFER;
-        } else if (usageFlags & SDL_GPU_BUFFERUSAGE_INDIRECT_BIT) {
-            initialState = D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT;
-        } else if (usageFlags & SDL_GPU_BUFFERUSAGE_GRAPHICS_STORAGE_READ_BIT) {
-            initialState = D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE;
-        } else if (usageFlags & SDL_GPU_BUFFERUSAGE_COMPUTE_STORAGE_READ_BIT) {
-            initialState = D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE;
-        } else if (usageFlags & SDL_GPU_BUFFERUSAGE_COMPUTE_STORAGE_WRITE_BIT) {
-            initialState = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
-        } else {
-            SDL_LogError(SDL_LOG_CATEGORY_GPU, "Creating GPU buffer with no usage flags is invalid!");
-            return NULL;
-        }
     } else if (type == D3D12_BUFFER_TYPE_UPLOAD) {
         heapProperties.Type = D3D12_HEAP_TYPE_UPLOAD;
         heapProperties.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
@@ -2557,7 +2543,6 @@ static D3D12Buffer *D3D12_INTERNAL_CreateBuffer(
         heapProperties.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
         heapProperties.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
         heapFlags = D3D12_HEAP_FLAG_NONE;
-        initialState = D3D12_RESOURCE_STATE_COPY_DEST;
     } else if (type == D3D12_BUFFER_TYPE_UNIFORM) {
         /* D3D12 is badly designed, so we have to check if the fast path for uniform buffers is enabled */
         if (renderer->GPUUploadHeapSupported) {
@@ -2568,9 +2553,9 @@ static D3D12Buffer *D3D12_INTERNAL_CreateBuffer(
             heapProperties.Type = D3D12_HEAP_TYPE_UPLOAD;
             heapProperties.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
             heapProperties.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
+            initialState = D3D12_RESOURCE_STATE_GENERIC_READ;
         }
-        heapFlags = D3D12_HEAP_FLAG_ALLOW_ONLY_BUFFERS;
-        initialState = D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER;
+        heapFlags = D3D12_HEAP_FLAG_NONE;
     } else {
         SDL_LogError(SDL_LOG_CATEGORY_GPU, "Unrecognized buffer type!");
         return NULL;
@@ -2687,6 +2672,7 @@ static D3D12Buffer *D3D12_INTERNAL_CreateBuffer(
     buffer->container = NULL;
     buffer->containerIndex = 0;
 
+    buffer->transitioned = initialState != D3D12_RESOURCE_STATE_COMMON;
     SDL_AtomicSet(&buffer->referenceCount, 0);
     return buffer;
 }
@@ -4594,6 +4580,7 @@ static void D3D12_UnclaimWindow(
             D3D12_ReleaseFence(
                 driverData,
                 (SDL_GpuFence *)windowData->inFlightFences[i]);
+            windowData->inFlightFences[i] = NULL;
         }
     }
 
@@ -4718,12 +4705,6 @@ static void D3D12_INTERNAL_AllocateCommandBuffer(
         return;
     }
 
-    renderer->availableCommandBufferCapacity += 1;
-
-    renderer->availableCommandBuffers = SDL_realloc(
-        renderer->availableCommandBuffers,
-        sizeof(D3D12CommandBuffer *) * renderer->availableCommandBufferCapacity);
-
     commandBuffer = SDL_malloc(sizeof(D3D12CommandBuffer));
     commandBuffer->renderer = renderer;
     commandBuffer->commandAllocator = commandAllocator;
@@ -4763,6 +4744,10 @@ static void D3D12_INTERNAL_AllocateCommandBuffer(
         commandBuffer->usedUniformBufferCapacity * sizeof(D3D12UniformBuffer *));
 
     /* Add to inactive command buffer array */
+    renderer->availableCommandBufferCapacity += 1;
+    renderer->availableCommandBuffers = SDL_realloc(
+        renderer->availableCommandBuffers,
+        sizeof(D3D12CommandBuffer *) * renderer->availableCommandBufferCapacity);
     renderer->availableCommandBuffers[renderer->availableCommandBufferCount] = commandBuffer;
     renderer->availableCommandBufferCount += 1;
 }
@@ -5099,10 +5084,11 @@ static void D3D12_Submit(
     res = ID3D12GraphicsCommandList_Close(d3d12CommandBuffer->graphicsCommandList);
     ERROR_CHECK("Failed to close command list!");
 
-    ID3D12GraphicsCommandList_QueryInterface(
+    res = ID3D12GraphicsCommandList_QueryInterface(
         d3d12CommandBuffer->graphicsCommandList,
         &D3D_IID_ID3D12CommandList,
         (void **)&commandLists[0]);
+    ERROR_CHECK("Failed to convert command list!")
 
     /* Submit the command list to the queue */
     ID3D12CommandQueue_ExecuteCommandLists(
