@@ -5665,7 +5665,7 @@ static void D3D12_INTERNAL_TryInitializeD3D12DebugInfoQueue(D3D12Renderer *rende
     res = ID3D12Device_QueryInterface(
         renderer->device,
         &D3D_IID_ID3D12InfoQueue,
-        (void **)infoQueue);
+        (void **)&infoQueue);
     if (FAILED(res)) {
         ERROR_CHECK_RETURN("Failed to convert ID3D12Device to ID3D12InfoQueue", );
     }
@@ -5862,7 +5862,7 @@ static SDL_GpuDevice *D3D12_CreateDevice(SDL_bool debugMode, SDL_bool preferLowP
 
     /* Initialize the D3D12 debug info queue, if applicable */
     if (debugMode) {
-        // D3D12_INTERNAL_TryInitializeD3D12DebugInfoQueue(renderer);
+        D3D12_INTERNAL_TryInitializeD3D12DebugInfoQueue(renderer);
     }
 
     /* Check UMA */
