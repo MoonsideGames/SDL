@@ -142,6 +142,7 @@ static const IID D3D_IID_ID3D12CommandList = { 0x7116d91c, 0xe7e4, 0x47ce, { 0xb
 static const IID D3D_IID_ID3D12GraphicsCommandList = { 0x5b160d0f, 0xac1b, 0x4185, { 0x8b, 0xa8, 0xb3, 0xae, 0x42, 0xa5, 0xa4, 0x55 } };
 static const IID D3D_IID_ID3D12Fence = { 0x0a753dcf, 0xc4d8, 0x4b91, { 0xad, 0xf6, 0xbe, 0x5a, 0x60, 0xd9, 0x5a, 0x76 } };
 static const IID D3D_IID_ID3D12RootSignature = { 0xc54a6b66, 0x72df, 0x4ee8, { 0x8b, 0xe5, 0xa9, 0x46, 0xa1, 0x42, 0x92, 0x14 } };
+static const IID D3D_IID_ID3D12CommandSignature = { 0xc36a797c, 0xec80, 0x4f0a, { 0x89, 0x85, 0xa7, 0xb2, 0x47, 0x50, 0x82, 0xd1 } };
 static const IID D3D_IID_ID3D12PipelineState = { 0x765a30f3, 0xf624, 0x4c6f, { 0xa8, 0x28, 0xac, 0xe9, 0x48, 0x62, 0x24, 0x45 } };
 static const IID D3D_IID_ID3D12Debug = { 0x344488b7, 0x6846, 0x474b, { 0xb9, 0x89, 0xf0, 0x27, 0x44, 0x82, 0x45, 0xe0 } };
 static const IID D3D_IID_ID3D12InfoQueue = { 0x0742a90b, 0xc387, 0x483f, { 0xb9, 0x46, 0x30, 0xa7, 0xe4, 0xe6, 0x14, 0x58 } };
@@ -493,6 +494,11 @@ struct D3D12Renderer
     /* FIXME: these might not be necessary since we're not using custom heaps */
     SDL_bool UMA;
     SDL_bool UMACacheCoherent;
+
+    /* Indirect command signatures */
+    ID3D12CommandSignature *indirectDrawCommandSignature;
+    ID3D12CommandSignature *indirectIndexedDrawCommandSignature;
+    ID3D12CommandSignature *indirectDispatchCommandSignature;
 
     /* Resources */
 
@@ -1110,6 +1116,18 @@ static void D3D12_INTERNAL_DestroyRenderer(D3D12Renderer *renderer)
     SDL_free(renderer->uniformBufferPool);
 
     /* Tear down D3D12 objects */
+    if (renderer->indirectDrawCommandSignature) {
+        ID3D12CommandSignature_Release(renderer->indirectDrawCommandSignature);
+        renderer->indirectDrawCommandSignature = NULL;
+    }
+    if (renderer->indirectIndexedDrawCommandSignature) {
+        ID3D12CommandSignature_Release(renderer->indirectIndexedDrawCommandSignature);
+        renderer->indirectIndexedDrawCommandSignature = NULL;
+    }
+    if (renderer->indirectDispatchCommandSignature) {
+        ID3D12CommandSignature_Release(renderer->indirectDispatchCommandSignature);
+        renderer->indirectDispatchCommandSignature = NULL;
+    }
     if (renderer->commandQueue) {
         ID3D12CommandQueue_Release(renderer->commandQueue);
         renderer->commandQueue = NULL;
@@ -3894,14 +3912,44 @@ static void D3D12_DrawPrimitivesIndirect(
     SDL_GpuBuffer *buffer,
     Uint32 offsetInBytes,
     Uint32 drawCount,
-    Uint32 stride) { SDL_assert(SDL_FALSE); }
+    Uint32 stride)
+{
+    D3D12CommandBuffer *d3d12CommandBuffer = (D3D12CommandBuffer *)commandBuffer;
+    D3D12Buffer *d3d12Buffer = ((D3D12BufferContainer *)buffer)->activeBuffer;
+
+    D3D12_INTERNAL_BindGraphicsResources(d3d12CommandBuffer);
+
+    ID3D12GraphicsCommandList_ExecuteIndirect(
+        d3d12CommandBuffer->graphicsCommandList,
+        d3d12CommandBuffer->renderer->indirectDrawCommandSignature,
+        drawCount,
+        d3d12Buffer->handle,
+        offsetInBytes,
+        NULL,
+        0);
+}
 
 static void D3D12_DrawIndexedPrimitivesIndirect(
     SDL_GpuCommandBuffer *commandBuffer,
     SDL_GpuBuffer *buffer,
     Uint32 offsetInBytes,
     Uint32 drawCount,
-    Uint32 stride) { SDL_assert(SDL_FALSE); }
+    Uint32 stride)
+{
+    D3D12CommandBuffer *d3d12CommandBuffer = (D3D12CommandBuffer *)commandBuffer;
+    D3D12Buffer *d3d12Buffer = ((D3D12BufferContainer *)buffer)->activeBuffer;
+
+    D3D12_INTERNAL_BindGraphicsResources(d3d12CommandBuffer);
+
+    ID3D12GraphicsCommandList_ExecuteIndirect(
+        d3d12CommandBuffer->graphicsCommandList,
+        d3d12CommandBuffer->renderer->indirectIndexedDrawCommandSignature,
+        drawCount,
+        d3d12Buffer->handle,
+        offsetInBytes,
+        NULL,
+        0);
+}
 
 static void D3D12_EndRenderPass(
     SDL_GpuCommandBuffer *commandBuffer)
@@ -5892,6 +5940,7 @@ static SDL_GpuDevice *D3D12_CreateDevice(SDL_bool debugMode, SDL_bool preferLowP
         renderer->GPUUploadHeapSupported = options16.GPUUploadHeapSupported;
     }
 
+    /* Create command queue */
     queueDesc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
     queueDesc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
 
@@ -5904,6 +5953,57 @@ static SDL_GpuDevice *D3D12_CreateDevice(SDL_bool debugMode, SDL_bool preferLowP
     if (FAILED(res)) {
         D3D12_INTERNAL_DestroyRendererAndFree(&renderer);
         ERROR_CHECK_RETURN("Could not create D3D12CommandQueue", NULL);
+    }
+
+    /* Create indirect command signatures */
+
+    D3D12_COMMAND_SIGNATURE_DESC commandSignatureDesc;
+    D3D12_INDIRECT_ARGUMENT_DESC indirectArgumentDesc;
+    indirectArgumentDesc.Type = D3D12_INDIRECT_ARGUMENT_TYPE_DRAW;
+    commandSignatureDesc.NodeMask = 0;
+    commandSignatureDesc.ByteStride = 16;
+    commandSignatureDesc.NumArgumentDescs = 1;
+    commandSignatureDesc.pArgumentDescs = &indirectArgumentDesc;
+
+    res = ID3D12Device_CreateCommandSignature(
+        renderer->device,
+        &commandSignatureDesc,
+        NULL,
+        &D3D_IID_ID3D12CommandSignature,
+        (void **)&renderer->indirectDrawCommandSignature);
+    if (FAILED(res)) {
+        D3D12_INTERNAL_DestroyRendererAndFree(&renderer);
+        ERROR_CHECK_RETURN("Could not create indirect draw command signature", NULL)
+    }
+
+    indirectArgumentDesc.Type = D3D12_INDIRECT_ARGUMENT_TYPE_DRAW_INDEXED;
+    commandSignatureDesc.ByteStride = 20;
+    commandSignatureDesc.pArgumentDescs = &indirectArgumentDesc;
+
+    res = ID3D12Device_CreateCommandSignature(
+        renderer->device,
+        &commandSignatureDesc,
+        NULL,
+        &D3D_IID_ID3D12CommandSignature,
+        (void **)&renderer->indirectIndexedDrawCommandSignature);
+    if (FAILED(res)) {
+        D3D12_INTERNAL_DestroyRendererAndFree(&renderer);
+        ERROR_CHECK_RETURN("Could not create indirect indexed draw command signature", NULL)
+    }
+
+    indirectArgumentDesc.Type = D3D12_INDIRECT_ARGUMENT_TYPE_DISPATCH;
+    commandSignatureDesc.ByteStride = 12;
+    commandSignatureDesc.pArgumentDescs = &indirectArgumentDesc;
+
+    res = ID3D12Device_CreateCommandSignature(
+        renderer->device,
+        &commandSignatureDesc,
+        NULL,
+        &D3D_IID_ID3D12CommandSignature,
+        (void **)&renderer->indirectDispatchCommandSignature);
+    if (FAILED(res)) {
+        D3D12_INTERNAL_DestroyRendererAndFree(&renderer);
+        ERROR_CHECK_RETURN("Could not create indirect dispatch command signature", NULL)
     }
 
     /* Initialize pools */
