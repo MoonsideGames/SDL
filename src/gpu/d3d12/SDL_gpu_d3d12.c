@@ -29,6 +29,22 @@
 
 #include <d3dcompiler.h>
 
+/* Built-in shaders, compiled with compile_shaders.bat */
+
+#define g_main D3D12_BlitFrom2D
+#include "D3D12_BlitFrom2D.h"
+#undef g_main
+
+/*
+#define g_main D3D11_BlitFrom2DArray
+#include "D3D11_BlitFrom2DArray.h"
+#undef g_main
+*/
+
+#define g_main D3D12_FullscreenVert
+#include "D3D12_FullscreenVert.h"
+#undef g_main
+
 /* Macros */
 
 #define D3DCOMPILER_API STDMETHODCALLTYPE
@@ -500,6 +516,11 @@ struct D3D12Renderer
     ID3D12CommandSignature *indirectIndexedDrawCommandSignature;
     ID3D12CommandSignature *indirectDispatchCommandSignature;
 
+    /* Blit */
+    SDL_GpuGraphicsPipeline *blitFrom2DPipeline;
+    SDL_GpuSampler *blitNearestSampler;
+    SDL_GpuSampler *blitLinearSampler;
+
     /* Resources */
 
     D3D12CommandBuffer **availableCommandBuffers;
@@ -721,11 +742,21 @@ struct D3D12UniformBuffer
     Uint32 currentBlockSize;
 };
 
+typedef struct BlitFragmentUniforms
+{
+    /* texcoord space */
+    float left;
+    float top;
+    float width;
+    float height;
+} BlitFragmentUniforms;
+
 /* Foward function declarations */
 
 static void D3D12_UnclaimWindow(SDL_GpuRenderer *driverData, SDL_Window *window);
 static void D3D12_Wait(SDL_GpuRenderer *driverData);
 static void D3D12_WaitForFences(SDL_GpuRenderer *driverData, SDL_bool waitAll, SDL_GpuFence **pFences, Uint32 fenceCount);
+static void D3D12_INTERNAL_ReleaseBlitPipelines(D3D12Renderer *renderer);
 
 /* Helpers */
 
@@ -1021,8 +1052,8 @@ static SDL_bool D3D12_QueryFence(
     SDL_GpuRenderer *driverData,
     SDL_GpuFence *fence)
 {
-    SDL_assert(SDL_FALSE);
-    return SDL_FALSE;
+    D3D12Fence *d3d12Fence = (D3D12Fence *)fence;
+    return ID3D12Fence_GetCompletedValue(d3d12Fence->handle) == D3D12_FENCE_SIGNAL_VALUE;
 }
 
 static void D3D12_INTERNAL_DestroyDescriptorHeap(D3D12DescriptorHeap *descriptorHeap)
@@ -1048,6 +1079,9 @@ static void D3D12_INTERNAL_DestroyFence(D3D12Fence *fence)
 /* FIXME: just move this into DestroyDevice */
 static void D3D12_INTERNAL_DestroyRenderer(D3D12Renderer *renderer)
 {
+    /* Release blit pipeline structures */
+    D3D12_INTERNAL_ReleaseBlitPipelines(renderer);
+
     /* Flush any remaining GPU work... */
     D3D12_Wait((SDL_GpuRenderer *)renderer);
 
@@ -1823,6 +1857,7 @@ static SDL_bool D3D12_INTERNAL_CreateShaderBytecode(
     size_t bytecodeSize;
     HRESULT res;
 
+    /* TODO: accept DXIL */
     if (format == SDL_GPU_SHADERFORMAT_HLSL) {
         res = renderer->D3DCompile_func(
             code,
@@ -2270,7 +2305,7 @@ static D3D12Texture *D3D12_INTERNAL_CreateTexture(
         desc.Alignment = D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT;
         desc.Width = textureCreateInfo->width;
         desc.Height = textureCreateInfo->height;
-        desc.DepthOrArraySize = 1;
+        desc.DepthOrArraySize = textureCreateInfo->depth;
         desc.MipLevels = textureCreateInfo->levelCount;
         desc.Format = SDLToD3D12_TextureFormat[textureCreateInfo->format];
         desc.SampleDesc.Count = 1;
@@ -2937,6 +2972,15 @@ static void D3D12_ReleaseGraphicsPipeline(
     SDL_UnlockMutex(renderer->disposeLock);
 }
 
+static void D3D12_INTERNAL_ReleaseBlitPipelines(D3D12Renderer *renderer)
+{
+    /* Release blit pipeline structures */
+    D3D12_ReleaseSampler((SDL_GpuRenderer *)renderer, renderer->blitLinearSampler);
+    D3D12_ReleaseSampler((SDL_GpuRenderer *)renderer, renderer->blitNearestSampler);
+
+    D3D12_ReleaseGraphicsPipeline((SDL_GpuRenderer *)renderer, renderer->blitFrom2DPipeline);
+}
+
 /* Render Pass */
 
 static void D3D12_SetViewport(
@@ -3566,7 +3610,30 @@ static void D3D12_BindVertexSamplers(
     SDL_GpuCommandBuffer *commandBuffer,
     Uint32 firstSlot,
     SDL_GpuTextureSamplerBinding *textureSamplerBindings,
-    Uint32 bindingCount) { SDL_assert(SDL_FALSE); }
+    Uint32 bindingCount)
+{
+    D3D12CommandBuffer *d3d12CommandBuffer = (D3D12CommandBuffer *)commandBuffer;
+
+    for (Uint32 i = 0; i < bindingCount; i += 1) {
+        D3D12TextureContainer *container = (D3D12TextureContainer *)textureSamplerBindings[i].texture;
+        D3D12Sampler *sampler = (D3D12Sampler *)textureSamplerBindings[i].sampler;
+
+        for (Uint32 j = 0; j < container->activeTexture->subresourceCount; j += 1) {
+            D3D12_INTERNAL_TrackTextureSubresource(
+                d3d12CommandBuffer,
+                &container->activeTexture->subresources[j]);
+        }
+
+        D3D12_INTERNAL_TrackSampler(
+            d3d12CommandBuffer,
+            sampler);
+
+        d3d12CommandBuffer->vertexSamplers[firstSlot + i] = sampler;
+        d3d12CommandBuffer->vertexSamplerTextures[firstSlot + i] = container->activeTexture;
+    }
+
+    d3d12CommandBuffer->needVertexSamplerBind = SDL_TRUE;
+}
 
 static void D3D12_BindVertexStorageTextures(
     SDL_GpuCommandBuffer *commandBuffer,
@@ -3664,8 +3731,8 @@ static void D3D12_INTERNAL_WriteGPUDescriptors(
     D3D12_CPU_DESCRIPTOR_HANDLE gpuHeapCpuHandle;
 
     /* FIXME: need to error on overflow */
-    gpuHeapCpuHandle.ptr = heap->descriptorHeapCPUStart.ptr + (heap->currentDescriptorIndex + heap->descriptorSize);
-    gpuBaseDescriptor->ptr = heap->descriptorHeapGPUStart.ptr + (heap->currentDescriptorIndex + heap->descriptorSize);
+    gpuHeapCpuHandle.ptr = heap->descriptorHeapCPUStart.ptr + (heap->currentDescriptorIndex * heap->descriptorSize);
+    gpuBaseDescriptor->ptr = heap->descriptorHeapGPUStart.ptr + (heap->currentDescriptorIndex * heap->descriptorSize);
 
     for (Uint32 i = 0; i < resourceHandleCount; i += 1) {
         ID3D12Device_CopyDescriptorsSimple(
@@ -4129,6 +4196,7 @@ static void D3D12_UploadToTexture(
     Uint32 rowPitch = source->imagePitch;
     Uint32 alignedRowPitch;
     SDL_bool needsRealignment;
+    SDL_bool needsAlignmentCopy;
 
     if (rowPitch == 0) {
         rowPitch = BytesPerRow(destination->w, textureContainer->createInfo.format);
@@ -4136,6 +4204,7 @@ static void D3D12_UploadToTexture(
 
     alignedRowPitch = D3D12_INTERNAL_Align(rowPitch, D3D12_TEXTURE_DATA_PITCH_ALIGNMENT);
     needsRealignment = rowPitch != alignedRowPitch;
+    needsAlignmentCopy = source->offset % D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT != 0;
 
     /* Note that the transfer buffer does not need a barrier, as it is synced by the client. */
 
@@ -4152,6 +4221,8 @@ static void D3D12_UploadToTexture(
      * and a restriction that no other backend requires, we're going to copy data to a temporary buffer,
      * copy THAT data to the texture, and then get rid of the temporary buffer ASAP.
      * If we're lucky and the row pitch is already aligned, we can skip all of that.
+     *
+     * D3D12 also requires offsets to be 512 byte aligned. We'll fix that for the client and warn them as well.
      */
 
     sourceLocation.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
@@ -4177,6 +4248,22 @@ static void D3D12_UploadToTexture(
 
         sourceLocation.pResource = temporaryBuffer->handle;
         sourceLocation.PlacedFootprint.Offset = 0;
+    } else if (needsAlignmentCopy) {
+        temporaryBuffer = D3D12_INTERNAL_CreateBuffer(
+            d3d12CommandBuffer->renderer,
+            0,
+            alignedRowPitch * destination->h * destination->d,
+            D3D12_BUFFER_TYPE_UPLOAD);
+
+        SDL_memcpy(
+            temporaryBuffer->mapPointer,
+            transferBufferContainer->activeBuffer->mapPointer + source->offset,
+            alignedRowPitch * destination->h * destination->d);
+
+        sourceLocation.pResource = temporaryBuffer->handle;
+        sourceLocation.PlacedFootprint.Offset = 0;
+
+        SDL_LogWarn(SDL_LOG_CATEGORY_GPU, "Texture upload offset not aligned to 512 bytes! This is suboptimal on D3D12!");
     } else {
         sourceLocation.pResource = transferBufferContainer->activeBuffer->handle;
         sourceLocation.PlacedFootprint.Offset = source->offset;
@@ -4203,7 +4290,7 @@ static void D3D12_UploadToTexture(
     D3D12_INTERNAL_TrackBuffer(d3d12CommandBuffer, transferBufferContainer->activeBuffer);
     D3D12_INTERNAL_TrackTextureSubresource(d3d12CommandBuffer, textureSubresource);
 
-    if (needsRealignment) {
+    if (temporaryBuffer != NULL) {
         D3D12_INTERNAL_TrackBuffer(d3d12CommandBuffer, temporaryBuffer);
         D3D12_INTERNAL_ReleaseBuffer(
             d3d12CommandBuffer->renderer,
@@ -4290,7 +4377,102 @@ static void D3D12_Blit(
     SDL_GpuTextureRegion *source,
     SDL_GpuTextureRegion *destination,
     SDL_GpuFilter filterMode,
-    SDL_bool cycle) { SDL_assert(SDL_FALSE); }
+    SDL_bool cycle)
+{
+    D3D12CommandBuffer *d3d12CommandBuffer = (D3D12CommandBuffer *)commandBuffer;
+    D3D12Renderer *renderer = d3d12CommandBuffer->renderer;
+    D3D12TextureContainer *sourceTextureContainer = (D3D12TextureContainer *)source->textureSlice.texture;
+    D3D12TextureContainer *destinationTextureContainer = (D3D12TextureContainer *)destination->textureSlice.texture;
+    SDL_GpuColorAttachmentInfo colorAttachmentInfo;
+    SDL_GpuViewport viewport;
+    SDL_GpuTextureSamplerBinding textureSamplerBinding;
+    BlitFragmentUniforms blitFragmentUniforms;
+    SDL_GpuTextureCreateInfo *sourceTextureCreateInfo;
+    SDL_GpuTextureCreateInfo *destinationTextureCreateInfo;
+
+    sourceTextureCreateInfo = &sourceTextureContainer->createInfo;
+    destinationTextureCreateInfo = &destinationTextureContainer->createInfo;
+
+    /* Unused */
+    colorAttachmentInfo.clearColor.r = 0;
+    colorAttachmentInfo.clearColor.g = 0;
+    colorAttachmentInfo.clearColor.b = 0;
+    colorAttachmentInfo.clearColor.a = 0;
+
+    /* If the entire destination is blitted, we don't have to load */
+    if (
+        destinationTextureCreateInfo->layerCount == 1 &&
+        destinationTextureCreateInfo->levelCount == 1 &&
+        destination->w == destinationTextureCreateInfo->width &&
+        destination->h == destinationTextureCreateInfo->height &&
+        destination->d == destinationTextureCreateInfo->depth) {
+        colorAttachmentInfo.loadOp = SDL_GPU_LOADOP_DONT_CARE;
+    } else {
+        colorAttachmentInfo.loadOp = SDL_GPU_LOADOP_LOAD;
+    }
+
+    colorAttachmentInfo.storeOp = SDL_GPU_STOREOP_STORE;
+
+    colorAttachmentInfo.textureSlice = destination->textureSlice;
+    colorAttachmentInfo.cycle = cycle;
+
+    D3D12_BeginRenderPass(
+        commandBuffer,
+        &colorAttachmentInfo,
+        1,
+        NULL);
+
+    viewport.x = (float)destination->x;
+    viewport.y = (float)destination->y;
+    viewport.w = (float)destination->w;
+    viewport.h = (float)destination->h;
+    viewport.minDepth = 0;
+    viewport.maxDepth = 1;
+
+    D3D12_SetViewport(
+        commandBuffer,
+        &viewport);
+
+    if (
+        sourceTextureCreateInfo->layerCount == 1 &&
+        sourceTextureCreateInfo->depth == 1) {
+        /* 2D source */
+        D3D12_BindGraphicsPipeline(
+            commandBuffer,
+            renderer->blitFrom2DPipeline);
+    } else {
+        SDL_LogError(SDL_LOG_CATEGORY_GPU, "3D blit source not implemented!");
+        return;
+    }
+
+    textureSamplerBinding.texture = source->textureSlice.texture;
+    textureSamplerBinding.sampler =
+        filterMode == SDL_GPU_FILTER_NEAREST ? renderer->blitNearestSampler : renderer->blitLinearSampler;
+
+    D3D12_BindFragmentSamplers(
+        commandBuffer,
+        0,
+        &textureSamplerBinding,
+        1);
+
+    blitFragmentUniforms.left = (float)source->x / sourceTextureCreateInfo->width;
+    blitFragmentUniforms.top = (float)source->y / sourceTextureCreateInfo->height;
+    blitFragmentUniforms.width = (float)source->w / sourceTextureCreateInfo->width;
+    blitFragmentUniforms.height = (float)source->h / sourceTextureCreateInfo->height;
+
+    D3D12_PushFragmentUniformData(
+        commandBuffer,
+        0,
+        &blitFragmentUniforms,
+        sizeof(BlitFragmentUniforms));
+
+    D3D12_DrawPrimitives(
+        commandBuffer,
+        0,
+        1);
+
+    D3D12_EndRenderPass(commandBuffer);
+}
 
 /* Submission/Presentation */
 
@@ -4766,8 +4948,42 @@ static SDL_bool D3D12_SetSwapchainParameters(
     SDL_GpuSwapchainComposition swapchainComposition,
     SDL_GpuPresentMode presentMode)
 {
-    SDL_assert(SDL_FALSE);
-    return SDL_FALSE;
+    D3D12Renderer *renderer = (D3D12Renderer *)driverData;
+    D3D12WindowData *windowData = D3D12_INTERNAL_FetchWindowData(window);
+
+    if (windowData == NULL) {
+        SDL_LogError(SDL_LOG_CATEGORY_GPU, "Cannot set swapchain parameters on unclaimed window!");
+        return SDL_FALSE;
+    }
+
+    if (!D3D12_SupportsSwapchainComposition(driverData, window, swapchainComposition)) {
+        SDL_LogError(SDL_LOG_CATEGORY_GPU, "Swapchain composition not supported!");
+        return SDL_FALSE;
+    }
+
+    if (!D3D12_SupportsPresentMode(driverData, window, presentMode)) {
+        SDL_LogError(SDL_LOG_CATEGORY_GPU, "Present mode not supported!");
+        return SDL_FALSE;
+    }
+
+    if (
+        swapchainComposition != windowData->swapchainComposition ||
+        presentMode != windowData->presentMode) {
+        D3D12_Wait(driverData);
+
+        /* Recreate the swapchain */
+        D3D12_INTERNAL_DestroySwapchain(
+            renderer,
+            windowData);
+
+        return D3D12_INTERNAL_CreateSwapchain(
+            renderer,
+            windowData,
+            swapchainComposition,
+            presentMode);
+    }
+
+    return SDL_TRUE;
 }
 
 static SDL_GpuTextureFormat D3D12_GetSwapchainTextureFormat(
@@ -5353,8 +5569,10 @@ static void D3D12_Submit(
 static SDL_GpuFence *D3D12_SubmitAndAcquireFence(
     SDL_GpuCommandBuffer *commandBuffer)
 {
-    SDL_assert(SDL_FALSE);
-    return NULL;
+    D3D12CommandBuffer *d3d12CommandBuffer = (D3D12CommandBuffer *)commandBuffer;
+    d3d12CommandBuffer->autoReleaseFence = SDL_FALSE;
+    D3D12_Submit(commandBuffer);
+    return (SDL_GpuFence *)d3d12CommandBuffer->inFlightFence;
 }
 
 static void D3D12_Wait(
@@ -5508,6 +5726,136 @@ static SDL_GpuSampleCount D3D12_GetBestSampleCount(
     }
 
     return (SDL_GpuSampleCount)SDL_min(maxSupported, desiredSampleCount);
+}
+
+static void D3D12_INTERNAL_InitBlitPipelines(
+    D3D12Renderer *renderer)
+{
+    SDL_GpuShaderCreateInfo shaderCreateInfo;
+    SDL_GpuShader *fullscreenVertexShader;
+    SDL_GpuShader *blitFrom2DPixelShader;
+    // SDL_GpuShader *blitFrom2DArrayPixelShader;
+    SDL_GpuGraphicsPipelineCreateInfo blitPipelineCreateInfo;
+    SDL_GpuSamplerCreateInfo samplerCreateInfo;
+    SDL_GpuVertexBinding binding;
+    SDL_GpuVertexAttribute attribute;
+    SDL_GpuColorAttachmentDescription colorAttachmentDesc;
+
+    /* Fullscreen vertex shader */
+    SDL_zero(shaderCreateInfo);
+    shaderCreateInfo.code = (Uint8 *)D3D12_FullscreenVert;
+    shaderCreateInfo.codeSize = sizeof(D3D12_FullscreenVert);
+    shaderCreateInfo.stage = SDL_GPU_SHADERSTAGE_VERTEX;
+    shaderCreateInfo.format = SDL_GPU_SHADERFORMAT_DXBC;
+    shaderCreateInfo.entryPointName = "main";
+
+    fullscreenVertexShader = D3D12_CreateShader(
+        (SDL_GpuRenderer *)renderer,
+        &shaderCreateInfo);
+
+    if (fullscreenVertexShader == NULL) {
+        SDL_LogError(SDL_LOG_CATEGORY_GPU, "Failed to compile fullscreen vertex shader for blit!");
+    }
+
+    /* Blit from 2D pixel shader */
+    shaderCreateInfo.code = (Uint8 *)D3D12_BlitFrom2D;
+    shaderCreateInfo.codeSize = sizeof(D3D12_BlitFrom2D);
+    shaderCreateInfo.stage = SDL_GPU_SHADERSTAGE_FRAGMENT;
+    shaderCreateInfo.samplerCount = 1;
+    shaderCreateInfo.uniformBufferCount = 1;
+
+    blitFrom2DPixelShader = D3D12_CreateShader(
+        (SDL_GpuRenderer *)renderer,
+        &shaderCreateInfo);
+
+    if (blitFrom2DPixelShader == NULL) {
+        SDL_LogError(SDL_LOG_CATEGORY_GPU, "Failed to compile blit from 2D pixel shader!");
+    }
+
+    /* Blit from 2D pipeline */
+    SDL_zero(blitPipelineCreateInfo);
+
+    SDL_zero(colorAttachmentDesc);
+    colorAttachmentDesc.blendState.colorWriteMask = 0xF;
+    colorAttachmentDesc.format = SDL_GPU_TEXTUREFORMAT_B8G8R8A8; /* FIXME: we are gonna need a pipeline per output format */
+
+    blitPipelineCreateInfo.attachmentInfo.colorAttachmentDescriptions = &colorAttachmentDesc;
+    blitPipelineCreateInfo.attachmentInfo.colorAttachmentCount = 1;
+    blitPipelineCreateInfo.attachmentInfo.depthStencilFormat = SDL_GPU_TEXTUREFORMAT_D16_UNORM; /* arbitrary */
+    blitPipelineCreateInfo.attachmentInfo.hasDepthStencilAttachment = 0;
+
+    binding.binding = 0;
+    binding.inputRate = SDL_GPU_VERTEXINPUTRATE_VERTEX;
+    binding.stepRate = 0;
+    binding.stride = 64;
+
+    attribute.binding = 0;
+    attribute.format = SDL_GPU_VERTEXELEMENTFORMAT_VECTOR2;
+    attribute.location = 0;
+    attribute.offset = 0;
+
+    blitPipelineCreateInfo.vertexInputState.vertexAttributeCount = 1;
+    blitPipelineCreateInfo.vertexInputState.vertexAttributes = &attribute;
+    blitPipelineCreateInfo.vertexInputState.vertexBindingCount = 1;
+    blitPipelineCreateInfo.vertexInputState.vertexBindings = &binding;
+
+    blitPipelineCreateInfo.vertexShader = fullscreenVertexShader;
+    blitPipelineCreateInfo.fragmentShader = blitFrom2DPixelShader;
+
+    blitPipelineCreateInfo.multisampleState.multisampleCount = SDL_GPU_SAMPLECOUNT_1;
+    blitPipelineCreateInfo.multisampleState.sampleMask = 0xFFFFFFFF;
+
+    blitPipelineCreateInfo.primitiveType = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST;
+
+    blitPipelineCreateInfo.blendConstants[0] = 1.0f;
+    blitPipelineCreateInfo.blendConstants[1] = 1.0f;
+    blitPipelineCreateInfo.blendConstants[2] = 1.0f;
+    blitPipelineCreateInfo.blendConstants[3] = 1.0f;
+
+    renderer->blitFrom2DPipeline = D3D12_CreateGraphicsPipeline(
+        (SDL_GpuRenderer *)renderer,
+        &blitPipelineCreateInfo);
+
+    if (renderer->blitFrom2DPipeline == NULL) {
+        SDL_LogError(SDL_LOG_CATEGORY_GPU, "Failed to create blit pipeline!");
+    }
+
+    /* Create samplers */
+    samplerCreateInfo.addressModeU = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
+    samplerCreateInfo.addressModeV = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
+    samplerCreateInfo.addressModeW = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
+    samplerCreateInfo.anisotropyEnable = 0;
+    samplerCreateInfo.compareEnable = 0;
+    samplerCreateInfo.magFilter = SDL_GPU_FILTER_NEAREST;
+    samplerCreateInfo.minFilter = SDL_GPU_FILTER_NEAREST;
+    samplerCreateInfo.mipmapMode = SDL_GPU_SAMPLERMIPMAPMODE_NEAREST;
+    samplerCreateInfo.mipLodBias = 0.0f;
+    samplerCreateInfo.minLod = 0;
+    samplerCreateInfo.maxLod = 1000;
+
+    renderer->blitNearestSampler = D3D12_CreateSampler(
+        (SDL_GpuRenderer *)renderer,
+        &samplerCreateInfo);
+
+    if (renderer->blitNearestSampler == NULL) {
+        SDL_LogError(SDL_LOG_CATEGORY_GPU, "Failed to create blit nearest sampler!");
+    }
+
+    samplerCreateInfo.magFilter = SDL_GPU_FILTER_LINEAR;
+    samplerCreateInfo.minFilter = SDL_GPU_FILTER_LINEAR;
+    samplerCreateInfo.mipmapMode = SDL_GPU_SAMPLERMIPMAPMODE_LINEAR;
+
+    renderer->blitLinearSampler = D3D12_CreateSampler(
+        (SDL_GpuRenderer *)renderer,
+        &samplerCreateInfo);
+
+    if (renderer->blitLinearSampler == NULL) {
+        SDL_LogError(SDL_LOG_CATEGORY_GPU, "Failed to create blit linear sampler!");
+    }
+
+    /* Clean up */
+    D3D12_ReleaseShader((SDL_GpuRenderer *)renderer, fullscreenVertexShader);
+    D3D12_ReleaseShader((SDL_GpuRenderer *)renderer, blitFrom2DPixelShader);
 }
 
 static SDL_bool D3D12_PrepareDriver(SDL_VideoDevice *_this)
@@ -6053,6 +6401,9 @@ static SDL_GpuDevice *D3D12_CreateDevice(SDL_bool debugMode, SDL_bool preferLowP
                 SDL_FALSE);
         }
     }
+
+    /* Blit pipelines */
+    D3D12_INTERNAL_InitBlitPipelines(renderer);
 
     /* Deferred resource releasing */
 
