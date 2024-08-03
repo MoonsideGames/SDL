@@ -4178,7 +4178,7 @@ static void D3D12_UploadToTexture(
         sourceLocation.pResource = temporaryBuffer->handle;
         sourceLocation.PlacedFootprint.Offset = 0;
     } else {
-        sourceLocation.pResource = temporaryBuffer->handle;
+        sourceLocation.pResource = transferBufferContainer->activeBuffer->handle;
         sourceLocation.PlacedFootprint.Offset = source->offset;
     }
 
