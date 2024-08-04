@@ -5832,6 +5832,8 @@ static void D3D12_INTERNAL_InitBlitPipelines(
     samplerCreateInfo.mipLodBias = 0.0f;
     samplerCreateInfo.minLod = 0;
     samplerCreateInfo.maxLod = 1000;
+    samplerCreateInfo.maxAnisotropy = 1.0f;
+    samplerCreateInfo.compareOp = SDL_GPU_COMPAREOP_ALWAYS;
 
     renderer->blitNearestSampler = D3D12_CreateSampler(
         (SDL_GpuRenderer *)renderer,
