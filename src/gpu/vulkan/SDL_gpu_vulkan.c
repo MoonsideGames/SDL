@@ -4256,7 +4256,6 @@ static Uint8 VULKAN_INTERNAL_QuerySwapchainSupport(
             sizeof(VkSurfaceFormatKHR) * outputDetails->formatsLength);
 
         if (!outputDetails->formats) {
-            SDL_OutOfMemory();
             return 0;
         }
 
@@ -4283,7 +4282,6 @@ static Uint8 VULKAN_INTERNAL_QuerySwapchainSupport(
 
         if (!outputDetails->presentModes) {
             SDL_free(outputDetails->formats);
-            SDL_OutOfMemory();
             return 0;
         }
 
@@ -4579,7 +4577,6 @@ static SDL_bool VULKAN_INTERNAL_CreateSwapchain(
         sizeof(VulkanTextureContainer) * swapchainData->imageCount);
 
     if (!swapchainData->textureContainers) {
-        SDL_OutOfMemory();
         renderer->vkDestroySurfaceKHR(
             renderer->instance,
             swapchainData->surface,
