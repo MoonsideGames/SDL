@@ -118,27 +118,6 @@ static inline SDL_bool IsStencilFormat(
     }
 }
 
-static inline Uint32 PrimitiveVerts(
-    SDL_GpuPrimitiveType primitiveType,
-    Uint32 primitiveCount)
-{
-    switch (primitiveType) {
-    case SDL_GPU_PRIMITIVETYPE_TRIANGLELIST:
-        return primitiveCount * 3;
-    case SDL_GPU_PRIMITIVETYPE_TRIANGLESTRIP:
-        return primitiveCount + 2;
-    case SDL_GPU_PRIMITIVETYPE_LINELIST:
-        return primitiveCount * 2;
-    case SDL_GPU_PRIMITIVETYPE_LINESTRIP:
-        return primitiveCount + 1;
-    case SDL_GPU_PRIMITIVETYPE_POINTLIST:
-        return primitiveCount;
-    default:
-        SDL_assert_release(!"Unrecognized primitive type!");
-        return 0;
-    }
-}
-
 static inline Uint32 IndexSize(SDL_GpuIndexElementSize size)
 {
     return (size == SDL_GPU_INDEXELEMENTSIZE_16BIT) ? 2 : 4;
@@ -369,13 +348,13 @@ struct SDL_GpuDevice
         SDL_GpuCommandBuffer *commandBuffer,
         Uint32 baseVertex,
         Uint32 startIndex,
-        Uint32 primitiveCount,
+        Uint32 vertexCount,
         Uint32 instanceCount);
 
     void (*DrawPrimitives)(
         SDL_GpuCommandBuffer *commandBuffer,
         Uint32 vertexStart,
-        Uint32 primitiveCount);
+        Uint32 vertexCount);
 
     void (*DrawPrimitivesIndirect)(
         SDL_GpuCommandBuffer *commandBuffer,

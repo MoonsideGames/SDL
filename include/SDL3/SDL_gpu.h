@@ -1544,7 +1544,7 @@ extern SDL_DECLSPEC void SDLCALL SDL_GpuBindFragmentStorageBuffers(
  * \param renderPass a render pass handle
  * \param baseVertex the starting offset to read from the vertex buffer
  * \param startIndex the starting offset to read from the index buffer
- * \param primitiveCount the number of primitives to draw
+ * \param vertexCount the number of vertices to draw
  * \param instanceCount the number of instances that will be drawn
  *
  * \since This function is available since SDL 3.x.x
@@ -1553,7 +1553,7 @@ extern SDL_DECLSPEC void SDLCALL SDL_GpuDrawIndexedPrimitives(
     SDL_GpuRenderPass *renderPass,
     Uint32 baseVertex,
     Uint32 startIndex,
-    Uint32 primitiveCount,
+    Uint32 vertexCount,
     Uint32 instanceCount);
 
 /**
@@ -1562,14 +1562,14 @@ extern SDL_DECLSPEC void SDLCALL SDL_GpuDrawIndexedPrimitives(
  *
  * \param renderPass a render pass handle
  * \param vertexStart The starting offset to read from the vertex buffer
- * \param primitiveCount The number of primitives to draw
+ * \param vertexCount The number of vertices to draw
  *
  * \since This function is available since SDL 3.x.x
  */
 extern SDL_DECLSPEC void SDLCALL SDL_GpuDrawPrimitives(
     SDL_GpuRenderPass *renderPass,
     Uint32 vertexStart,
-    Uint32 primitiveCount);
+    Uint32 vertexCount);
 
 /**
  * Draws data using bound graphics state and with draw parameters set from a buffer.

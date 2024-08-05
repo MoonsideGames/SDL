@@ -5290,7 +5290,7 @@ static void VULKAN_DrawIndexedPrimitives(
     SDL_GpuCommandBuffer *commandBuffer,
     Uint32 baseVertex,
     Uint32 startIndex,
-    Uint32 primitiveCount,
+    Uint32 vertexCount,
     Uint32 instanceCount)
 {
     VulkanCommandBuffer *vulkanCommandBuffer = (VulkanCommandBuffer *)commandBuffer;
@@ -5300,9 +5300,7 @@ static void VULKAN_DrawIndexedPrimitives(
 
     renderer->vkCmdDrawIndexed(
         vulkanCommandBuffer->commandBuffer,
-        PrimitiveVerts(
-            vulkanCommandBuffer->currentGraphicsPipeline->primitiveType,
-            primitiveCount),
+        vertexCount,
         instanceCount,
         startIndex,
         baseVertex,
@@ -5312,7 +5310,7 @@ static void VULKAN_DrawIndexedPrimitives(
 static void VULKAN_DrawPrimitives(
     SDL_GpuCommandBuffer *commandBuffer,
     Uint32 vertexStart,
-    Uint32 primitiveCount)
+    Uint32 vertexCount)
 {
     VulkanCommandBuffer *vulkanCommandBuffer = (VulkanCommandBuffer *)commandBuffer;
     VulkanRenderer *renderer = (VulkanRenderer *)vulkanCommandBuffer->renderer;
@@ -5321,9 +5319,7 @@ static void VULKAN_DrawPrimitives(
 
     renderer->vkCmdDraw(
         vulkanCommandBuffer->commandBuffer,
-        PrimitiveVerts(
-            vulkanCommandBuffer->currentGraphicsPipeline->primitiveType,
-            primitiveCount),
+        vertexCount,
         1,
         vertexStart,
         0);

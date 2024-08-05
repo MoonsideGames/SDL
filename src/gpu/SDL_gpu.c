@@ -1112,7 +1112,7 @@ void SDL_GpuDrawIndexedPrimitives(
     SDL_GpuRenderPass *renderPass,
     Uint32 baseVertex,
     Uint32 startIndex,
-    Uint32 primitiveCount,
+    Uint32 vertexCount,
     Uint32 instanceCount)
 {
     if (renderPass == NULL) {
@@ -1129,14 +1129,14 @@ void SDL_GpuDrawIndexedPrimitives(
         RENDERPASS_COMMAND_BUFFER,
         baseVertex,
         startIndex,
-        primitiveCount,
+        vertexCount,
         instanceCount);
 }
 
 void SDL_GpuDrawPrimitives(
     SDL_GpuRenderPass *renderPass,
     Uint32 vertexStart,
-    Uint32 primitiveCount)
+    Uint32 vertexCount)
 {
     if (renderPass == NULL) {
         SDL_InvalidParamError("renderPass");
@@ -1151,7 +1151,7 @@ void SDL_GpuDrawPrimitives(
     RENDERPASS_DEVICE->DrawPrimitives(
         RENDERPASS_COMMAND_BUFFER,
         vertexStart,
-        primitiveCount);
+        vertexCount);
 }
 
 void SDL_GpuDrawPrimitivesIndirect(
