@@ -5184,7 +5184,7 @@ static void VULKAN_INTERNAL_BindGraphicsDescriptorSets(
             currentWriteDescriptorSet->sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
             currentWriteDescriptorSet->pNext = NULL;
             currentWriteDescriptorSet->descriptorCount = 1;
-            currentWriteDescriptorSet->descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+            currentWriteDescriptorSet->descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
             currentWriteDescriptorSet->dstArrayElement = 0;
             currentWriteDescriptorSet->dstBinding = resourceLayout->fragmentSamplerCount + resourceLayout->fragmentStorageTextureCount + i;
             currentWriteDescriptorSet->dstSet = commandBuffer->fragmentResourceDescriptorSet;
@@ -8571,8 +8571,7 @@ static void VULKAN_DispatchComputeIndirect(
     renderer->vkCmdDispatchIndirect(
         vulkanCommandBuffer->commandBuffer,
         vulkanBuffer->buffer,
-        offsetInBytes
-    );
+        offsetInBytes);
 
     VULKAN_INTERNAL_TrackBuffer(vulkanCommandBuffer, vulkanBuffer);
 }
@@ -9597,11 +9596,11 @@ static WindowData *VULKAN_INTERNAL_FetchWindowData(
     return (WindowData *)SDL_GetPointerProperty(properties, WINDOW_PROPERTY_DATA, NULL);
 }
 
-static int VULKAN_INTERNAL_OnWindowResize(void* userdata, SDL_Event *e) {
-    SDL_Window *w = (SDL_Window*) userdata;
+static int VULKAN_INTERNAL_OnWindowResize(void *userdata, SDL_Event *e)
+{
+    SDL_Window *w = (SDL_Window *)userdata;
     WindowData *data;
-    if (e->type == SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED)
-    {
+    if (e->type == SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED) {
         data = VULKAN_INTERNAL_FetchWindowData(w);
         data->needsSwapchainRecreate = SDL_TRUE;
     }
@@ -9900,8 +9899,7 @@ static SDL_GpuTexture *VULKAN_AcquireSwapchainTexture(
     }
 
     /* If window data marked as needing swapchain recreate, try to recreate */
-    if (windowData->needsSwapchainRecreate)
-    {
+    if (windowData->needsSwapchainRecreate) {
         VULKAN_INTERNAL_RecreateSwapchain(renderer, windowData);
         swapchainData = windowData->swapchainData;
 
