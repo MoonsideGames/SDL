@@ -3329,8 +3329,8 @@ static void D3D12_BeginRenderPass(
     SDL_GpuViewport defaultViewport;
     defaultViewport.x = 0;
     defaultViewport.y = 0;
-    defaultViewport.w = framebufferWidth;
-    defaultViewport.h = framebufferHeight;
+    defaultViewport.w = (float)framebufferWidth;
+    defaultViewport.h = (float)framebufferHeight;
     defaultViewport.minDepth = 0;
     defaultViewport.maxDepth = 1;
 
@@ -3341,8 +3341,8 @@ static void D3D12_BeginRenderPass(
     SDL_GpuRect defaultScissor;
     defaultScissor.x = 0;
     defaultScissor.y = 0;
-    defaultScissor.w = framebufferWidth;
-    defaultScissor.h = framebufferHeight;
+    defaultScissor.w = (Sint32)framebufferWidth;
+    defaultScissor.h = (Sint32)framebufferHeight;
 
     D3D12_SetScissor(
         commandBuffer,
@@ -4569,8 +4569,8 @@ static SDL_bool D3D12_INTERNAL_InitializeSwapchainTexture(
     SDL_AtomicSet(&pTexture->subresources[0].referenceCount, 0);
 
     ID3D12Resource_GetDesc(swapchainTexture, &textureDesc);
-    pTextureContainer->createInfo.width = textureDesc.Width;
-    pTextureContainer->createInfo.height = textureDesc.Height;
+    pTextureContainer->createInfo.width = (Uint32)textureDesc.Width;
+    pTextureContainer->createInfo.height = (Uint32)textureDesc.Height;
     pTextureContainer->createInfo.depth = 1;
     pTextureContainer->createInfo.layerCount = 1;
     pTextureContainer->createInfo.levelCount = 1;
@@ -5302,7 +5302,7 @@ static void D3D12_INTERNAL_PerformPendingDestroys(D3D12Renderer *renderer)
 
     for (Sint32 i = renderer->texturesToDestroyCount - 1; i >= 0; i -= 1) {
         Sint32 refCountTotal = 0;
-        for (Sint32 subresourceIndex = 0; subresourceIndex < renderer->texturesToDestroy[i]->subresourceCount; subresourceIndex += 1) {
+        for (Uint32 subresourceIndex = 0; subresourceIndex < renderer->texturesToDestroy[i]->subresourceCount; subresourceIndex += 1) {
             refCountTotal += SDL_AtomicGet(&renderer->texturesToDestroy[i]->subresources[subresourceIndex].referenceCount);
         }
 

@@ -1593,7 +1593,6 @@ static SDL_GpuGraphicsPipeline *D3D11_CreateGraphicsPipeline(
     D3D11Shader *vertShader = (D3D11Shader *)pipelineCreateInfo->vertexShader;
     D3D11Shader *fragShader = (D3D11Shader *)pipelineCreateInfo->fragmentShader;
     D3D11GraphicsPipeline *pipeline = SDL_malloc(sizeof(D3D11GraphicsPipeline));
-    Uint32 i;
 
     /* Blend */
 
@@ -1603,7 +1602,7 @@ static SDL_GpuGraphicsPipeline *D3D11_CreateGraphicsPipeline(
         pipelineCreateInfo->attachmentInfo.colorAttachmentDescriptions);
 
     pipeline->numColorAttachments = pipelineCreateInfo->attachmentInfo.colorAttachmentCount;
-    for (i = 0; i < pipeline->numColorAttachments; i += 1) {
+    for (Sint32 i = 0; i < pipeline->numColorAttachments; i += 1) {
         pipeline->colorAttachmentFormats[i] = SDLToD3D11_TextureFormat[pipelineCreateInfo->attachmentInfo.colorAttachmentDescriptions[i].format];
     }
 
@@ -1654,7 +1653,7 @@ static SDL_GpuGraphicsPipeline *D3D11_CreateGraphicsPipeline(
             sizeof(Uint32) *
             pipelineCreateInfo->vertexInputState.vertexBindingCount);
 
-        for (i = 0; i < pipelineCreateInfo->vertexInputState.vertexBindingCount; i += 1) {
+        for (Uint32 i = 0; i < pipelineCreateInfo->vertexInputState.vertexBindingCount; i += 1) {
             pipeline->vertexStrides[i] = pipelineCreateInfo->vertexInputState.vertexBindings[i].stride;
         }
     } else {
