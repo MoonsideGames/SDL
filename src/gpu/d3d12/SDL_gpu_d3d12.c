@@ -5107,7 +5107,6 @@ static void D3D12_UploadToBuffer(
     SDL_bool cycle)
 {
     D3D12CommandBuffer *d3d12CommandBuffer = (D3D12CommandBuffer *)commandBuffer;
-    D3D12Renderer *renderer = d3d12CommandBuffer->renderer;
     D3D12BufferContainer *transferBufferContainer = (D3D12BufferContainer *)source->transferBuffer;
     D3D12BufferContainer *bufferContainer = (D3D12BufferContainer *)destination->buffer;
 
