@@ -5052,18 +5052,114 @@ static void D3D12_CopyTextureToTexture(
     Uint32 w,
     Uint32 h,
     Uint32 d,
-    SDL_bool cycle) { SDL_assert(SDL_FALSE); }
+    SDL_bool cycle)
+{
+    D3D12CommandBuffer *d3d12CommandBuffer = (D3D12CommandBuffer *)commandBuffer;
+    D3D12TextureContainer *sourceContainer = (D3D12TextureContainer *)source->textureSlice.texture;
+    D3D12TextureContainer *destinationContainer = (D3D12TextureContainer *)destination->textureSlice.texture;
+    D3D12_TEXTURE_COPY_LOCATION sourceLocation;
+    D3D12_TEXTURE_COPY_LOCATION destinationLocation;
+
+    D3D12TextureSubresource *sourceSubresource = D3D12_INTERNAL_FetchTextureSubresource(
+        sourceContainer,
+        source->textureSlice.layer,
+        source->textureSlice.mipLevel);
+
+    D3D12TextureSubresource *destinationSubresource = D3D12_INTERNAL_PrepareTextureSubresourceForWrite(
+        d3d12CommandBuffer,
+        destinationContainer,
+        destination->textureSlice.layer,
+        destination->textureSlice.mipLevel,
+        cycle,
+        D3D12_RESOURCE_STATE_COPY_DEST);
+
+    D3D12_INTERNAL_TextureSubresourceTransitionFromDefaultUsage(
+        d3d12CommandBuffer,
+        D3D12_RESOURCE_STATE_COPY_SOURCE,
+        sourceSubresource);
+
+    sourceLocation.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+    sourceLocation.SubresourceIndex = sourceSubresource->index;
+    sourceLocation.pResource = sourceSubresource->parent->resource;
+
+    destinationLocation.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+    destinationLocation.SubresourceIndex = destinationSubresource->index;
+    destinationLocation.pResource = destinationSubresource->parent->resource;
+
+    D3D12_BOX sourceBox = { source->x, source->y, source->z, source->x + w, source->y + h, source->z + d };
+
+    ID3D12GraphicsCommandList_CopyTextureRegion(
+        d3d12CommandBuffer->graphicsCommandList,
+        &destinationLocation,
+        destination->x,
+        destination->y,
+        destination->z,
+        &sourceLocation,
+        &sourceBox);
+
+    D3D12_INTERNAL_TextureSubresourceTransitionToDefaultUsage(
+        d3d12CommandBuffer,
+        D3D12_RESOURCE_STATE_COPY_SOURCE,
+        sourceSubresource);
+
+    D3D12_INTERNAL_TextureSubresourceTransitionToDefaultUsage(
+        d3d12CommandBuffer,
+        D3D12_RESOURCE_STATE_COPY_DEST,
+        destinationSubresource);
+
+    D3D12_INTERNAL_TrackTextureSubresource(
+        d3d12CommandBuffer,
+        sourceSubresource);
+
+    D3D12_INTERNAL_TrackTextureSubresource(
+        d3d12CommandBuffer,
+        destinationSubresource);
+}
 
 static void D3D12_CopyBufferToBuffer(
     SDL_GpuCommandBuffer *commandBuffer,
     SDL_GpuBufferLocation *source,
     SDL_GpuBufferLocation *destination,
     Uint32 size,
-    SDL_bool cycle) { SDL_assert(SDL_FALSE); }
+    SDL_bool cycle)
+{
+    D3D12CommandBuffer *d3d12CommandBuffer = (D3D12CommandBuffer *)commandBuffer;
+    D3D12BufferContainer *sourceContainer = (D3D12BufferContainer *)source->buffer;
+    D3D12BufferContainer *destinationContainer = (D3D12BufferContainer *)destination->buffer;
 
-static void D3D12_GenerateMipmaps(
-    SDL_GpuCommandBuffer *commandBuffer,
-    SDL_GpuTexture *texture) { SDL_assert(SDL_FALSE); }
+    D3D12Buffer *sourceBuffer = sourceContainer->activeBuffer;
+    D3D12Buffer *destinationBuffer = D3D12_INTERNAL_PrepareBufferForWrite(
+        d3d12CommandBuffer,
+        destinationContainer,
+        cycle,
+        D3D12_RESOURCE_STATE_COPY_DEST);
+
+    D3D12_INTERNAL_BufferTransitionFromDefaultUsage(
+        d3d12CommandBuffer,
+        D3D12_RESOURCE_STATE_COPY_SOURCE,
+        sourceBuffer);
+
+    ID3D12GraphicsCommandList_CopyBufferRegion(
+        d3d12CommandBuffer->graphicsCommandList,
+        destinationBuffer->handle,
+        destination->offset,
+        sourceBuffer->handle,
+        source->offset,
+        size);
+
+    D3D12_INTERNAL_BufferTransitionToDefaultUsage(
+        d3d12CommandBuffer,
+        D3D12_RESOURCE_STATE_COPY_SOURCE,
+        sourceBuffer);
+
+    D3D12_INTERNAL_BufferTransitionToDefaultUsage(
+        d3d12CommandBuffer,
+        D3D12_RESOURCE_STATE_COPY_DEST,
+        destinationBuffer);
+
+    D3D12_INTERNAL_TrackBuffer(d3d12CommandBuffer, sourceBuffer);
+    D3D12_INTERNAL_TrackBuffer(d3d12CommandBuffer, destinationBuffer);
+}
 
 static void D3D12_DownloadFromTexture(
     SDL_GpuCommandBuffer *commandBuffer,
@@ -5081,6 +5177,10 @@ static void D3D12_EndCopyPass(
     /* no-op */
     (void)commandBuffer;
 }
+
+static void D3D12_GenerateMipmaps(
+    SDL_GpuCommandBuffer *commandBuffer,
+    SDL_GpuTexture *texture) { SDL_assert(SDL_FALSE); }
 
 static void D3D12_Blit(
     SDL_GpuCommandBuffer *commandBuffer,
