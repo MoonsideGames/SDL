@@ -2122,7 +2122,7 @@ static D3D12ComputeRootSignature *D3D12_INTERNAL_CreateComputeRootSignature(
         rootParameter.DescriptorTable.pDescriptorRanges = &descriptorRanges[rangeCount];
         rootParameter.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL; /* ALL is used for compute */
         rootParameters[parameterCount] = rootParameter;
-        d3d12ComputeRootSignature->readOnlyStorageBufferRootIndex = parameterCount;
+        d3d12ComputeRootSignature->readWriteStorageTextureRootIndex = parameterCount;
         rangeCount += 1;
         parameterCount += 1;
     }
@@ -2140,7 +2140,7 @@ static D3D12ComputeRootSignature *D3D12_INTERNAL_CreateComputeRootSignature(
         rootParameter.DescriptorTable.pDescriptorRanges = &descriptorRanges[rangeCount];
         rootParameter.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL; /* ALL is used for compute */
         rootParameters[parameterCount] = rootParameter;
-        d3d12ComputeRootSignature->readOnlyStorageBufferRootIndex = parameterCount;
+        d3d12ComputeRootSignature->readWriteStorageBufferRootIndex = parameterCount;
         rangeCount += 1;
         parameterCount += 1;
     }
@@ -4661,7 +4661,7 @@ static void D3D12_BindComputeStorageTextures(
 
     for (Uint32 i = 0; i < bindingCount; i += 1) {
         if (d3d12CommandBuffer->computeReadOnlyStorageTextures[firstSlot + i] != NULL) {
-            D3D12_INTERNAL_TextureSubresourceTransitionToDefaultUsage(
+            D3D12_INTERNAL_TextureSubresourceTransitionFromDefaultUsage(
                 d3d12CommandBuffer,
                 D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
                 d3d12CommandBuffer->computeReadOnlyStorageTextures[firstSlot + i]);
@@ -4843,7 +4843,7 @@ static void D3D12_EndComputePass(
 
     for (Uint32 i = 0; i < MAX_STORAGE_TEXTURES_PER_STAGE; i += 1) {
         if (d3d12CommandBuffer->computeReadWriteStorageTextures[i]) {
-            D3D12_INTERNAL_TextureSubresourceTransitionFromDefaultUsage(
+            D3D12_INTERNAL_TextureSubresourceTransitionToDefaultUsage(
                 d3d12CommandBuffer,
                 D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
                 d3d12CommandBuffer->computeReadWriteStorageTextures[i]);
@@ -4854,7 +4854,7 @@ static void D3D12_EndComputePass(
 
     for (Uint32 i = 0; i < MAX_STORAGE_BUFFERS_PER_STAGE; i += 1) {
         if (d3d12CommandBuffer->computeReadWriteStorageBuffers[i]) {
-            D3D12_INTERNAL_BufferTransitionFromDefaultUsage(
+            D3D12_INTERNAL_BufferTransitionToDefaultUsage(
                 d3d12CommandBuffer,
                 D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
                 d3d12CommandBuffer->computeReadWriteStorageBuffers[i]);
@@ -4865,7 +4865,7 @@ static void D3D12_EndComputePass(
 
     for (Uint32 i = 0; i < MAX_STORAGE_TEXTURES_PER_STAGE; i += 1) {
         if (d3d12CommandBuffer->computeReadOnlyStorageTextures[i]) {
-            D3D12_INTERNAL_TextureSubresourceTransitionFromDefaultUsage(
+            D3D12_INTERNAL_TextureSubresourceTransitionToDefaultUsage(
                 d3d12CommandBuffer,
                 D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
                 d3d12CommandBuffer->computeReadOnlyStorageTextures[i]);
@@ -4876,7 +4876,7 @@ static void D3D12_EndComputePass(
 
     for (Uint32 i = 0; i < MAX_STORAGE_BUFFERS_PER_STAGE; i += 1) {
         if (d3d12CommandBuffer->computeReadOnlyStorageBuffers[i]) {
-            D3D12_INTERNAL_BufferTransitionFromDefaultUsage(
+            D3D12_INTERNAL_BufferTransitionToDefaultUsage(
                 d3d12CommandBuffer,
                 D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
                 d3d12CommandBuffer->computeReadOnlyStorageBuffers[i]);
