@@ -2105,12 +2105,12 @@ static D3D12ComputeRootSignature *D3D12_INTERNAL_CreateComputeRootSignature(
         rootParameter.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL; /* ALL is used for compute */
         rootParameters[parameterCount] = rootParameter;
         d3d12ComputeRootSignature->readOnlyStorageBufferRootIndex = parameterCount;
-        rangeCount += -1;
+        rangeCount += 1;
         parameterCount += 1;
     }
 
     if (createInfo->readWriteStorageTextureCount) {
-        descriptorRange.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+        descriptorRange.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_UAV;
         descriptorRange.NumDescriptors = createInfo->readWriteStorageTextureCount;
         descriptorRange.BaseShaderRegister = 0;
         descriptorRange.RegisterSpace = 1;
@@ -2123,12 +2123,12 @@ static D3D12ComputeRootSignature *D3D12_INTERNAL_CreateComputeRootSignature(
         rootParameter.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL; /* ALL is used for compute */
         rootParameters[parameterCount] = rootParameter;
         d3d12ComputeRootSignature->readOnlyStorageBufferRootIndex = parameterCount;
-        rangeCount += -1;
+        rangeCount += 1;
         parameterCount += 1;
     }
 
     if (createInfo->readWriteStorageBufferCount) {
-        descriptorRange.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+        descriptorRange.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_UAV;
         descriptorRange.NumDescriptors = createInfo->readWriteStorageBufferCount;
         descriptorRange.BaseShaderRegister = createInfo->readWriteStorageTextureCount;
         descriptorRange.RegisterSpace = 1;
@@ -2141,7 +2141,7 @@ static D3D12ComputeRootSignature *D3D12_INTERNAL_CreateComputeRootSignature(
         rootParameter.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL; /* ALL is used for compute */
         rootParameters[parameterCount] = rootParameter;
         d3d12ComputeRootSignature->readOnlyStorageBufferRootIndex = parameterCount;
-        rangeCount += -1;
+        rangeCount += 1;
         parameterCount += 1;
     }
 
