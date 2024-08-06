@@ -3085,7 +3085,9 @@ static D3D12Buffer *D3D12_INTERNAL_CreateBuffer(
             buffer->uavDescriptor.cpuHandle);
     }
 
-    if (usageFlags & SDL_GPU_BUFFERUSAGE_GRAPHICS_STORAGE_READ_BIT) {
+    if (
+        (usageFlags & SDL_GPU_BUFFERUSAGE_GRAPHICS_STORAGE_READ_BIT) ||
+        (usageFlags & SDL_GPU_BUFFERUSAGE_COMPUTE_STORAGE_READ_BIT)) {
         D3D12_INTERNAL_AssignCpuDescriptorHandle(
             renderer,
             D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
@@ -3916,6 +3918,7 @@ static void D3D12_INTERNAL_PushUniformData(
             commandBuffer->computeUniformBuffers[slotIndex] = D3D12_INTERNAL_AcquireUniformBufferFromPool(
                 commandBuffer);
         }
+        uniformBuffer = commandBuffer->computeUniformBuffers[slotIndex];
     } else {
         SDL_LogError(SDL_LOG_CATEGORY_GPU, "Unrecognized shader stage!");
         return;
@@ -4563,6 +4566,9 @@ static void D3D12_BeginComputePass(
     if (storageBufferBindingCount > 0) {
         for (Uint32 i = 0; i < storageBufferBindingCount; i += 1) {
             D3D12BufferContainer *container = (D3D12BufferContainer *)storageBufferBindings[i].buffer;
+            if (!(container->usageFlags & SDL_GPU_BUFFERUSAGE_COMPUTE_STORAGE_WRITE_BIT)) {
+                SDL_LogError(SDL_LOG_CATEGORY_GPU, "Attempted to bind read-only texture as compute write texture");
+            }
             D3D12Buffer *buffer = D3D12_INTERNAL_PrepareBufferForWrite(
                 d3d12CommandBuffer,
                 container,
