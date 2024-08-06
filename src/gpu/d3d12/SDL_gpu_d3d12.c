@@ -3899,7 +3899,6 @@ static void D3D12_INTERNAL_PushUniformData(
 {
     D3D12UniformBuffer *uniformBuffer = NULL;
 
-    /* TODO: compute uniforms */
     if (shaderStage == SDL_GPU_SHADERSTAGE_VERTEX) {
         if (commandBuffer->vertexUniformBuffers[slotIndex] == NULL) {
             commandBuffer->vertexUniformBuffers[slotIndex] = D3D12_INTERNAL_AcquireUniformBufferFromPool(
@@ -3912,6 +3911,11 @@ static void D3D12_INTERNAL_PushUniformData(
                 commandBuffer);
         }
         uniformBuffer = commandBuffer->fragmentUniformBuffers[slotIndex];
+    } else if (shaderStage == SDL_GPU_SHADERSTAGE_COMPUTE) {
+        if (commandBuffer->computeUniformBuffers[slotIndex] == NULL) {
+            commandBuffer->computeUniformBuffers[slotIndex] = D3D12_INTERNAL_AcquireUniformBufferFromPool(
+                commandBuffer);
+        }
     } else {
         SDL_LogError(SDL_LOG_CATEGORY_GPU, "Unrecognized shader stage!");
         return;
@@ -3935,11 +3939,12 @@ static void D3D12_INTERNAL_PushUniformData(
         uniformBuffer->drawOffset = 0;
         uniformBuffer->writeOffset = 0;
 
-        /* TODO: compute uniforms */
         if (shaderStage == SDL_GPU_SHADERSTAGE_VERTEX) {
             commandBuffer->vertexUniformBuffers[slotIndex] = uniformBuffer;
         } else if (shaderStage == SDL_GPU_SHADERSTAGE_FRAGMENT) {
             commandBuffer->fragmentUniformBuffers[slotIndex] = uniformBuffer;
+        } else if (shaderStage == SDL_GPU_SHADERSTAGE_COMPUTE) {
+            commandBuffer->computeUniformBuffers[slotIndex] = uniformBuffer;
         } else {
             SDL_LogError(SDL_LOG_CATEGORY_GPU, "Unrecognized shader stage!");
         }
@@ -3954,11 +3959,12 @@ static void D3D12_INTERNAL_PushUniformData(
 
     uniformBuffer->writeOffset += uniformBuffer->currentBlockSize;
 
-    /* TODO: compute uniforms */
     if (shaderStage == SDL_GPU_SHADERSTAGE_VERTEX) {
         commandBuffer->needVertexUniformBufferBind[slotIndex] = SDL_TRUE;
     } else if (shaderStage == SDL_GPU_SHADERSTAGE_FRAGMENT) {
         commandBuffer->needFragmentUniformBufferBind[slotIndex] = SDL_TRUE;
+    } else if (shaderStage == SDL_GPU_SHADERSTAGE_COMPUTE) {
+        commandBuffer->needComputeUniformBufferBind[slotIndex] = SDL_TRUE;
     } else {
         SDL_LogError(SDL_LOG_CATEGORY_GPU, "Unrecognized shader stage!");
     }
@@ -4649,30 +4655,186 @@ static void D3D12_BindComputeStorageTextures(
     SDL_GpuCommandBuffer *commandBuffer,
     Uint32 firstSlot,
     SDL_GpuTextureSlice *storageTextureSlices,
-    Uint32 bindingCount) { SDL_assert(SDL_FALSE); }
+    Uint32 bindingCount)
+{
+    D3D12CommandBuffer *d3d12CommandBuffer = (D3D12CommandBuffer *)commandBuffer;
+
+    for (Uint32 i = 0; i < bindingCount; i += 1) {
+        if (d3d12CommandBuffer->computeReadOnlyStorageTextures[firstSlot + i] != NULL) {
+            D3D12_INTERNAL_TextureSubresourceTransitionToDefaultUsage(
+                d3d12CommandBuffer,
+                D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
+                d3d12CommandBuffer->computeReadOnlyStorageTextures[firstSlot + i]);
+        }
+
+        D3D12TextureContainer *container = (D3D12TextureContainer *)storageTextureSlices[i].texture;
+        D3D12TextureSubresource *subresource = D3D12_INTERNAL_FetchTextureSubresource(
+            container,
+            storageTextureSlices[i].layer,
+            storageTextureSlices[i].mipLevel);
+
+        d3d12CommandBuffer->computeReadOnlyStorageTextures[firstSlot + i] = subresource;
+
+        D3D12_INTERNAL_TextureSubresourceTransitionFromDefaultUsage(
+            d3d12CommandBuffer,
+            D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
+            subresource);
+
+        D3D12_INTERNAL_TrackTextureSubresource(
+            d3d12CommandBuffer,
+            subresource);
+    }
+
+    d3d12CommandBuffer->needComputeReadOnlyStorageTextureBind = SDL_TRUE;
+}
 
 static void D3D12_BindComputeStorageBuffers(
     SDL_GpuCommandBuffer *commandBuffer,
     Uint32 firstSlot,
     SDL_GpuBuffer **storageBuffers,
-    Uint32 bindingCount) { SDL_assert(SDL_FALSE); }
+    Uint32 bindingCount)
+{
+    D3D12CommandBuffer *d3d12CommandBuffer = (D3D12CommandBuffer *)commandBuffer;
+
+    for (Uint32 i = 0; i < bindingCount; i += 1) {
+        if (d3d12CommandBuffer->computeReadOnlyStorageBuffers[firstSlot + i] != NULL) {
+            D3D12_INTERNAL_BufferTransitionToDefaultUsage(
+                d3d12CommandBuffer,
+                D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
+                d3d12CommandBuffer->computeReadOnlyStorageBuffers[firstSlot + i]);
+        }
+
+        D3D12BufferContainer *container = (D3D12BufferContainer *)storageBuffers[i];
+        D3D12Buffer *buffer = container->activeBuffer;
+
+        d3d12CommandBuffer->computeReadOnlyStorageBuffers[firstSlot + i] = buffer;
+
+        D3D12_INTERNAL_BufferTransitionFromDefaultUsage(
+            d3d12CommandBuffer,
+            D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
+            buffer);
+
+        D3D12_INTERNAL_TrackBuffer(
+            d3d12CommandBuffer,
+            buffer);
+    }
+
+    d3d12CommandBuffer->needComputeReadOnlyStorageBufferBind = SDL_TRUE;
+}
 
 static void D3D12_PushComputeUniformData(
     SDL_GpuCommandBuffer *commandBuffer,
     Uint32 slotIndex,
     const void *data,
-    Uint32 dataLengthInBytes) { SDL_assert(SDL_FALSE); }
+    Uint32 dataLengthInBytes)
+{
+    D3D12CommandBuffer *d3d12CommandBuffer = (D3D12CommandBuffer *)commandBuffer;
+
+    D3D12_INTERNAL_PushUniformData(
+        d3d12CommandBuffer,
+        SDL_GPU_SHADERSTAGE_COMPUTE,
+        slotIndex,
+        data,
+        dataLengthInBytes);
+}
+
+static void D3D12_INTERNAL_BindComputeResources(
+    D3D12CommandBuffer *commandBuffer)
+{
+    D3D12ComputePipeline *computePipeline = commandBuffer->currentComputePipeline;
+
+    D3D12_CPU_DESCRIPTOR_HANDLE cpuHandles[MAX_TEXTURE_SAMPLERS_PER_STAGE];
+    D3D12_GPU_DESCRIPTOR_HANDLE gpuDescriptorHandle;
+
+    if (commandBuffer->needComputeReadOnlyStorageTextureBind) {
+        if (computePipeline->readOnlyStorageTextureCount > 0) {
+            for (Uint32 i = 0; i < computePipeline->readOnlyStorageTextureCount; i += 1) {
+                cpuHandles[i] = commandBuffer->computeReadOnlyStorageTextures[i]->srvHandle.cpuHandle;
+            }
+
+            D3D12_INTERNAL_WriteGPUDescriptors(
+                commandBuffer,
+                D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
+                cpuHandles,
+                computePipeline->readOnlyStorageTextureCount,
+                &gpuDescriptorHandle);
+
+            ID3D12GraphicsCommandList_SetComputeRootDescriptorTable(
+                commandBuffer->graphicsCommandList,
+                computePipeline->rootSignature->readOnlyStorageTextureRootIndex,
+                gpuDescriptorHandle);
+        }
+        commandBuffer->needComputeReadOnlyStorageTextureBind = SDL_FALSE;
+    }
+
+    if (commandBuffer->needComputeReadOnlyStorageBufferBind) {
+        if (computePipeline->readOnlyStorageBufferCount > 0) {
+            for (Uint32 i = 0; i < computePipeline->readOnlyStorageBufferCount; i += 1) {
+                cpuHandles[i] = commandBuffer->computeReadOnlyStorageBuffers[i]->srvDescriptor.cpuHandle;
+            }
+
+            D3D12_INTERNAL_WriteGPUDescriptors(
+                commandBuffer,
+                D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
+                cpuHandles,
+                computePipeline->readOnlyStorageBufferCount,
+                &gpuDescriptorHandle);
+
+            ID3D12GraphicsCommandList_SetComputeRootDescriptorTable(
+                commandBuffer->graphicsCommandList,
+                computePipeline->rootSignature->readOnlyStorageBufferRootIndex,
+                gpuDescriptorHandle);
+        }
+        commandBuffer->needComputeReadOnlyStorageBufferBind = SDL_FALSE;
+    }
+
+    for (Uint32 i = 0; i < MAX_UNIFORM_BUFFERS_PER_STAGE; i += 1) {
+        if (commandBuffer->needComputeUniformBufferBind[i]) {
+            if (computePipeline->uniformBufferCount > i) {
+                ID3D12GraphicsCommandList_SetComputeRootConstantBufferView(
+                    commandBuffer->graphicsCommandList,
+                    computePipeline->rootSignature->uniformBufferRootIndex[i],
+                    commandBuffer->computeUniformBuffers[i]->buffer->virtualAddress + commandBuffer->computeUniformBuffers[i]->drawOffset);
+            }
+        }
+        commandBuffer->needComputeUniformBufferBind[i] = SDL_FALSE;
+    }
+}
 
 static void D3D12_DispatchCompute(
     SDL_GpuCommandBuffer *commandBuffer,
     Uint32 groupCountX,
     Uint32 groupCountY,
-    Uint32 groupCountZ) { SDL_assert(SDL_FALSE); }
+    Uint32 groupCountZ)
+{
+    D3D12CommandBuffer *d3d12CommandBuffer = (D3D12CommandBuffer *)commandBuffer;
+
+    D3D12_INTERNAL_BindComputeResources(d3d12CommandBuffer);
+    ID3D12GraphicsCommandList_Dispatch(
+        d3d12CommandBuffer->graphicsCommandList,
+        groupCountX,
+        groupCountY,
+        groupCountZ);
+}
 
 static void D3D12_DispatchComputeIndirect(
     SDL_GpuCommandBuffer *commandBuffer,
     SDL_GpuBuffer *buffer,
-    Uint32 offsetInBytes) { SDL_assert(SDL_FALSE); }
+    Uint32 offsetInBytes)
+{
+    D3D12CommandBuffer *d3d12CommandBuffer = (D3D12CommandBuffer *)commandBuffer;
+    D3D12Buffer *d3d12Buffer = ((D3D12BufferContainer *)buffer)->activeBuffer;
+
+    D3D12_INTERNAL_BindComputeResources(d3d12CommandBuffer);
+    ID3D12GraphicsCommandList_ExecuteIndirect(
+        d3d12CommandBuffer->graphicsCommandList,
+        d3d12CommandBuffer->renderer->indirectDispatchCommandSignature,
+        1,
+        d3d12Buffer->handle,
+        offsetInBytes,
+        NULL,
+        0);
+}
 
 static void D3D12_EndComputePass(
     SDL_GpuCommandBuffer *commandBuffer)
