@@ -565,6 +565,10 @@ struct D3D12Renderer
     Uint32 graphicsPipelinesToDestroyCount;
     Uint32 graphicsPipelinesToDestroyCapacity;
 
+    D3D12ComputePipeline **computePipelinesToDestroy;
+    Uint32 computePipelinesToDestroyCount;
+    Uint32 computePipelinesToDestroyCapacity;
+
     /* Locks */
     SDL_Mutex *stagingDescriptorHeapLock;
     SDL_Mutex *acquireCommandBufferLock;
@@ -3367,7 +3371,25 @@ static void D3D12_ReleaseShader(
 
 static void D3D12_ReleaseComputePipeline(
     SDL_GpuRenderer *driverData,
-    SDL_GpuComputePipeline *computePipeline) { SDL_assert(SDL_FALSE); }
+    SDL_GpuComputePipeline *computePipeline)
+{
+    D3D12Renderer *renderer = (D3D12Renderer *)driverData;
+    D3D12ComputePipeline *d3d12ComputePipeline = (D3D12ComputePipeline *)computePipeline;
+
+    SDL_LockMutex(renderer->disposeLock);
+
+    EXPAND_ARRAY_IF_NEEDED(
+        renderer->computePipelinesToDestroy,
+        D3D12ComputePipeline *,
+        renderer->computePipelinesToDestroyCount + 1,
+        renderer->computePipelinesToDestroyCapacity,
+        renderer->computePipelinesToDestroyCapacity * 2)
+
+    renderer->computePipelinesToDestroy[renderer->computePipelinesToDestroyCount] = d3d12ComputePipeline;
+    renderer->computePipelinesToDestroyCount += 1;
+
+    SDL_UnlockMutex(renderer->disposeLock);
+}
 
 static void D3D12_ReleaseGraphicsPipeline(
     SDL_GpuRenderer *driverData,
@@ -6008,6 +6030,16 @@ static void D3D12_INTERNAL_PerformPendingDestroys(D3D12Renderer *renderer)
         }
     }
 
+    for (Sint32 i = renderer->computePipelinesToDestroyCount - 1; i >= 0; i -= 1) {
+        if (SDL_AtomicGet(&renderer->computePipelinesToDestroy[i]->referenceCount) == 0) {
+            D3D12_INTERNAL_DestroyComputePipeline(
+                renderer->computePipelinesToDestroy[i]);
+
+            renderer->computePipelinesToDestroy[i] = renderer->computePipelinesToDestroy[renderer->computePipelinesToDestroyCount - 1];
+            renderer->computePipelinesToDestroyCount -= 1;
+        }
+    }
+
     SDL_UnlockMutex(renderer->disposeLock);
 }
 
@@ -7108,7 +7140,7 @@ static SDL_GpuDevice *D3D12_CreateDevice(SDL_bool debugMode, SDL_bool preferLowP
     renderer->buffersToDestroyCount = 0;
     renderer->buffersToDestroy = SDL_calloc(
         renderer->buffersToDestroyCapacity, sizeof(D3D12Buffer *));
-    if (!renderer->buffersToDestroyCapacity) {
+    if (!renderer->buffersToDestroy) {
         D3D12_INTERNAL_DestroyRenderer(renderer);
         return NULL;
     }
@@ -7117,7 +7149,7 @@ static SDL_GpuDevice *D3D12_CreateDevice(SDL_bool debugMode, SDL_bool preferLowP
     renderer->texturesToDestroyCount = 0;
     renderer->texturesToDestroy = SDL_calloc(
         renderer->texturesToDestroyCapacity, sizeof(D3D12Texture *));
-    if (!renderer->texturesToDestroyCapacity) {
+    if (!renderer->texturesToDestroy) {
         D3D12_INTERNAL_DestroyRenderer(renderer);
         return NULL;
     }
@@ -7126,7 +7158,7 @@ static SDL_GpuDevice *D3D12_CreateDevice(SDL_bool debugMode, SDL_bool preferLowP
     renderer->samplersToDestroyCount = 0;
     renderer->samplersToDestroy = SDL_calloc(
         renderer->samplersToDestroyCapacity, sizeof(D3D12Sampler *));
-    if (!renderer->samplersToDestroyCapacity) {
+    if (!renderer->samplersToDestroy) {
         D3D12_INTERNAL_DestroyRenderer(renderer);
         return NULL;
     }
@@ -7135,7 +7167,16 @@ static SDL_GpuDevice *D3D12_CreateDevice(SDL_bool debugMode, SDL_bool preferLowP
     renderer->graphicsPipelinesToDestroyCount = 0;
     renderer->graphicsPipelinesToDestroy = SDL_calloc(
         renderer->graphicsPipelinesToDestroyCapacity, sizeof(D3D12GraphicsPipeline *));
-    if (!renderer->graphicsPipelinesToDestroyCapacity) {
+    if (!renderer->graphicsPipelinesToDestroy) {
+        D3D12_INTERNAL_DestroyRenderer(renderer);
+        return NULL;
+    }
+
+    renderer->computePipelinesToDestroyCapacity = 4;
+    renderer->computePipelinesToDestroyCount = 0;
+    renderer->computePipelinesToDestroy = SDL_calloc(
+        renderer->computePipelinesToDestroyCapacity, sizeof(D3D12ComputePipeline *));
+    if (!renderer->computePipelinesToDestroy) {
         D3D12_INTERNAL_DestroyRenderer(renderer);
         return NULL;
     }
