@@ -132,7 +132,6 @@
 /* Function Pointer Signatures */
 typedef HRESULT(WINAPI *PFN_CREATE_DXGI_FACTORY1)(const GUID *riid, void **ppFactory);
 typedef HRESULT(WINAPI *PFN_DXGI_GET_DEBUG_INTERFACE)(const GUID *riid, void **ppDebug);
-typedef HRESULT(WINAPI *PFN_D3D12_GET_DEBUG_INTERFACE)(const GUID *riid, void **ppDebug);
 typedef HRESULT(D3DCOMPILER_API *PFN_D3DCOMPILE)(LPCVOID pSrcData, SIZE_T SrcDataSize, LPCSTR pSourceName, const D3D_SHADER_MACRO *pDefines, ID3DInclude *pInclude, LPCSTR pEntrypoint, LPCSTR pTarget, UINT Flags1, UINT Flags2, ID3DBlob **ppCode, ID3DBlob **ppErrorMsgs);
 
 /* IIDs (from https://www.magnumdb.com/) */
@@ -874,7 +873,7 @@ static void D3D12_INTERNAL_SetResourceName(
     if (renderer->debugMode) {
         ID3D12DeviceChild_SetPrivateData(
             resource,
-            &D3D_IID_D3DDebugObjectName,
+            D3D_GUID(D3D_IID_D3DDebugObjectName),
             (UINT)SDL_strlen(text),
             text);
     }
@@ -1629,7 +1628,7 @@ static D3D12DescriptorHeap *D3D12_INTERNAL_CreateDescriptorHeap(
     res = ID3D12Device_CreateDescriptorHeap(
         renderer->device,
         &heapDesc,
-        &D3D_IID_ID3D12DescriptorHeap,
+        D3D_GUID(D3D_IID_ID3D12DescriptorHeap),
         (void **)&handle);
 
     if (FAILED(res)) {
@@ -1955,7 +1954,7 @@ static D3D12GraphicsRootSignature *D3D12_INTERNAL_CreateGraphicsRootSignature(
         0,
         ID3D10Blob_GetBufferPointer(serializedRootSignature),
         ID3D10Blob_GetBufferSize(serializedRootSignature),
-        &D3D_IID_ID3D12RootSignature,
+        D3D_GUID(D3D_IID_ID3D12RootSignature),
         (void **)&rootSignature);
 
     if (FAILED(res)) {
@@ -2186,7 +2185,7 @@ static D3D12ComputeRootSignature *D3D12_INTERNAL_CreateComputeRootSignature(
         0,
         ID3D10Blob_GetBufferPointer(serializedRootSignature),
         ID3D10Blob_GetBufferSize(serializedRootSignature),
-        &D3D_IID_ID3D12RootSignature,
+        D3D_GUID(D3D_IID_ID3D12RootSignature),
         (void **)&rootSignature);
 
     if (FAILED(res)) {
@@ -2245,7 +2244,7 @@ static SDL_GpuComputePipeline *D3D12_CreateComputePipeline(
     HRESULT res = ID3D12Device_CreateComputePipelineState(
         renderer->device,
         &pipelineDesc,
-        &D3D_IID_ID3D12PipelineState,
+        D3D_GUID(D3D_IID_ID3D12PipelineState),
         (void **)&pipelineState);
 
     if (FAILED(res)) {
@@ -2512,7 +2511,7 @@ static SDL_GpuGraphicsPipeline *D3D12_CreateGraphicsPipeline(
     psoDesc.pRootSignature = rootSignature->handle;
     ID3D12PipelineState *pipelineState = NULL;
 
-    HRESULT res = ID3D12Device_CreateGraphicsPipelineState(renderer->device, &psoDesc, &D3D_IID_ID3D12PipelineState, (void **)&pipelineState);
+    HRESULT res = ID3D12Device_CreateGraphicsPipelineState(renderer->device, &psoDesc, D3D_GUID(D3D_IID_ID3D12PipelineState), (void **)&pipelineState);
     if (FAILED(res)) {
         D3D12_INTERNAL_LogError(renderer->device, "Could not create graphics pipeline state", res);
         D3D12_INTERNAL_DestroyGraphicsPipeline(pipeline);
@@ -2704,7 +2703,7 @@ static D3D12Texture *D3D12_INTERNAL_CreateTexture(
         &desc,
         initialState,
         NULL,
-        &D3D_IID_ID3D12Resource,
+        D3D_GUID(D3D_IID_ID3D12Resource),
         (void **)&handle);
     if (FAILED(res)) {
         D3D12_INTERNAL_LogError(renderer->device, "Failed to create texture!", res);
@@ -3047,7 +3046,7 @@ static D3D12Buffer *D3D12_INTERNAL_CreateBuffer(
         &desc,
         initialState,
         NULL,
-        &D3D_IID_ID3D12Resource,
+        D3D_GUID(D3D_IID_ID3D12Resource),
         (void **)&handle);
     if (FAILED(res)) {
         D3D12_INTERNAL_LogError(renderer->device, "Could not create buffer!", res);
@@ -5347,7 +5346,7 @@ static SDL_bool D3D12_INTERNAL_InitializeSwapchainTexture(
     res = IDXGISwapChain_GetBuffer(
         swapchain,
         index,
-        &D3D_IID_ID3D12Resource,
+        D3D_GUID(D3D_IID_ID3D12Resource),
         (void **)&swapchainTexture);
     ERROR_CHECK_RETURN("Could not get buffer from swapchain!", 0);
 
@@ -5593,7 +5592,7 @@ static SDL_bool D3D12_INTERNAL_CreateSwapchain(
 
     res = IDXGISwapChain1_QueryInterface(
         swapchain,
-        &D3D_IID_IDXGISwapChain3,
+        D3D_GUID(D3D_IID_IDXGISwapChain3),
         (void **)&swapchain3);
     IDXGISwapChain1_Release(swapchain);
     ERROR_CHECK_RETURN("Could not create IDXGISwapChain3", 0);
@@ -5621,7 +5620,7 @@ static SDL_bool D3D12_INTERNAL_CreateSwapchain(
      */
     res = IDXGISwapChain3_GetParent(
         swapchain3,
-        &D3D_IID_IDXGIFactory1,
+        D3D_GUID(D3D_IID_IDXGIFactory1),
         (void **)&pParent);
     if (FAILED(res)) {
         SDL_LogWarn(
@@ -5842,7 +5841,7 @@ static D3D12Fence *D3D12_INTERNAL_AcquireFence(
             renderer->device,
             D3D12_FENCE_UNSIGNALED_VALUE,
             D3D12_FENCE_FLAG_NONE,
-            &D3D_IID_ID3D12Fence,
+            D3D_GUID(D3D_IID_ID3D12Fence),
             (void **)&handle);
         if (FAILED(res)) {
             D3D12_INTERNAL_LogError(renderer->device, "Failed to create fence!", res);
@@ -5886,7 +5885,7 @@ static void D3D12_INTERNAL_AllocateCommandBuffer(
     res = ID3D12Device_CreateCommandAllocator(
         renderer->device,
         D3D12_COMMAND_LIST_TYPE_DIRECT,
-        &D3D_IID_ID3D12CommandAllocator,
+        D3D_GUID(D3D_IID_ID3D12CommandAllocator),
         (void **)&commandAllocator);
     if (FAILED(res)) {
         SDL_LogError(SDL_LOG_CATEGORY_GPU, "Failed to create ID3D12CommandAllocator");
@@ -5901,7 +5900,7 @@ static void D3D12_INTERNAL_AllocateCommandBuffer(
         D3D12_COMMAND_LIST_TYPE_DIRECT,
         commandAllocator,
         NULL,
-        &D3D_IID_ID3D12GraphicsCommandList,
+        D3D_GUID(D3D_IID_ID3D12GraphicsCommandList),
         (void **)&commandList);
 
     if (FAILED(res)) {
@@ -6134,7 +6133,7 @@ static SDL_GpuTexture *D3D12_AcquireSwapchainTexture(
     res = IDXGISwapChain_GetBuffer(
         windowData->swapchain,
         swapchainIndex,
-        &D3D_IID_ID3D12Resource,
+        D3D_GUID(D3D_IID_ID3D12Resource),
         (void **)&windowData->textureContainers[swapchainIndex].activeTexture->resource);
     ERROR_CHECK_RETURN("Could not acquire swapchain!", NULL);
 
@@ -6370,7 +6369,7 @@ static void D3D12_Submit(
 
     res = ID3D12GraphicsCommandList_QueryInterface(
         d3d12CommandBuffer->graphicsCommandList,
-        &D3D_IID_ID3D12CommandList,
+        D3D_GUID(D3D_IID_ID3D12CommandList),
         (void **)&commandLists[0]);
     ERROR_CHECK("Failed to convert command list!")
 
@@ -6816,7 +6815,7 @@ static SDL_bool D3D12_PrepareDriver(SDL_VideoDevice *_this)
     /* Check for DXGI 1.4 support */
     res = IDXGIFactory1_QueryInterface(
         factory,
-        &D3D_IID_IDXGIFactory4,
+        D3D_GUID(D3D_IID_IDXGIFactory4),
         (void **)&factory4);
     if (FAILED(res)) {
         IDXGIFactory1_Release(factory);
@@ -6829,14 +6828,14 @@ static SDL_bool D3D12_PrepareDriver(SDL_VideoDevice *_this)
 
     res = IDXGIFactory1_QueryInterface(
         factory,
-        &D3D_IID_IDXGIFactory6,
+        D3D_GUID(D3D_IID_IDXGIFactory6),
         (void **)&factory6);
     if (SUCCEEDED(res)) {
         res = IDXGIFactory6_EnumAdapterByGpuPreference(
             factory6,
             0,
             DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE,
-            &D3D_IID_IDXGIAdapter1,
+            D3D_GUID(D3D_IID_IDXGIAdapter1),
             (void **)&adapter);
         IDXGIFactory6_Release(factory6);
     } else {
@@ -6856,7 +6855,7 @@ static SDL_bool D3D12_PrepareDriver(SDL_VideoDevice *_this)
     res = D3D12CreateDeviceFunc(
         (IUnknown *)adapter,
         D3D_FEATURE_LEVEL_CHOICE,
-        &D3D_IID_ID3D12Device,
+        D3D_GUID(D3D_IID_ID3D12Device),
         (void **)&device);
 
     if (SUCCEEDED(res)) {
@@ -6936,7 +6935,7 @@ static void D3D12_INTERNAL_TryInitializeD3D12Debug(D3D12Renderer *renderer)
         return;
     }
 
-    res = D3D12GetDebugInterfaceFunc(&D3D_IID_ID3D12Debug, (void **)&renderer->d3d12Debug);
+    res = D3D12GetDebugInterfaceFunc(D3D_GUID(D3D_IID_ID3D12Debug), (void **)&renderer->d3d12Debug);
     if (FAILED(res)) {
         SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Could not get ID3D12Debug interface");
         return;
@@ -6954,7 +6953,7 @@ static void D3D12_INTERNAL_TryInitializeD3D12DebugInfoQueue(D3D12Renderer *rende
 
     res = ID3D12Device_QueryInterface(
         renderer->device,
-        &D3D_IID_ID3D12InfoQueue,
+        D3D_GUID(D3D_IID_ID3D12InfoQueue),
         (void **)&infoQueue);
     if (FAILED(res)) {
         ERROR_CHECK_RETURN("Failed to convert ID3D12Device to ID3D12InfoQueue", );
@@ -7045,7 +7044,7 @@ static SDL_GpuDevice *D3D12_CreateDevice(SDL_bool debugMode, SDL_bool preferLowP
     /* Check for DXGI 1.4 support */
     res = IDXGIFactory1_QueryInterface(
         factory1,
-        &D3D_IID_IDXGIFactory4,
+        D3D_GUID(D3D_IID_IDXGIFactory4),
         (void **)&renderer->factory);
     if (FAILED(res)) {
         D3D12_INTERNAL_DestroyRenderer(renderer);
@@ -7056,7 +7055,7 @@ static SDL_GpuDevice *D3D12_CreateDevice(SDL_bool debugMode, SDL_bool preferLowP
     /* Check for explicit tearing support */
     res = IDXGIFactory4_QueryInterface(
         renderer->factory,
-        &D3D_IID_IDXGIFactory5,
+        D3D_GUID(D3D_IID_IDXGIFactory5),
         (void **)&factory5);
     if (SUCCEEDED(res)) {
         res = IDXGIFactory5_CheckFeatureSupport(
@@ -7073,14 +7072,14 @@ static SDL_GpuDevice *D3D12_CreateDevice(SDL_bool debugMode, SDL_bool preferLowP
     /* Select the appropriate device for rendering */
     res = IDXGIFactory4_QueryInterface(
         renderer->factory,
-        &D3D_IID_IDXGIFactory6,
+        D3D_GUID(D3D_IID_IDXGIFactory6),
         (void **)&factory6);
     if (SUCCEEDED(res)) {
         res = IDXGIFactory6_EnumAdapterByGpuPreference(
             factory6,
             0,
             preferLowPower ? DXGI_GPU_PREFERENCE_MINIMUM_POWER : DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE,
-            &D3D_IID_IDXGIAdapter1,
+            D3D_GUID(D3D_IID_IDXGIAdapter1),
             (void **)&renderer->adapter);
         IDXGIFactory6_Release(factory6);
     } else {
@@ -7141,7 +7140,7 @@ static SDL_GpuDevice *D3D12_CreateDevice(SDL_bool debugMode, SDL_bool preferLowP
     res = D3D12CreateDeviceFunc(
         (IUnknown *)renderer->adapter,
         D3D_FEATURE_LEVEL_CHOICE,
-        &D3D_IID_ID3D12Device,
+        D3D_GUID(D3D_IID_ID3D12Device),
         (void **)&renderer->device);
 
     if (FAILED(res)) {
@@ -7188,7 +7187,7 @@ static SDL_GpuDevice *D3D12_CreateDevice(SDL_bool debugMode, SDL_bool preferLowP
     res = ID3D12Device_CreateCommandQueue(
         renderer->device,
         &queueDesc,
-        &D3D_IID_ID3D12CommandQueue,
+        D3D_GUID(D3D_IID_ID3D12CommandQueue),
         (void **)&renderer->commandQueue);
 
     if (FAILED(res)) {
@@ -7210,7 +7209,7 @@ static SDL_GpuDevice *D3D12_CreateDevice(SDL_bool debugMode, SDL_bool preferLowP
         renderer->device,
         &commandSignatureDesc,
         NULL,
-        &D3D_IID_ID3D12CommandSignature,
+        D3D_GUID(D3D_IID_ID3D12CommandSignature),
         (void **)&renderer->indirectDrawCommandSignature);
     if (FAILED(res)) {
         D3D12_INTERNAL_DestroyRenderer(renderer);
@@ -7225,7 +7224,7 @@ static SDL_GpuDevice *D3D12_CreateDevice(SDL_bool debugMode, SDL_bool preferLowP
         renderer->device,
         &commandSignatureDesc,
         NULL,
-        &D3D_IID_ID3D12CommandSignature,
+        D3D_GUID(D3D_IID_ID3D12CommandSignature),
         (void **)&renderer->indirectIndexedDrawCommandSignature);
     if (FAILED(res)) {
         D3D12_INTERNAL_DestroyRenderer(renderer);
@@ -7240,7 +7239,7 @@ static SDL_GpuDevice *D3D12_CreateDevice(SDL_bool debugMode, SDL_bool preferLowP
         renderer->device,
         &commandSignatureDesc,
         NULL,
-        &D3D_IID_ID3D12CommandSignature,
+        D3D_GUID(D3D_IID_ID3D12CommandSignature),
         (void **)&renderer->indirectDispatchCommandSignature);
     if (FAILED(res)) {
         D3D12_INTERNAL_DestroyRenderer(renderer);
