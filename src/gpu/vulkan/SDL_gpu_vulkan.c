@@ -10042,7 +10042,6 @@ static SDL_GpuTextureFormat VULKAN_GetSwapchainTextureFormat(
     SDL_GpuRenderer *driverData,
     SDL_Window *window)
 {
-    VulkanRenderer *renderer = (VulkanRenderer *)driverData;
     WindowData *windowData = VULKAN_INTERNAL_FetchWindowData(window);
 
     if (windowData == NULL) {
