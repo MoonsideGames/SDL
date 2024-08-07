@@ -3505,15 +3505,15 @@ static Uint8 METAL_INTERNAL_CreateSwapchain(
     windowData->textureContainer.activeTexture = &windowData->texture;
     windowData->textureContainer.textureCapacity = 1;
     windowData->textureContainer.textureCount = 1;
-    windowData->textureContainer.createInfo.format = SwapchainCompositionToFormat[swapchainComposition];
-    windowData->textureContainer.createInfo.levelCount = 1;
-    windowData->textureContainer.createInfo.depth = 1;
-    windowData->textureContainer.createInfo.isCube = 0;
-    windowData->textureContainer.createInfo.usageFlags = SDL_GPU_TEXTUREUSAGE_COLOR_TARGET_BIT | SDL_GPU_TEXTUREUSAGE_SAMPLER_BIT;
+    windowData->textureContainer.header.info.format = SwapchainCompositionToFormat[swapchainComposition];
+    windowData->textureContainer.header.info.levelCount = 1;
+    windowData->textureContainer.header.info.depth = 1;
+    windowData->textureContainer.header.info.isCube = 0;
+    windowData->textureContainer.header.info.usageFlags = SDL_GPU_TEXTUREUSAGE_COLOR_TARGET_BIT | SDL_GPU_TEXTUREUSAGE_SAMPLER_BIT;
 
     drawableSize = windowData->layer.drawableSize;
-    windowData->textureContainer.createInfo.width = (Uint32)drawableSize.width;
-    windowData->textureContainer.createInfo.height = (Uint32)drawableSize.height;
+    windowData->textureContainer.header.info.width = (Uint32)drawableSize.width;
+    windowData->textureContainer.header.info.height = (Uint32)drawableSize.height;
 
     return 1;
 }
@@ -3630,8 +3630,8 @@ static SDL_GpuTexture *METAL_AcquireSwapchainTexture(
 
         /* Update the window size */
         drawableSize = windowData->layer.drawableSize;
-        windowData->textureContainer.createInfo.width = (Uint32)drawableSize.width;
-        windowData->textureContainer.createInfo.height = (Uint32)drawableSize.height;
+        windowData->textureContainer.header.info.width = (Uint32)drawableSize.width;
+        windowData->textureContainer.header.info.height = (Uint32)drawableSize.height;
 
         /* Send the dimensions to the out parameters. */
         *pWidth = (Uint32)drawableSize.width;
@@ -3663,7 +3663,7 @@ static SDL_GpuTextureFormat METAL_GetSwapchainTextureFormat(
         return 0;
     }
 
-    return windowData->textureContainer.createInfo.format;
+    return windowData->textureContainer.header.info.format;
 }
 
 static SDL_bool METAL_SetSwapchainParameters(
@@ -3705,7 +3705,7 @@ static SDL_bool METAL_SetSwapchainParameters(
         windowData->layer.colorspace = colorspace;
         CGColorSpaceRelease(colorspace);
 
-        windowData->textureContainer.createInfo.format = SwapchainCompositionToFormat[swapchainComposition];
+        windowData->textureContainer.header.info.format = SwapchainCompositionToFormat[swapchainComposition];
 
         return SDL_TRUE;
     }
