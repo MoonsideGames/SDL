@@ -679,10 +679,18 @@ typedef struct SDL_GpuDriver
     SDL_GpuDevice *(*CreateDevice)(SDL_bool debugMode, SDL_bool preferLowPower);
 } SDL_GpuDriver;
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 extern SDL_GpuDriver VulkanDriver;
 extern SDL_GpuDriver D3D11Driver;
 extern SDL_GpuDriver D3D12Driver;
 extern SDL_GpuDriver MetalDriver;
 extern SDL_GpuDriver PS5Driver;
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* SDL_GPU_DRIVER_H */
