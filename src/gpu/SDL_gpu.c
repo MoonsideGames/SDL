@@ -437,8 +437,8 @@ SDL_GpuTexture *SDL_GpuCreateTexture(
                 SDL_assert_release(!"For cube textures: depth must be 1");
                 failed = SDL_TRUE;
             }
-            if (textureCreateInfo->layerCount > 1) {
-                SDL_assert_release(!"For cube textures: layerCount must be 1");
+            if (textureCreateInfo->layerCount != 6) {
+                SDL_assert_release(!"For cube textures: layerCount must be 6");
                 failed = SDL_TRUE;
             }
             if (textureCreateInfo->sampleCount > SDL_GPU_SAMPLECOUNT_1) {
