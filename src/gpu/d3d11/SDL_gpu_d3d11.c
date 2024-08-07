@@ -4548,7 +4548,7 @@ static void D3D11_INTERNAL_MapAndCopyTextureDownload(
         D3D11_MAP_READ,
         0,
         &subres);
-    ERROR_CHECK_RETURN("Could not map staging textre", )
+    ERROR_CHECK_RETURN("Could not map staging texture", )
 
     for (depth = 0; depth < textureDownload->depth; depth += 1) {
         dataPtrOffset = textureDownload->bufferOffset + (depth * textureDownload->bytesPerDepthSlice);
