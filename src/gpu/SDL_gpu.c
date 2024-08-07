@@ -399,6 +399,103 @@ SDL_GpuTexture *SDL_GpuCreateTexture(
         return NULL;
     }
 
+    if (device->debugMode) {
+        SDL_bool failed = SDL_FALSE;
+
+        const Uint32 MAX_2D_DIMENSION = 16384;
+        const Uint32 MAX_3D_DIMENSION = 2048;
+
+        /* Common checks for all texture types */
+        if (textureCreateInfo->width <= 0 || textureCreateInfo->height <= 0 || textureCreateInfo->depth <= 0) {
+            SDL_assert_release(!"For any texture: width, height, and depth must be >= 1");
+            failed = SDL_TRUE;
+        }
+        if (textureCreateInfo->layerCount <= 0) {
+            SDL_assert_release(!"For any texture: layerCount must be >= 1");
+            failed = SDL_TRUE;
+        }
+        if (textureCreateInfo->levelCount <= 0) {
+            SDL_assert_release(!"For any texture: levelCount must be >= 1");
+            failed = SDL_TRUE;
+        }
+
+        if (textureCreateInfo->isCube) {
+            /* Cubemap validation */
+            if (textureCreateInfo->width != textureCreateInfo->height) {
+                SDL_assert_release(!"For cube textures: width and height must be identical");
+                failed = SDL_TRUE;
+            }
+            if (textureCreateInfo->width > MAX_2D_DIMENSION || textureCreateInfo->height > MAX_2D_DIMENSION) {
+                SDL_assert_release(!"For cube textures: width and height must be <= 16384");
+                failed = SDL_TRUE;
+            }
+            if (textureCreateInfo->depth > 1) {
+                SDL_assert_release(!"For cube textures: depth must be 1");
+                failed = SDL_TRUE;
+            }
+            if (textureCreateInfo->layerCount > 1) {
+                SDL_assert_release(!"For cube textures: layerCount must be 1");
+                failed = SDL_TRUE;
+            }
+            if (textureCreateInfo->sampleCount > SDL_GPU_SAMPLECOUNT_1) {
+                SDL_assert_release(!"For cube textures: sampleCount must be SDL_GPU_SAMPLECOUNT_1");
+                failed = SDL_TRUE;
+            }
+            if (!SDL_GpuIsTextureFormatSupported(device, textureCreateInfo->format, SDL_GPU_TEXTURETYPE_CUBE, textureCreateInfo->usageFlags)) {
+                SDL_assert_release(!"For cube textures: the format is unsupported for the given usageFlags");
+                failed = SDL_TRUE;
+            }
+        } else if (textureCreateInfo->depth > 1) {
+            /* 3D Texture Validation*/
+            if (textureCreateInfo->width > MAX_3D_DIMENSION || textureCreateInfo->height > MAX_3D_DIMENSION || textureCreateInfo->depth > MAX_3D_DIMENSION) {
+                SDL_assert_release(!"For 3D textures: width, height, and depth must be <= 2048");
+                failed = SDL_TRUE;
+            }
+            if (textureCreateInfo->usageFlags & (SDL_GPU_TEXTUREUSAGE_COLOR_TARGET_BIT | SDL_GPU_TEXTUREUSAGE_DEPTH_STENCIL_TARGET_BIT)) {
+                SDL_assert_release(!"For 3D textures: usageFlags must not contain COLOR_TARGET_BIT or DEPTH_STENCIL_TARGET_BIT");
+                failed = SDL_TRUE;
+            }
+            if (textureCreateInfo->layerCount > 1) {
+                SDL_assert_release(!"For 3D textures: layerCount must be 1");
+                failed = SDL_TRUE;
+            }
+            if (textureCreateInfo->sampleCount > SDL_GPU_SAMPLECOUNT_1) {
+                SDL_assert_release(!"For 3D textures: sampleCount must be SDL_GPU_SAMPLECOUNT_1");
+                failed = SDL_TRUE;
+            }
+            if (!SDL_GpuIsTextureFormatSupported(device, textureCreateInfo->format, SDL_GPU_TEXTURETYPE_3D, textureCreateInfo->usageFlags)) {
+                SDL_assert_release(!"For 3D textures: the format is unsupported for the given usageFlags");
+                failed = SDL_TRUE;
+            }
+        } else {
+            /* 2D Texture Validation */
+            if (textureCreateInfo->layerCount > 1) {
+                /* Array Texture Validation */
+                if (textureCreateInfo->usageFlags & (SDL_GPU_TEXTUREUSAGE_COLOR_TARGET_BIT | SDL_GPU_TEXTUREUSAGE_DEPTH_STENCIL_TARGET_BIT)) {
+                    SDL_assert_release(!"For array textures: usageFlags must not contain COLOR_TARGET_BIT or DEPTH_STENCIL_TARGET_BIT");
+                    failed = SDL_TRUE;
+                }
+                if (textureCreateInfo->sampleCount > SDL_GPU_SAMPLECOUNT_1) {
+                    SDL_assert_release(!"For array textures: sampleCount must be SDL_GPU_SAMPLECOUNT_1");
+                    failed = SDL_TRUE;
+                }
+            } else {
+                if (textureCreateInfo->sampleCount > SDL_GPU_SAMPLECOUNT_1 && textureCreateInfo->levelCount > 1) {
+                    SDL_assert_release(!"For 2D textures: if sampleCount is >= SDL_GPU_SAMPLECOUNT_1, then levelCount must be 1");
+                    failed = SDL_TRUE;
+                }
+            }
+            if (!SDL_GpuIsTextureFormatSupported(device, textureCreateInfo->format, SDL_GPU_TEXTURETYPE_2D, textureCreateInfo->usageFlags)) {
+                SDL_assert_release(!"For 2D textures: the format is unsupported for the given usageFlags");
+                failed = SDL_TRUE;
+            }
+        }
+
+        if (failed) {
+            return NULL;
+        }
+    }
+
     return device->CreateTexture(
         device->driverData,
         textureCreateInfo);
