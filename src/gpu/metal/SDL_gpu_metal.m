@@ -2984,7 +2984,6 @@ static void METAL_Blit(
 {
     MetalCommandBuffer *metalCommandBuffer = (MetalCommandBuffer *)commandBuffer;
     MetalRenderer *renderer = (MetalRenderer *)metalCommandBuffer->renderer;
-    MetalTextureContainer *sourceTextureContainer = (MetalTextureContainer *)source->textureSlice.texture;
     MetalTextureContainer *destinationTextureContainer = (MetalTextureContainer *)destination->textureSlice.texture;
     SDL_GpuGraphicsPipeline *pipeline;
     SDL_GpuColorAttachmentInfo colorAttachmentInfo;
