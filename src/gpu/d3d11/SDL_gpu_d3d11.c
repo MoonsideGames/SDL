@@ -4243,11 +4243,6 @@ static void D3D11_Blit(
     SDL_GpuViewport viewport;
     SDL_GpuTextureSamplerBinding textureSamplerBinding;
 
-    if (destinationTextureContainer->header.info.depth > 1) {
-        SDL_LogError(SDL_LOG_CATEGORY_GPU, "3D blit destination not implemented!");
-        return;
-    }
-
     /* Unused */
     colorAttachmentInfo.clearColor.r = 0;
     colorAttachmentInfo.clearColor.g = 0;
@@ -4315,10 +4310,6 @@ static void D3D11_Blit(
     textureSamplerBinding.texture = source->textureSlice.texture;
     textureSamplerBinding.sampler =
         filterMode == SDL_GPU_FILTER_NEAREST ? renderer->blitNearestSampler : renderer->blitLinearSampler;
-
-    if (((D3D11TextureContainer *)textureSamplerBinding.texture)->activeTexture->shaderView == NULL) {
-        SDL_LogError(SDL_LOG_CATEGORY_GPU, "Blit source texture must be created with SAMPLER bit!");
-    }
 
     D3D11_BindFragmentSamplers(
         commandBuffer,

@@ -2993,21 +2993,6 @@ static void METAL_Blit(
 
     /* FIXME: cube copies? texture arrays? */
 
-    if (sourceTextureContainer->header.info.depth > 1) {
-        SDL_LogError(SDL_LOG_CATEGORY_GPU, "3D blit source not implemented!");
-        return;
-    }
-
-    if (destinationTextureContainer->header.info.depth > 1) {
-        SDL_LogError(SDL_LOG_CATEGORY_GPU, "3D blit destination not implemented!");
-        return;
-    }
-
-    if ((sourceTextureContainer->header.info.usageFlags & SDL_GPU_TEXTUREUSAGE_SAMPLER_BIT) == 0) {
-        SDL_LogError(SDL_LOG_CATEGORY_GPU, "Blit source texture must be created with SAMPLER bit!");
-        return;
-    }
-
     pipeline = METAL_INTERNAL_FetchBlitPipeline(
         renderer,
         destinationTextureContainer->header.info.format);

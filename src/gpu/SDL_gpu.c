@@ -1807,6 +1807,32 @@ void SDL_GpuBlit(
 
     if (COMMAND_BUFFER_DEVICE->debugMode) {
         CHECK_COMMAND_BUFFER
+
+        /* Validation */
+        SDL_bool failed = SDL_FALSE;
+        TextureCommonHeader *srcHeader = (TextureCommonHeader *)source->textureSlice.texture;
+        TextureCommonHeader *dstHeader = (TextureCommonHeader *)destination->textureSlice.texture;
+
+        if ((srcHeader->info.usageFlags & SDL_GPU_TEXTUREUSAGE_SAMPLER_BIT) == 0) {
+            SDL_assert_release(!"Blit source texture must be created with the SAMPLER_BIT usage flag");
+            failed = SDL_TRUE;
+        }
+        if ((dstHeader->info.usageFlags & SDL_GPU_TEXTUREUSAGE_COLOR_TARGET_BIT) == 0) {
+            SDL_assert_release(!"Blit destination texture must be created with the COLOR_TARGET_BIT usage flag");
+            failed = SDL_TRUE;
+        }
+        if (srcHeader->info.layerCount > 1 || dstHeader->info.layerCount > 1) {
+            SDL_assert_release(!"Blit source and destination textures must have a layerCount of 1");
+            failed = SDL_TRUE;
+        }
+        if (srcHeader->info.depth > 1 || dstHeader->info.depth > 1) {
+            SDL_assert_release(!"Blit source and destination textures must have a depth of 1");
+            failed = SDL_TRUE;
+        }
+
+        if (failed) {
+            return;
+        }
     }
 
     COMMAND_BUFFER_DEVICE->Blit(
