@@ -5223,8 +5223,6 @@ static SDL_bool D3D11_INTERNAL_CreateSwapchain(
     windowData->textureContainer.header.info.levelCount = 1;
     windowData->textureContainer.header.info.sampleCount = SDL_GPU_SAMPLECOUNT_1;
     windowData->textureContainer.header.info.usageFlags = SDL_GPU_TEXTUREUSAGE_COLOR_TARGET_BIT |
-                                                          SDL_GPU_TEXTUREUSAGE_COMPUTE_STORAGE_READ_BIT |
-                                                          SDL_GPU_TEXTUREUSAGE_GRAPHICS_STORAGE_READ_BIT |
                                                           SDL_GPU_TEXTUREUSAGE_SAMPLER_BIT;
 
     return SDL_TRUE;

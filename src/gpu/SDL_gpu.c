@@ -472,7 +472,6 @@ SDL_GpuTexture *SDL_GpuCreateTexture(
                 failed = SDL_TRUE;
             }
         } else {
-            /* 2D Texture Validation */
             if (textureCreateInfo->layerCount > 1) {
                 /* Array Texture Validation */
                 if (textureCreateInfo->usageFlags & (SDL_GPU_TEXTUREUSAGE_COLOR_TARGET_BIT | SDL_GPU_TEXTUREUSAGE_DEPTH_STENCIL_TARGET_BIT)) {
@@ -484,6 +483,7 @@ SDL_GpuTexture *SDL_GpuCreateTexture(
                     failed = SDL_TRUE;
                 }
             } else {
+                /* 2D Texture Validation */
                 if (textureCreateInfo->sampleCount > SDL_GPU_SAMPLECOUNT_1 && textureCreateInfo->levelCount > 1) {
                     SDL_assert_release(!"For 2D textures: if sampleCount is >= SDL_GPU_SAMPLECOUNT_1, then levelCount must be 1");
                     failed = SDL_TRUE;

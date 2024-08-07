@@ -419,7 +419,7 @@ typedef struct D3D12CPUDescriptor
 
 typedef struct D3D12TextureContainer
 {
-    SDL_GpuTextureCreateInfo createInfo;
+    TextureCommonHeader header;
 
     D3D12Texture *activeTexture;
 
@@ -1397,7 +1397,7 @@ static void D3D12_INTERNAL_TextureSubresourceBarrier(
         destinationState,
         textureSubresource->parent->resource,
         textureSubresource->index,
-        textureSubresource->parent->container->createInfo.usageFlags & SDL_GPU_TEXTUREUSAGE_COMPUTE_STORAGE_WRITE_BIT);
+        textureSubresource->parent->container->header.info.usageFlags & SDL_GPU_TEXTUREUSAGE_COMPUTE_STORAGE_WRITE_BIT);
 }
 
 static D3D12_RESOURCE_STATES D3D12_INTERNAL_DefaultTextureResourceState(SDL_GpuTextureUsageFlags usageFlags)
@@ -1429,7 +1429,7 @@ static void D3D12_INTERNAL_TextureSubresourceTransitionFromDefaultUsage(
 {
     D3D12_INTERNAL_TextureSubresourceBarrier(
         commandBuffer,
-        D3D12_INTERNAL_DefaultTextureResourceState(textureSubresource->parent->container->createInfo.usageFlags),
+        D3D12_INTERNAL_DefaultTextureResourceState(textureSubresource->parent->container->header.info.usageFlags),
         destinationUsageMode,
         textureSubresource);
 }
@@ -1442,7 +1442,7 @@ static void D3D12_INTERNAL_TextureSubresourceTransitionToDefaultUsage(
     D3D12_INTERNAL_TextureSubresourceBarrier(
         commandBuffer,
         sourceUsageMode,
-        D3D12_INTERNAL_DefaultTextureResourceState(textureSubresource->parent->container->createInfo.usageFlags),
+        D3D12_INTERNAL_DefaultTextureResourceState(textureSubresource->parent->container->header.info.usageFlags),
         textureSubresource);
 }
 
@@ -2930,7 +2930,7 @@ static SDL_GpuTexture *D3D12_CreateTexture(
         return NULL;
     }
 
-    container->createInfo = *textureCreateInfo;
+    container->header.info = *textureCreateInfo;
     container->textureCapacity = 1;
     container->textureCount = 1;
     container->textures = SDL_calloc(
@@ -3462,7 +3462,7 @@ static D3D12TextureSubresource *D3D12_INTERNAL_FetchTextureSubresource(
     Uint32 index = D3D12_INTERNAL_CalcSubresource(
         level,
         layer,
-        container->createInfo.levelCount);
+        container->header.info.levelCount);
     return &container->activeTexture->subresources[index];
 }
 
@@ -3491,7 +3491,7 @@ static void D3D12_INTERNAL_CycleActiveTexture(
     /* No texture is available, generate a new one. */
     texture = D3D12_INTERNAL_CreateTexture(
         renderer,
-        &container->createInfo);
+        &container->header.info);
 
     if (!texture) {
         SDL_LogError(SDL_LOG_CATEGORY_GPU, "Failed to cycle active texture!");
@@ -3638,8 +3638,8 @@ static void D3D12_BeginRenderPass(
 
     for (Uint32 i = 0; i < colorAttachmentCount; i += 1) {
         D3D12TextureContainer *container = (D3D12TextureContainer *)colorAttachmentInfos[i].textureSlice.texture;
-        Uint32 h = container->createInfo.height >> colorAttachmentInfos[i].textureSlice.mipLevel;
-        Uint32 w = container->createInfo.width >> colorAttachmentInfos[i].textureSlice.mipLevel;
+        Uint32 h = container->header.info.height >> colorAttachmentInfos[i].textureSlice.mipLevel;
+        Uint32 w = container->header.info.width >> colorAttachmentInfos[i].textureSlice.mipLevel;
 
         /* The framebuffer cannot be larger than the smallest attachment. */
 
@@ -3651,7 +3651,7 @@ static void D3D12_BeginRenderPass(
             framebufferHeight = h;
         }
 
-        if (!(container->createInfo.usageFlags & SDL_GPU_TEXTUREUSAGE_COLOR_TARGET_BIT)) {
+        if (!(container->header.info.usageFlags & SDL_GPU_TEXTUREUSAGE_COLOR_TARGET_BIT)) {
             SDL_LogError(SDL_LOG_CATEGORY_GPU, "Color attachment texture was not designated as a color target!");
             return;
         }
@@ -3660,8 +3660,8 @@ static void D3D12_BeginRenderPass(
     if (depthStencilAttachmentInfo != NULL) {
         D3D12TextureContainer *container = (D3D12TextureContainer *)depthStencilAttachmentInfo->textureSlice.texture;
 
-        Uint32 h = container->createInfo.height >> depthStencilAttachmentInfo->textureSlice.mipLevel;
-        Uint32 w = container->createInfo.width >> depthStencilAttachmentInfo->textureSlice.mipLevel;
+        Uint32 h = container->header.info.height >> depthStencilAttachmentInfo->textureSlice.mipLevel;
+        Uint32 w = container->header.info.width >> depthStencilAttachmentInfo->textureSlice.mipLevel;
 
         /* The framebuffer cannot be larger than the smallest attachment. */
 
@@ -3674,7 +3674,7 @@ static void D3D12_BeginRenderPass(
         }
 
         /* Fixme: */
-        if (!(container->createInfo.usageFlags & SDL_GPU_TEXTUREUSAGE_DEPTH_STENCIL_TARGET_BIT)) {
+        if (!(container->header.info.usageFlags & SDL_GPU_TEXTUREUSAGE_DEPTH_STENCIL_TARGET_BIT)) {
             SDL_LogError(SDL_LOG_CATEGORY_GPU, "Depth stencil attachment texture was not designated as a depth target!");
             return;
         }
@@ -4543,7 +4543,7 @@ static void D3D12_BeginComputePass(
     if (storageTextureBindingCount > 0) {
         for (Uint32 i = 0; i < storageTextureBindingCount; i += 1) {
             D3D12TextureContainer *container = (D3D12TextureContainer *)storageTextureBindings[i].textureSlice.texture;
-            if (!(container->createInfo.usageFlags & SDL_GPU_TEXTUREUSAGE_COMPUTE_STORAGE_WRITE_BIT)) {
+            if (!(container->header.info.usageFlags & SDL_GPU_TEXTUREUSAGE_COMPUTE_STORAGE_WRITE_BIT)) {
                 SDL_LogError(SDL_LOG_CATEGORY_GPU, "Attempted to bind read-only texture as compute write texture");
             }
 
@@ -4995,7 +4995,7 @@ static void D3D12_UploadToTexture(
     SDL_bool needsAlignmentCopy;
 
     if (rowPitch == 0) {
-        rowPitch = BytesPerRow(destination->w, textureContainer->createInfo.format);
+        rowPitch = BytesPerRow(destination->w, textureContainer->header.info.format);
     }
 
     alignedRowPitch = D3D12_INTERNAL_Align(rowPitch, D3D12_TEXTURE_DATA_PITCH_ALIGNMENT);
@@ -5022,7 +5022,7 @@ static void D3D12_UploadToTexture(
      */
 
     sourceLocation.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
-    sourceLocation.PlacedFootprint.Footprint.Format = SDLToD3D12_TextureFormat[textureContainer->createInfo.format];
+    sourceLocation.PlacedFootprint.Footprint.Format = SDLToD3D12_TextureFormat[textureContainer->header.info.format];
     sourceLocation.PlacedFootprint.Footprint.Width = destination->w;
     sourceLocation.PlacedFootprint.Footprint.Height = destination->h;
     sourceLocation.PlacedFootprint.Footprint.Depth = destination->d;
@@ -5187,8 +5187,8 @@ static void D3D12_Blit(
     SDL_GpuViewport viewport;
     SDL_GpuTextureSamplerBinding textureSamplerBinding;
     BlitFragmentUniforms blitFragmentUniforms;
-    SDL_GpuTextureCreateInfo *sourceTextureCreateInfo = &sourceTextureContainer->createInfo;
-    SDL_GpuTextureCreateInfo *destinationTextureCreateInfo = &destinationTextureContainer->createInfo;
+    SDL_GpuTextureCreateInfo *sourceTextureCreateInfo = &sourceTextureContainer->header.info;
+    SDL_GpuTextureCreateInfo *destinationTextureCreateInfo = &destinationTextureContainer->header.info;
 
     /* Unused */
     colorAttachmentInfo.clearColor.r = 0;
@@ -5375,17 +5375,17 @@ static SDL_bool D3D12_INTERNAL_InitializeSwapchainTexture(
     SDL_AtomicSet(&pTexture->subresources[0].referenceCount, 0);
 
     ID3D12Resource_GetDesc(swapchainTexture, &textureDesc);
-    pTextureContainer->createInfo.width = (Uint32)textureDesc.Width;
-    pTextureContainer->createInfo.height = (Uint32)textureDesc.Height;
-    pTextureContainer->createInfo.depth = 1;
-    pTextureContainer->createInfo.layerCount = 1;
-    pTextureContainer->createInfo.levelCount = 1;
-    pTextureContainer->createInfo.isCube = 0;
-    pTextureContainer->createInfo.usageFlags =
+    pTextureContainer->header.info.width = (Uint32)textureDesc.Width;
+    pTextureContainer->header.info.height = (Uint32)textureDesc.Height;
+    pTextureContainer->header.info.depth = 1;
+    pTextureContainer->header.info.layerCount = 1;
+    pTextureContainer->header.info.levelCount = 1;
+    pTextureContainer->header.info.isCube = 0;
+    pTextureContainer->header.info.usageFlags =
         SDL_GPU_TEXTUREUSAGE_COLOR_TARGET_BIT |
         SDL_GPU_TEXTUREUSAGE_SAMPLER_BIT;
-    pTextureContainer->createInfo.sampleCount = SDL_GPU_SAMPLECOUNT_1;
-    pTextureContainer->createInfo.format = 0; /* this is never used */
+    pTextureContainer->header.info.sampleCount = SDL_GPU_SAMPLECOUNT_1;
+    pTextureContainer->header.info.format = 0; /* this is never used */
 
     pTextureContainer->debugName = NULL;
     pTextureContainer->textures = SDL_calloc(1, sizeof(D3D12Texture *));
@@ -6139,8 +6139,8 @@ static SDL_GpuTexture *D3D12_AcquireSwapchainTexture(
     ERROR_CHECK_RETURN("Could not acquire swapchain!", NULL);
 
     /* Send the dimensions to the out parameters. */
-    *pWidth = windowData->textureContainers[swapchainIndex].createInfo.width;
-    *pHeight = windowData->textureContainers[swapchainIndex].createInfo.height;
+    *pWidth = windowData->textureContainers[swapchainIndex].header.info.width;
+    *pHeight = windowData->textureContainers[swapchainIndex].header.info.height;
 
     /* TODO: Set up the texture container */
 
