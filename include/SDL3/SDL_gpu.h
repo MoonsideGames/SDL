@@ -962,6 +962,14 @@ extern SDL_DECLSPEC SDL_GpuShader *SDLCALL SDL_GpuCreateShader(
  * If you request a sample count higher than the hardware supports,
  * the implementation will automatically fall back to the highest available sample count.
  *
+ * For depth textures, the hardware support matrix looks as follows:
+ * - D16_UNORM is guaranteed to always be supported.
+ * - It's guaranteed that either D24_UNORM or D32_SFLOAT will be supported.
+ * - It's guaranteed that either D24_UNORM_S8_UINT or D32_SFLOAT_S8_UINT will be supported.
+ * Therefore, unless D16 is sufficient for your purposes, you should always call
+ * SDL_GpuIsTextureFormatSupported to determine which of D24/D32 are supported by the GPU
+ * before creating a depth texture.
+ *
  * \param device a GPU Context
  * \param textureCreateInfo a struct describing the state of the texture to create
  * \returns a texture object on success, or NULL on failure
@@ -977,6 +985,7 @@ extern SDL_DECLSPEC SDL_GpuShader *SDLCALL SDL_GpuCreateShader(
  * \sa SDL_GpuBindComputeStorageTextures
  * \sa SDL_GpuBlit
  * \sa SDL_GpuReleaseTexture
+ * \sa SDL_GpuIsTextureFormatSupported
  */
 extern SDL_DECLSPEC SDL_GpuTexture *SDLCALL SDL_GpuCreateTexture(
     SDL_GpuDevice *device,

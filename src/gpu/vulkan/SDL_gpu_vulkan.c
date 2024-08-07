@@ -241,9 +241,9 @@ static VkComponentMapping SDLToVK_SurfaceSwizzle[] = {
 
 static VkFormat SwapchainCompositionToFormat[] = {
     VK_FORMAT_B8G8R8A8_UNORM,          /* SDR */
-    VK_FORMAT_B8G8R8A8_SRGB,           /* SDR_SRGB */
-    VK_FORMAT_R16G16B16A16_SFLOAT,     /* HDR */
-    VK_FORMAT_A2B10G10R10_UNORM_PACK32 /* HDR_ADVANCED */
+    VK_FORMAT_B8G8R8A8_SRGB,           /* SDR_LINEAR */
+    VK_FORMAT_R16G16B16A16_SFLOAT,     /* HDR_EXTENDED_LINEAR */
+    VK_FORMAT_A2B10G10R10_UNORM_PACK32 /* HDR10_ST2048 */
 };
 
 static VkFormat SwapchainCompositionToFallbackFormat[] = {
@@ -252,6 +252,24 @@ static VkFormat SwapchainCompositionToFallbackFormat[] = {
     VK_FORMAT_UNDEFINED, /* no fallback */
     VK_FORMAT_UNDEFINED  /* no fallback */
 };
+
+static SDL_GpuTextureFormat SwapchainCompositionToSDLFormat(
+    SDL_GpuSwapchainComposition composition,
+    SDL_bool usingFallback
+) {
+    switch (composition) {
+    case SDL_GPU_SWAPCHAINCOMPOSITION_SDR:
+        return usingFallback ? SDL_GPU_TEXTUREFORMAT_R8G8B8A8 : SDL_GPU_TEXTUREFORMAT_B8G8R8A8;
+    case SDL_GPU_SWAPCHAINCOMPOSITION_SDR_LINEAR:
+        return usingFallback ? SDL_GPU_TEXTUREFORMAT_R8G8B8A8_SRGB : SDL_GPU_TEXTUREFORMAT_B8G8R8A8_SRGB;
+    case SDL_GPU_SWAPCHAINCOMPOSITION_HDR_EXTENDED_LINEAR:
+        return SDL_GPU_TEXTUREFORMAT_R16G16B16A16_SFLOAT;
+    case SDL_GPU_SWAPCHAINCOMPOSITION_HDR10_ST2048:
+        return SDL_GPU_TEXTUREFORMAT_R10G10B10A2;
+    default:
+        return SDL_GPU_TEXTUREFORMAT_INVALID;
+    }
+}
 
 static VkColorSpaceKHR SwapchainCompositionToColorSpace[] = {
     VK_COLOR_SPACE_SRGB_NONLINEAR_KHR,
@@ -621,6 +639,8 @@ struct VulkanTexture
  */
 struct VulkanTextureContainer
 {
+    TextureCommonHeader header; /* FIXME: Use this instead of passing so many args to CreateTexture */
+
     VulkanTextureHandle *activeTextureHandle;
 
     /* These are all the texture handles that have been used by this container.
@@ -687,9 +707,9 @@ typedef struct VulkanSwapchainData
     VkColorSpaceKHR colorSpace;
     VkComponentMapping swapchainSwizzle;
     VkPresentModeKHR presentMode;
+    SDL_bool usingFallbackFormat;
 
     /* Swapchain images */
-    VkExtent2D extent;
     VulkanTextureContainer *textureContainers; /* use containers so that swapchain textures can use the same API as other textures */
     Uint32 imageCount;
 
@@ -4417,6 +4437,7 @@ static SDL_bool VULKAN_INTERNAL_CreateSwapchain(
     swapchainData->format = SwapchainCompositionToFormat[windowData->swapchainComposition];
     swapchainData->colorSpace = SwapchainCompositionToColorSpace[windowData->swapchainComposition];
     swapchainData->swapchainSwizzle = SwapchainCompositionSwizzle[windowData->swapchainComposition];
+    swapchainData->usingFallbackFormat = SDL_FALSE;
 
     hasValidSwapchainComposition = VULKAN_INTERNAL_VerifySwapSurfaceFormat(
         swapchainData->format,
@@ -4427,6 +4448,7 @@ static SDL_bool VULKAN_INTERNAL_CreateSwapchain(
     if (!hasValidSwapchainComposition) {
         /* Let's try again with the fallback format... */
         swapchainData->format = SwapchainCompositionToFallbackFormat[windowData->swapchainComposition];
+        swapchainData->usingFallbackFormat = SDL_TRUE;
         hasValidSwapchainComposition = VULKAN_INTERNAL_VerifySwapSurfaceFormat(
             swapchainData->format,
             swapchainData->colorSpace,
@@ -4502,9 +4524,6 @@ static SDL_bool VULKAN_INTERNAL_CreateSwapchain(
         }
     }
 
-    swapchainData->extent.width = drawableWidth;
-    swapchainData->extent.height = drawableHeight;
-
     swapchainData->imageCount = swapchainSupportDetails.capabilities.minImageCount + 1;
 
     if (swapchainSupportDetails.capabilities.maxImageCount > 0 &&
@@ -4529,7 +4548,8 @@ static SDL_bool VULKAN_INTERNAL_CreateSwapchain(
     swapchainCreateInfo.minImageCount = swapchainData->imageCount;
     swapchainCreateInfo.imageFormat = swapchainData->format;
     swapchainCreateInfo.imageColorSpace = swapchainData->colorSpace;
-    swapchainCreateInfo.imageExtent = swapchainData->extent;
+    swapchainCreateInfo.imageExtent.width = drawableWidth;
+    swapchainCreateInfo.imageExtent.height = drawableHeight;
     swapchainCreateInfo.imageArrayLayers = 1;
     swapchainCreateInfo.imageUsage =
         VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
@@ -4606,11 +4626,23 @@ static SDL_bool VULKAN_INTERNAL_CreateSwapchain(
     imageViewCreateInfo.subresourceRange.layerCount = 1;
 
     for (i = 0; i < swapchainData->imageCount; i += 1) {
-        swapchainData->textureContainers[i].canBeCycled = 0;
-        swapchainData->textureContainers[i].textureCapacity = 0;
-        swapchainData->textureContainers[i].textureCount = 0;
-        swapchainData->textureContainers[i].textureHandles = NULL;
-        swapchainData->textureContainers[i].debugName = NULL;
+
+        /* Initialize dummy container */
+        SDL_zero(swapchainData->textureContainers[i]);
+        swapchainData->textureContainers[i].canBeCycled = SDL_FALSE;
+        swapchainData->textureContainers[i].header.info.width = drawableWidth;
+        swapchainData->textureContainers[i].header.info.height = drawableHeight;
+        swapchainData->textureContainers[i].header.info.depth = 1;
+        swapchainData->textureContainers[i].header.info.format = SwapchainCompositionToSDLFormat(
+            windowData->swapchainComposition,
+            swapchainData->usingFallbackFormat);
+        swapchainData->textureContainers[i].header.info.isCube = SDL_FALSE;
+        swapchainData->textureContainers[i].header.info.layerCount = 1;
+        swapchainData->textureContainers[i].header.info.levelCount = 1;
+        swapchainData->textureContainers[i].header.info.sampleCount = SDL_GPU_SAMPLECOUNT_1;
+        swapchainData->textureContainers[i].header.info.usageFlags = SDL_GPU_TEXTUREUSAGE_COLOR_TARGET_BIT |
+                                                                     SDL_GPU_TEXTUREUSAGE_SAMPLER_BIT;
+
         swapchainData->textureContainers[i].activeTextureHandle = SDL_malloc(sizeof(VulkanTextureHandle));
 
         swapchainData->textureContainers[i].activeTextureHandle->vulkanTexture = SDL_malloc(sizeof(VulkanTexture));
@@ -4640,7 +4672,8 @@ static SDL_bool VULKAN_INTERNAL_CreateSwapchain(
         /* Swapchain memory is managed by the driver */
         swapchainData->textureContainers[i].activeTextureHandle->vulkanTexture->usedRegion = NULL;
 
-        swapchainData->textureContainers[i].activeTextureHandle->vulkanTexture->dimensions = swapchainData->extent;
+        swapchainData->textureContainers[i].activeTextureHandle->vulkanTexture->dimensions.width = drawableWidth;
+        swapchainData->textureContainers[i].activeTextureHandle->vulkanTexture->dimensions.height = drawableHeight;
         swapchainData->textureContainers[i].activeTextureHandle->vulkanTexture->format = swapchainData->format;
         swapchainData->textureContainers[i].activeTextureHandle->vulkanTexture->swizzle = swapchainData->swapchainSwizzle;
         swapchainData->textureContainers[i].activeTextureHandle->vulkanTexture->is3D = 0;
@@ -6895,6 +6928,7 @@ static SDL_GpuTexture *VULKAN_CreateTexture(
     }
 
     container = SDL_malloc(sizeof(VulkanTextureContainer));
+    container->header.info = *textureCreateInfo;
     container->canBeCycled = 1;
     container->activeTextureHandle = textureHandle;
     container->textureCapacity = 1;
@@ -9143,11 +9177,6 @@ static void VULKAN_Blit(
     VulkanTextureContainer *sourceTextureContainer = (VulkanTextureContainer *)source->textureSlice.texture;
     VkImageBlit region;
 
-    if ((sourceTextureContainer->activeTextureHandle->vulkanTexture->usageFlags & SDL_GPU_TEXTUREUSAGE_SAMPLER_BIT) == 0) {
-        SDL_LogError(SDL_LOG_CATEGORY_GPU, "Blit source texture must be created with SAMPLER bit!");
-        return;
-    }
-
     VulkanTextureSlice *srcTextureSlice = VULKAN_INTERNAL_FetchTextureSlice(
         sourceTextureContainer->activeTextureHandle->vulkanTexture,
         source->textureSlice.layer,
@@ -10003,8 +10032,8 @@ static SDL_GpuTexture *VULKAN_AcquireSwapchainTexture(
         swapchainData->renderFinishedSemaphore[swapchainData->frameCounter];
     vulkanCommandBuffer->signalSemaphoreCount += 1;
 
-    *pWidth = swapchainData->extent.width;
-    *pHeight = swapchainData->extent.height;
+    *pWidth = swapchainData->textureContainers[swapchainData->frameCounter].header.info.width;
+    *pHeight = swapchainData->textureContainers[swapchainData->frameCounter].header.info.height;
 
     return (SDL_GpuTexture *)swapchainTextureContainer;
 }
@@ -10025,29 +10054,9 @@ static SDL_GpuTextureFormat VULKAN_GetSwapchainTextureFormat(
         return 0;
     }
 
-    switch (windowData->swapchainData->format) {
-    case VK_FORMAT_R8G8B8A8_UNORM:
-        return SDL_GPU_TEXTUREFORMAT_R8G8B8A8;
-
-    case VK_FORMAT_B8G8R8A8_UNORM:
-        return SDL_GPU_TEXTUREFORMAT_B8G8R8A8;
-
-    case VK_FORMAT_B8G8R8A8_SRGB:
-        return SDL_GPU_TEXTUREFORMAT_B8G8R8A8_SRGB;
-
-    case VK_FORMAT_R8G8B8A8_SRGB:
-        return SDL_GPU_TEXTUREFORMAT_R8G8B8A8_SRGB;
-
-    case VK_FORMAT_R16G16B16A16_SFLOAT:
-        return SDL_GPU_TEXTUREFORMAT_R16G16B16A16_SFLOAT;
-
-    case VK_FORMAT_A2B10G10R10_UNORM_PACK32:
-        return SDL_GPU_TEXTUREFORMAT_R10G10B10A2;
-
-    default:
-        SDL_LogError(SDL_LOG_CATEGORY_GPU, "Unrecognized swapchain format!");
-        return 0;
-    }
+    return SwapchainCompositionToSDLFormat(
+        windowData->swapchainComposition,
+        windowData->swapchainData->usingFallbackFormat);
 }
 
 static SDL_bool VULKAN_SetSwapchainParameters(

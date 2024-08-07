@@ -337,7 +337,8 @@ typedef struct MetalTexture
 
 typedef struct MetalTextureContainer
 {
-    SDL_GpuTextureCreateInfo createInfo;
+    TextureCommonHeader header;
+
     MetalTexture *activeTexture;
     Uint8 canBeCycled;
 
@@ -1409,7 +1410,7 @@ static SDL_GpuTexture *METAL_CreateTexture(
 
         container = SDL_malloc(sizeof(MetalTextureContainer));
         container->canBeCycled = 1;
-        container->createInfo = *textureCreateInfo;
+        container->header.info = *textureCreateInfo;
         container->activeTexture = texture;
         container->textureCapacity = 1;
         container->textureCount = 1;
@@ -1448,7 +1449,7 @@ static MetalTexture *METAL_INTERNAL_PrepareTextureForWrite(
 
         container->textures[container->textureCount] = METAL_INTERNAL_CreateTexture(
             renderer,
-            &container->createInfo);
+            &container->header.info);
         container->textureCount += 1;
 
         container->activeTexture = container->textures[container->textureCount - 1];
@@ -1725,8 +1726,8 @@ static void METAL_UploadToTexture(
         [metalCommandBuffer->blitEncoder
                  copyFromBuffer:bufferContainer->activeBuffer->handle
                    sourceOffset:source->offset
-              sourceBytesPerRow:BytesPerRow(destination->w, textureContainer->createInfo.format)
-            sourceBytesPerImage:BytesPerImage(destination->w, destination->h, textureContainer->createInfo.format)
+              sourceBytesPerRow:BytesPerRow(destination->w, textureContainer->header.info.format)
+            sourceBytesPerImage:BytesPerImage(destination->w, destination->h, textureContainer->header.info.format)
                      sourceSize:MTLSizeMake(destination->w, destination->h, destination->d)
                       toTexture:metalTexture->handle
                destinationSlice:destination->textureSlice.layer
@@ -1844,7 +1845,7 @@ static void METAL_GenerateMipmaps(
         MetalTextureContainer *container = (MetalTextureContainer *)texture;
         MetalTexture *metalTexture = container->activeTexture;
 
-        if (container->createInfo.levelCount <= 1) {
+        if (container->header.info.levelCount <= 1) {
             SDL_LogError(SDL_LOG_CATEGORY_GPU, "Cannot generate mipmaps for texture with levelCount <= 1!");
             return;
         }
@@ -1892,7 +1893,7 @@ static void METAL_DownloadFromTexture(
             bufferImageHeight = source->h;
         }
 
-        bytesPerRow = BytesPerRow(bufferStride, textureContainer->createInfo.format);
+        bytesPerRow = BytesPerRow(bufferStride, textureContainer->header.info.format);
         bytesPerDepthSlice = bytesPerRow * bufferImageHeight;
 
         [metalCommandBuffer->blitEncoder
@@ -2198,7 +2199,7 @@ static void METAL_BeginRenderPass(
                 texture->msaaHandle ? 1 : 0);
             passDescriptor.depthAttachment.clearDepth = depthStencilAttachmentInfo->depthStencilClearValue.depth;
 
-            if (IsStencilFormat(container->createInfo.format)) {
+            if (IsStencilFormat(container->header.info.format)) {
                 if (texture->msaaHandle) {
                     passDescriptor.stencilAttachment.texture = texture->msaaHandle;
                     passDescriptor.stencilAttachment.resolveTexture = texture->handle;
@@ -2222,8 +2223,8 @@ static void METAL_BeginRenderPass(
         /* The viewport cannot be larger than the smallest attachment. */
         for (Uint32 i = 0; i < colorAttachmentCount; i += 1) {
             MetalTextureContainer *container = (MetalTextureContainer *)colorAttachmentInfos[i].textureSlice.texture;
-            Uint32 w = container->createInfo.width >> colorAttachmentInfos[i].textureSlice.mipLevel;
-            Uint32 h = container->createInfo.height >> colorAttachmentInfos[i].textureSlice.mipLevel;
+            Uint32 w = container->header.info.width >> colorAttachmentInfos[i].textureSlice.mipLevel;
+            Uint32 h = container->header.info.height >> colorAttachmentInfos[i].textureSlice.mipLevel;
 
             if (w < vpWidth) {
                 vpWidth = w;
@@ -2236,8 +2237,8 @@ static void METAL_BeginRenderPass(
 
         if (depthStencilAttachmentInfo != NULL) {
             MetalTextureContainer *container = (MetalTextureContainer *)depthStencilAttachmentInfo->textureSlice.texture;
-            Uint32 w = container->createInfo.width >> depthStencilAttachmentInfo->textureSlice.mipLevel;
-            Uint32 h = container->createInfo.height >> depthStencilAttachmentInfo->textureSlice.mipLevel;
+            Uint32 w = container->header.info.width >> depthStencilAttachmentInfo->textureSlice.mipLevel;
+            Uint32 h = container->header.info.height >> depthStencilAttachmentInfo->textureSlice.mipLevel;
 
             if (w < vpWidth) {
                 vpWidth = w;
@@ -2983,7 +2984,6 @@ static void METAL_Blit(
 {
     MetalCommandBuffer *metalCommandBuffer = (MetalCommandBuffer *)commandBuffer;
     MetalRenderer *renderer = (MetalRenderer *)metalCommandBuffer->renderer;
-    MetalTextureContainer *sourceTextureContainer = (MetalTextureContainer *)source->textureSlice.texture;
     MetalTextureContainer *destinationTextureContainer = (MetalTextureContainer *)destination->textureSlice.texture;
     SDL_GpuGraphicsPipeline *pipeline;
     SDL_GpuColorAttachmentInfo colorAttachmentInfo;
@@ -2992,24 +2992,9 @@ static void METAL_Blit(
 
     /* FIXME: cube copies? texture arrays? */
 
-    if (sourceTextureContainer->createInfo.depth > 1) {
-        SDL_LogError(SDL_LOG_CATEGORY_GPU, "3D blit source not implemented!");
-        return;
-    }
-
-    if (destinationTextureContainer->createInfo.depth > 1) {
-        SDL_LogError(SDL_LOG_CATEGORY_GPU, "3D blit destination not implemented!");
-        return;
-    }
-
-    if ((sourceTextureContainer->createInfo.usageFlags & SDL_GPU_TEXTUREUSAGE_SAMPLER_BIT) == 0) {
-        SDL_LogError(SDL_LOG_CATEGORY_GPU, "Blit source texture must be created with SAMPLER bit!");
-        return;
-    }
-
     pipeline = METAL_INTERNAL_FetchBlitPipeline(
         renderer,
-        destinationTextureContainer->createInfo.format);
+        destinationTextureContainer->header.info.format);
     if (pipeline == NULL) {
         /* Drop the blit if the pipeline fetch failed! */
         return;
@@ -3023,10 +3008,10 @@ static void METAL_Blit(
 
     /* If the entire destination is blitted, we don't have to load */
     if (
-        destinationTextureContainer->createInfo.levelCount == 1 &&
-        destination->w == destinationTextureContainer->createInfo.width &&
-        destination->h == destinationTextureContainer->createInfo.height &&
-        destination->d == destinationTextureContainer->createInfo.depth) {
+        destinationTextureContainer->header.info.levelCount == 1 &&
+        destination->w == destinationTextureContainer->header.info.width &&
+        destination->h == destinationTextureContainer->header.info.height &&
+        destination->d == destinationTextureContainer->header.info.depth) {
         colorAttachmentInfo.loadOp = SDL_GPU_LOADOP_DONT_CARE;
     } else {
         colorAttachmentInfo.loadOp = SDL_GPU_LOADOP_LOAD;
@@ -3087,7 +3072,7 @@ static void METAL_BeginComputePass(
 
         for (Uint32 i = 0; i < storageTextureBindingCount; i += 1) {
             textureContainer = (MetalTextureContainer *)storageTextureBindings[i].textureSlice.texture;
-            if (!(textureContainer->createInfo.usageFlags & SDL_GPU_TEXTUREUSAGE_COMPUTE_STORAGE_WRITE_BIT)) {
+            if (!(textureContainer->header.info.usageFlags & SDL_GPU_TEXTUREUSAGE_COMPUTE_STORAGE_WRITE_BIT)) {
                 SDL_LogError(SDL_LOG_CATEGORY_GPU, "Attempted to bind read-only texture as compute write texture");
             }
 
@@ -3519,15 +3504,15 @@ static Uint8 METAL_INTERNAL_CreateSwapchain(
     windowData->textureContainer.activeTexture = &windowData->texture;
     windowData->textureContainer.textureCapacity = 1;
     windowData->textureContainer.textureCount = 1;
-    windowData->textureContainer.createInfo.format = SwapchainCompositionToFormat[swapchainComposition];
-    windowData->textureContainer.createInfo.levelCount = 1;
-    windowData->textureContainer.createInfo.depth = 1;
-    windowData->textureContainer.createInfo.isCube = 0;
-    windowData->textureContainer.createInfo.usageFlags = SDL_GPU_TEXTUREUSAGE_COLOR_TARGET_BIT | SDL_GPU_TEXTUREUSAGE_SAMPLER_BIT;
+    windowData->textureContainer.header.info.format = SwapchainCompositionToFormat[swapchainComposition];
+    windowData->textureContainer.header.info.levelCount = 1;
+    windowData->textureContainer.header.info.depth = 1;
+    windowData->textureContainer.header.info.isCube = 0;
+    windowData->textureContainer.header.info.usageFlags = SDL_GPU_TEXTUREUSAGE_COLOR_TARGET_BIT | SDL_GPU_TEXTUREUSAGE_SAMPLER_BIT;
 
     drawableSize = windowData->layer.drawableSize;
-    windowData->textureContainer.createInfo.width = (Uint32)drawableSize.width;
-    windowData->textureContainer.createInfo.height = (Uint32)drawableSize.height;
+    windowData->textureContainer.header.info.width = (Uint32)drawableSize.width;
+    windowData->textureContainer.header.info.height = (Uint32)drawableSize.height;
 
     return 1;
 }
@@ -3644,8 +3629,8 @@ static SDL_GpuTexture *METAL_AcquireSwapchainTexture(
 
         /* Update the window size */
         drawableSize = windowData->layer.drawableSize;
-        windowData->textureContainer.createInfo.width = (Uint32)drawableSize.width;
-        windowData->textureContainer.createInfo.height = (Uint32)drawableSize.height;
+        windowData->textureContainer.header.info.width = (Uint32)drawableSize.width;
+        windowData->textureContainer.header.info.height = (Uint32)drawableSize.height;
 
         /* Send the dimensions to the out parameters. */
         *pWidth = (Uint32)drawableSize.width;
@@ -3677,7 +3662,7 @@ static SDL_GpuTextureFormat METAL_GetSwapchainTextureFormat(
         return 0;
     }
 
-    return windowData->textureContainer.createInfo.format;
+    return windowData->textureContainer.header.info.format;
 }
 
 static SDL_bool METAL_SetSwapchainParameters(
@@ -3719,7 +3704,7 @@ static SDL_bool METAL_SetSwapchainParameters(
         windowData->layer.colorspace = colorspace;
         CGColorSpaceRelease(colorspace);
 
-        windowData->textureContainer.createInfo.format = SwapchainCompositionToFormat[swapchainComposition];
+        windowData->textureContainer.header.info.format = SwapchainCompositionToFormat[swapchainComposition];
 
         return SDL_TRUE;
     }
