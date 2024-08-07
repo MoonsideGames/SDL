@@ -985,7 +985,7 @@ extern SDL_DECLSPEC SDL_GpuShader *SDLCALL SDL_GpuCreateShader(
  * \sa SDL_GpuBindComputeStorageTextures
  * \sa SDL_GpuBlit
  * \sa SDL_GpuReleaseTexture
- * \sa SDL_GPuIsTextureFormatSupported
+ * \sa SDL_GpuIsTextureFormatSupported
  */
 extern SDL_DECLSPEC SDL_GpuTexture *SDLCALL SDL_GpuCreateTexture(
     SDL_GpuDevice *device,
