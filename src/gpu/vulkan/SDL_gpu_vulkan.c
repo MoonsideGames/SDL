@@ -621,6 +621,8 @@ struct VulkanTexture
  */
 struct VulkanTextureContainer
 {
+    TextureCommonHeader header; /* FIXME: Use this instead of passing so many args to CreateTexture */
+
     VulkanTextureHandle *activeTextureHandle;
 
     /* These are all the texture handles that have been used by this container.
@@ -6895,6 +6897,7 @@ static SDL_GpuTexture *VULKAN_CreateTexture(
     }
 
     container = SDL_malloc(sizeof(VulkanTextureContainer));
+    container->header.info = *textureCreateInfo;
     container->canBeCycled = 1;
     container->activeTextureHandle = textureHandle;
     container->textureCapacity = 1;

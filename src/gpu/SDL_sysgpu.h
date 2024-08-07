@@ -43,6 +43,11 @@ typedef struct CommandBufferCommonHeader
     SDL_bool submitted;
 } CommandBufferCommonHeader;
 
+typedef struct TextureCommonHeader
+{
+    SDL_GpuTextureCreateInfo info;
+} TextureCommonHeader;
+
 /* Internal Helper Utilities */
 
 static inline Sint32 Texture_GetBlockSize(

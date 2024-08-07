@@ -453,7 +453,8 @@ struct D3D11Texture
 
 typedef struct D3D11TextureContainer
 {
-    SDL_GpuTextureCreateInfo createInfo;
+    TextureCommonHeader header;
+
     D3D11Texture *activeTexture;
     SDL_bool canBeCycled;
 
@@ -2291,8 +2292,8 @@ static SDL_GpuTexture *D3D11_CreateTexture(
     }
 
     container = SDL_malloc(sizeof(D3D11TextureContainer));
+    container->header.info = *textureCreateInfo;
     container->canBeCycled = 1;
-    container->createInfo = *textureCreateInfo;
     container->activeTexture = texture;
     container->textureCapacity = 1;
     container->textureCount = 1;
@@ -2329,7 +2330,7 @@ static void D3D11_INTERNAL_CycleActiveTexture(
 
     container->textures[container->textureCount] = D3D11_INTERNAL_CreateTexture(
         renderer,
-        &container->createInfo,
+        &container->header.info,
         NULL);
     container->textureCount += 1;
 
@@ -2348,7 +2349,7 @@ static D3D11TextureSubresource *D3D11_INTERNAL_FetchTextureSubresource(
     Uint32 layer,
     Uint32 level)
 {
-    Uint32 index = D3D11_INTERNAL_CalcSubresource(level, layer, container->createInfo.levelCount);
+    Uint32 index = D3D11_INTERNAL_CalcSubresource(level, layer, container->header.info.levelCount);
     return &container->activeTexture->subresources[index];
 }
 
@@ -2760,7 +2761,7 @@ static void D3D11_UploadToTexture(
     D3D11TransferBufferContainer *srcTransferContainer = (D3D11TransferBufferContainer *)source->transferBuffer;
     D3D11TransferBuffer *srcTransferBuffer = srcTransferContainer->activeBuffer;
     D3D11TextureContainer *dstTextureContainer = (D3D11TextureContainer *)destination->textureSlice.texture;
-    SDL_GpuTextureFormat dstFormat = dstTextureContainer->createInfo.format;
+    SDL_GpuTextureFormat dstFormat = dstTextureContainer->header.info.format;
     Uint32 bufferStride = source->imagePitch;
     Uint32 bufferImageHeight = source->imageHeight;
     Sint32 w = destination->w;
@@ -2901,7 +2902,7 @@ static void D3D11_DownloadFromTexture(
     D3D11TransferBufferContainer *dstTransferContainer = (D3D11TransferBufferContainer *)destination->transferBuffer;
     D3D11TransferBuffer *d3d11TransferBuffer = dstTransferContainer->activeBuffer;
     D3D11TextureContainer *srcTextureContainer = (D3D11TextureContainer *)source->textureSlice.texture;
-    SDL_GpuTextureFormat srcFormat = srcTextureContainer->createInfo.format;
+    SDL_GpuTextureFormat srcFormat = srcTextureContainer->header.info.format;
     D3D11_TEXTURE2D_DESC stagingDesc2D;
     D3D11_TEXTURE3D_DESC stagingDesc3D;
     D3D11TextureSubresource *textureSubresource = D3D11_INTERNAL_FetchTextureSubresource(
@@ -3530,7 +3531,7 @@ static void D3D11_BeginRenderPass(
             d3d11CommandBuffer->colorTargetResolveTexture[i] = subresource->parent;
             d3d11CommandBuffer->colorTargetResolveSubresourceIndex[i] = subresource->index;
             d3d11CommandBuffer->colorTargetMsaaHandle[i] = subresource->msaaHandle;
-            d3d11CommandBuffer->colorTargetMsaaFormat[i] = SDLToD3D11_TextureFormat[container->createInfo.format];
+            d3d11CommandBuffer->colorTargetMsaaFormat[i] = SDLToD3D11_TextureFormat[container->header.info.format];
 
             rtvs[i] = subresource->msaaTargetView;
         } else {
@@ -3604,8 +3605,8 @@ static void D3D11_BeginRenderPass(
     /* The viewport cannot be larger than the smallest attachment. */
     for (Uint32 i = 0; i < colorAttachmentCount; i += 1) {
         D3D11TextureContainer *container = (D3D11TextureContainer *)colorAttachmentInfos[i].textureSlice.texture;
-        Uint32 w = container->createInfo.width >> colorAttachmentInfos[i].textureSlice.mipLevel;
-        Uint32 h = container->createInfo.height >> colorAttachmentInfos[i].textureSlice.mipLevel;
+        Uint32 w = container->header.info.width >> colorAttachmentInfos[i].textureSlice.mipLevel;
+        Uint32 h = container->header.info.height >> colorAttachmentInfos[i].textureSlice.mipLevel;
 
         if (w < vpWidth) {
             vpWidth = w;
@@ -3618,8 +3619,8 @@ static void D3D11_BeginRenderPass(
 
     if (depthStencilAttachmentInfo != NULL) {
         D3D11TextureContainer *container = (D3D11TextureContainer *)depthStencilAttachmentInfo->textureSlice.texture;
-        Uint32 w = container->createInfo.width >> depthStencilAttachmentInfo->textureSlice.mipLevel;
-        Uint32 h = container->createInfo.height >> depthStencilAttachmentInfo->textureSlice.mipLevel;
+        Uint32 w = container->header.info.width >> depthStencilAttachmentInfo->textureSlice.mipLevel;
+        Uint32 h = container->header.info.height >> depthStencilAttachmentInfo->textureSlice.mipLevel;
 
         if (w < vpWidth) {
             vpWidth = w;
@@ -4242,7 +4243,7 @@ static void D3D11_Blit(
     SDL_GpuViewport viewport;
     SDL_GpuTextureSamplerBinding textureSamplerBinding;
 
-    if (destinationTextureContainer->createInfo.depth > 1) {
+    if (destinationTextureContainer->header.info.depth > 1) {
         SDL_LogError(SDL_LOG_CATEGORY_GPU, "3D blit destination not implemented!");
         return;
     }
@@ -4255,11 +4256,11 @@ static void D3D11_Blit(
 
     /* If the entire destination is blitted, we don't have to load */
     if (
-        destinationTextureContainer->createInfo.layerCount == 1 &&
-        destinationTextureContainer->createInfo.levelCount == 1 &&
-        destination->w == destinationTextureContainer->createInfo.width &&
-        destination->h == destinationTextureContainer->createInfo.height &&
-        destination->d == destinationTextureContainer->createInfo.depth) {
+        destinationTextureContainer->header.info.layerCount == 1 &&
+        destinationTextureContainer->header.info.levelCount == 1 &&
+        destination->w == destinationTextureContainer->header.info.width &&
+        destination->h == destinationTextureContainer->header.info.height &&
+        destination->d == destinationTextureContainer->header.info.depth) {
         colorAttachmentInfo.loadOp = SDL_GPU_LOADOP_DONT_CARE;
     } else {
         colorAttachmentInfo.loadOp = SDL_GPU_LOADOP_LOAD;
@@ -4288,14 +4289,14 @@ static void D3D11_Blit(
         &viewport);
 
     if (
-        sourceTextureContainer->createInfo.layerCount == 1 &&
-        sourceTextureContainer->createInfo.depth == 1) {
+        sourceTextureContainer->header.info.layerCount == 1 &&
+        sourceTextureContainer->header.info.depth == 1) {
         /* 2D source */
         D3D11_BindGraphicsPipeline(
             commandBuffer,
             renderer->blitFrom2DPipeline);
     } else if (
-        sourceTextureContainer->createInfo.layerCount > 1) {
+        sourceTextureContainer->header.info.layerCount > 1) {
         /* 2D array source */
         D3D11_BindGraphicsPipeline(
             commandBuffer,
@@ -4351,7 +4352,7 @@ static void D3D11_BeginComputePass(
 
     for (i = 0; i < storageTextureBindingCount; i += 1) {
         textureContainer = (D3D11TextureContainer *)storageTextureBindings[i].textureSlice.texture;
-        if (!(textureContainer->createInfo.usageFlags & SDL_GPU_TEXTUREUSAGE_COMPUTE_STORAGE_WRITE_BIT)) {
+        if (!(textureContainer->header.info.usageFlags & SDL_GPU_TEXTUREUSAGE_COMPUTE_STORAGE_WRITE_BIT)) {
             SDL_LogError(SDL_LOG_CATEGORY_GPU, "Attempted to bind read-only texture as compute write texture");
         }
 
@@ -5224,16 +5225,16 @@ static SDL_bool D3D11_INTERNAL_CreateSwapchain(
     windowData->textureContainer.textureCount = 1;
     windowData->textureContainer.textureCapacity = 1;
 
-    windowData->textureContainer.createInfo.depth = 1;
-    windowData->textureContainer.createInfo.format = SwapchainCompositionToSDLTextureFormat[windowData->swapchainComposition];
-    windowData->textureContainer.createInfo.isCube = SDL_FALSE;
-    windowData->textureContainer.createInfo.layerCount = 1;
-    windowData->textureContainer.createInfo.levelCount = 1;
-    windowData->textureContainer.createInfo.sampleCount = SDL_GPU_SAMPLECOUNT_1;
-    windowData->textureContainer.createInfo.usageFlags = SDL_GPU_TEXTUREUSAGE_COLOR_TARGET_BIT |
-                                                         SDL_GPU_TEXTUREUSAGE_COMPUTE_STORAGE_READ_BIT |
-                                                         SDL_GPU_TEXTUREUSAGE_GRAPHICS_STORAGE_READ_BIT |
-                                                         SDL_GPU_TEXTUREUSAGE_SAMPLER_BIT;
+    windowData->textureContainer.header.info.depth = 1;
+    windowData->textureContainer.header.info.format = SwapchainCompositionToSDLTextureFormat[windowData->swapchainComposition];
+    windowData->textureContainer.header.info.isCube = SDL_FALSE;
+    windowData->textureContainer.header.info.layerCount = 1;
+    windowData->textureContainer.header.info.levelCount = 1;
+    windowData->textureContainer.header.info.sampleCount = SDL_GPU_SAMPLECOUNT_1;
+    windowData->textureContainer.header.info.usageFlags = SDL_GPU_TEXTUREUSAGE_COLOR_TARGET_BIT |
+                                                          SDL_GPU_TEXTUREUSAGE_COMPUTE_STORAGE_READ_BIT |
+                                                          SDL_GPU_TEXTUREUSAGE_GRAPHICS_STORAGE_READ_BIT |
+                                                          SDL_GPU_TEXTUREUSAGE_SAMPLER_BIT;
 
     return SDL_TRUE;
 }
@@ -5487,8 +5488,8 @@ static SDL_GpuTexture *D3D11_AcquireSwapchainTexture(
     *pHeight = h;
 
     /* Update the texture container dimensions */
-    windowData->textureContainer.createInfo.width = w;
-    windowData->textureContainer.createInfo.height = h;
+    windowData->textureContainer.header.info.width = w;
+    windowData->textureContainer.header.info.height = h;
 
     /* Set up presentation */
     if (d3d11CommandBuffer->windowDataCount == d3d11CommandBuffer->windowDataCapacity) {
@@ -5515,7 +5516,7 @@ static SDL_GpuTextureFormat D3D11_GetSwapchainTextureFormat(
         return 0;
     }
 
-    return windowData->textureContainer.createInfo.format;
+    return windowData->textureContainer.header.info.format;
 }
 
 static SDL_bool D3D11_SetSwapchainParameters(
