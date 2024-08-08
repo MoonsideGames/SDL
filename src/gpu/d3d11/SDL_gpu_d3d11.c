@@ -35,49 +35,6 @@
 
 #include "../SDL_sysgpu.h"
 
-/* __stdcall declaration, largely taken from vkd3d_windows.h */
-#ifndef _WIN32
-#ifdef __stdcall
-#undef __stdcall
-#endif
-#ifdef __x86_64__
-#define __stdcall __attribute__((ms_abi))
-#else
-#if (__GNUC__ > 4) || ((__GNUC__ == 4) && (__GNUC_MINOR__ >= 2)) || defined(__APPLE__)
-#define __stdcall __attribute__((__stdcall__)) __attribute__((__force_align_arg_pointer__))
-#else
-#define __stdcall __attribute__((__stdcall__))
-#endif
-#endif
-#endif
-
-/* vkd3d uses stdcall for its ID3D10Blob implementation */
-#ifndef _WIN32
-typedef struct VKD3DBlob VKD3DBlob;
-typedef struct VKD3DBlobVtbl
-{
-    HRESULT(__stdcall *QueryInterface)
-    (
-        VKD3DBlob *This,
-        REFIID riid,
-        void **ppvObject);
-    ULONG(__stdcall *AddRef)
-    (VKD3DBlob *This);
-    ULONG(__stdcall *Release)
-    (VKD3DBlob *This);
-    LPVOID(__stdcall *GetBufferPointer)
-    (VKD3DBlob *This);
-    SIZE_T(__stdcall *GetBufferSize)
-    (VKD3DBlob *This);
-} VKD3DBlobVtbl;
-struct VKD3DBlob
-{
-    const VKD3DBlobVtbl *lpVtbl;
-};
-#define ID3D10Blob VKD3DBlob
-#define ID3DBlob   VKD3DBlob
-#endif
-
 /* MinGW doesn't implement this yet */
 #ifdef _WIN32
 #define HAVE_IDXGIINFOQUEUE
