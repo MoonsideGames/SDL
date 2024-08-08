@@ -27,8 +27,6 @@
 #include "../SDL_sysgpu.h"
 #include "SDL_hashtable.h"
 
-#include <d3dcompiler.h>
-
 /* Built-in shaders, compiled with compile_shaders.bat */
 
 #define g_main D3D12_BlitFrom2D
@@ -46,8 +44,6 @@
 #undef g_main
 
 /* Macros */
-
-#define D3DCOMPILER_API STDMETHODCALLTYPE
 
 #define ERROR_CHECK(msg)                                     \
     if (FAILED(res)) {                                       \
@@ -73,28 +69,19 @@
 #define D3D12_DLL     "d3d12.dll"
 #define DXGI_DLL      "dxgi.dll"
 #define DXGIDEBUG_DLL "dxgidebug.dll"
-
-/* FIXME: Reuse the d3dcompiler loader in SDL_egl.c */
-#ifdef D3DCOMPILER_DLL
-#undef D3DCOMPILER_DLL
-#endif
-#define D3DCOMPILER_DLL "d3dcompiler_47.dll"
 #elif defined(__APPLE__)
 #define D3D12_DLL       "libdxvk_d3d12.dylib"
 #define DXGI_DLL        "libdxvk_dxgi.dylib"
 #define DXGIDEBUG_DLL   "libdxvk_dxgidebug.dylib"
-#define D3DCOMPILER_DLL "libvkd3d-utils.1.dylib"
 #else
 #define D3D12_DLL       "libdxvk_d3d12.so"
 #define DXGI_DLL        "libdxvk_dxgi.so"
 #define DXGIDEBUG_DLL   "libdxvk_dxgidebug.so"
-#define D3DCOMPILER_DLL "libvkd3d-utils.so.1"
 #endif
 
 #define D3D12_CREATE_DEVICE_FUNC            "D3D12CreateDevice"
 #define D3D12_SERIALIZE_ROOT_SIGNATURE_FUNC "D3D12SerializeRootSignature"
 #define CREATE_DXGI_FACTORY1_FUNC           "CreateDXGIFactory1"
-#define D3DCOMPILE_FUNC                     "D3DCompile"
 #define DXGI_GET_DEBUG_INTERFACE_FUNC       "DXGIGetDebugInterface"
 #define D3D12_GET_DEBUG_INTERFACE_FUNC      "D3D12GetDebugInterface"
 #define WINDOW_PROPERTY_DATA                "SDL_GpuD3D12WindowPropertyData"
@@ -132,7 +119,6 @@
 /* Function Pointer Signatures */
 typedef HRESULT(WINAPI *PFN_CREATE_DXGI_FACTORY1)(const GUID *riid, void **ppFactory);
 typedef HRESULT(WINAPI *PFN_DXGI_GET_DEBUG_INTERFACE)(const GUID *riid, void **ppDebug);
-typedef HRESULT(D3DCOMPILER_API *PFN_D3DCOMPILE)(LPCVOID pSrcData, SIZE_T SrcDataSize, LPCSTR pSourceName, const D3D_SHADER_MACRO *pDefines, ID3DInclude *pInclude, LPCSTR pEntrypoint, LPCSTR pTarget, UINT Flags1, UINT Flags2, ID3DBlob **ppCode, ID3DBlob **ppErrorMsgs);
 
 /* IIDs (from https://www.magnumdb.com/) */
 static const IID D3D_IID_IDXGIFactory1 = { 0x770aae78, 0xf26f, 0x4dba, { 0xa8, 0x29, 0x25, 0x3c, 0x83, 0xd1, 0xb3, 0x87 } };
@@ -161,8 +147,6 @@ static const IID D3D_IID_ID3D12CommandSignature = { 0xc36a797c, 0xec80, 0x4f0a, 
 static const IID D3D_IID_ID3D12PipelineState = { 0x765a30f3, 0xf624, 0x4c6f, { 0xa8, 0x28, 0xac, 0xe9, 0x48, 0x62, 0x24, 0x45 } };
 static const IID D3D_IID_ID3D12Debug = { 0x344488b7, 0x6846, 0x474b, { 0xb9, 0x89, 0xf0, 0x27, 0x44, 0x82, 0x45, 0xe0 } };
 static const IID D3D_IID_ID3D12InfoQueue = { 0x0742a90b, 0xc387, 0x483f, { 0xb9, 0x46, 0x30, 0xa7, 0xe4, 0xe6, 0x14, 0x58 } };
-
-static const char *D3D12ShaderProfiles[3] = { "vs_5_1", "ps_5_1", "cs_5_1" };
 
 /* Enums */
 
@@ -493,8 +477,6 @@ struct D3D12Renderer
     IDXGIDebug *dxgiDebug;
     IDXGIInfoQueue *dxgiInfoQueue;
     ID3D12Debug *d3d12Debug;
-    void *d3dcompiler_dll;
-    PFN_D3DCOMPILE D3DCompile_func;
     void *dxgi_dll;
     IDXGIFactory4 *factory;
     SDL_bool supportsTearing;
@@ -1307,15 +1289,10 @@ static void D3D12_INTERNAL_DestroyRenderer(D3D12Renderer *renderer)
         SDL_UnloadObject(renderer->dxgi_dll);
         renderer->dxgi_dll = NULL;
     }
-    if (renderer->d3dcompiler_dll) {
-        SDL_UnloadObject(renderer->d3dcompiler_dll);
-        renderer->d3dcompiler_dll = NULL;
-    }
     if (renderer->dxgidebug_dll) {
         SDL_UnloadObject(renderer->dxgidebug_dll);
         renderer->dxgidebug_dll = NULL;
     }
-    renderer->D3DCompile_func = NULL;
     renderer->D3D12SerializeRootSignature_func = NULL;
 
     SDL_DestroyMutex(renderer->stagingDescriptorHeapLock);
@@ -1979,64 +1956,19 @@ static SDL_bool D3D12_INTERNAL_CreateShaderBytecode(
     void **pBytecode,
     size_t *pBytecodeSize)
 {
-    ID3DBlob *blob = NULL;
-    ID3DBlob *errorBlob = NULL;
-    const Uint8 *bytecode;
-    size_t bytecodeSize;
-    HRESULT res;
-
     /* TODO: accept DXIL */
-    if (format == SDL_GPU_SHADERFORMAT_HLSL) {
-        res = renderer->D3DCompile_func(
-            code,
-            codeSize,
-            NULL,
-            NULL,
-            NULL,
-            entryPointName,
-            D3D12ShaderProfiles[stage],
-            0,
-            0,
-            &blob,
-            &errorBlob);
-        if (FAILED(res)) {
-            if (errorBlob) {
-                SDL_LogError(SDL_LOG_CATEGORY_GPU, "%s", (const char *)ID3D10Blob_GetBufferPointer(errorBlob));
-                ID3D10Blob_Release(errorBlob);
-            }
-            if (blob) {
-                ID3D10Blob_Release(blob);
-            }
-            return SDL_FALSE;
-        }
-        if (errorBlob) {
-            ID3D10Blob_Release(errorBlob);
-        }
-        bytecode = (const Uint8 *)ID3D10Blob_GetBufferPointer(blob);
-        bytecodeSize = ID3D10Blob_GetBufferSize(blob);
-    } else if (format == SDL_GPU_SHADERFORMAT_DXBC) {
-        bytecode = code;
-        bytecodeSize = codeSize;
-    } else {
+    if (format != SDL_GPU_SHADERFORMAT_DXBC) {
         SDL_LogError(SDL_LOG_CATEGORY_GPU, "Incompatible shader format for D3D12");
         return SDL_FALSE;
     }
 
     if (pBytecode != NULL) {
-        *pBytecode = SDL_malloc(bytecodeSize);
+        *pBytecode = SDL_malloc(codeSize);
         if (!*pBytecode) {
-            if (blob) {
-                ID3D10Blob_Release(blob);
-            }
             return SDL_FALSE;
         }
-        SDL_memcpy(*pBytecode, bytecode, bytecodeSize);
-        *pBytecodeSize = bytecodeSize;
-    }
-
-    // Clean up
-    if (blob) {
-        ID3D10Blob_Release(blob);
+        SDL_memcpy(*pBytecode, code, codeSize);
+        *pBytecodeSize = codeSize;
     }
 
     return SDL_TRUE;
@@ -6731,10 +6663,8 @@ static SDL_bool D3D12_PrepareDriver(SDL_VideoDevice *_this)
 {
     void *d3d12_dll;
     void *dxgi_dll;
-    void *d3dcompiler_dll;
     PFN_D3D12_CREATE_DEVICE D3D12CreateDeviceFunc;
     PFN_CREATE_DXGI_FACTORY1 CreateDXGIFactoryFunc;
-    PFN_D3DCOMPILE D3DCompileFunc;
     HRESULT res;
     ID3D12Device *device;
     IDXGIFactory1 *factory;
@@ -6849,23 +6779,6 @@ static SDL_bool D3D12_PrepareDriver(SDL_VideoDevice *_this)
         return SDL_FALSE;
     }
 
-    /* Can we load D3DCompiler? */
-
-    d3dcompiler_dll = SDL_LoadObject(D3DCOMPILER_DLL);
-    if (d3dcompiler_dll == NULL) {
-        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "D3D12: Could not find " D3DCOMPILER_DLL);
-        return SDL_FALSE;
-    }
-
-    D3DCompileFunc = (PFN_D3DCOMPILE)SDL_LoadFunction(
-        d3dcompiler_dll,
-        D3DCOMPILE_FUNC);
-    SDL_UnloadObject(d3dcompiler_dll); /* We're not going to call this function, so we can just unload now. */
-    if (D3DCompileFunc == NULL) {
-        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "D3D12: Could not find function D3DCompile in " D3DCOMPILER_DLL);
-        return SDL_FALSE;
-    }
-
     return SDL_TRUE;
 }
 
@@ -6971,21 +6884,6 @@ static SDL_GpuDevice *D3D12_CreateDevice(SDL_bool debugMode, SDL_bool preferLowP
     D3D12_COMMAND_QUEUE_DESC queueDesc;
 
     renderer = (D3D12Renderer *)SDL_calloc(1, sizeof(D3D12Renderer));
-
-    /* Load the D3DCompiler library */
-    renderer->d3dcompiler_dll = SDL_LoadObject(D3DCOMPILER_DLL);
-    if (renderer->d3dcompiler_dll == NULL) {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Could not find " D3DCOMPILER_DLL);
-        D3D12_INTERNAL_DestroyRenderer(renderer);
-        return NULL;
-    }
-
-    renderer->D3DCompile_func = (PFN_D3DCOMPILE)SDL_LoadFunction(renderer->d3dcompiler_dll, D3DCOMPILE_FUNC);
-    if (renderer->D3DCompile_func == NULL) {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Could not load function: " D3DCOMPILE_FUNC);
-        D3D12_INTERNAL_DestroyRenderer(renderer);
-        return NULL;
-    }
 
     /* Load the DXGI library */
     renderer->dxgi_dll = SDL_LoadObject(DXGI_DLL);
