@@ -1405,11 +1405,6 @@ static ID3D11DeviceChild *D3D11_INTERNAL_CreateID3D11Shader(
     ID3D11DeviceChild *handle = NULL;
     HRESULT res;
 
-    if (pBytecode != NULL) {
-        *pBytecode = NULL;
-        *pBytecodeSize = 0;
-    }
-
     if (format != SDL_GPU_SHADERFORMAT_DXBC) {
         SDL_LogError(SDL_LOG_CATEGORY_GPU, "Incompatible shader format for D3D11");
         return NULL;
@@ -1797,8 +1792,8 @@ SDL_GpuShader *D3D11_CreateShader(
 {
     D3D11Renderer *renderer = (D3D11Renderer *)driverData;
     ID3D11DeviceChild *handle;
-    void *bytecode;
-    size_t bytecodeSize;
+    void *bytecode = NULL;
+    size_t bytecodeSize = 0;
     D3D11Shader *shader;
 
     handle = D3D11_INTERNAL_CreateID3D11Shader(
