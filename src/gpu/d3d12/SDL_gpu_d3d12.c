@@ -4917,7 +4917,7 @@ static void D3D12_UploadToTexture(
     Uint32 rowsPerSlice = source->imageHeight;
     Uint32 bytesPerSlice;
     SDL_bool needsRealignment;
-    SDL_bool needsAlignmentCopy;
+    SDL_bool needsPlacementCopy;
 
     /* Note that the transfer buffer does not need a barrier, as it is synced by the client. */
 
@@ -4956,45 +4956,69 @@ static void D3D12_UploadToTexture(
 
     alignedRowPitch = D3D12_INTERNAL_Align(rowPitch, D3D12_TEXTURE_DATA_PITCH_ALIGNMENT);
     needsRealignment = rowsPerSlice != destination->h && rowPitch != alignedRowPitch;
-    needsAlignmentCopy = source->offset % D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT != 0;
+    needsPlacementCopy = source->offset % D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT != 0;
 
     sourceLocation.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
     sourceLocation.PlacedFootprint.Footprint.Format = SDLToD3D12_TextureFormat[textureContainer->header.info.format];
-    sourceLocation.PlacedFootprint.Footprint.Width = destination->w;
-    sourceLocation.PlacedFootprint.Footprint.Height = destination->h;
-    sourceLocation.PlacedFootprint.Footprint.Depth = destination->d;
     sourceLocation.PlacedFootprint.Footprint.RowPitch = alignedRowPitch;
 
-    if (needsRealignment) {
+    destinationLocation.pResource = textureContainer->activeTexture->resource;
+    destinationLocation.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+    destinationLocation.SubresourceIndex = textureSubresource->index;
+
+    if (needsRealignment || destination->h != source->imageHeight) {
         temporaryBuffer = D3D12_INTERNAL_CreateBuffer(
             d3d12CommandBuffer->renderer,
             0,
             alignedRowPitch * destination->h * destination->d,
             D3D12_BUFFER_TYPE_UPLOAD);
+
         if (!temporaryBuffer) {
             SDL_LogError(SDL_LOG_CATEGORY_GPU, "Failed to create temporary upload buffer.");
             return;
-        }
-
-        for (Uint32 rowIndex = 0; rowIndex < destination->h * destination->d; rowIndex += 1) {
-            SDL_memcpy(
-                temporaryBuffer->mapPointer + (rowIndex * alignedRowPitch),
-                transferBufferContainer->activeBuffer->mapPointer + source->offset + (rowIndex * rowPitch),
-                alignedRowPitch);
         }
 
         sourceLocation.pResource = temporaryBuffer->handle;
-        sourceLocation.PlacedFootprint.Offset = 0;
-    } else if (needsAlignmentCopy) {
+
+        for (Uint32 sliceIndex = 0; sliceIndex < destination->d; sliceIndex += 1) {
+            for (Uint32 rowIndex = 0; rowIndex < rowsPerSlice; rowIndex += 1) {
+                SDL_memcpy(
+                    temporaryBuffer->mapPointer + (sliceIndex * rowsPerSlice) + (rowIndex * alignedRowPitch),
+                    transferBufferContainer->activeBuffer->mapPointer + source->offset + (sliceIndex * bytesPerSlice) + (rowIndex * rowPitch),
+                    alignedRowPitch);
+            }
+
+            sourceLocation.PlacedFootprint.Footprint.Width = destination->w;
+            sourceLocation.PlacedFootprint.Footprint.Height = destination->h;
+            sourceLocation.PlacedFootprint.Footprint.Depth = 1;
+            sourceLocation.PlacedFootprint.Offset = (sliceIndex * bytesPerSlice);
+
+            ID3D12GraphicsCommandList_CopyTextureRegion(
+                d3d12CommandBuffer->graphicsCommandList,
+                &destinationLocation,
+                destination->x,
+                destination->y,
+                sliceIndex,
+                &sourceLocation,
+                NULL);
+        }
+
+        D3D12_INTERNAL_TrackBuffer(d3d12CommandBuffer, temporaryBuffer);
+        D3D12_INTERNAL_ReleaseBuffer(
+            d3d12CommandBuffer->renderer,
+            temporaryBuffer);
+    } else if (needsPlacementCopy) {
         temporaryBuffer = D3D12_INTERNAL_CreateBuffer(
             d3d12CommandBuffer->renderer,
             0,
             alignedRowPitch * destination->h * destination->d,
             D3D12_BUFFER_TYPE_UPLOAD);
+
         if (!temporaryBuffer) {
             SDL_LogError(SDL_LOG_CATEGORY_GPU, "Failed to create temporary upload buffer.");
             return;
         }
+
         SDL_memcpy(
             temporaryBuffer->mapPointer,
             transferBufferContainer->activeBuffer->mapPointer + source->offset,
@@ -5002,25 +5026,41 @@ static void D3D12_UploadToTexture(
 
         sourceLocation.pResource = temporaryBuffer->handle;
         sourceLocation.PlacedFootprint.Offset = 0;
+        sourceLocation.PlacedFootprint.Footprint.Width = destination->w;
+        sourceLocation.PlacedFootprint.Footprint.Height = destination->h;
+        sourceLocation.PlacedFootprint.Footprint.Depth = 1;
+
+        ID3D12GraphicsCommandList_CopyTextureRegion(
+            d3d12CommandBuffer->graphicsCommandList,
+            &destinationLocation,
+            destination->x,
+            destination->y,
+            destination->z,
+            &sourceLocation,
+            NULL);
+
+        D3D12_INTERNAL_TrackBuffer(d3d12CommandBuffer, temporaryBuffer);
+        D3D12_INTERNAL_ReleaseBuffer(
+            d3d12CommandBuffer->renderer,
+            temporaryBuffer);
 
         SDL_LogWarn(SDL_LOG_CATEGORY_GPU, "Texture upload offset not aligned to 512 bytes! This is suboptimal on D3D12!");
     } else {
         sourceLocation.pResource = transferBufferContainer->activeBuffer->handle;
         sourceLocation.PlacedFootprint.Offset = source->offset;
+        sourceLocation.PlacedFootprint.Footprint.Width = destination->w;
+        sourceLocation.PlacedFootprint.Footprint.Height = destination->h;
+        sourceLocation.PlacedFootprint.Footprint.Depth = destination->d;
+
+        ID3D12GraphicsCommandList_CopyTextureRegion(
+            d3d12CommandBuffer->graphicsCommandList,
+            &destinationLocation,
+            destination->x,
+            destination->y,
+            destination->z,
+            &sourceLocation,
+            NULL);
     }
-
-    destinationLocation.pResource = textureContainer->activeTexture->resource;
-    destinationLocation.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
-    destinationLocation.SubresourceIndex = textureSubresource->index;
-
-    ID3D12GraphicsCommandList_CopyTextureRegion(
-        d3d12CommandBuffer->graphicsCommandList,
-        &destinationLocation,
-        destination->x,
-        destination->y,
-        destination->z,
-        &sourceLocation,
-        NULL);
 
     D3D12_INTERNAL_TextureSubresourceTransitionToDefaultUsage(
         d3d12CommandBuffer,
@@ -5029,13 +5069,6 @@ static void D3D12_UploadToTexture(
 
     D3D12_INTERNAL_TrackBuffer(d3d12CommandBuffer, transferBufferContainer->activeBuffer);
     D3D12_INTERNAL_TrackTextureSubresource(d3d12CommandBuffer, textureSubresource);
-
-    if (temporaryBuffer != NULL) {
-        D3D12_INTERNAL_TrackBuffer(d3d12CommandBuffer, temporaryBuffer);
-        D3D12_INTERNAL_ReleaseBuffer(
-            d3d12CommandBuffer->renderer,
-            temporaryBuffer);
-    }
 }
 
 static void D3D12_UploadToBuffer(
@@ -5200,6 +5233,8 @@ static void D3D12_DownloadFromTexture(
     D3D12_TEXTURE_COPY_LOCATION destinationLocation;
     Uint32 rowPitch = destination->imagePitch;
     Uint32 alignedRowPitch;
+    Uint32 imageHeight = destination->imageHeight;
+
     SDL_bool needsRealignment;
     SDL_bool needsAlignmentCopy;
     HRESULT res;
@@ -5217,7 +5252,7 @@ static void D3D12_DownloadFromTexture(
     D3D12TextureDownload *textureDownload = NULL;
 
     if (rowPitch == 0) {
-        rowPitch = BytesPerRow(source->w, sourceContainer->createInfo.format);
+        rowPitch = BytesPerRow(source->w, sourceContainer->header.info.format);
     }
 
     alignedRowPitch = D3D12_INTERNAL_Align(rowPitch, D3D12_TEXTURE_DATA_PITCH_ALIGNMENT);
@@ -5240,7 +5275,7 @@ static void D3D12_DownloadFromTexture(
      */
 
     destinationLocation.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
-    destinationLocation.PlacedFootprint.Footprint.Format = SDLToD3D12_TextureFormat[sourceContainer->createInfo.format];
+    destinationLocation.PlacedFootprint.Footprint.Format = SDLToD3D12_TextureFormat[sourceContainer->header.info.format];
     destinationLocation.PlacedFootprint.Footprint.Width = source->w;
     destinationLocation.PlacedFootprint.Footprint.Height = source->h;
     destinationLocation.PlacedFootprint.Footprint.Depth = source->d;
