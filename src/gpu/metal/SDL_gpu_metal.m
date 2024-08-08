@@ -3048,7 +3048,7 @@ static void METAL_Blit(
         &textureSamplerBinding,
         1);
 
-    METAL_DrawPrimitives(commandBuffer, 0, 1);
+    METAL_DrawPrimitives(commandBuffer, 0, 3);
     METAL_EndRenderPass(commandBuffer);
 }
 
