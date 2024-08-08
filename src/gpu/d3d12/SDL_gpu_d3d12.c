@@ -2804,6 +2804,7 @@ static D3D12Texture *D3D12_INTERNAL_CreateTexture(
                     rtvDesc.Texture2DArray.MipSlice = levelIndex;
                     rtvDesc.Texture2DArray.FirstArraySlice = layerIndex;
                     rtvDesc.Texture2DArray.ArraySize = 1;
+                    rtvDesc.Texture2DArray.PlaneSlice = 0;
                 } else if (textureCreateInfo->depth > 1) {
                     rtvDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE3D;
                     rtvDesc.Texture3D.MipSlice = levelIndex;
