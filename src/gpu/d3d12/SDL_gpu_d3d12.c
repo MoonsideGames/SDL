@@ -4945,33 +4945,6 @@ static void D3D12_UnmapTransferBuffer(
     }
 }
 
-static void D3D12_SetTransferData(
-    SDL_GpuRenderer *driverData,
-    const void *source,
-    SDL_GpuTransferBufferRegion *destination,
-    SDL_bool cycle)
-{
-    D3D12BufferContainer *container = (D3D12BufferContainer *)destination->transferBuffer;
-    void *dataPtr;
-
-    D3D12_MapTransferBuffer(driverData, destination->transferBuffer, cycle, &dataPtr);
-
-    SDL_memcpy(
-        ((Uint8 *)container->activeBuffer->mapPointer) + destination->offset,
-        source,
-        destination->size);
-
-    D3D12_UnmapTransferBuffer(driverData, destination->transferBuffer);
-}
-
-static void D3D12_GetTransferData(
-    SDL_GpuRenderer *driverData,
-    SDL_GpuTransferBufferRegion *source,
-    void *destination)
-{
-    SDL_assert(SDL_FALSE);
-}
-
 /* Copy Pass */
 
 static void D3D12_BeginCopyPass(

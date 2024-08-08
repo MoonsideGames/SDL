@@ -1659,45 +1659,6 @@ static void METAL_UnmapTransferBuffer(
 #endif
 }
 
-static void METAL_SetTransferData(
-    SDL_GpuRenderer *driverData,
-    const void *source,
-    SDL_GpuTransferBufferRegion *destination,
-    SDL_bool cycle)
-{
-    @autoreleasepool {
-        MetalRenderer *renderer = (MetalRenderer *)driverData;
-        MetalBufferContainer *container = (MetalBufferContainer *)destination->transferBuffer;
-        MetalBuffer *buffer = METAL_INTERNAL_PrepareBufferForWrite(renderer, container, cycle);
-
-        SDL_memcpy(
-            ((Uint8 *)buffer->handle.contents) + destination->offset,
-            ((Uint8 *)source),
-            destination->size);
-
-#ifdef SDL_PLATFORM_MACOS
-        /* FIXME: Is this necessary? */
-        if (buffer->handle.storageMode == MTLStorageModeManaged) {
-            [buffer->handle didModifyRange:NSMakeRange(destination->offset, destination->size)];
-        }
-#endif
-    }
-}
-
-static void METAL_GetTransferData(
-    SDL_GpuRenderer *driverData,
-    SDL_GpuTransferBufferRegion *source,
-    void *destination)
-{
-    @autoreleasepool {
-        MetalBufferContainer *transferBufferContainer = (MetalBufferContainer *)source->transferBuffer;
-        SDL_memcpy(
-            ((Uint8 *)destination),
-            ((Uint8 *)transferBufferContainer->activeBuffer->handle.contents) + source->offset,
-            source->size);
-    }
-}
-
 /* Copy Pass */
 
 static void METAL_BeginCopyPass(
