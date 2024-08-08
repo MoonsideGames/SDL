@@ -1111,8 +1111,6 @@ SDL3_0.0.0 {
     SDL_GpuEndComputePass;
     SDL_GpuMapTransferBuffer;
     SDL_GpuUnmapTransferBuffer;
-    SDL_GpuSetTransferData;
-    SDL_GpuGetTransferData;
     SDL_GpuBeginCopyPass;
     SDL_GpuUploadToTexture;
     SDL_GpuUploadToBuffer;

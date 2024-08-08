@@ -424,13 +424,6 @@ typedef struct SDL_GpuTransferBufferLocation
     Uint32 offset;
 } SDL_GpuTransferBufferLocation;
 
-typedef struct SDL_GpuTransferBufferRegion
-{
-    SDL_GpuTransferBuffer *transferBuffer;
-    Uint32 offset;
-    Uint32 size;
-} SDL_GpuTransferBufferRegion;
-
 typedef struct SDL_GpuTextureSlice
 {
     SDL_GpuTexture *texture;
@@ -1329,8 +1322,9 @@ extern SDL_DECLSPEC void SDLCALL SDL_GpuPushComputeUniformData(
  * or if none are available, a new one is created.
  * This means you don't have to worry about complex state tracking and synchronization as long as cycling is correctly employed.
  *
- * For example: you can call SetTransferData and then UploadToTexture. The next time you call SetTransferData,
- * if you set the cycle param to SDL_TRUE, you don't have to worry about overwriting any data that is not yet uploaded.
+ * For example: you can call MapTransferBuffer, write texture data, UnmapTransferBuffer, and then UploadToTexture.
+ * The next time you write texture data to the transfer buffer, if you set the cycle param to SDL_TRUE, you don't have
+ * to worry about overwriting any data that is not yet uploaded.
  *
  * Another example: If you are using a texture in a render pass every frame, this can cause a data dependency between frames.
  * If you set cycle to SDL_TRUE in the ColorAttachmentInfo struct, you can prevent this data dependency.
@@ -1799,36 +1793,6 @@ extern SDL_DECLSPEC void SDLCALL SDL_GpuUnmapTransferBuffer(
     SDL_GpuDevice *device,
     SDL_GpuTransferBuffer *transferBuffer);
 
-/**
- * Immediately copies data from a pointer to a transfer buffer.
- *
- * \param device a GPU context
- * \param source a pointer to data to copy into the transfer buffer
- * \param destination a transfer buffer with offset and size
- * \param cycle if SDL_TRUE, cycles the transfer buffer if it is bound, otherwise overwrites the data.
- *
- * \since This function is available since SDL 3.x.x
- */
-extern SDL_DECLSPEC void SDLCALL SDL_GpuSetTransferData(
-    SDL_GpuDevice *device,
-    const void *source,
-    SDL_GpuTransferBufferRegion *destination,
-    SDL_bool cycle);
-
-/**
- * Immediately copies data from a transfer buffer to a pointer.
- *
- * \param device a GPU context
- * \param source a transfer buffer with offset and size
- * \param destination a data pointer
- *
- * \since This function is available since SDL 3.x.x
- */
-extern SDL_DECLSPEC void SDLCALL SDL_GpuGetTransferData(
-    SDL_GpuDevice *device,
-    SDL_GpuTransferBufferRegion *source,
-    void *destination);
-
 /* Copy Pass */
 
 /**
@@ -2257,7 +2221,6 @@ extern SDL_DECLSPEC void SDLCALL SDL_GpuReleaseFence(
  *
  * \since This function is available since SDL 3.x.x
  *
- * \sa SDL_GpuSetTransferData
  * \sa SDL_GpuUploadToTexture
  */
 extern SDL_DECLSPEC Uint32 SDLCALL SDL_GpuTextureFormatTexelBlockSize(

@@ -1520,50 +1520,6 @@ void SDL_GpuUnmapTransferBuffer(
         transferBuffer);
 }
 
-void SDL_GpuSetTransferData(
-    SDL_GpuDevice *device,
-    const void *source,
-    SDL_GpuTransferBufferRegion *destination,
-    SDL_bool cycle)
-{
-    CHECK_DEVICE_MAGIC(device, );
-    if (source == NULL) {
-        SDL_InvalidParamError("source");
-        return;
-    }
-    if (destination == NULL) {
-        SDL_InvalidParamError("destination");
-        return;
-    }
-
-    device->SetTransferData(
-        device->driverData,
-        source,
-        destination,
-        cycle);
-}
-
-void SDL_GpuGetTransferData(
-    SDL_GpuDevice *device,
-    SDL_GpuTransferBufferRegion *source,
-    void *destination)
-{
-    CHECK_DEVICE_MAGIC(device, );
-    if (source == NULL) {
-        SDL_InvalidParamError("source");
-        return;
-    }
-    if (destination == NULL) {
-        SDL_InvalidParamError("destination");
-        return;
-    }
-
-    device->GetTransferData(
-        device->driverData,
-        source,
-        destination);
-}
-
 /* Copy Pass */
 
 SDL_GpuCopyPass *SDL_GpuBeginCopyPass(

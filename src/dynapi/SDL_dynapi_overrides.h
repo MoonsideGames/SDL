@@ -1136,8 +1136,6 @@
 #define SDL_GpuEndComputePass SDL_GpuEndComputePass_REAL
 #define SDL_GpuMapTransferBuffer SDL_GpuMapTransferBuffer_REAL
 #define SDL_GpuUnmapTransferBuffer SDL_GpuUnmapTransferBuffer_REAL
-#define SDL_GpuSetTransferData SDL_GpuSetTransferData_REAL
-#define SDL_GpuGetTransferData SDL_GpuGetTransferData_REAL
 #define SDL_GpuBeginCopyPass SDL_GpuBeginCopyPass_REAL
 #define SDL_GpuUploadToTexture SDL_GpuUploadToTexture_REAL
 #define SDL_GpuUploadToBuffer SDL_GpuUploadToBuffer_REAL

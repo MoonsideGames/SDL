@@ -388,7 +388,7 @@ Render(SDL_Window *window, const int windownum)
     pass = SDL_GpuBeginRenderPass(cmd, &color_attachment, 1, &depth_attachment);
     SDL_GpuBindGraphicsPipeline(pass, render_state.pipeline);
     SDL_GpuBindVertexBuffers(pass, 0, &vertex_binding, 1);
-    SDL_GpuDrawPrimitives(pass, 0, 12);
+    SDL_GpuDrawPrimitives(pass, 0, 36);
     SDL_GpuEndRenderPass(pass);
 
     /* Blit MSAA to swapchain, if needed */
@@ -452,7 +452,7 @@ init_render_state(int msaa)
 {
     SDL_GpuCommandBuffer *cmd;
     SDL_GpuTransferBuffer *buf_transfer;
-    SDL_GpuTransferBufferRegion buf_region;
+    void *map;
     SDL_GpuTransferBufferLocation buf_location;
     SDL_GpuBufferRegion dst_region;
     SDL_GpuCopyPass *copy_pass;
@@ -505,10 +505,9 @@ init_render_state(int msaa)
     CHECK_CREATE(buf_transfer, "Vertex transfer buffer")
 
     /* We just need to upload the static data once. */
-    buf_region.transferBuffer = buf_transfer;
-    buf_region.offset = 0;
-    buf_region.size = sizeof(vertex_data);
-    SDL_GpuSetTransferData(gpu_device, (void*) vertex_data, &buf_region, SDL_FALSE);
+    SDL_GpuMapTransferBuffer(gpu_device, buf_transfer, SDL_FALSE, &map);
+    SDL_memcpy(map, vertex_data, sizeof(vertex_data));
+    SDL_GpuUnmapTransferBuffer(gpu_device, buf_transfer);
 
     cmd = SDL_GpuAcquireCommandBuffer(gpu_device);
     copy_pass = SDL_GpuBeginCopyPass(cmd);

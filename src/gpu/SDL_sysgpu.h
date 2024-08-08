@@ -435,17 +435,6 @@ struct SDL_GpuDevice
         SDL_GpuRenderer *device,
         SDL_GpuTransferBuffer *transferBuffer);
 
-    void (*SetTransferData)(
-        SDL_GpuRenderer *driverData,
-        const void *source,
-        SDL_GpuTransferBufferRegion *destination,
-        SDL_bool cycle);
-
-    void (*GetTransferData)(
-        SDL_GpuRenderer *driverData,
-        SDL_GpuTransferBufferRegion *source,
-        void *destination);
-
     /* Copy Pass */
 
     void (*BeginCopyPass)(
@@ -642,8 +631,6 @@ struct SDL_GpuDevice
     ASSIGN_DRIVER_FUNC(EndComputePass, name)                \
     ASSIGN_DRIVER_FUNC(MapTransferBuffer, name)             \
     ASSIGN_DRIVER_FUNC(UnmapTransferBuffer, name)           \
-    ASSIGN_DRIVER_FUNC(SetTransferData, name)               \
-    ASSIGN_DRIVER_FUNC(GetTransferData, name)               \
     ASSIGN_DRIVER_FUNC(BeginCopyPass, name)                 \
     ASSIGN_DRIVER_FUNC(UploadToTexture, name)               \
     ASSIGN_DRIVER_FUNC(UploadToBuffer, name)                \
