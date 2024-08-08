@@ -5267,11 +5267,7 @@ static void D3D12_Blit(
         &blitFragmentUniforms,
         sizeof(BlitFragmentUniforms));
 
-    D3D12_DrawPrimitives(
-        commandBuffer,
-        0,
-        1);
-
+    D3D12_DrawPrimitives(commandBuffer, 0, 3);
     D3D12_EndRenderPass(commandBuffer);
 }
 
@@ -7406,4 +7402,4 @@ SDL_GpuDriver D3D12Driver = {
     D3D12_CreateDevice
 };
 
-#endif /* SDL_GPU_D12 */
+#endif /* SDL_GPU_D3D12 */

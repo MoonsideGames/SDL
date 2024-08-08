@@ -4317,11 +4317,7 @@ static void D3D11_Blit(
         &textureSamplerBinding,
         1);
 
-    D3D11_DrawPrimitives(
-        commandBuffer,
-        0,
-        1);
-
+    D3D11_DrawPrimitives(commandBuffer, 0, 3);
     D3D11_EndRenderPass(commandBuffer);
 }
 
