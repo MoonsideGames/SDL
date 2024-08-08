@@ -1956,8 +1956,6 @@ static SDL_bool D3D12_INTERNAL_CreateShaderBytecode(
     void **pBytecode,
     size_t *pBytecodeSize)
 {
-    HRESULT res;
-
     /* TODO: accept DXIL */
     if (format != SDL_GPU_SHADERFORMAT_DXBC) {
         SDL_LogError(SDL_LOG_CATEGORY_GPU, "Incompatible shader format for D3D12");
