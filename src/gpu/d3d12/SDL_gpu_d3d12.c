@@ -70,13 +70,13 @@
 #define DXGI_DLL      "dxgi.dll"
 #define DXGIDEBUG_DLL "dxgidebug.dll"
 #elif defined(__APPLE__)
-#define D3D12_DLL       "libdxvk_d3d12.dylib"
-#define DXGI_DLL        "libdxvk_dxgi.dylib"
-#define DXGIDEBUG_DLL   "libdxvk_dxgidebug.dylib"
+#define D3D12_DLL     "libdxvk_d3d12.dylib"
+#define DXGI_DLL      "libdxvk_dxgi.dylib"
+#define DXGIDEBUG_DLL "libdxvk_dxgidebug.dylib"
 #else
-#define D3D12_DLL       "libdxvk_d3d12.so"
-#define DXGI_DLL        "libdxvk_dxgi.so"
-#define DXGIDEBUG_DLL   "libdxvk_dxgidebug.so"
+#define D3D12_DLL     "libdxvk_d3d12.so"
+#define DXGI_DLL      "libdxvk_dxgi.so"
+#define DXGIDEBUG_DLL "libdxvk_dxgidebug.so"
 #endif
 
 #define D3D12_CREATE_DEVICE_FUNC            "D3D12CreateDevice"
@@ -6477,7 +6477,7 @@ static void D3D12_INTERNAL_CopyTextureDownload(
         download->temporaryBuffer->handle,
         0,
         NULL,
-        (void**) &sourcePtr);
+        (void **)&sourcePtr);
 
     if (FAILED(res)) {
         SDL_LogError(SDL_LOG_CATEGORY_GPU, "Failed to map temporary buffer!");
@@ -6488,7 +6488,7 @@ static void D3D12_INTERNAL_CopyTextureDownload(
         download->destinationBuffer->handle,
         0,
         NULL,
-        (void**) &destPtr);
+        (void **)&destPtr);
 
     if (FAILED(res)) {
         SDL_LogError(SDL_LOG_CATEGORY_GPU, "Failed to map destination buffer!");
@@ -7606,9 +7606,6 @@ static SDL_GpuDevice *D3D12_CreateDevice(SDL_bool debugMode, SDL_bool preferLowP
         }
     }
 
-    /* Blit pipelines */
-    D3D12_INTERNAL_InitBlitPipelines(renderer);
-
     /* Deferred resource releasing */
 
     renderer->buffersToDestroyCapacity = 4;
@@ -7667,6 +7664,11 @@ static SDL_GpuDevice *D3D12_CreateDevice(SDL_bool debugMode, SDL_bool preferLowP
 
     renderer->debugMode = debugMode;
 
+    renderer->semantic = SDL_GetStringProperty(props, SDL_PROP_GPU_CREATEDEVICE_D3D12_SEMANTIC_NAME_STRING, "TEXCOORD");
+
+    /* Blit pipelines */
+    D3D12_INTERNAL_InitBlitPipelines(renderer);
+
     /* Create the SDL_Gpu Device */
     result = (SDL_GpuDevice *)SDL_calloc(1, sizeof(SDL_GpuDevice));
 
@@ -7674,8 +7676,6 @@ static SDL_GpuDevice *D3D12_CreateDevice(SDL_bool debugMode, SDL_bool preferLowP
         D3D12_INTERNAL_DestroyRenderer(renderer);
         return NULL;
     }
-
-    renderer->semantic = SDL_GetStringProperty(props, SDL_PROP_GPU_CREATEDEVICE_D3D12_SEMANTIC_NAME_STRING, "TEXCOORD");
 
     ASSIGN_DRIVER(D3D12)
     result->driverData = (SDL_GpuRenderer *)renderer;
