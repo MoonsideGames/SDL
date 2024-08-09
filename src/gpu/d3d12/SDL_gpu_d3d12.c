@@ -5252,11 +5252,7 @@ static void D3D12_DownloadFromTexture(
         source->textureSlice.layer,
         source->textureSlice.mipLevel);
     D3D12BufferContainer *destinationContainer = (D3D12BufferContainer *)destination->transferBuffer;
-    D3D12Buffer *destinationBuffer = D3D12_INTERNAL_PrepareBufferForWrite(
-        d3d12CommandBuffer,
-        destinationContainer,
-        SDL_FALSE,
-        D3D12_RESOURCE_STATE_COPY_DEST);
+    D3D12Buffer *destinationBuffer = destinationContainer->activeBuffer;
 
     /* D3D12 requires texture data row pitch to be 256 byte aligned, which is obviously insane.
      * Instead of exposing that restriction to the client, which is a huge rake to step on,
@@ -5327,7 +5323,7 @@ static void D3D12_DownloadFromTexture(
         textureDownload->height = rowsPerSlice;
         textureDownload->depth = source->d;
         textureDownload->bytesPerRow = rowPitch;
-        textureDownload->bytesPerDepthSlice = rowPitch * destination->imageHeight;
+        textureDownload->bytesPerDepthSlice = rowPitch * rowsPerSlice;
         textureDownload->alignedBytesPerRow = alignedRowPitch;
 
         destinationLocation.pResource = textureDownload->temporaryBuffer->handle;
@@ -5337,10 +5333,10 @@ static void D3D12_DownloadFromTexture(
         destinationLocation.PlacedFootprint.Offset = destination->offset;
     }
 
-    D3D12_INTERNAL_BufferTransitionFromDefaultUsage(
+    D3D12_INTERNAL_TextureSubresourceTransitionFromDefaultUsage(
         d3d12CommandBuffer,
         D3D12_RESOURCE_STATE_COPY_SOURCE,
-        textureDownload == NULL ? destinationBuffer : textureDownload->temporaryBuffer);
+        sourceSubresource);
 
     ID3D12GraphicsCommandList_CopyTextureRegion(
         d3d12CommandBuffer->graphicsCommandList,
@@ -5355,11 +5351,6 @@ static void D3D12_DownloadFromTexture(
         d3d12CommandBuffer,
         D3D12_RESOURCE_STATE_COPY_SOURCE,
         sourceSubresource);
-
-    D3D12_INTERNAL_BufferTransitionToDefaultUsage(
-        d3d12CommandBuffer,
-        D3D12_RESOURCE_STATE_COPY_DEST,
-        textureDownload == NULL ? destinationBuffer : textureDownload->temporaryBuffer);
 
     D3D12_INTERNAL_TrackBuffer(d3d12CommandBuffer, destinationBuffer);
     D3D12_INTERNAL_TrackTextureSubresource(d3d12CommandBuffer, sourceSubresource);
@@ -5376,6 +5367,8 @@ static void D3D12_DownloadFromTexture(
 
         d3d12CommandBuffer->textureDownloads[d3d12CommandBuffer->textureDownloadCount] = textureDownload;
         d3d12CommandBuffer->textureDownloadCount += 1;
+
+        D3D12_INTERNAL_ReleaseBuffer(d3d12CommandBuffer->renderer, textureDownload->temporaryBuffer);
     }
 }
 
@@ -5394,11 +5387,7 @@ static void D3D12_DownloadFromBuffer(
         D3D12_RESOURCE_STATE_COPY_SOURCE,
         sourceBuffer);
 
-    D3D12Buffer *destinationBuffer = D3D12_INTERNAL_PrepareBufferForWrite(
-        d3d12CommandBuffer,
-        destinationContainer,
-        SDL_FALSE,
-        D3D12_RESOURCE_STATE_COPY_DEST);
+    D3D12Buffer *destinationBuffer = destinationContainer->activeBuffer;
 
     ID3D12GraphicsCommandList_CopyBufferRegion(
         d3d12CommandBuffer->graphicsCommandList,
@@ -5412,11 +5401,6 @@ static void D3D12_DownloadFromBuffer(
         d3d12CommandBuffer,
         D3D12_RESOURCE_STATE_COPY_SOURCE,
         sourceBuffer);
-
-    D3D12_INTERNAL_BufferTransitionToDefaultUsage(
-        d3d12CommandBuffer,
-        D3D12_RESOURCE_STATE_COPY_DEST,
-        destinationBuffer);
 
     D3D12_INTERNAL_TrackBuffer(d3d12CommandBuffer, sourceBuffer);
     D3D12_INTERNAL_TrackBuffer(d3d12CommandBuffer, destinationBuffer);
@@ -6489,31 +6473,48 @@ static void D3D12_INTERNAL_CopyTextureDownload(
     D3D12CommandBuffer *commandBuffer,
     D3D12TextureDownload *download)
 {
-    Uint8 *dataPtr;
+    Uint8 *sourcePtr;
+    Uint8 *destPtr;
     HRESULT res;
 
     res = ID3D12Resource_Map(
         download->temporaryBuffer->handle,
         0,
         NULL,
-        &dataPtr);
+        &sourcePtr);
 
     if (FAILED(res)) {
         SDL_LogError(SDL_LOG_CATEGORY_GPU, "Failed to map temporary buffer!");
         return;
     }
 
+    res = ID3D12Resource_Map(
+        download->destinationBuffer->handle,
+        0,
+        NULL,
+        &destPtr);
+
+    if (FAILED(res)) {
+        SDL_LogError(SDL_LOG_CATEGORY_GPU, "Failed to map destination buffer!");
+        return;
+    }
+
     for (Uint32 sliceIndex = 0; sliceIndex < download->depth; sliceIndex += 1) {
         for (Uint32 rowIndex = 0; rowIndex < download->height; rowIndex += 1) {
             SDL_memcpy(
-                download->destinationBuffer->mapPointer + download->bufferOffset + (sliceIndex * download->bytesPerDepthSlice) + (rowIndex * download->bytesPerRow),
-                dataPtr + (sliceIndex * download->height) + (rowIndex * download->alignedBytesPerRow),
+                destPtr + download->bufferOffset + (sliceIndex * download->bytesPerDepthSlice) + (rowIndex * download->bytesPerRow),
+                sourcePtr + (sliceIndex * download->height) + (rowIndex * download->alignedBytesPerRow),
                 download->bytesPerRow);
         }
     }
 
     ID3D12Resource_Unmap(
         download->temporaryBuffer->handle,
+        0,
+        NULL);
+
+    ID3D12Resource_Unmap(
+        download->destinationBuffer->handle,
         0,
         NULL);
 }
@@ -6827,6 +6828,8 @@ static void D3D12_WaitForFences(
     HANDLE *events = SDL_stack_alloc(HANDLE, fenceCount);
     HRESULT res;
 
+    SDL_LockMutex(renderer->submitLock);
+
     for (Uint32 i = 0; i < fenceCount; i += 1) {
         fence = (D3D12Fence *)pFences[i];
 
@@ -6845,7 +6848,23 @@ static void D3D12_WaitForFences(
         waitAll,
         INFINITE);
 
+    /* Check for cleanups */
+    for (Sint32 i = renderer->submittedCommandBufferCount - 1; i >= 0; i -= 1) {
+        Uint64 fenceValue = ID3D12Fence_GetCompletedValue(
+            renderer->submittedCommandBuffers[i]->inFlightFence->handle);
+
+        if (fenceValue == D3D12_FENCE_SIGNAL_VALUE) {
+            D3D12_INTERNAL_CleanCommandBuffer(
+                renderer,
+                renderer->submittedCommandBuffers[i]);
+        }
+    }
+
+    D3D12_INTERNAL_PerformPendingDestroys(renderer);
+
     SDL_stack_free(events);
+
+    SDL_UnlockMutex(renderer->submitLock);
 }
 
 /* Feature Queries */
