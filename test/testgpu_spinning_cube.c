@@ -642,7 +642,7 @@ main(int argc, char *argv[])
     int msaa;
     int i;
     const SDL_DisplayMode *mode;
-    Uint32 then, now;
+    Uint64 then, now;
 
     /* Initialize params */
     msaa = 0;
