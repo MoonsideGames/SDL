@@ -609,7 +609,7 @@ struct D3D12CommandBuffer
 
     D3D12Texture *vertexSamplerTextures[MAX_TEXTURE_SAMPLERS_PER_STAGE];
     D3D12Sampler *vertexSamplers[MAX_TEXTURE_SAMPLERS_PER_STAGE];
-    D3D12TextureSubresource *vertexStorageTextureSlices[MAX_STORAGE_TEXTURES_PER_STAGE];
+    D3D12TextureSubresource *vertexStorageTextureSubresources[MAX_STORAGE_TEXTURES_PER_STAGE];
     D3D12Buffer *vertexStorageBuffers[MAX_STORAGE_BUFFERS_PER_STAGE];
     D3D12UniformBuffer *vertexUniformBuffers[MAX_UNIFORM_BUFFERS_PER_STAGE];
 
@@ -4067,13 +4067,45 @@ static void D3D12_BindVertexStorageTextures(
     SDL_GpuCommandBuffer *commandBuffer,
     Uint32 firstSlot,
     SDL_GpuTextureSlice *storageTextureSlices,
-    Uint32 bindingCount) { SDL_assert(SDL_FALSE); }
+    Uint32 bindingCount)
+{
+    D3D12CommandBuffer *d3d12CommandBuffer = (D3D12CommandBuffer *)commandBuffer;
+
+    for (Uint32 i = 0; i < bindingCount; i += 1) {
+        D3D12TextureContainer *container = (D3D12TextureContainer *)storageTextureSlices[i].texture;
+        D3D12TextureSubresource *subresource = D3D12_INTERNAL_FetchTextureSubresource(
+            container,
+            storageTextureSlices[i].layer,
+            storageTextureSlices[i].mipLevel);
+
+        D3D12_INTERNAL_TrackTextureSubresource(d3d12CommandBuffer, subresource);
+
+        d3d12CommandBuffer->vertexStorageTextureSubresources[firstSlot + i] = subresource;
+    }
+
+    d3d12CommandBuffer->needVertexStorageTextureBind = SDL_TRUE;
+}
 
 static void D3D12_BindVertexStorageBuffers(
     SDL_GpuCommandBuffer *commandBuffer,
     Uint32 firstSlot,
     SDL_GpuBuffer **storageBuffers,
-    Uint32 bindingCount) { SDL_assert(SDL_FALSE); }
+    Uint32 bindingCount)
+{
+    D3D12CommandBuffer *d3d12CommandBuffer = (D3D12CommandBuffer *)commandBuffer;
+
+    for (Uint32 i = 0; i < bindingCount; i += 1) {
+        D3D12BufferContainer *container = (D3D12BufferContainer *)storageBuffers[i];
+
+        D3D12_INTERNAL_TrackBuffer(
+            d3d12CommandBuffer,
+            container->activeBuffer);
+
+        d3d12CommandBuffer->vertexStorageBuffers[firstSlot + i] = container->activeBuffer;
+    }
+
+    d3d12CommandBuffer->needVertexStorageBufferBind = SDL_TRUE;
+}
 
 static void D3D12_BindFragmentSamplers(
     SDL_GpuCommandBuffer *commandBuffer,
@@ -4108,13 +4140,45 @@ static void D3D12_BindFragmentStorageTextures(
     SDL_GpuCommandBuffer *commandBuffer,
     Uint32 firstSlot,
     SDL_GpuTextureSlice *storageTextureSlices,
-    Uint32 bindingCount) { SDL_assert(SDL_FALSE); }
+    Uint32 bindingCount)
+{
+    D3D12CommandBuffer *d3d12CommandBuffer = (D3D12CommandBuffer *)commandBuffer;
+
+    for (Uint32 i = 0; i < bindingCount; i += 1) {
+        D3D12TextureContainer *container = (D3D12TextureContainer *)storageTextureSlices[i].texture;
+        D3D12TextureSubresource *subresource = D3D12_INTERNAL_FetchTextureSubresource(
+            container,
+            storageTextureSlices[i].layer,
+            storageTextureSlices[i].mipLevel);
+
+        D3D12_INTERNAL_TrackTextureSubresource(d3d12CommandBuffer, subresource);
+
+        d3d12CommandBuffer->fragmentStorageTextureSlices[firstSlot + i] = subresource;
+    }
+
+    d3d12CommandBuffer->needFragmentStorageTextureBind = SDL_TRUE;
+}
 
 static void D3D12_BindFragmentStorageBuffers(
     SDL_GpuCommandBuffer *commandBuffer,
     Uint32 firstSlot,
     SDL_GpuBuffer **storageBuffers,
-    Uint32 bindingCount) { SDL_assert(SDL_FALSE); }
+    Uint32 bindingCount)
+{
+    D3D12CommandBuffer *d3d12CommandBuffer = (D3D12CommandBuffer *)commandBuffer;
+
+    for (Uint32 i = 0; i < bindingCount; i += 1) {
+        D3D12BufferContainer *container = (D3D12BufferContainer *)storageBuffers[i];
+
+        D3D12_INTERNAL_TrackBuffer(
+            d3d12CommandBuffer,
+            container->activeBuffer);
+
+        d3d12CommandBuffer->fragmentStorageBuffers[firstSlot + i] = container->activeBuffer;
+    }
+
+    d3d12CommandBuffer->needFragmentStorageBufferBind = SDL_TRUE;
+}
 
 static void D3D12_PushVertexUniformData(
     SDL_GpuCommandBuffer *commandBuffer,
@@ -4223,7 +4287,7 @@ static void D3D12_INTERNAL_BindGraphicsResources(
     if (commandBuffer->needVertexStorageTextureBind) {
         if (graphicsPipeline->vertexStorageTextureCount > 0) {
             for (Uint32 i = 0; i < graphicsPipeline->vertexStorageTextureCount; i += 1) {
-                cpuHandles[i] = commandBuffer->vertexStorageTextureSlices[i]->srvHandle.cpuHandle;
+                cpuHandles[i] = commandBuffer->vertexStorageTextureSubresources[i]->srvHandle.cpuHandle;
             }
 
             D3D12_INTERNAL_WriteGPUDescriptors(
@@ -6291,7 +6355,7 @@ static SDL_GpuCommandBuffer *D3D12_AcquireCommandBuffer(
 
     SDL_zeroa(commandBuffer->vertexSamplerTextures);
     SDL_zeroa(commandBuffer->vertexSamplers);
-    SDL_zeroa(commandBuffer->vertexStorageTextureSlices);
+    SDL_zeroa(commandBuffer->vertexStorageTextureSubresources);
     SDL_zeroa(commandBuffer->vertexStorageBuffers);
     SDL_zeroa(commandBuffer->vertexUniformBuffers);
 
