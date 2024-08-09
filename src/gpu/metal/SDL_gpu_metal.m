@@ -3929,7 +3929,7 @@ static void METAL_INTERNAL_DestroyBlitResources(
     SDL_free(renderer->blitPipelines);
 }
 
-static SDL_GpuDevice *METAL_CreateDevice(SDL_bool debugMode, SDL_bool preferLowPower)
+static SDL_GpuDevice *METAL_CreateDevice(SDL_bool debugMode, SDL_bool preferLowPower, SDL_PropertiesID props)
 {
     @autoreleasepool {
         MetalRenderer *renderer;
@@ -4028,9 +4028,9 @@ static SDL_GpuDevice *METAL_CreateDevice(SDL_bool debugMode, SDL_bool preferLowP
     }
 }
 
-SDL_GpuDriver MetalDriver = {
+SDL_GpuBootstrap MetalDriver = {
     "Metal",
-    SDL_GPU_BACKEND_METAL,
+    SDL_GPU_DRIVER_METAL,
     METAL_PrepareDriver,
     METAL_CreateDevice
 };

@@ -5906,7 +5906,7 @@ static void D3D11_INTERNAL_DestroyBlitPipelines(
     D3D11_ReleaseGraphicsPipeline(driverData, renderer->blitFrom2DArrayPipeline);
 }
 
-static SDL_GpuDevice *D3D11_CreateDevice(SDL_bool debugMode, SDL_bool preferLowPower)
+static SDL_GpuDevice *D3D11_CreateDevice(SDL_bool debugMode, SDL_bool preferLowPower, SDL_PropertiesID props)
 {
     D3D11Renderer *renderer;
     PFN_CREATE_DXGI_FACTORY1 CreateDXGIFactoryFunc;
@@ -6151,9 +6151,9 @@ tryCreateDevice:
     return result;
 }
 
-SDL_GpuDriver D3D11Driver = {
+SDL_GpuBootstrap D3D11Driver = {
     "D3D11",
-    SDL_GPU_BACKEND_D3D11,
+    SDL_GPU_DRIVER_D3D11,
     D3D11_PrepareDriver,
     D3D11_CreateDevice
 };

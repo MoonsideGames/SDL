@@ -1018,7 +1018,7 @@ extern "C" {
  *
  * \since This hint is available since SDL 3.0.0.
  */
-#define SDL_HINT_GPU_BACKEND "SDL_GPU_BACKEND"
+#define SDL_HINT_GPU_DRIVER "SDL_GPU_DRIVER"
 
 /**
  * A variable to control whether SDL_hid_enumerate() enumerates all HID

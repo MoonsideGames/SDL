@@ -363,17 +363,15 @@ typedef enum SDL_GpuSwapchainComposition
     SDL_GPU_SWAPCHAINCOMPOSITION_HDR10_ST2048
 } SDL_GpuSwapchainComposition;
 
-typedef enum SDL_GpuBackendBits
+typedef enum SDL_GpuDriver
 {
-    SDL_GPU_BACKEND_INVALID = 0,
-    SDL_GPU_BACKEND_VULKAN = 0x0000000000000001,
-    SDL_GPU_BACKEND_D3D11 = 0x0000000000000002,
-    SDL_GPU_BACKEND_METAL = 0x0000000000000004,
-    SDL_GPU_BACKEND_D3D12 = 0x0000000000000008,
-    SDL_GPU_BACKEND_ALL = (SDL_GPU_BACKEND_VULKAN | SDL_GPU_BACKEND_D3D11 | SDL_GPU_BACKEND_METAL | SDL_GPU_BACKEND_D3D12)
-} SDL_GpuBackendBits;
-
-typedef Uint64 SDL_GpuBackend;
+    SDL_GPU_DRIVER_INVALID = -1,
+    SDL_GPU_DRIVER_SECRET,
+    SDL_GPU_DRIVER_VULKAN,
+    SDL_GPU_DRIVER_D3D11,
+    SDL_GPU_DRIVER_D3D12,
+    SDL_GPU_DRIVER_METAL
+} SDL_GpuDriver;
 
 /* Structures */
 
@@ -786,24 +784,30 @@ typedef struct SDL_GpuStorageTextureReadWriteBinding
 /**
  * Creates a GPU context.
  *
- * Backends will first be checked for availability in order of bitflags passed using preferredBackends. If none of the backends are available, the remaining backends are checked as fallback renderers.
+ * These are the supported properties:
  *
- * Think of "preferred" backends as those that have pre-built shaders readily available - for example, you would set the SDL_GPU_BACKEND_VULKAN bit if your game includes SPIR-V shaders. If you generate shaders at runtime (i.e. via SDL_shader) and the library does _not_ provide you with a preferredBackends value, you should pass SDL_GPU_BACKEND_ALL so that updated versions of SDL can be aware of which backends the application was aware of at compile time. SDL_GPU_BACKEND_INVALID is an accepted value but is not recommended.
+ * - `SDL_PROP_GPU_CREATEDEVICE_NAME_STRING`: the name of the GPU driver to use, if a specific one is desired
  *
- * \param preferredBackends a bitflag containing the renderers most recognized by the application
+ * With the D3D12 renderer:
+ * - `SDL_PROP_GPU_CREATEDEVICE_D3D12_SEMANTIC_NAME_STRING`: the prefix to use for all vertex semantics, default is "TEXCOORD"
+ *
  * \param debugMode enable debug mode properties and validations
  * \param preferLowPower set this to SDL_TRUE if your app prefers energy efficiency over maximum GPU performance
+ * \param props the properties to use.
  * \returns a GPU context on success or NULL on failure
  *
  * \since This function is available since SDL 3.x.x
  *
- * \sa SDL_GpuSelectBackend
+ * \sa SDL_GpuGetDriver
  * \sa SDL_GpuDestroyDevice
  */
 extern SDL_DECLSPEC SDL_GpuDevice *SDLCALL SDL_GpuCreateDevice(
-    SDL_GpuBackend preferredBackends,
     SDL_bool debugMode,
-    SDL_bool preferLowPower);
+    SDL_bool preferLowPower,
+    SDL_PropertiesID props);
+
+#define SDL_PROP_GPU_CREATEDEVICE_NAME_STRING                 "name"
+#define SDL_PROP_GPU_CREATEDEVICE_D3D12_SEMANTIC_NAME_STRING  "d3d12.semantic"
 
 /**
  * Destroys a GPU context previously returned by SDL_GpuCreateDevice.
@@ -820,13 +824,11 @@ extern SDL_DECLSPEC void SDLCALL SDL_GpuDestroyDevice(SDL_GpuDevice *device);
  * Returns the backend used to create this GPU context.
  *
  * \param device a GPU context to query
- * \returns an SDL_GpuBackend value, or SDL_GPU_BACKEND_INVALID on error
+ * \returns an SDL_GpuDriver value, or SDL_GPU_DRIVER_INVALID on error
  *
  * \since This function is available since SDL 3.x.x
- *
- * \sa SDL_GpuSelectBackend
  */
-extern SDL_DECLSPEC SDL_GpuBackend SDLCALL SDL_GpuGetBackend(SDL_GpuDevice *device);
+extern SDL_DECLSPEC SDL_GpuDriver SDLCALL SDL_GpuGetDriver(SDL_GpuDevice *device);
 
 /* State Creation */
 

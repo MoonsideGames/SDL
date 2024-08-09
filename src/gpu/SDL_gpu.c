@@ -102,7 +102,7 @@
 
 /* Drivers */
 
-static const SDL_GpuDriver *backends[] = {
+static const SDL_GpuBootstrap *backends[] = {
 #ifdef SDL_GPU_METAL
     &MetalDriver,
 #endif
@@ -120,12 +120,12 @@ static const SDL_GpuDriver *backends[] = {
 
 /* Driver Functions */
 
-static SDL_GpuBackend SDL_GpuSelectBackend(SDL_VideoDevice *_this, SDL_GpuBackend preferredBackends)
+static SDL_GpuDriver SDL_GpuSelectBackend(SDL_VideoDevice *_this, SDL_PropertiesID props)
 {
     Uint32 i;
+    const char *gpudriver = SDL_GetStringProperty(props, SDL_PROP_GPU_CREATEDEVICE_NAME_STRING, SDL_GetHint(SDL_HINT_GPU_DRIVER));
 
-    /* Environment override... */
-    const char *gpudriver = SDL_GetHint(SDL_HINT_GPU_BACKEND);
+    /* Environment/Properties override... */
     if (gpudriver != NULL) {
         for (i = 0; backends[i]; i += 1) {
             if (SDL_strcasecmp(gpudriver, backends[i]->Name) == 0 && backends[i]->PrepareDriver(_this)) {
@@ -134,20 +134,9 @@ static SDL_GpuBackend SDL_GpuSelectBackend(SDL_VideoDevice *_this, SDL_GpuBacken
         }
 
         SDL_LogError(SDL_LOG_CATEGORY_GPU, "SDL_HINT_GPU_BACKEND %s unsupported!", gpudriver);
-        return SDL_GPU_BACKEND_INVALID;
+        return SDL_GPU_DRIVER_INVALID;
     }
 
-    /* Preferred backends... */
-    if (preferredBackends != SDL_GPU_BACKEND_INVALID) {
-        for (i = 0; backends[i]; i += 1) {
-            if ((preferredBackends & backends[i]->backendflag) && backends[i]->PrepareDriver(_this)) {
-                return backends[i]->backendflag;
-            }
-        }
-        SDL_LogWarn(SDL_LOG_CATEGORY_GPU, "No preferred SDL_Gpu backend found!");
-    }
-
-    /* ... Fallback backends */
     for (i = 0; backends[i]; i += 1) {
         if (backends[i]->PrepareDriver(_this)) {
             return backends[i]->backendflag;
@@ -155,17 +144,17 @@ static SDL_GpuBackend SDL_GpuSelectBackend(SDL_VideoDevice *_this, SDL_GpuBacken
     }
 
     SDL_LogError(SDL_LOG_CATEGORY_GPU, "No supported SDL_Gpu backend found!");
-    return SDL_GPU_BACKEND_INVALID;
+    return SDL_GPU_DRIVER_INVALID;
 }
 
 SDL_GpuDevice *SDL_GpuCreateDevice(
-    SDL_GpuBackend preferredBackends,
     SDL_bool debugMode,
-    SDL_bool preferLowPower)
+    SDL_bool preferLowPower,
+    SDL_PropertiesID props)
 {
     int i;
     SDL_GpuDevice *result = NULL;
-    SDL_GpuBackend selectedBackend;
+    SDL_GpuDriver selectedBackend;
     SDL_VideoDevice *_this = SDL_GetVideoDevice();
 
     if (_this == NULL) {
@@ -173,11 +162,11 @@ SDL_GpuDevice *SDL_GpuCreateDevice(
         return NULL;
     }
 
-    selectedBackend = SDL_GpuSelectBackend(_this, preferredBackends);
-    if (selectedBackend != SDL_GPU_BACKEND_INVALID) {
+    selectedBackend = SDL_GpuSelectBackend(_this, props);
+    if (selectedBackend != SDL_GPU_DRIVER_INVALID) {
         for (i = 0; backends[i]; i += 1) {
             if (backends[i]->backendflag == selectedBackend) {
-                result = backends[i]->CreateDevice(debugMode, preferLowPower);
+                result = backends[i]->CreateDevice(debugMode, preferLowPower, props);
                 if (result != NULL) {
                     result->backend = backends[i]->backendflag;
                     result->debugMode = debugMode;
@@ -196,9 +185,9 @@ void SDL_GpuDestroyDevice(SDL_GpuDevice *device)
     device->DestroyDevice(device);
 }
 
-SDL_GpuBackend SDL_GpuGetBackend(SDL_GpuDevice *device)
+SDL_GpuDriver SDL_GpuGetDriver(SDL_GpuDevice *device)
 {
-    CHECK_DEVICE_MAGIC(device, SDL_GPU_BACKEND_INVALID);
+    CHECK_DEVICE_MAGIC(device, SDL_GPU_DRIVER_INVALID);
 
     return device->backend;
 }

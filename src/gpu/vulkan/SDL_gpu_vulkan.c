@@ -11545,7 +11545,7 @@ static SDL_bool VULKAN_PrepareDriver(SDL_VideoDevice *_this)
     return result;
 }
 
-static SDL_GpuDevice *VULKAN_CreateDevice(SDL_bool debugMode, SDL_bool preferLowPower)
+static SDL_GpuDevice *VULKAN_CreateDevice(SDL_bool debugMode, SDL_bool preferLowPower, SDL_PropertiesID props)
 {
     VulkanRenderer *renderer;
 
@@ -11786,9 +11786,9 @@ static SDL_GpuDevice *VULKAN_CreateDevice(SDL_bool debugMode, SDL_bool preferLow
     return result;
 }
 
-SDL_GpuDriver VulkanDriver = {
+SDL_GpuBootstrap VulkanDriver = {
     "Vulkan",
-    SDL_GPU_BACKEND_VULKAN,
+    SDL_GPU_DRIVER_VULKAN,
     VULKAN_PrepareDriver,
     VULKAN_CreateDevice
 };

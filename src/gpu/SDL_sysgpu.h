@@ -572,8 +572,8 @@ struct SDL_GpuDevice
     /* Opaque pointer for the Driver */
     SDL_GpuRenderer *driverData;
 
-    /* Store this for SDL_GpuGetBackend() */
-    SDL_GpuBackend backend;
+    /* Store this for SDL_GpuGetDriver() */
+    SDL_GpuDriver backend;
 
     /* Store this for SDL_gpu.c's debug layer */
     SDL_bool debugMode;
@@ -658,23 +658,23 @@ struct SDL_GpuDevice
     ASSIGN_DRIVER_FUNC(SupportsTextureFormat, name)      \
     ASSIGN_DRIVER_FUNC(GetBestSampleCount, name)
 
-typedef struct SDL_GpuDriver
+typedef struct SDL_GpuBootstrap
 {
     const char *Name;
-    const SDL_GpuBackend backendflag;
+    const SDL_GpuDriver backendflag;
     SDL_bool (*PrepareDriver)(SDL_VideoDevice *_this);
-    SDL_GpuDevice *(*CreateDevice)(SDL_bool debugMode, SDL_bool preferLowPower);
-} SDL_GpuDriver;
+    SDL_GpuDevice *(*CreateDevice)(SDL_bool debugMode, SDL_bool preferLowPower, SDL_PropertiesID props);
+} SDL_GpuBootstrap;
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-extern SDL_GpuDriver VulkanDriver;
-extern SDL_GpuDriver D3D11Driver;
-extern SDL_GpuDriver D3D12Driver;
-extern SDL_GpuDriver MetalDriver;
-extern SDL_GpuDriver PS5Driver;
+extern SDL_GpuBootstrap VulkanDriver;
+extern SDL_GpuBootstrap D3D11Driver;
+extern SDL_GpuBootstrap D3D12Driver;
+extern SDL_GpuBootstrap MetalDriver;
+extern SDL_GpuBootstrap PS5Driver;
 
 #ifdef __cplusplus
 }

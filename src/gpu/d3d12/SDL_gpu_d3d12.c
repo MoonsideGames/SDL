@@ -485,6 +485,7 @@ struct D3D12Renderer
     void *d3d12_dll;
     ID3D12Device *device;
     PFN_D3D12_SERIALIZE_ROOT_SIGNATURE D3D12SerializeRootSignature_func;
+    const char *semantic;
 
     ID3D12CommandQueue *commandQueue;
 
@@ -2339,7 +2340,7 @@ static SDL_bool D3D12_INTERNAL_ConvertDepthStencilState(SDL_GpuDepthStencilState
     return SDL_TRUE;
 }
 
-static SDL_bool D3D12_INTERNAL_ConvertVertexInputState(SDL_GpuVertexInputState vertexInputState, D3D12_INPUT_ELEMENT_DESC *desc)
+static SDL_bool D3D12_INTERNAL_ConvertVertexInputState(SDL_GpuVertexInputState vertexInputState, D3D12_INPUT_ELEMENT_DESC *desc, const char *semantic)
 {
     if (desc == NULL || vertexInputState.vertexAttributeCount == 0) {
         return SDL_FALSE;
@@ -2348,7 +2349,7 @@ static SDL_bool D3D12_INTERNAL_ConvertVertexInputState(SDL_GpuVertexInputState v
     for (Uint32 i = 0; i < vertexInputState.vertexAttributeCount; i += 1) {
         SDL_GpuVertexAttribute attribute = vertexInputState.vertexAttributes[i];
 
-        desc[i].SemanticName = "TEXCOORD"; // Default to TEXCOORD, can be adjusted as needed
+        desc[i].SemanticName = semantic;
         desc[i].SemanticIndex = attribute.location;
         desc[i].Format = SDLToD3D12_VertexFormat[attribute.format];
         desc[i].InputSlot = attribute.binding;
@@ -2411,7 +2412,7 @@ static SDL_GpuGraphicsPipeline *D3D12_CreateGraphicsPipeline(
     if (pipelineCreateInfo->vertexInputState.vertexAttributeCount > 0) {
         psoDesc.InputLayout.pInputElementDescs = inputElementDescs;
         psoDesc.InputLayout.NumElements = pipelineCreateInfo->vertexInputState.vertexAttributeCount;
-        D3D12_INTERNAL_ConvertVertexInputState(pipelineCreateInfo->vertexInputState, inputElementDescs);
+        D3D12_INTERNAL_ConvertVertexInputState(pipelineCreateInfo->vertexInputState, inputElementDescs, renderer->semantic);
     }
 
     psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
@@ -7283,7 +7284,7 @@ static void D3D12_INTERNAL_TryInitializeD3D12DebugInfoQueue(D3D12Renderer *rende
     ID3D12InfoQueue_Release(infoQueue);
 }
 
-static SDL_GpuDevice *D3D12_CreateDevice(SDL_bool debugMode, SDL_bool preferLowPower)
+static SDL_GpuDevice *D3D12_CreateDevice(SDL_bool debugMode, SDL_bool preferLowPower, SDL_PropertiesID props)
 {
     SDL_GpuDevice *result;
     D3D12Renderer *renderer;
@@ -7674,6 +7675,8 @@ static SDL_GpuDevice *D3D12_CreateDevice(SDL_bool debugMode, SDL_bool preferLowP
         return NULL;
     }
 
+    renderer->semantic = SDL_GetStringProperty(props, SDL_PROP_GPU_CREATEDEVICE_D3D12_SEMANTIC_NAME_STRING, "TEXCOORD");
+
     ASSIGN_DRIVER(D3D12)
     result->driverData = (SDL_GpuRenderer *)renderer;
     result->debugMode = debugMode;
@@ -7681,9 +7684,9 @@ static SDL_GpuDevice *D3D12_CreateDevice(SDL_bool debugMode, SDL_bool preferLowP
     return result;
 }
 
-SDL_GpuDriver D3D12Driver = {
+SDL_GpuBootstrap D3D12Driver = {
     "D3D12",
-    SDL_GPU_BACKEND_D3D12,
+    SDL_GPU_DRIVER_D3D12,
     D3D12_PrepareDriver,
     D3D12_CreateDevice
 };

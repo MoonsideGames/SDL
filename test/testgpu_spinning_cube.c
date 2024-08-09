@@ -421,14 +421,14 @@ load_shader(SDL_bool is_vertex)
     createinfo.uniformBufferCount = is_vertex ? 1 : 0;
 
 #if !FORCE_SPIRV_CROSS
-    SDL_GpuBackend backend = SDL_GpuGetBackend(gpu_device);
-    if (backend == SDL_GPU_BACKEND_D3D11) {
+    SDL_GpuDriver backend = SDL_GpuGetDriver(gpu_device);
+    if (backend == SDL_GPU_DRIVER_D3D11) {
         createinfo.format = SDL_GPU_SHADERFORMAT_DXBC;
         createinfo.code = is_vertex ? g_vert_main : g_frag_main;
         createinfo.codeSize = is_vertex ? SDL_arraysize(g_vert_main) : SDL_arraysize(g_frag_main);
         createinfo.entryPointName = "main";
     }
-    else if (backend == SDL_GPU_BACKEND_METAL) {
+    else if (backend == SDL_GPU_DRIVER_METAL) {
         createinfo.format = SDL_GPU_SHADERFORMAT_METALLIB;
         createinfo.code = is_vertex ? cube_vert_metallib : cube_frag_metallib;
         createinfo.codeSize = is_vertex ? cube_vert_metallib_len : cube_frag_metallib_len;
@@ -463,9 +463,11 @@ init_render_state(int msaa)
     SDL_GpuVertexBinding vertex_binding;
     SDL_GpuShader *vertex_shader;
     SDL_GpuShader *fragment_shader;
+    SDL_PropertiesID props;
     int i;
 
-    gpu_device = SDL_GpuCreateDevice(SDL_GPU_BACKEND_ALL, 1, 0);
+    props = SDL_CreateProperties(); /* TODO: Arg to allow forcing a backend */
+    gpu_device = SDL_GpuCreateDevice(1, 0, props);
     CHECK_CREATE(gpu_device, "GPU device");
 
     /* Claim the windows */
