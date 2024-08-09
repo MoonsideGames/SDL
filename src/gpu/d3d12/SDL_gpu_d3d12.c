@@ -361,6 +361,7 @@ typedef struct D3D12Buffer D3D12Buffer;
 typedef struct D3D12BufferContainer D3D12BufferContainer;
 typedef struct D3D12UniformBuffer D3D12UniformBuffer;
 typedef struct D3D12DescriptorHeap D3D12DescriptorHeap;
+typedef struct D3D12TextureDownload D3D12TextureDownload;
 
 typedef struct D3D12Fence
 {
@@ -646,6 +647,11 @@ struct D3D12CommandBuffer
     D3D12ComputePipeline **usedComputePipelines;
     Uint32 usedComputePipelineCount;
     Uint32 usedComputePipelineCapacity;
+
+    /* Used for texture pitch hack */
+    D3D12TextureDownload **textureDownloads;
+    Uint32 textureDownloadCount;
+    Uint32 textureDownloadCapacity;
 };
 
 struct D3D12Shader
@@ -728,7 +734,7 @@ struct D3D12ComputePipeline
     SDL_AtomicInt referenceCount;
 };
 
-typedef struct D3D12TextureDownload
+struct D3D12TextureDownload
 {
     D3D12Buffer *destinationBuffer;
     D3D12Buffer *temporaryBuffer;
@@ -738,7 +744,8 @@ typedef struct D3D12TextureDownload
     Uint32 bufferOffset;
     Uint32 bytesPerRow;
     Uint32 bytesPerDepthSlice;
-} D3D12TextureDownload;
+    Uint32 alignedBytesPerRow;
+};
 
 struct D3D12Buffer
 {
@@ -4933,20 +4940,18 @@ static void D3D12_UploadToTexture(
      * Instead of exposing that restriction to the client, which is a huge rake to step on,
      * and a restriction that no other backend requires, we're going to copy data to a temporary buffer,
      * copy THAT data to the texture, and then get rid of the temporary buffer ASAP.
-     * If we're lucky and the row pitch is already aligned, we can skip all of that.
+     * If we're lucky and the row pitch and depth pitch are already aligned, we can skip all of that.
      *
      * D3D12 also requires offsets to be 512 byte aligned. We'll fix that for the client and warn them as well.
      *
-     * And just for some extra fun, D3D12 doesn't support depth pitch, so we have to realign that too!
+     * And just for some extra fun, D3D12 doesn't actually support depth pitch, so we have to realign that too!
      */
 
     if (pixelsPerRow == 0) {
         pixelsPerRow = destination->w;
     }
 
-    if (rowPitch == 0) {
-        rowPitch = BytesPerRow(destination->w, textureContainer->header.info.format);
-    }
+    rowPitch = BytesPerRow(pixelsPerRow, textureContainer->header.info.format);
 
     if (rowsPerSlice == 0) {
         rowsPerSlice = destination->h;
@@ -4966,7 +4971,7 @@ static void D3D12_UploadToTexture(
     destinationLocation.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
     destinationLocation.SubresourceIndex = textureSubresource->index;
 
-    if (needsRealignment || destination->h != source->imageHeight) {
+    if (needsRealignment) {
         temporaryBuffer = D3D12_INTERNAL_CreateBuffer(
             d3d12CommandBuffer->renderer,
             0,
@@ -4989,7 +4994,7 @@ static void D3D12_UploadToTexture(
             }
 
             sourceLocation.PlacedFootprint.Footprint.Width = destination->w;
-            sourceLocation.PlacedFootprint.Footprint.Height = destination->h;
+            sourceLocation.PlacedFootprint.Footprint.Height = source->imageHeight;
             sourceLocation.PlacedFootprint.Footprint.Depth = 1;
             sourceLocation.PlacedFootprint.Offset = (sliceIndex * bytesPerSlice);
 
@@ -5231,12 +5236,14 @@ static void D3D12_DownloadFromTexture(
     D3D12Renderer *renderer = d3d12CommandBuffer->renderer;
     D3D12_TEXTURE_COPY_LOCATION sourceLocation;
     D3D12_TEXTURE_COPY_LOCATION destinationLocation;
-    Uint32 rowPitch = destination->imagePitch;
+    Uint32 pixelsPerRow = destination->imagePitch;
+    Uint32 rowPitch;
     Uint32 alignedRowPitch;
-    Uint32 imageHeight = destination->imageHeight;
-
+    Uint32 rowsPerSlice = destination->imageHeight;
+    Uint32 bytesPerSlice;
     SDL_bool needsRealignment;
-    SDL_bool needsAlignmentCopy;
+    SDL_bool needsPlacementCopy;
+    D3D12TextureDownload *textureDownload = NULL;
     HRESULT res;
     D3D12TextureContainer *sourceContainer = (D3D12TextureContainer *)source->textureSlice.texture;
     D3D12TextureSubresource *sourceSubresource = D3D12_INTERNAL_FetchTextureSubresource(
@@ -5249,30 +5256,42 @@ static void D3D12_DownloadFromTexture(
         destinationContainer,
         SDL_FALSE,
         D3D12_RESOURCE_STATE_COPY_DEST);
-    D3D12TextureDownload *textureDownload = NULL;
 
-    if (rowPitch == 0) {
-        rowPitch = BytesPerRow(source->w, sourceContainer->header.info.format);
+    /* D3D12 requires texture data row pitch to be 256 byte aligned, which is obviously insane.
+     * Instead of exposing that restriction to the client, which is a huge rake to step on,
+     * and a restriction that no other backend requires, we're going to copy data to a temporary buffer,
+     * copy THAT data to the texture, and then get rid of the temporary buffer ASAP.
+     * If we're lucky and the row pitch and depth pitch are already aligned, we can skip all of that.
+     *
+     * D3D12 also requires offsets to be 512 byte aligned. We'll fix that for the client and warn them as well.
+     *
+     * And just for some extra fun, D3D12 doesn't actually support depth pitch, so we have to realign that too!
+     *
+     * Since this is an async download we have to do all these fixups after the command is finished,
+     * so we'll cache the metadata similar to D3D11 and map and copy it when the command buffer is cleaned.
+     */
+
+    if (pixelsPerRow == 0) {
+        pixelsPerRow = source->w;
     }
 
+    rowPitch = BytesPerRow(pixelsPerRow, sourceContainer->header.info.format);
+
+    if (rowsPerSlice == 0) {
+        rowsPerSlice = source->h;
+    }
+
+    bytesPerSlice = rowsPerSlice * rowPitch;
+
     alignedRowPitch = D3D12_INTERNAL_Align(rowPitch, D3D12_TEXTURE_DATA_PITCH_ALIGNMENT);
-    needsRealignment = rowPitch != alignedRowPitch;
-    needsAlignmentCopy = destination->offset % D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT != 0;
+    needsRealignment = rowsPerSlice != source->h && rowPitch != alignedRowPitch;
+    needsPlacementCopy = destination->offset % D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT != 0;
 
     sourceLocation.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
     sourceLocation.SubresourceIndex = sourceSubresource->index;
     sourceLocation.pResource = sourceSubresource->parent->resource;
 
     D3D12_BOX sourceBox = { source->x, source->y, source->z, source->x + source->w, source->y + source->h, source->z + source->d };
-
-    /* D3D12 requires texture data row pitch to be 256 byte aligned, which is obviously insane.
-     * Instead of exposing that restriction to the client, which is a huge rake to step on,
-     * and a restriction that no other backend requires, we're going to copy data to a temporary buffer,
-     * copy THAT data to the texture, and then get rid of the temporary buffer ASAP.
-     * If we're lucky and the row pitch is already aligned, we can skip all of that.
-     *
-     * D3D12 also requires offsets to be 512 byte aligned. We'll fix that for the client and warn them as well.
-     */
 
     destinationLocation.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
     destinationLocation.PlacedFootprint.Footprint.Format = SDLToD3D12_TextureFormat[sourceContainer->header.info.format];
@@ -5281,7 +5300,7 @@ static void D3D12_DownloadFromTexture(
     destinationLocation.PlacedFootprint.Footprint.Depth = source->d;
     destinationLocation.PlacedFootprint.Footprint.RowPitch = alignedRowPitch;
 
-    if (needsRealignment || needsAlignmentCopy) {
+    if (needsRealignment || needsPlacementCopy) {
         textureDownload = SDL_malloc(sizeof(D3D12TextureDownload));
 
         if (!textureDownload) {
@@ -5292,7 +5311,7 @@ static void D3D12_DownloadFromTexture(
         textureDownload->temporaryBuffer = D3D12_INTERNAL_CreateBuffer(
             d3d12CommandBuffer->renderer,
             0,
-            alignedRowPitch * source->h * source->d,
+            alignedRowPitch * rowsPerSlice * source->d,
             D3D12_BUFFER_TYPE_DOWNLOAD);
 
         if (!textureDownload->temporaryBuffer) {
@@ -5304,10 +5323,11 @@ static void D3D12_DownloadFromTexture(
         textureDownload->destinationBuffer = destinationBuffer;
         textureDownload->bufferOffset = destination->offset;
         textureDownload->width = source->w;
-        textureDownload->height = source->h;
+        textureDownload->height = rowsPerSlice;
         textureDownload->depth = source->d;
         textureDownload->bytesPerRow = rowPitch;
         textureDownload->bytesPerDepthSlice = rowPitch * destination->imageHeight;
+        textureDownload->alignedBytesPerRow = alignedRowPitch;
 
         destinationLocation.pResource = textureDownload->temporaryBuffer->handle;
         destinationLocation.PlacedFootprint.Offset = 0;
@@ -5319,7 +5339,7 @@ static void D3D12_DownloadFromTexture(
     D3D12_INTERNAL_BufferTransitionFromDefaultUsage(
         d3d12CommandBuffer,
         D3D12_RESOURCE_STATE_COPY_SOURCE,
-        temporaryBuffer == NULL ? destinationBuffer : temporaryBuffer);
+        textureDownload == NULL ? destinationBuffer : textureDownload->temporaryBuffer);
 
     ID3D12GraphicsCommandList_CopyTextureRegion(
         d3d12CommandBuffer->graphicsCommandList,
@@ -5338,13 +5358,23 @@ static void D3D12_DownloadFromTexture(
     D3D12_INTERNAL_BufferTransitionToDefaultUsage(
         d3d12CommandBuffer,
         D3D12_RESOURCE_STATE_COPY_DEST,
-        temporaryBuffer == NULL ? destinationBuffer : temporaryBuffer);
+        textureDownload == NULL ? destinationBuffer : textureDownload->temporaryBuffer);
 
     D3D12_INTERNAL_TrackBuffer(d3d12CommandBuffer, destinationBuffer);
     D3D12_INTERNAL_TrackTextureSubresource(d3d12CommandBuffer, sourceSubresource);
 
-    if (temporaryBuffer != NULL) {
-        D3D12_INTERNAL_TrackBuffer(d3d12CommandBuffer, temporaryBuffer);
+    if (textureDownload != NULL) {
+        D3D12_INTERNAL_TrackBuffer(d3d12CommandBuffer, textureDownload->temporaryBuffer);
+
+        if (d3d12CommandBuffer->textureDownloadCount >= d3d12CommandBuffer->textureDownloadCapacity) {
+            d3d12CommandBuffer->textureDownloadCapacity *= 2;
+            d3d12CommandBuffer->textureDownloads = SDL_realloc(
+                d3d12CommandBuffer->textureDownloads,
+                d3d12CommandBuffer->textureDownloadCapacity * sizeof(D3D12TextureDownload *));
+        }
+
+        d3d12CommandBuffer->textureDownloads[d3d12CommandBuffer->textureDownloadCount] = textureDownload;
+        d3d12CommandBuffer->textureDownloadCount += 1;
     }
 }
 
@@ -6138,6 +6168,11 @@ static void D3D12_INTERNAL_AllocateCommandBuffer(
     commandBuffer->usedUniformBuffers = (D3D12UniformBuffer **)SDL_calloc(
         commandBuffer->usedUniformBufferCapacity, sizeof(D3D12UniformBuffer *));
 
+    commandBuffer->textureDownloadCapacity = 4;
+    commandBuffer->textureDownloadCount = 0;
+    commandBuffer->textureDownloads = SDL_calloc(
+        commandBuffer->textureDownloadCapacity, sizeof(D3D12TextureDownload *));
+
     if (
         (!commandBuffer->presentDatas) ||
         (!commandBuffer->usedTextureSubresources) ||
@@ -6145,7 +6180,8 @@ static void D3D12_INTERNAL_AllocateCommandBuffer(
         (!commandBuffer->usedSamplers) ||
         (!commandBuffer->usedGraphicsPipelines) ||
         (!commandBuffer->usedComputePipelines) ||
-        (!commandBuffer->usedUniformBuffers)) {
+        (!commandBuffer->usedUniformBuffers) ||
+        (!commandBuffer->textureDownloads)) {
         SDL_LogError(SDL_LOG_CATEGORY_GPU, "Failed to create ID3D12CommandList. Out of Memory");
         D3D12_INTERNAL_DestroyCommandBuffer(commandBuffer);
         return;
@@ -6410,12 +6446,55 @@ static void D3D12_INTERNAL_PerformPendingDestroys(D3D12Renderer *renderer)
     SDL_UnlockMutex(renderer->disposeLock);
 }
 
+static void D3D12_INTERNAL_CopyTextureDownload(
+    D3D12CommandBuffer *commandBuffer,
+    D3D12TextureDownload *download)
+{
+    Uint8 *dataPtr;
+    HRESULT res;
+
+    res = ID3D12Resource_Map(
+        download->temporaryBuffer->handle,
+        0,
+        NULL,
+        &dataPtr);
+
+    if (FAILED(res)) {
+        SDL_LogError(SDL_LOG_CATEGORY_GPU, "Failed to map temporary buffer!");
+        return;
+    }
+
+    for (Uint32 sliceIndex = 0; sliceIndex < download->depth; sliceIndex += 1) {
+        for (Uint32 rowIndex = 0; rowIndex < download->height; rowIndex += 1) {
+            SDL_memcpy(
+                download->destinationBuffer->mapPointer + download->bufferOffset + (sliceIndex * download->bytesPerDepthSlice) + (rowIndex * download->bytesPerRow),
+                dataPtr + (sliceIndex * download->height) + (rowIndex * download->alignedBytesPerRow),
+                download->bytesPerRow);
+        }
+    }
+
+    ID3D12Resource_Unmap(
+        download->temporaryBuffer->handle,
+        0,
+        NULL);
+}
+
 static void D3D12_INTERNAL_CleanCommandBuffer(
     D3D12Renderer *renderer,
     D3D12CommandBuffer *commandBuffer)
 {
     Uint32 i;
     HRESULT res;
+
+    /* Perform deferred texture data copies */
+
+    for (i = 0; i < commandBuffer->textureDownloadCount; i += 1) {
+        D3D12_INTERNAL_CopyTextureDownload(
+            commandBuffer,
+            commandBuffer->textureDownloads[i]);
+        SDL_free(commandBuffer->textureDownloads[i]);
+    }
+    commandBuffer->textureDownloadCount = 0;
 
     res = ID3D12CommandAllocator_Reset(commandBuffer->commandAllocator);
     ERROR_CHECK("Could not reset command allocator")
