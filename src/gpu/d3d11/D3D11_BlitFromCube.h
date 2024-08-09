@@ -12,7 +12,7 @@
 //   float2 regionOrigin;               // Offset:    8 Size:     8
 //   float2 regionSize;                 // Offset:   16 Size:     8
 //   uint mipLevel;                     // Offset:   24 Size:     4
-//   uint layer;                        // Offset:   28 Size:     4 [unused]
+//   uint layer;                        // Offset:   28 Size:     4
 //
 // }
 //
@@ -22,7 +22,7 @@
 // Name                                 Type  Format         Dim      HLSL Bind  Count
 // ------------------------------ ---------- ------- ----------- -------------- ------
 // SourceSampler                     sampler      NA          NA             s0      1 
-// Source                            texture  float4          2d             t0      1 
+// Source                            texture  float4        cube             t0      1 
 // BlitParams                        cbuffer      NA          NA            cb0      1 
 //
 //
@@ -44,24 +44,24 @@ ps_5_0
 dcl_globalFlags refactoringAllowed
 dcl_constantbuffer CB0[2], immediateIndexed
 dcl_sampler s0, mode_default
-dcl_resource_texture2d (float,float,float,float) t0
+dcl_resource_texturecube (float,float,float,float) t0
 dcl_input_ps linear v0.xy
 dcl_output o0.xyzw
 dcl_temps 1
 mad r0.xy, v0.xyxx, cb0[1].xyxx, cb0[0].zwzz
 div r0.xy, r0.xyxx, cb0[0].xyxx
-utof r0.z, cb0[1].z
-sample_l_indexable(texture2d)(float,float,float,float) o0.xyzw, r0.xyxx, t0.xyzw, s0, r0.z
+utof r0.zw, cb0[1].wwwz
+sample_l_indexable(texturecube)(float,float,float,float) o0.xyzw, r0.xyzx, t0.xyzw, s0, r0.w
 ret 
 // Approximately 5 instruction slots used
 #endif
 
 const BYTE g_main[] =
 {
-     68,  88,  66,  67, 178, 123, 
-     31,  33,  81, 170, 242, 103, 
-    142,  58,  36, 242, 238,   4, 
-     99, 211,   1,   0,   0,   0, 
+     68,  88,  66,  67, 216, 116, 
+     38,  52,  41, 220,   1, 157, 
+    180, 240,  22, 227,  27, 235, 
+      1, 228,   1,   0,   0,   0, 
     140,   4,   0,   0,   5,   0, 
       0,   0,  52,   0,   0,   0, 
     140,   2,   0,   0, 192,   2, 
@@ -85,7 +85,7 @@ const BYTE g_main[] =
       1,   0,   0,   0,   1,   0, 
       0,   0, 170,   0,   0,   0, 
       2,   0,   0,   0,   5,   0, 
-      0,   0,   4,   0,   0,   0, 
+      0,   0,   9,   0,   0,   0, 
     255, 255, 255, 255,   0,   0, 
       0,   0,   1,   0,   0,   0, 
      13,   0,   0,   0, 177,   0, 
@@ -132,7 +132,7 @@ const BYTE g_main[] =
     255, 255,   0,   0,   0,   0, 
      32,   2,   0,   0,  28,   0, 
       0,   0,   4,   0,   0,   0, 
-      0,   0,   0,   0, 252,   1, 
+      2,   0,   0,   0, 252,   1, 
       0,   0,   0,   0,   0,   0, 
     255, 255, 255, 255,   0,   0, 
       0,   0, 255, 255, 255, 255, 
@@ -192,7 +192,7 @@ const BYTE g_main[] =
       0,   0,   2,   0,   0,   0, 
      90,   0,   0,   3,   0,  96, 
      16,   0,   0,   0,   0,   0, 
-     88,  24,   0,   4,   0, 112, 
+     88,  48,   0,   4,   0, 112, 
      16,   0,   0,   0,   0,   0, 
      85,  85,   0,   0,  98,  16, 
       0,   3,  50,  16,  16,   0, 
@@ -213,18 +213,18 @@ const BYTE g_main[] =
       0,   0,   0,   0,  70, 128, 
      32,   0,   0,   0,   0,   0, 
       0,   0,   0,   0,  86,   0, 
-      0,   6,  66,   0,  16,   0, 
-      0,   0,   0,   0,  42, 128, 
+      0,   6, 194,   0,  16,   0, 
+      0,   0,   0,   0, 246, 139, 
      32,   0,   0,   0,   0,   0, 
       1,   0,   0,   0,  72,   0, 
-      0, 141, 194,   0,   0, 128, 
+      0, 141, 130,   1,   0, 128, 
      67,  85,  21,   0, 242,  32, 
      16,   0,   0,   0,   0,   0, 
-     70,   0,  16,   0,   0,   0, 
+     70,   2,  16,   0,   0,   0, 
       0,   0,  70, 126,  16,   0, 
       0,   0,   0,   0,   0,  96, 
      16,   0,   0,   0,   0,   0, 
-     42,   0,  16,   0,   0,   0, 
+     58,   0,  16,   0,   0,   0, 
       0,   0,  62,   0,   0,   1, 
      83,  84,  65,  84, 148,   0, 
       0,   0,   5,   0,   0,   0, 
