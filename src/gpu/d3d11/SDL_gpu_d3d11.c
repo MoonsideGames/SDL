@@ -2786,7 +2786,7 @@ static void D3D11_DownloadFromTexture(
     Uint32 bufferStride = destination->imagePitch;
     Uint32 bufferImageHeight = destination->imageHeight;
     Uint32 bytesPerRow, bytesPerDepthSlice;
-    D3D11_BOX srcBox = { source->x, source->y, source->z, source->x + source->w, source->y + source->h, 1 };
+    D3D11_BOX srcBox = { source->x, source->y, source->z, source->x + source->w, source->y + source->h, source->z + source->d };
     HRESULT res;
 
     if (d3d11TransferBuffer->textureDownloadCount >= d3d11TransferBuffer->textureDownloadCapacity) {
@@ -2939,7 +2939,7 @@ static void D3D11_CopyTextureToTexture(
     D3D11TextureContainer *srcContainer = (D3D11TextureContainer *)source->textureSlice.texture;
     D3D11TextureContainer *dstContainer = (D3D11TextureContainer *)destination->textureSlice.texture;
 
-    D3D11_BOX srcBox = { source->x, source->y, source->z, source->x + w, source->y + h, 1 };
+    D3D11_BOX srcBox = { source->x, source->y, source->z, source->x + w, source->y + h, source->z + d };
 
     D3D11TextureSubresource *srcSubresource = D3D11_INTERNAL_FetchTextureSubresource(
         srcContainer,
@@ -4548,7 +4548,7 @@ static void D3D11_INTERNAL_MapAndCopyTextureDownload(
         D3D11_MAP_READ,
         0,
         &subres);
-    ERROR_CHECK_RETURN("Could not map staging textre", )
+    ERROR_CHECK_RETURN("Could not map staging texture", )
 
     for (depth = 0; depth < textureDownload->depth; depth += 1) {
         dataPtrOffset = textureDownload->bufferOffset + (depth * textureDownload->bytesPerDepthSlice);
