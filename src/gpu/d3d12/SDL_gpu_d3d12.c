@@ -5245,7 +5245,6 @@ static void D3D12_DownloadFromTexture(
     SDL_bool needsRealignment;
     SDL_bool needsPlacementCopy;
     D3D12TextureDownload *textureDownload = NULL;
-    HRESULT res;
     D3D12TextureContainer *sourceContainer = (D3D12TextureContainer *)source->textureSlice.texture;
     D3D12TextureSubresource *sourceSubresource = D3D12_INTERNAL_FetchTextureSubresource(
         sourceContainer,
