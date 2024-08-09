@@ -995,7 +995,7 @@ static SDL_GpuGraphicsPipeline *METAL_CreateGraphicsPipeline(
 
         /* Multisample */
 
-        pipelineDescriptor.rasterSampleCount = SDLToMetal_SampleCount[pipelineCreateInfo->multisampleState.multisampleCount];
+        pipelineDescriptor.rasterSampleCount = SDLToMetal_SampleCount[pipelineCreateInfo->multisampleState.sampleCount];
 
         /* Depth Stencil */
 
@@ -2903,7 +2903,7 @@ static SDL_GpuGraphicsPipeline *METAL_INTERNAL_FetchBlitPipeline(
     blitPipelineCreateInfo.vertexShader = renderer->fullscreenVertexShader;
     blitPipelineCreateInfo.fragmentShader = renderer->blitFrom2DPixelShader;
 
-    blitPipelineCreateInfo.multisampleState.multisampleCount = SDL_GPU_SAMPLECOUNT_1;
+    blitPipelineCreateInfo.multisampleState.sampleCount = SDL_GPU_SAMPLECOUNT_1;
     blitPipelineCreateInfo.multisampleState.sampleMask = 0xFFFFFFFF;
 
     blitPipelineCreateInfo.primitiveType = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST;

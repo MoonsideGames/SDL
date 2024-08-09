@@ -590,7 +590,7 @@ typedef struct SDL_GpuRasterizerState
 
 typedef struct SDL_GpuMultisampleState
 {
-    SDL_GpuSampleCount multisampleCount;
+    SDL_GpuSampleCount sampleCount;
     Uint32 sampleMask;
 } SDL_GpuMultisampleState;
 

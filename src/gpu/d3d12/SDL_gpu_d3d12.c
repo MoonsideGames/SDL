@@ -2432,7 +2432,7 @@ static SDL_GpuGraphicsPipeline *D3D12_CreateGraphicsPipeline(
     }
 
     psoDesc.SampleMask = UINT_MAX;
-    psoDesc.SampleDesc.Count = SDLToD3D12_SampleCount[pipelineCreateInfo->multisampleState.multisampleCount];
+    psoDesc.SampleDesc.Count = SDLToD3D12_SampleCount[pipelineCreateInfo->multisampleState.sampleCount];
     psoDesc.SampleDesc.Quality = 0;
 
     psoDesc.DSVFormat = SDLToD3D12_TextureFormat[pipelineCreateInfo->attachmentInfo.depthStencilFormat];
@@ -7015,7 +7015,7 @@ static void D3D12_INTERNAL_InitBlitPipelines(
     blitPipelineCreateInfo.vertexShader = fullscreenVertexShader;
     blitPipelineCreateInfo.fragmentShader = blitFrom2DPixelShader;
 
-    blitPipelineCreateInfo.multisampleState.multisampleCount = SDL_GPU_SAMPLECOUNT_1;
+    blitPipelineCreateInfo.multisampleState.sampleCount = SDL_GPU_SAMPLECOUNT_1;
     blitPipelineCreateInfo.multisampleState.sampleMask = 0xFFFFFFFF;
 
     blitPipelineCreateInfo.primitiveType = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST;

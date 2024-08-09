@@ -553,7 +553,7 @@ init_render_state(int msaa)
     pipelinedesc.depthStencilState.depthWriteEnable = 1;
     pipelinedesc.depthStencilState.compareOp = SDL_GPU_COMPAREOP_LESS_OR_EQUAL;
 
-    pipelinedesc.multisampleState.multisampleCount = render_state.sample_count;
+    pipelinedesc.multisampleState.sampleCount = render_state.sample_count;
     pipelinedesc.multisampleState.sampleMask = 0xF;
 
     pipelinedesc.primitiveType = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST;

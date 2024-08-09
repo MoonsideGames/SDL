@@ -6370,7 +6370,7 @@ static SDL_GpuGraphicsPipeline *VULKAN_CreateGraphicsPipeline(
 
     actualSampleCount = VULKAN_INTERNAL_GetMaxMultiSampleCount(
         renderer,
-        SDLToVK_SampleCount[pipelineCreateInfo->multisampleState.multisampleCount]);
+        SDLToVK_SampleCount[pipelineCreateInfo->multisampleState.sampleCount]);
 
     /* Create a "compatible" render pass */
 
