@@ -845,7 +845,7 @@ typedef struct VulkanComputePipeline
 typedef struct RenderPassColorTargetDescription
 {
     VkFormat format;
-    SDL_GpuColor clearColor;
+    SDL_FColor clearColor;
     SDL_GpuLoadOp loadOp;
     SDL_GpuStoreOp storeOp;
 } RenderPassColorTargetDescription;
@@ -7424,7 +7424,7 @@ static void VULKAN_SetViewport(
 
 static void VULKAN_INTERNAL_SetCurrentScissor(
     VulkanCommandBuffer *vulkanCommandBuffer,
-    SDL_GpuRect *scissor)
+    SDL_Rect *scissor)
 {
     vulkanCommandBuffer->currentScissor.offset.x = scissor->x;
     vulkanCommandBuffer->currentScissor.offset.y = scissor->y;
@@ -7434,7 +7434,7 @@ static void VULKAN_INTERNAL_SetCurrentScissor(
 
 static void VULKAN_SetScissor(
     SDL_GpuCommandBuffer *commandBuffer,
-    SDL_GpuRect *scissor)
+    SDL_Rect *scissor)
 {
     VulkanCommandBuffer *vulkanCommandBuffer = (VulkanCommandBuffer *)commandBuffer;
     VulkanRenderer *renderer = (VulkanRenderer *)vulkanCommandBuffer->renderer;
@@ -7757,7 +7757,7 @@ static void VULKAN_BeginRenderPass(
     Uint32 totalColorAttachmentCount = 0;
     Uint32 i;
     SDL_GpuViewport defaultViewport;
-    SDL_GpuRect defaultScissor;
+    SDL_Rect defaultScissor;
     Uint32 framebufferWidth = UINT32_MAX;
     Uint32 framebufferHeight = UINT32_MAX;
 

@@ -381,22 +381,6 @@ typedef struct SDL_GpuDepthStencilValue
     Uint32 stencil;
 } SDL_GpuDepthStencilValue;
 
-typedef struct SDL_GpuRect
-{
-    Sint32 x;
-    Sint32 y;
-    Sint32 w;
-    Sint32 h;
-} SDL_GpuRect;
-
-typedef struct SDL_GpuColor
-{
-    float r;
-    float g;
-    float b;
-    float a;
-} SDL_GpuColor;
-
 typedef struct SDL_GpuViewport
 {
     float x;
@@ -654,7 +638,7 @@ typedef struct SDL_GpuColorAttachmentInfo
     SDL_GpuTextureSlice textureSlice;
 
     /* Can be ignored by RenderPass if CLEAR is not used */
-    SDL_GpuColor clearColor;
+    SDL_FColor clearColor;
 
     /* Determines what is done with the texture slice at the beginning of the render pass.
      *
@@ -1405,7 +1389,7 @@ extern SDL_DECLSPEC void SDLCALL SDL_GpuSetViewport(
  */
 extern SDL_DECLSPEC void SDLCALL SDL_GpuSetScissor(
     SDL_GpuRenderPass *renderPass,
-    SDL_GpuRect *scissor);
+    SDL_Rect *scissor);
 
 /**
  * Binds vertex buffers on a command buffer for use with subsequent draw calls.

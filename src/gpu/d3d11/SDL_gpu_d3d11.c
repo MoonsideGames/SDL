@@ -3614,7 +3614,7 @@ static void D3D11_SetViewport(
 
 static void D3D11_SetScissor(
     SDL_GpuCommandBuffer *commandBuffer,
-    SDL_GpuRect *scissor)
+    SDL_Rect *scissor)
 {
     D3D11CommandBuffer *d3d11CommandBuffer = (D3D11CommandBuffer *)commandBuffer;
     D3D11_RECT rect = {

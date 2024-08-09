@@ -3401,7 +3401,7 @@ static void D3D12_SetViewport(
 
 static void D3D12_SetScissor(
     SDL_GpuCommandBuffer *commandBuffer,
-    SDL_GpuRect *scissor)
+    SDL_Rect *scissor)
 {
     D3D12CommandBuffer *d3d12CommandBuffer = (D3D12CommandBuffer *)commandBuffer;
     D3D12_RECT scissorRect;
@@ -3748,7 +3748,7 @@ static void D3D12_BeginRenderPass(
         commandBuffer,
         &defaultViewport);
 
-    SDL_GpuRect defaultScissor;
+    SDL_Rect defaultScissor;
     defaultScissor.x = 0;
     defaultScissor.y = 0;
     defaultScissor.w = (Sint32)framebufferWidth;

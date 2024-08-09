@@ -921,7 +921,7 @@ void SDL_GpuSetViewport(
 
 void SDL_GpuSetScissor(
     SDL_GpuRenderPass *renderPass,
-    SDL_GpuRect *scissor)
+    SDL_Rect *scissor)
 {
     if (renderPass == NULL) {
         SDL_InvalidParamError("renderPass");

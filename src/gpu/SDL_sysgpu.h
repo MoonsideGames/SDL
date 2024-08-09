@@ -288,7 +288,7 @@ struct SDL_GpuDevice
 
     void (*SetScissor)(
         SDL_GpuCommandBuffer *commandBuffer,
-        SDL_GpuRect *scissor);
+        SDL_Rect *scissor);
 
     void (*BindVertexBuffers)(
         SDL_GpuCommandBuffer *commandBuffer,

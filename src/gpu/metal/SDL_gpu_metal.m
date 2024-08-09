@@ -2304,7 +2304,7 @@ static void METAL_SetViewport(
 
 static void METAL_SetScissor(
     SDL_GpuCommandBuffer *commandBuffer,
-    SDL_GpuRect *scissor)
+    SDL_Rect *scissor)
 {
     @autoreleasepool {
         MetalCommandBuffer *metalCommandBuffer = (MetalCommandBuffer *)commandBuffer;
