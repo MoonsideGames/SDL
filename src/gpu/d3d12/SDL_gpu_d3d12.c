@@ -5234,14 +5234,12 @@ static void D3D12_DownloadFromTexture(
     SDL_GpuTextureTransferInfo *destination)
 {
     D3D12CommandBuffer *d3d12CommandBuffer = (D3D12CommandBuffer *)commandBuffer;
-    D3D12Renderer *renderer = d3d12CommandBuffer->renderer;
     D3D12_TEXTURE_COPY_LOCATION sourceLocation;
     D3D12_TEXTURE_COPY_LOCATION destinationLocation;
     Uint32 pixelsPerRow = destination->imagePitch;
     Uint32 rowPitch;
     Uint32 alignedRowPitch;
     Uint32 rowsPerSlice = destination->imageHeight;
-    Uint32 bytesPerSlice;
     SDL_bool needsRealignment;
     SDL_bool needsPlacementCopy;
     D3D12TextureDownload *textureDownload = NULL;
@@ -5276,8 +5274,6 @@ static void D3D12_DownloadFromTexture(
     if (rowsPerSlice == 0) {
         rowsPerSlice = source->h;
     }
-
-    bytesPerSlice = rowsPerSlice * rowPitch;
 
     alignedRowPitch = D3D12_INTERNAL_Align(rowPitch, D3D12_TEXTURE_DATA_PITCH_ALIGNMENT);
     needsRealignment = rowsPerSlice != source->h || rowPitch != alignedRowPitch;
@@ -6480,7 +6476,7 @@ static void D3D12_INTERNAL_CopyTextureDownload(
         download->temporaryBuffer->handle,
         0,
         NULL,
-        &sourcePtr);
+        (void**) &sourcePtr);
 
     if (FAILED(res)) {
         SDL_LogError(SDL_LOG_CATEGORY_GPU, "Failed to map temporary buffer!");
@@ -6491,7 +6487,7 @@ static void D3D12_INTERNAL_CopyTextureDownload(
         download->destinationBuffer->handle,
         0,
         NULL,
-        &destPtr);
+        (void**) &destPtr);
 
     if (FAILED(res)) {
         SDL_LogError(SDL_LOG_CATEGORY_GPU, "Failed to map destination buffer!");
