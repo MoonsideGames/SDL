@@ -560,6 +560,9 @@ struct D3D12Renderer
     SDL_Mutex *windowLock;
     SDL_Mutex *fenceLock;
     SDL_Mutex *disposeLock;
+
+    /* Warning trackers */
+    SDL_bool debugMarkerFunctionsNotSupportedWarning;
 };
 
 struct D3D12CommandBuffer
@@ -3244,16 +3247,41 @@ static void D3D12_SetTextureName(
     }
 }
 
+/* These debug functions are all marked as "for internal usage only"
+ * on D3D12 and the parameter usage is opaque. Oh well.
+ */
+
 static void D3D12_InsertDebugLabel(
     SDL_GpuCommandBuffer *commandBuffer,
-    const char *text) { SDL_assert(SDL_FALSE); }
+    const char *text)
+{
+    D3D12Renderer *renderer = ((D3D12CommandBuffer *)commandBuffer)->renderer;
+    if (!renderer->debugMarkerFunctionsNotSupportedWarning) {
+        SDL_LogInfo(SDL_LOG_CATEGORY_GPU, "Debug marker functions are not supported on D3D12");
+        renderer->debugMarkerFunctionsNotSupportedWarning = SDL_TRUE;
+    }
+}
 
 static void D3D12_PushDebugGroup(
     SDL_GpuCommandBuffer *commandBuffer,
-    const char *name) { SDL_assert(SDL_FALSE); }
+    const char *name)
+{
+    D3D12Renderer *renderer = ((D3D12CommandBuffer *)commandBuffer)->renderer;
+    if (!renderer->debugMarkerFunctionsNotSupportedWarning) {
+        SDL_LogInfo(SDL_LOG_CATEGORY_GPU, "Debug marker functions are not supported on D3D12");
+        renderer->debugMarkerFunctionsNotSupportedWarning = SDL_TRUE;
+    }
+}
 
 static void D3D12_PopDebugGroup(
-    SDL_GpuCommandBuffer *commandBuffer) { SDL_assert(SDL_FALSE); }
+    SDL_GpuCommandBuffer *commandBuffer)
+{
+    D3D12Renderer *renderer = ((D3D12CommandBuffer *)commandBuffer)->renderer;
+    if (!renderer->debugMarkerFunctionsNotSupportedWarning) {
+        SDL_LogInfo(SDL_LOG_CATEGORY_GPU, "Debug marker functions are not supported on D3D12");
+        renderer->debugMarkerFunctionsNotSupportedWarning = SDL_TRUE;
+    }
+}
 
 /* Disposal */
 
