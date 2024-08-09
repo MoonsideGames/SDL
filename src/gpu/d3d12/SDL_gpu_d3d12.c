@@ -486,6 +486,7 @@ struct D3D12Renderer
     ID3D12Device *device;
     PFN_D3D12_SERIALIZE_ROOT_SIGNATURE D3D12SerializeRootSignature_func;
     const char *semantic;
+    SDL_iconv_t iconv;
 
     ID3D12CommandQueue *commandQueue;
 
@@ -1314,6 +1315,10 @@ static void D3D12_INTERNAL_DestroyRenderer(D3D12Renderer *renderer)
         renderer->dxgidebug_dll = NULL;
     }
     renderer->D3D12SerializeRootSignature_func = NULL;
+
+    if (renderer->iconv) {
+        SDL_iconv_close(renderer->iconv);
+    }
 
     SDL_DestroyMutex(renderer->stagingDescriptorHeapLock);
     SDL_DestroyMutex(renderer->acquireCommandBufferLock);
@@ -3244,16 +3249,105 @@ static void D3D12_SetTextureName(
     }
 }
 
+/* These debug functions are all marked as "for internal usage only"
+ * on D3D12... works on renderdoc!
+ */
+
+static SDL_bool D3D12_INTERNAL_StrToWStr(
+    D3D12Renderer *renderer,
+    const char *str,
+    wchar_t *wstr,
+    size_t wstr_size,
+    Uint32 *outSize)
+{
+    size_t inlen, result;
+    size_t outlen = wstr_size;
+
+    if (renderer->iconv == NULL) {
+        renderer->iconv = SDL_iconv_open("WCHAR_T", "UTF-8");
+        SDL_assert(renderer->iconv);
+    }
+
+    /* Convert... */
+    inlen = SDL_strlen(str) + 1;
+    result = SDL_iconv(
+        renderer->iconv,
+        &str,
+        &inlen,
+        (char **)&wstr,
+        &outlen);
+
+    *outSize = (Uint32)outlen;
+
+    /* Check... */
+    switch (result) {
+    case SDL_ICONV_ERROR:
+    case SDL_ICONV_E2BIG:
+    case SDL_ICONV_EILSEQ:
+    case SDL_ICONV_EINVAL:
+        SDL_LogWarn(SDL_LOG_CATEGORY_GPU, "Failed to convert string to wchar_t!");
+        return SDL_FALSE;
+    default:
+        break;
+    }
+
+    return SDL_TRUE;
+}
+
 static void D3D12_InsertDebugLabel(
     SDL_GpuCommandBuffer *commandBuffer,
-    const char *text) { SDL_assert(SDL_FALSE); }
+    const char *text)
+{
+    D3D12CommandBuffer *d3d12CommandBuffer = (D3D12CommandBuffer *)commandBuffer;
+    wchar_t wstr[256];
+    Uint32 convSize;
+
+    if (!D3D12_INTERNAL_StrToWStr(
+        d3d12CommandBuffer->renderer,
+        text,
+        wstr,
+        sizeof(wstr),
+        &convSize)) {
+        return;
+    }
+
+    ID3D12GraphicsCommandList_SetMarker(
+        d3d12CommandBuffer->graphicsCommandList,
+        0,
+        wstr,
+        convSize);
+}
 
 static void D3D12_PushDebugGroup(
     SDL_GpuCommandBuffer *commandBuffer,
-    const char *name) { SDL_assert(SDL_FALSE); }
+    const char *name)
+{
+    D3D12CommandBuffer *d3d12CommandBuffer = (D3D12CommandBuffer *)commandBuffer;
+    wchar_t wstr[256];
+    Uint32 convSize;
+
+    if (!D3D12_INTERNAL_StrToWStr(
+        d3d12CommandBuffer->renderer,
+        name,
+        wstr,
+        sizeof(wstr),
+        &convSize)) {
+        return;
+    }
+
+    ID3D12GraphicsCommandList_BeginEvent(
+        d3d12CommandBuffer->graphicsCommandList,
+        0,
+        wstr,
+        convSize);
+}
 
 static void D3D12_PopDebugGroup(
-    SDL_GpuCommandBuffer *commandBuffer) { SDL_assert(SDL_FALSE); }
+    SDL_GpuCommandBuffer *commandBuffer)
+{
+    D3D12CommandBuffer *d3d12CommandBuffer = (D3D12CommandBuffer *)commandBuffer;
+    ID3D12GraphicsCommandList_EndEvent(d3d12CommandBuffer->graphicsCommandList);
+}
 
 /* Disposal */
 
