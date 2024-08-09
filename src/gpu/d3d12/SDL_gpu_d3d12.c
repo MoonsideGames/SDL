@@ -4101,7 +4101,7 @@ static void D3D12_BindVertexStorageBuffers(
             d3d12CommandBuffer,
             container->activeBuffer);
 
-        d3d12CommandBuffer->vertexStorageBuffers[i] = container->activeBuffer;
+        d3d12CommandBuffer->vertexStorageBuffers[firstSlot + i] = container->activeBuffer;
     }
 
     d3d12CommandBuffer->needVertexStorageBufferBind = SDL_TRUE;
@@ -4174,7 +4174,7 @@ static void D3D12_BindFragmentStorageBuffers(
             d3d12CommandBuffer,
             container->activeBuffer);
 
-        d3d12CommandBuffer->fragmentStorageBuffers[i] = container->activeBuffer;
+        d3d12CommandBuffer->fragmentStorageBuffers[firstSlot + i] = container->activeBuffer;
     }
 
     d3d12CommandBuffer->needFragmentStorageBufferBind = SDL_TRUE;
