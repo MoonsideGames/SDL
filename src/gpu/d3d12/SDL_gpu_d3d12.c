@@ -2966,6 +2966,7 @@ static D3D12Buffer *D3D12_INTERNAL_CreateBuffer(
         heapProperties.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
         heapProperties.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
         heapFlags = D3D12_HEAP_FLAG_NONE;
+        initialState = D3D12_RESOURCE_STATE_COPY_DEST;
     } else if (type == D3D12_BUFFER_TYPE_UNIFORM) {
         /* D3D12 is badly designed, so we have to check if the fast path for uniform buffers is enabled */
         if (renderer->GPUUploadHeapSupported) {
@@ -4960,7 +4961,7 @@ static void D3D12_UploadToTexture(
     bytesPerSlice = rowsPerSlice * rowPitch;
 
     alignedRowPitch = D3D12_INTERNAL_Align(rowPitch, D3D12_TEXTURE_DATA_PITCH_ALIGNMENT);
-    needsRealignment = rowsPerSlice != destination->h && rowPitch != alignedRowPitch;
+    needsRealignment = rowsPerSlice != destination->h || rowPitch != alignedRowPitch;
     needsPlacementCopy = source->offset % D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT != 0;
 
     sourceLocation.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
@@ -4994,7 +4995,7 @@ static void D3D12_UploadToTexture(
             }
 
             sourceLocation.PlacedFootprint.Footprint.Width = destination->w;
-            sourceLocation.PlacedFootprint.Footprint.Height = source->imageHeight;
+            sourceLocation.PlacedFootprint.Footprint.Height = rowsPerSlice;
             sourceLocation.PlacedFootprint.Footprint.Depth = 1;
             sourceLocation.PlacedFootprint.Offset = (sliceIndex * bytesPerSlice);
 
@@ -5284,19 +5285,19 @@ static void D3D12_DownloadFromTexture(
     bytesPerSlice = rowsPerSlice * rowPitch;
 
     alignedRowPitch = D3D12_INTERNAL_Align(rowPitch, D3D12_TEXTURE_DATA_PITCH_ALIGNMENT);
-    needsRealignment = rowsPerSlice != source->h && rowPitch != alignedRowPitch;
+    needsRealignment = rowsPerSlice != source->h || rowPitch != alignedRowPitch;
     needsPlacementCopy = destination->offset % D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT != 0;
 
     sourceLocation.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
     sourceLocation.SubresourceIndex = sourceSubresource->index;
     sourceLocation.pResource = sourceSubresource->parent->resource;
 
-    D3D12_BOX sourceBox = { source->x, source->y, source->z, source->x + source->w, source->y + source->h, source->z + source->d };
+    D3D12_BOX sourceBox = { source->x, source->y, source->z, source->x + source->w, source->y + rowsPerSlice, source->z + source->d };
 
     destinationLocation.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
     destinationLocation.PlacedFootprint.Footprint.Format = SDLToD3D12_TextureFormat[sourceContainer->header.info.format];
     destinationLocation.PlacedFootprint.Footprint.Width = source->w;
-    destinationLocation.PlacedFootprint.Footprint.Height = source->h;
+    destinationLocation.PlacedFootprint.Footprint.Height = rowsPerSlice;
     destinationLocation.PlacedFootprint.Footprint.Depth = source->d;
     destinationLocation.PlacedFootprint.Footprint.RowPitch = alignedRowPitch;
 
@@ -5381,7 +5382,45 @@ static void D3D12_DownloadFromTexture(
 static void D3D12_DownloadFromBuffer(
     SDL_GpuCommandBuffer *commandBuffer,
     SDL_GpuBufferRegion *source,
-    SDL_GpuTransferBufferLocation *destination) { SDL_assert(SDL_FALSE); }
+    SDL_GpuTransferBufferLocation *destination)
+{
+    D3D12CommandBuffer *d3d12CommandBuffer = (D3D12CommandBuffer *)commandBuffer;
+    D3D12BufferContainer *sourceContainer = (D3D12BufferContainer *)source->buffer;
+    D3D12BufferContainer *destinationContainer = (D3D12BufferContainer *)destination->transferBuffer;
+
+    D3D12Buffer *sourceBuffer = sourceContainer->activeBuffer;
+    D3D12_INTERNAL_BufferTransitionFromDefaultUsage(
+        d3d12CommandBuffer,
+        D3D12_RESOURCE_STATE_COPY_SOURCE,
+        sourceBuffer);
+
+    D3D12Buffer *destinationBuffer = D3D12_INTERNAL_PrepareBufferForWrite(
+        d3d12CommandBuffer,
+        destinationContainer,
+        SDL_FALSE,
+        D3D12_RESOURCE_STATE_COPY_DEST);
+
+    ID3D12GraphicsCommandList_CopyBufferRegion(
+        d3d12CommandBuffer->graphicsCommandList,
+        destinationBuffer->handle,
+        destination->offset,
+        sourceBuffer->handle,
+        source->offset,
+        source->size);
+
+    D3D12_INTERNAL_BufferTransitionToDefaultUsage(
+        d3d12CommandBuffer,
+        D3D12_RESOURCE_STATE_COPY_SOURCE,
+        sourceBuffer);
+
+    D3D12_INTERNAL_BufferTransitionToDefaultUsage(
+        d3d12CommandBuffer,
+        D3D12_RESOURCE_STATE_COPY_DEST,
+        destinationBuffer);
+
+    D3D12_INTERNAL_TrackBuffer(d3d12CommandBuffer, sourceBuffer);
+    D3D12_INTERNAL_TrackBuffer(d3d12CommandBuffer, destinationBuffer);
+}
 
 static void D3D12_EndCopyPass(
     SDL_GpuCommandBuffer *commandBuffer)
