@@ -1167,5 +1167,5 @@ SDL_DYNAPI_PROC(void,SDL_GpuWaitForFences,(SDL_GpuDevice *a, SDL_bool b, SDL_Gpu
 SDL_DYNAPI_PROC(SDL_bool,SDL_GpuQueryFence,(SDL_GpuDevice *a, SDL_GpuFence *b),(a,b),return)
 SDL_DYNAPI_PROC(void,SDL_GpuReleaseFence,(SDL_GpuDevice *a, SDL_GpuFence *b),(a,b),)
 SDL_DYNAPI_PROC(Uint32,SDL_GpuTextureFormatTexelBlockSize,(SDL_GpuTextureFormat a),(a),return)
-SDL_DYNAPI_PROC(SDL_bool,SDL_GpuIsTextureFormatSupported,(SDL_GpuDevice *a, SDL_GpuTextureFormat b, SDL_GpuTextureType c, SDL_GpuTextureUsageFlags d),(a,b,c,d),return)
+SDL_DYNAPI_PROC(SDL_bool,SDL_GpuSupportsTextureFormat,(SDL_GpuDevice *a, SDL_GpuTextureFormat b, SDL_GpuTextureType c, SDL_GpuTextureUsageFlags d),(a,b,c,d),return)
 SDL_DYNAPI_PROC(SDL_GpuSampleCount,SDL_GpuGetBestSampleCount,(SDL_GpuDevice *a, SDL_GpuTextureFormat b, SDL_GpuSampleCount c),(a,b,c),return)

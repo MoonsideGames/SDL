@@ -10771,7 +10771,7 @@ static Uint8 VULKAN_INTERNAL_DefragmentMemory(
 
 /* Format Info */
 
-static SDL_bool VULKAN_IsTextureFormatSupported(
+static SDL_bool VULKAN_SupportsTextureFormat(
     SDL_GpuRenderer *driverData,
     SDL_GpuTextureFormat format,
     SDL_GpuTextureType type,

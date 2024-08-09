@@ -3767,7 +3767,7 @@ static void METAL_Wait(
 
 /* Format Info */
 
-static SDL_bool METAL_IsTextureFormatSupported(
+static SDL_bool METAL_SupportsTextureFormat(
     SDL_GpuRenderer *driverData,
     SDL_GpuTextureFormat format,
     SDL_GpuTextureType type,

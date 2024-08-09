@@ -558,7 +558,7 @@ struct SDL_GpuDevice
 
     /* Feature Queries */
 
-    SDL_bool (*IsTextureFormatSupported)(
+    SDL_bool (*SupportsTextureFormat)(
         SDL_GpuRenderer *driverData,
         SDL_GpuTextureFormat format,
         SDL_GpuTextureType type,
@@ -655,7 +655,7 @@ struct SDL_GpuDevice
     ASSIGN_DRIVER_FUNC(WaitForFences, name)                 \
     ASSIGN_DRIVER_FUNC(QueryFence, name)                    \
     ASSIGN_DRIVER_FUNC(ReleaseFence, name)                  \
-    ASSIGN_DRIVER_FUNC(IsTextureFormatSupported, name)      \
+    ASSIGN_DRIVER_FUNC(SupportsTextureFormat, name)      \
     ASSIGN_DRIVER_FUNC(GetBestSampleCount, name)
 
 typedef struct SDL_GpuDriver

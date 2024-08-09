@@ -6864,7 +6864,7 @@ static void D3D12_WaitForFences(
 
 /* Feature Queries */
 
-static SDL_bool D3D12_IsTextureFormatSupported(
+static SDL_bool D3D12_SupportsTextureFormat(
     SDL_GpuRenderer *driverData,
     SDL_GpuTextureFormat format,
     SDL_GpuTextureType type,

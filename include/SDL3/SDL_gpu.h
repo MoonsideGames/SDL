@@ -959,7 +959,7 @@ extern SDL_DECLSPEC SDL_GpuShader *SDLCALL SDL_GpuCreateShader(
  * - It's guaranteed that either D24_UNORM or D32_SFLOAT will be supported.
  * - It's guaranteed that either D24_UNORM_S8_UINT or D32_SFLOAT_S8_UINT will be supported.
  * Therefore, unless D16 is sufficient for your purposes, you should always call
- * SDL_GpuIsTextureFormatSupported to determine which of D24/D32 are supported by the GPU
+ * SDL_GpuSupportsTextureFormat to determine which of D24/D32 are supported by the GPU
  * before creating a depth texture.
  *
  * \param device a GPU Context
@@ -977,7 +977,7 @@ extern SDL_DECLSPEC SDL_GpuShader *SDLCALL SDL_GpuCreateShader(
  * \sa SDL_GpuBindComputeStorageTextures
  * \sa SDL_GpuBlit
  * \sa SDL_GpuReleaseTexture
- * \sa SDL_GpuIsTextureFormatSupported
+ * \sa SDL_GpuSupportsTextureFormat
  */
 extern SDL_DECLSPEC SDL_GpuTexture *SDLCALL SDL_GpuCreateTexture(
     SDL_GpuDevice *device,
@@ -2236,7 +2236,7 @@ extern SDL_DECLSPEC Uint32 SDLCALL SDL_GpuTextureFormatTexelBlockSize(
  *
  * \since This function is available since SDL 3.x.x
  */
-extern SDL_DECLSPEC SDL_bool SDLCALL SDL_GpuIsTextureFormatSupported(
+extern SDL_DECLSPEC SDL_bool SDLCALL SDL_GpuSupportsTextureFormat(
     SDL_GpuDevice *device,
     SDL_GpuTextureFormat format,
     SDL_GpuTextureType type,

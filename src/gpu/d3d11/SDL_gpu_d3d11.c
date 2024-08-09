@@ -5582,7 +5582,7 @@ static void D3D11_Wait(
 
 /* Format Info */
 
-static SDL_bool D3D11_IsTextureFormatSupported(
+static SDL_bool D3D11_SupportsTextureFormat(
     SDL_GpuRenderer *driverData,
     SDL_GpuTextureFormat format,
     SDL_GpuTextureType type,

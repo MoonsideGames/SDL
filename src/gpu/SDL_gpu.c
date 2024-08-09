@@ -251,7 +251,7 @@ Uint32 SDL_GpuTextureFormatTexelBlockSize(
     }
 }
 
-SDL_bool SDL_GpuIsTextureFormatSupported(
+SDL_bool SDL_GpuSupportsTextureFormat(
     SDL_GpuDevice *device,
     SDL_GpuTextureFormat format,
     SDL_GpuTextureType type,
@@ -259,7 +259,7 @@ SDL_bool SDL_GpuIsTextureFormatSupported(
 {
     CHECK_DEVICE_MAGIC(device, SDL_FALSE);
 
-    return device->IsTextureFormatSupported(
+    return device->SupportsTextureFormat(
         device->driverData,
         format,
         type,
@@ -322,7 +322,7 @@ SDL_GpuGraphicsPipeline *SDL_GpuCreateGraphicsPipeline(
      */
     if (
         graphicsPipelineCreateInfo->attachmentInfo.hasDepthStencilAttachment &&
-        !device->IsTextureFormatSupported(
+        !device->SupportsTextureFormat(
             device->driverData,
             graphicsPipelineCreateInfo->attachmentInfo.depthStencilFormat,
             SDL_GPU_TEXTURETYPE_2D,
@@ -445,7 +445,7 @@ SDL_GpuTexture *SDL_GpuCreateTexture(
                 SDL_assert_release(!"For cube textures: sampleCount must be SDL_GPU_SAMPLECOUNT_1");
                 failed = SDL_TRUE;
             }
-            if (!SDL_GpuIsTextureFormatSupported(device, textureCreateInfo->format, SDL_GPU_TEXTURETYPE_CUBE, textureCreateInfo->usageFlags)) {
+            if (!SDL_GpuSupportsTextureFormat(device, textureCreateInfo->format, SDL_GPU_TEXTURETYPE_CUBE, textureCreateInfo->usageFlags)) {
                 SDL_assert_release(!"For cube textures: the format is unsupported for the given usageFlags");
                 failed = SDL_TRUE;
             }
@@ -467,7 +467,7 @@ SDL_GpuTexture *SDL_GpuCreateTexture(
                 SDL_assert_release(!"For 3D textures: sampleCount must be SDL_GPU_SAMPLECOUNT_1");
                 failed = SDL_TRUE;
             }
-            if (!SDL_GpuIsTextureFormatSupported(device, textureCreateInfo->format, SDL_GPU_TEXTURETYPE_3D, textureCreateInfo->usageFlags)) {
+            if (!SDL_GpuSupportsTextureFormat(device, textureCreateInfo->format, SDL_GPU_TEXTURETYPE_3D, textureCreateInfo->usageFlags)) {
                 SDL_assert_release(!"For 3D textures: the format is unsupported for the given usageFlags");
                 failed = SDL_TRUE;
             }
@@ -489,7 +489,7 @@ SDL_GpuTexture *SDL_GpuCreateTexture(
                     failed = SDL_TRUE;
                 }
             }
-            if (!SDL_GpuIsTextureFormatSupported(device, textureCreateInfo->format, SDL_GPU_TEXTURETYPE_2D, textureCreateInfo->usageFlags)) {
+            if (!SDL_GpuSupportsTextureFormat(device, textureCreateInfo->format, SDL_GPU_TEXTURETYPE_2D, textureCreateInfo->usageFlags)) {
                 SDL_assert_release(!"For 2D textures: the format is unsupported for the given usageFlags");
                 failed = SDL_TRUE;
             }
