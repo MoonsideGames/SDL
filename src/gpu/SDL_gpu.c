@@ -1863,12 +1863,12 @@ void SDL_GpuBlit(
             SDL_assert_release(!"Blit destination texture must be created with the COLOR_TARGET_BIT usage flag");
             failed = SDL_TRUE;
         }
-        if (srcHeader->info.layerCount > 1 || dstHeader->info.layerCount > 1) {
-            SDL_assert_release(!"Blit source and destination textures must have a layerCount of 1");
-            failed = SDL_TRUE;
-        }
         if (srcHeader->info.depth > 1 || dstHeader->info.depth > 1) {
             SDL_assert_release(!"Blit source and destination textures must have a depth of 1");
+            failed = SDL_TRUE;
+        }
+        if (srcHeader->info.format != dstHeader->info.format) {
+            SDL_assert_release(!"Blit source and destination textures must be have the same format");
             failed = SDL_TRUE;
         }
 
