@@ -1855,6 +1855,10 @@ void SDL_GpuBlit(
         TextureCommonHeader *srcHeader = (TextureCommonHeader *)source->texture;
         TextureCommonHeader *dstHeader = (TextureCommonHeader *)destination->texture;
 
+        if (srcHeader == NULL || dstHeader == NULL) {
+            SDL_assert_release(!"Blit source and destination textures must be non-NULL");
+            return; /* attempting to proceed will crash */
+        }
         if ((srcHeader->info.usageFlags & SDL_GPU_TEXTUREUSAGE_SAMPLER_BIT) == 0) {
             SDL_assert_release(!"Blit source texture must be created with the SAMPLER_BIT usage flag");
             failed = SDL_TRUE;
@@ -1869,6 +1873,10 @@ void SDL_GpuBlit(
         }
         if (srcHeader->info.format != dstHeader->info.format) {
             SDL_assert_release(!"Blit source and destination textures must be have the same format");
+            failed = SDL_TRUE;
+        }
+        if (source->w == 0 || source->h == 0 || destination->w == 0 || destination->h == 0) {
+            SDL_assert_release(!"Blit source/destination regions must have non-zero width and height");
             failed = SDL_TRUE;
         }
 
