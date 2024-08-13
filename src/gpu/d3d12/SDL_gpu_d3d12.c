@@ -5954,6 +5954,7 @@ static SDL_bool D3D12_INTERNAL_CreateSwapchain(
     swapchainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
     swapchainDesc.AlphaMode = DXGI_ALPHA_MODE_UNSPECIFIED;
     swapchainDesc.Flags = 0;
+    swapchainDesc.Stereo = 0;
 
     // Initialize the fullscreen descriptor (if needed)
     fullscreenDesc.RefreshRate.Numerator = 0;
