@@ -8133,6 +8133,20 @@ static void VULKAN_EndRenderPass(
     vulkanCommandBuffer->vertexUniformDescriptorSet = VK_NULL_HANDLE;
     vulkanCommandBuffer->fragmentResourceDescriptorSet = VK_NULL_HANDLE;
     vulkanCommandBuffer->fragmentUniformDescriptorSet = VK_NULL_HANDLE;
+
+    /* Reset bind state */
+    SDL_zeroa(vulkanCommandBuffer->colorAttachmentSlices);
+    vulkanCommandBuffer->depthStencilAttachmentSlice = NULL;
+
+    SDL_zeroa(vulkanCommandBuffer->vertexSamplers);
+    SDL_zeroa(vulkanCommandBuffer->vertexSamplerTextures);
+    SDL_zeroa(vulkanCommandBuffer->vertexStorageTextureSlices);
+    SDL_zeroa(vulkanCommandBuffer->vertexStorageBuffers);
+
+    SDL_zeroa(vulkanCommandBuffer->fragmentSamplers);
+    SDL_zeroa(vulkanCommandBuffer->fragmentSamplerTextures);
+    SDL_zeroa(vulkanCommandBuffer->fragmentStorageTextureSlices);
+    SDL_zeroa(vulkanCommandBuffer->fragmentStorageBuffers);
 }
 
 static void VULKAN_BeginComputePass(

@@ -616,7 +616,7 @@ struct D3D12CommandBuffer
 
     D3D12Texture *fragmentSamplerTextures[MAX_TEXTURE_SAMPLERS_PER_STAGE];
     D3D12Sampler *fragmentSamplers[MAX_TEXTURE_SAMPLERS_PER_STAGE];
-    D3D12TextureSubresource *fragmentStorageTextureSlices[MAX_STORAGE_TEXTURES_PER_STAGE];
+    D3D12TextureSubresource *fragmentStorageTextureSubresources[MAX_STORAGE_TEXTURES_PER_STAGE];
     D3D12Buffer *fragmentStorageBuffers[MAX_STORAGE_BUFFERS_PER_STAGE];
     D3D12UniformBuffer *fragmentUniformBuffers[MAX_UNIFORM_BUFFERS_PER_STAGE];
 
@@ -4246,7 +4246,7 @@ static void D3D12_BindFragmentStorageTextures(
 
         D3D12_INTERNAL_TrackTextureSubresource(d3d12CommandBuffer, subresource);
 
-        d3d12CommandBuffer->fragmentStorageTextureSlices[firstSlot + i] = subresource;
+        d3d12CommandBuffer->fragmentStorageTextureSubresources[firstSlot + i] = subresource;
     }
 
     d3d12CommandBuffer->needFragmentStorageTextureBind = SDL_TRUE;
@@ -4471,7 +4471,7 @@ static void D3D12_INTERNAL_BindGraphicsResources(
     if (commandBuffer->needFragmentStorageTextureBind) {
         if (graphicsPipeline->fragmentStorageTextureCount > 0) {
             for (Uint32 i = 0; i < graphicsPipeline->fragmentStorageTextureCount; i += 1) {
-                cpuHandles[i] = commandBuffer->fragmentStorageTextureSlices[i]->srvHandle.cpuHandle;
+                cpuHandles[i] = commandBuffer->fragmentStorageTextureSubresources[i]->srvHandle.cpuHandle;
             }
 
             D3D12_INTERNAL_WriteGPUDescriptors(
@@ -4636,6 +4636,20 @@ static void D3D12_EndRenderPass(
         NULL,
         SDL_FALSE,
         NULL);
+
+    /* Reset bind state */
+    SDL_zeroa(d3d12CommandBuffer->colorAttachmentTextureSubresources);
+    d3d12CommandBuffer->depthStencilTextureSubresource = NULL;
+
+    SDL_zeroa(d3d12CommandBuffer->vertexSamplerTextures);
+    SDL_zeroa(d3d12CommandBuffer->vertexSamplers);
+    SDL_zeroa(d3d12CommandBuffer->vertexStorageTextureSubresources);
+    SDL_zeroa(d3d12CommandBuffer->vertexStorageBuffers);
+
+    SDL_zeroa(d3d12CommandBuffer->fragmentSamplerTextures);
+    SDL_zeroa(d3d12CommandBuffer->fragmentSamplers);
+    SDL_zeroa(d3d12CommandBuffer->fragmentStorageTextureSubresources);
+    SDL_zeroa(d3d12CommandBuffer->fragmentStorageBuffers);
 }
 
 /* Compute Pass */
@@ -4962,7 +4976,7 @@ static void D3D12_EndComputePass(
 {
     D3D12CommandBuffer *d3d12CommandBuffer = (D3D12CommandBuffer *)commandBuffer;
 
-    for (Uint32 i = 0; i < MAX_COMPUTE_WRITE_TEXTURES; i += 1) {
+    for (Uint32 i = 0; i < d3d12CommandBuffer->computeReadWriteStorageTextureCount; i += 1) {
         if (d3d12CommandBuffer->computeReadWriteStorageTextures[i]) {
             D3D12_INTERNAL_TextureSubresourceTransitionToDefaultUsage(
                 d3d12CommandBuffer,
@@ -4973,7 +4987,7 @@ static void D3D12_EndComputePass(
         }
     }
 
-    for (Uint32 i = 0; i < MAX_COMPUTE_WRITE_BUFFERS; i += 1) {
+    for (Uint32 i = 0; i < d3d12CommandBuffer->computeReadWriteStorageBufferCount; i += 1) {
         if (d3d12CommandBuffer->computeReadWriteStorageBuffers[i]) {
             D3D12_INTERNAL_BufferTransitionToDefaultUsage(
                 d3d12CommandBuffer,
@@ -6455,7 +6469,7 @@ static SDL_GpuCommandBuffer *D3D12_AcquireCommandBuffer(
 
     SDL_zeroa(commandBuffer->fragmentSamplerTextures);
     SDL_zeroa(commandBuffer->fragmentSamplers);
-    SDL_zeroa(commandBuffer->fragmentStorageTextureSlices);
+    SDL_zeroa(commandBuffer->fragmentStorageTextureSubresources);
     SDL_zeroa(commandBuffer->fragmentStorageBuffers);
     SDL_zeroa(commandBuffer->fragmentUniformBuffers);
 

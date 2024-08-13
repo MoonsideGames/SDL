@@ -2756,6 +2756,16 @@ static void METAL_EndRenderPass(
         MetalCommandBuffer *metalCommandBuffer = (MetalCommandBuffer *)commandBuffer;
         [metalCommandBuffer->renderEncoder endEncoding];
         metalCommandBuffer->renderEncoder = nil;
+
+        SDL_zeroa(metalCommandBuffer->vertexSamplers);
+        SDL_zeroa(metalCommandBuffer->vertexTextures);
+        SDL_zeroa(metalCommandBuffer->vertexStorageTextures);
+        SDL_zeroa(metalCommandBuffer->vertexStorageBuffers);
+
+        SDL_zeroa(metalCommandBuffer->fragmentSamplers);
+        SDL_zeroa(metalCommandBuffer->fragmentTextures);
+        SDL_zeroa(metalCommandBuffer->fragmentStorageTextures);
+        SDL_zeroa(metalCommandBuffer->fragmentStorageBuffers);
     }
 }
 
@@ -3204,6 +3214,11 @@ static void METAL_EndComputePass(
         MetalCommandBuffer *metalCommandBuffer = (MetalCommandBuffer *)commandBuffer;
         [metalCommandBuffer->computeEncoder endEncoding];
         metalCommandBuffer->computeEncoder = nil;
+
+        SDL_zeroa(metalCommandBuffer->computeReadOnlyTextures);
+        SDL_zeroa(metalCommandBuffer->computeReadOnlyBuffers);
+        SDL_zeroa(metalCommandBuffer->computeReadWriteTextures);
+        SDL_zeroa(metalCommandBuffer->computeReadWriteBuffers);
     }
 }
 

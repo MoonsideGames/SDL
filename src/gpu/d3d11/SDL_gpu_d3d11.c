@@ -4069,6 +4069,13 @@ static void D3D11_EndRenderPass(
                 d3d11CommandBuffer->colorTargetMsaaFormat[i]);
         }
     }
+
+    /* Reset bind state */
+    SDL_zeroa(d3d11CommandBuffer->vertexSamplers);
+    SDL_zeroa(d3d11CommandBuffer->vertexShaderResourceViews);
+
+    SDL_zeroa(d3d11CommandBuffer->fragmentSamplers);
+    SDL_zeroa(d3d11CommandBuffer->fragmentShaderResourceViews);
 }
 
 static void D3D11_PushVertexUniformData(
@@ -4454,6 +4461,10 @@ static void D3D11_EndComputePass(
         NULL);
 
     d3d11CommandBuffer->computePipeline = NULL;
+
+    /* Reset bind state */
+    SDL_zeroa(d3d11CommandBuffer->computeUnorderedAccessViews);
+    SDL_zeroa(d3d11CommandBuffer->computeShaderResourceViews);
 }
 
 /* Fence Cleanup */
