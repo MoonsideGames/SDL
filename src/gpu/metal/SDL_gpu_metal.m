@@ -2758,18 +2758,18 @@ static void METAL_EndRenderPass(
         metalCommandBuffer->renderEncoder = nil;
 
         for (Uint32 i = 0; i < MAX_TEXTURE_SAMPLERS_PER_STAGE; i += 1) {
-            commandBuffer->vertexSamplers[i] = nil;
-            commandBuffer->vertexTextures[i] = nil;
-            commandBuffer->fragmentSamplers[i] = nil;
-            commandBuffer->fragmentTextures[i] = nil;
+            metalCommandBuffer->vertexSamplers[i] = nil;
+            metalCommandBuffer->vertexTextures[i] = nil;
+            metalCommandBuffer->fragmentSamplers[i] = nil;
+            metalCommandBuffer->fragmentTextures[i] = nil;
         }
         for (Uint32 i = 0; i < MAX_STORAGE_TEXTURES_PER_STAGE; i += 1) {
-            commandBuffer->vertexStorageTextures[i] = nil;
-            commandBuffer->fragmentStorageTextures[i] = nil;
+            metalCommandBuffer->vertexStorageTextures[i] = nil;
+            metalCommandBuffer->fragmentStorageTextures[i] = nil;
         }
         for (Uint32 i = 0; i < MAX_STORAGE_BUFFERS_PER_STAGE; i += 1) {
-            commandBuffer->vertexStorageBuffers[i] = nil;
-            commandBuffer->fragmentStorageBuffers[i] = nil;
+            metalCommandBuffer->vertexStorageBuffers[i] = nil;
+            metalCommandBuffer->fragmentStorageBuffers[i] = nil;
         }
     }
 }
