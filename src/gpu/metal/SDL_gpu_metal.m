@@ -2757,15 +2757,20 @@ static void METAL_EndRenderPass(
         [metalCommandBuffer->renderEncoder endEncoding];
         metalCommandBuffer->renderEncoder = nil;
 
-        SDL_zeroa(metalCommandBuffer->vertexSamplers);
-        SDL_zeroa(metalCommandBuffer->vertexTextures);
-        SDL_zeroa(metalCommandBuffer->vertexStorageTextures);
-        SDL_zeroa(metalCommandBuffer->vertexStorageBuffers);
-
-        SDL_zeroa(metalCommandBuffer->fragmentSamplers);
-        SDL_zeroa(metalCommandBuffer->fragmentTextures);
-        SDL_zeroa(metalCommandBuffer->fragmentStorageTextures);
-        SDL_zeroa(metalCommandBuffer->fragmentStorageBuffers);
+        for (Uint32 i = 0; i < MAX_TEXTURE_SAMPLERS_PER_STAGE; i += 1) {
+            commandBuffer->vertexSamplers[i] = nil;
+            commandBuffer->vertexTextures[i] = nil;
+            commandBuffer->fragmentSamplers[i] = nil;
+            commandBuffer->fragmentTextures[i] = nil;
+        }
+        for (Uint32 i = 0; i < MAX_STORAGE_TEXTURES_PER_STAGE; i += 1) {
+            commandBuffer->vertexStorageTextures[i] = nil;
+            commandBuffer->fragmentStorageTextures[i] = nil;
+        }
+        for (Uint32 i = 0; i < MAX_STORAGE_BUFFERS_PER_STAGE; i += 1) {
+            commandBuffer->vertexStorageBuffers[i] = nil;
+            commandBuffer->fragmentStorageBuffers[i] = nil;
+        }
     }
 }
 
@@ -3215,10 +3220,18 @@ static void METAL_EndComputePass(
         [metalCommandBuffer->computeEncoder endEncoding];
         metalCommandBuffer->computeEncoder = nil;
 
-        SDL_zeroa(metalCommandBuffer->computeReadOnlyTextures);
-        SDL_zeroa(metalCommandBuffer->computeReadOnlyBuffers);
-        SDL_zeroa(metalCommandBuffer->computeReadWriteTextures);
-        SDL_zeroa(metalCommandBuffer->computeReadWriteBuffers);
+        for (Uint32 i = 0; i < MAX_COMPUTE_WRITE_TEXTURES; i += 1) {
+            metalCommandBuffer->computeReadWriteTextures[i] = nil;
+        }
+        for (Uint32 i = 0; i < MAX_COMPUTE_WRITE_BUFFERS; i += 1) {
+            metalCommandBuffer->computeReadWriteBuffers[i] = nil;
+        }
+        for (Uint32 i = 0; i < MAX_STORAGE_TEXTURES_PER_STAGE; i += 1) {
+            metalCommandBuffer->computeReadOnlyTextures[i] = nil;
+        }
+        for (Uint32 i = 0; i < MAX_STORAGE_BUFFERS_PER_STAGE; i += 1) {
+            metalCommandBuffer->computeReadOnlyBuffers[i] = nil;
+        }
     }
 }
 
