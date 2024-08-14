@@ -620,8 +620,8 @@ typedef struct D3D11CommandBuffer
 
     ID3D11ShaderResourceView *computeShaderResourceViews[MAX_STORAGE_TEXTURES_PER_STAGE +
                                                          MAX_STORAGE_BUFFERS_PER_STAGE];
-    ID3D11UnorderedAccessView *computeUnorderedAccessViews[MAX_STORAGE_TEXTURES_PER_STAGE +
-                                                           MAX_STORAGE_BUFFERS_PER_STAGE];
+    ID3D11UnorderedAccessView *computeUnorderedAccessViews[MAX_COMPUTE_WRITE_TEXTURES +
+                                                           MAX_COMPUTE_WRITE_BUFFERS];
 
     /* Uniform buffers */
     D3D11UniformBuffer *vertexUniformBuffers[MAX_UNIFORM_BUFFERS_PER_STAGE];
@@ -732,8 +732,8 @@ ID3D11ShaderResourceView *nullSRVs[MAX_TEXTURE_SAMPLERS_PER_STAGE +
 
 ID3D11SamplerState *nullSamplers[MAX_TEXTURE_SAMPLERS_PER_STAGE];
 
-ID3D11UnorderedAccessView *nullUAVs[MAX_STORAGE_TEXTURES_PER_STAGE +
-                                    MAX_STORAGE_BUFFERS_PER_STAGE];
+ID3D11UnorderedAccessView *nullUAVs[MAX_COMPUTE_WRITE_TEXTURES +
+                                    MAX_COMPUTE_WRITE_BUFFERS];
 
 /* Logging */
 
@@ -4449,7 +4449,7 @@ static void D3D11_EndComputePass(
     ID3D11DeviceContext_CSSetUnorderedAccessViews(
         d3d11CommandBuffer->context,
         0,
-        MAX_STORAGE_TEXTURES_PER_STAGE + MAX_STORAGE_BUFFERS_PER_STAGE,
+        MAX_COMPUTE_WRITE_TEXTURES + MAX_COMPUTE_WRITE_BUFFERS,
         nullUAVs,
         NULL);
 

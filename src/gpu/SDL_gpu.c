@@ -279,12 +279,19 @@ SDL_GpuComputePipeline *SDL_GpuCreateComputePipeline(
         SDL_InvalidParamError("computePipelineCreateInfo");
         return NULL;
     }
-
     if (device->debugMode) {
+        if (computePipelineCreateInfo->readWriteStorageTextureCount > MAX_COMPUTE_WRITE_TEXTURES) {
+            SDL_assert_release(!"Compute pipeline read-write texture count cannot be higher than 8!");
+            return NULL;
+        }
+        if (computePipelineCreateInfo->readWriteStorageBufferCount > MAX_COMPUTE_WRITE_BUFFERS) {
+            SDL_assert_release(!"Compute pipeline read-write buffer count cannot be higher than 8!");
+            return NULL;
+        }
         if (computePipelineCreateInfo->threadCountX == 0 ||
             computePipelineCreateInfo->threadCountY == 0 ||
             computePipelineCreateInfo->threadCountZ == 0) {
-            SDL_assert_release(!"All ComputePipeline threadCount dimensions must be at least 1!");
+            SDL_assert_release(!"Compute pipeline threadCount dimensions must be at least 1!");
             return NULL;
         }
     }
@@ -1304,7 +1311,14 @@ SDL_GpuComputePass *SDL_GpuBeginComputePass(
         SDL_InvalidParamError("storageBufferBindings");
         return NULL;
     }
-
+    if (storageTextureBindingCount > MAX_COMPUTE_WRITE_TEXTURES) {
+        SDL_InvalidParamError("storageTextureBindingCount");
+        return NULL;
+    }
+    if (storageBufferBindingCount > MAX_COMPUTE_WRITE_BUFFERS) {
+        SDL_InvalidParamError("storageBufferBindingCount");
+        return NULL;
+    }
     if (COMMAND_BUFFER_DEVICE->debugMode) {
         CHECK_COMMAND_BUFFER_RETURN_NULL
         CHECK_ANY_PASS_IN_PROGRESS
