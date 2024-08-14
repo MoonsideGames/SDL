@@ -487,16 +487,20 @@ typedef struct MetalCommandBuffer
     id<MTLTexture> vertexTextures[MAX_TEXTURE_SAMPLERS_PER_STAGE];
     id<MTLTexture> vertexStorageTextures[MAX_STORAGE_TEXTURES_PER_STAGE];
     id<MTLBuffer> vertexStorageBuffers[MAX_STORAGE_BUFFERS_PER_STAGE];
+    NSUInteger vertexStorageBufferOffsets[MAX_STORAGE_BUFFERS_PER_STAGE];
 
     id<MTLSamplerState> fragmentSamplers[MAX_TEXTURE_SAMPLERS_PER_STAGE];
     id<MTLTexture> fragmentTextures[MAX_TEXTURE_SAMPLERS_PER_STAGE];
     id<MTLTexture> fragmentStorageTextures[MAX_STORAGE_TEXTURES_PER_STAGE];
     id<MTLBuffer> fragmentStorageBuffers[MAX_STORAGE_BUFFERS_PER_STAGE];
+    NSUInteger fragmentStorageBufferOffsets[MAX_STORAGE_BUFFERS_PER_STAGE];
 
     id<MTLTexture> computeReadOnlyTextures[MAX_STORAGE_TEXTURES_PER_STAGE];
     id<MTLBuffer> computeReadOnlyBuffers[MAX_STORAGE_BUFFERS_PER_STAGE];
+    NSUInteger computeReadOnlyBufferOffsets[MAX_STORAGE_BUFFERS_PER_STAGE];
     id<MTLTexture> computeReadWriteTextures[MAX_COMPUTE_WRITE_TEXTURES];
     id<MTLBuffer> computeReadWriteBuffers[MAX_COMPUTE_WRITE_BUFFERS];
+    NSUInteger computeReadWriteBufferOffsets[MAX_COMPUTE_WRITE_BUFFERS];
 
     /* Uniform buffers */
     MetalUniformBuffer *vertexUniformBuffers[MAX_UNIFORM_BUFFERS_PER_STAGE];
@@ -2412,14 +2416,14 @@ static void METAL_BindVertexStorageTextures(
 static void METAL_BindVertexStorageBuffers(
     SDL_GpuCommandBuffer *commandBuffer,
     Uint32 firstSlot,
-    SDL_GpuBuffer **storageBuffers,
+    SDL_GpuBufferLocation *storageBufferLocations,
     Uint32 bindingCount)
 {
     MetalCommandBuffer *metalCommandBuffer = (MetalCommandBuffer *)commandBuffer;
     MetalBufferContainer *bufferContainer;
 
     for (Uint32 i = 0; i < bindingCount; i += 1) {
-        bufferContainer = (MetalBufferContainer *)storageBuffers[i];
+        bufferContainer = (MetalBufferContainer *)storageBufferLocations[i].buffer;
 
         METAL_INTERNAL_TrackBuffer(
             metalCommandBuffer,
@@ -2427,6 +2431,8 @@ static void METAL_BindVertexStorageBuffers(
 
         metalCommandBuffer->vertexStorageBuffers[firstSlot + i] =
             bufferContainer->activeBuffer->handle;
+        metalCommandBuffer->vertexStorageBufferOffsets[firstSlot + i] =
+            (NSUInteger)storageBufferLocations[i].offset;
     }
 
     metalCommandBuffer->needVertexStorageBufferBind = SDL_TRUE;
@@ -2484,14 +2490,14 @@ static void METAL_BindFragmentStorageTextures(
 static void METAL_BindFragmentStorageBuffers(
     SDL_GpuCommandBuffer *commandBuffer,
     Uint32 firstSlot,
-    SDL_GpuBuffer **storageBuffers,
+    SDL_GpuBufferLocation *storageBufferLocations,
     Uint32 bindingCount)
 {
     MetalCommandBuffer *metalCommandBuffer = (MetalCommandBuffer *)commandBuffer;
     MetalBufferContainer *bufferContainer;
 
     for (Uint32 i = 0; i < bindingCount; i += 1) {
-        bufferContainer = (MetalBufferContainer *)storageBuffers[i];
+        bufferContainer = (MetalBufferContainer *)storageBufferLocations[i].buffer;
 
         METAL_INTERNAL_TrackBuffer(
             metalCommandBuffer,
@@ -2499,6 +2505,8 @@ static void METAL_BindFragmentStorageBuffers(
 
         metalCommandBuffer->fragmentStorageBuffers[firstSlot + i] =
             bufferContainer->activeBuffer->handle;
+        metalCommandBuffer->fragmentStorageBufferOffsets[firstSlot + i] =
+            (NSUInteger)storageBufferLocations[i].offset;
     }
 
     metalCommandBuffer->needFragmentStorageBufferBind = SDL_TRUE;
@@ -2509,7 +2517,6 @@ static void METAL_INTERNAL_BindGraphicsResources(
     MetalCommandBuffer *commandBuffer)
 {
     MetalGraphicsPipeline *graphicsPipeline = commandBuffer->graphicsPipeline;
-    NSUInteger offsets[MAX_STORAGE_BUFFERS_PER_STAGE] = { 0 };
 
     /* Vertex Samplers+Textures */
 
@@ -2534,7 +2541,7 @@ static void METAL_INTERNAL_BindGraphicsResources(
 
     if (graphicsPipeline->vertexStorageBufferCount > 0 && commandBuffer->needVertexStorageBufferBind) {
         [commandBuffer->renderEncoder setVertexBuffers:commandBuffer->vertexStorageBuffers
-                                               offsets:offsets
+                                               offsets:commandBuffer->vertexStorageBufferOffsets
                                              withRange:NSMakeRange(graphicsPipeline->vertexUniformBufferCount,
                                                                    graphicsPipeline->vertexStorageBufferCount)];
         commandBuffer->needVertexStorageBufferBind = SDL_FALSE;
@@ -2575,7 +2582,7 @@ static void METAL_INTERNAL_BindGraphicsResources(
 
     if (graphicsPipeline->fragmentStorageBufferCount > 0 && commandBuffer->needFragmentStorageBufferBind) {
         [commandBuffer->renderEncoder setFragmentBuffers:commandBuffer->fragmentStorageBuffers
-                                                 offsets:offsets
+                                                 offsets:commandBuffer->fragmentStorageBufferOffsets
                                                withRange:NSMakeRange(graphicsPipeline->fragmentUniformBufferCount,
                                                                      graphicsPipeline->fragmentStorageBufferCount)];
         commandBuffer->needFragmentStorageBufferBind = SDL_FALSE;
@@ -2598,7 +2605,6 @@ static void METAL_INTERNAL_BindComputeResources(
     MetalCommandBuffer *commandBuffer)
 {
     MetalComputePipeline *computePipeline = commandBuffer->computePipeline;
-    NSUInteger offsets[MAX_STORAGE_BUFFERS_PER_STAGE] = { 0 }; /* 8 is the max for both read and read-write */
 
     if (commandBuffer->needComputeTextureBind) {
         /* Bind read-only textures */
@@ -2621,14 +2627,14 @@ static void METAL_INTERNAL_BindComputeResources(
         /* Bind read-only buffers */
         if (computePipeline->readOnlyStorageBufferCount > 0) {
             [commandBuffer->computeEncoder setBuffers:commandBuffer->computeReadOnlyBuffers
-                                              offsets:offsets
+                                              offsets:commandBuffer->computeReadOnlyBufferOffsets
                                             withRange:NSMakeRange(computePipeline->uniformBufferCount,
                                                                   computePipeline->readOnlyStorageBufferCount)];
         }
         /* Bind read-write buffers */
         if (computePipeline->readWriteStorageBufferCount > 0) {
             [commandBuffer->computeEncoder setBuffers:commandBuffer->computeReadWriteBuffers
-                                              offsets:offsets
+                                              offsets:commandBuffer->computeReadOnlyBufferOffsets
                                             withRange:NSMakeRange(
                                                           computePipeline->uniformBufferCount +
                                                               computePipeline->readOnlyStorageBufferCount,
@@ -2769,7 +2775,9 @@ static void METAL_EndRenderPass(
         }
         for (Uint32 i = 0; i < MAX_STORAGE_BUFFERS_PER_STAGE; i += 1) {
             metalCommandBuffer->vertexStorageBuffers[i] = nil;
+            metalCommandBuffer->vertexStorageBufferOffsets[i] = 0;
             metalCommandBuffer->fragmentStorageBuffers[i] = nil;
+            metalCommandBuffer->fragmentStorageBufferOffsets[i] = 0;
         }
     }
 }
@@ -3076,6 +3084,7 @@ static void METAL_BeginComputePass(
                 buffer);
 
             metalCommandBuffer->computeReadWriteBuffers[i] = buffer->handle;
+            metalCommandBuffer->computeReadWriteBufferOffsets[i] = storageBufferBindings[i].offset;
             metalCommandBuffer->needComputeBufferBind = SDL_TRUE;
         }
     }
@@ -3130,14 +3139,14 @@ static void METAL_BindComputeStorageTextures(
 static void METAL_BindComputeStorageBuffers(
     SDL_GpuCommandBuffer *commandBuffer,
     Uint32 firstSlot,
-    SDL_GpuBuffer **storageBuffers,
+    SDL_GpuBufferLocation *storageBufferLocations,
     Uint32 bindingCount)
 {
     MetalCommandBuffer *metalCommandBuffer = (MetalCommandBuffer *)commandBuffer;
     MetalBufferContainer *bufferContainer;
 
     for (Uint32 i = 0; i < bindingCount; i += 1) {
-        bufferContainer = (MetalBufferContainer *)storageBuffers[i];
+        bufferContainer = (MetalBufferContainer *)storageBufferLocations[i].buffer;
 
         METAL_INTERNAL_TrackBuffer(
             metalCommandBuffer,
@@ -3145,6 +3154,8 @@ static void METAL_BindComputeStorageBuffers(
 
         metalCommandBuffer->computeReadOnlyBuffers[firstSlot + i] =
             bufferContainer->activeBuffer->handle;
+        metalCommandBuffer->computeReadOnlyBufferOffsets[firstSlot + i] =
+            (NSUInteger)storageBufferLocations[i].offset;
     }
 
     metalCommandBuffer->needComputeBufferBind = SDL_TRUE;
@@ -3225,12 +3236,14 @@ static void METAL_EndComputePass(
         }
         for (Uint32 i = 0; i < MAX_COMPUTE_WRITE_BUFFERS; i += 1) {
             metalCommandBuffer->computeReadWriteBuffers[i] = nil;
+            metalCommandBuffer->computeReadWriteBufferOffsets[i] = 0;
         }
         for (Uint32 i = 0; i < MAX_STORAGE_TEXTURES_PER_STAGE; i += 1) {
             metalCommandBuffer->computeReadOnlyTextures[i] = nil;
         }
         for (Uint32 i = 0; i < MAX_STORAGE_BUFFERS_PER_STAGE; i += 1) {
             metalCommandBuffer->computeReadOnlyBuffers[i] = nil;
+            metalCommandBuffer->computeReadOnlyBufferOffsets[i] = 0;
         }
     }
 }
@@ -3315,14 +3328,18 @@ static void METAL_INTERNAL_CleanCommandBuffer(
     }
     for (i = 0; i < MAX_STORAGE_BUFFERS_PER_STAGE; i += 1) {
         commandBuffer->vertexStorageBuffers[i] = nil;
+        commandBuffer->vertexStorageBufferOffsets[i] = 0;
         commandBuffer->fragmentStorageBuffers[i] = nil;
+        commandBuffer->fragmentStorageBufferOffsets[i] = 0;
         commandBuffer->computeReadOnlyBuffers[i] = nil;
+        commandBuffer->computeReadOnlyBufferOffsets[i] = 0;
     }
     for (i = 0; i < MAX_COMPUTE_WRITE_TEXTURES; i += 1) {
         commandBuffer->computeReadWriteTextures[i] = nil;
     }
     for (i = 0; i < MAX_COMPUTE_WRITE_BUFFERS; i += 1) {
         commandBuffer->computeReadWriteBuffers[i] = nil;
+        commandBuffer->computeReadWriteBufferOffsets[i] = 0;
     }
 
     /* The fence is now available (unless SubmitAndAcquireFence was called) */
