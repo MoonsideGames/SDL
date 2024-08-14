@@ -4389,7 +4389,7 @@ static void D3D11_BeginComputePass(
             /* We have to create a temporary UAV to represent a storage buffer offset. */
             D3D11_UNORDERED_ACCESS_VIEW_DESC uavDesc;
             uavDesc.Format = DXGI_FORMAT_R32_TYPELESS;
-            uavDesc.ViewDimension = D3D11_SRV_DIMENSION_BUFFEREX;
+            uavDesc.ViewDimension = D3D11_UAV_DIMENSION_BUFFER;
             uavDesc.Buffer.FirstElement = storageBufferBindings[i].offset / sizeof(Uint32);
             uavDesc.Buffer.NumElements = (bufferContainer->activeBuffer->size - storageBufferBindings[i].offset) / sizeof(Uint32);
             uavDesc.Buffer.Flags = D3D11_BUFFEREX_SRV_FLAG_RAW;
