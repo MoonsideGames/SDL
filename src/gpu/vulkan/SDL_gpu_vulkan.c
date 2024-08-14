@@ -1164,8 +1164,8 @@ typedef struct VulkanCommandBuffer
     VulkanTextureSlice *fragmentStorageTextureSlices[MAX_STORAGE_TEXTURES_PER_STAGE];
     VulkanBuffer *fragmentStorageBuffers[MAX_STORAGE_BUFFERS_PER_STAGE];
 
-    VulkanTextureSlice *readWriteComputeStorageTextureSlices[MAX_STORAGE_TEXTURES_PER_STAGE];
-    VulkanBuffer *readWriteComputeStorageBuffers[MAX_STORAGE_BUFFERS_PER_STAGE];
+    VulkanTextureSlice *readWriteComputeStorageTextureSlices[MAX_COMPUTE_WRITE_TEXTURES];
+    VulkanBuffer *readWriteComputeStorageBuffers[MAX_COMPUTE_WRITE_BUFFERS];
 
     VulkanTextureSlice *readOnlyComputeStorageTextureSlices[MAX_STORAGE_TEXTURES_PER_STAGE];
     VulkanBuffer *readOnlyComputeStorageBuffers[MAX_STORAGE_BUFFERS_PER_STAGE];
@@ -8325,8 +8325,8 @@ static void VULKAN_INTERNAL_BindComputeDescriptorSets(
     VkWriteDescriptorSet *writeDescriptorSets;
     VkWriteDescriptorSet *currentWriteDescriptorSet;
     DescriptorSetPool *descriptorSetPool;
-    VkDescriptorBufferInfo bufferInfos[MAX_STORAGE_BUFFERS_PER_STAGE];
-    VkDescriptorImageInfo imageInfos[MAX_STORAGE_TEXTURES_PER_STAGE];
+    VkDescriptorBufferInfo bufferInfos[MAX_STORAGE_BUFFERS_PER_STAGE]; /* 8 is max for both read and read-write */
+    VkDescriptorImageInfo imageInfos[MAX_STORAGE_TEXTURES_PER_STAGE];  /* 8 is max for both read and read-write */
     Uint32 dynamicOffsets[MAX_UNIFORM_BUFFERS_PER_STAGE];
     Uint32 bufferInfoCount = 0;
     Uint32 imageInfoCount = 0;
@@ -8606,7 +8606,7 @@ static void VULKAN_EndComputePass(
     VulkanCommandBuffer *vulkanCommandBuffer = (VulkanCommandBuffer *)commandBuffer;
     Uint32 i;
 
-    for (i = 0; i < MAX_STORAGE_TEXTURES_PER_STAGE; i += 1) {
+    for (i = 0; i < MAX_COMPUTE_WRITE_TEXTURES; i += 1) {
         if (vulkanCommandBuffer->readWriteComputeStorageTextureSlices[i] != NULL) {
             VULKAN_INTERNAL_TextureTransitionToDefaultUsage(
                 vulkanCommandBuffer->renderer,
@@ -8618,7 +8618,7 @@ static void VULKAN_EndComputePass(
         }
     }
 
-    for (i = 0; i < MAX_STORAGE_BUFFERS_PER_STAGE; i += 1) {
+    for (i = 0; i < MAX_COMPUTE_WRITE_BUFFERS; i += 1) {
         if (vulkanCommandBuffer->readWriteComputeStorageBuffers[i] != NULL) {
             VULKAN_INTERNAL_BufferTransitionToDefaultUsage(
                 vulkanCommandBuffer->renderer,

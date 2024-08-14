@@ -495,8 +495,8 @@ typedef struct MetalCommandBuffer
 
     id<MTLTexture> computeReadOnlyTextures[MAX_STORAGE_TEXTURES_PER_STAGE];
     id<MTLBuffer> computeReadOnlyBuffers[MAX_STORAGE_BUFFERS_PER_STAGE];
-    id<MTLTexture> computeReadWriteTextures[MAX_STORAGE_TEXTURES_PER_STAGE];
-    id<MTLBuffer> computeReadWriteBuffers[MAX_STORAGE_BUFFERS_PER_STAGE];
+    id<MTLTexture> computeReadWriteTextures[MAX_COMPUTE_WRITE_TEXTURES];
+    id<MTLBuffer> computeReadWriteBuffers[MAX_COMPUTE_WRITE_BUFFERS];
 
     /* Uniform buffers */
     MetalUniformBuffer *vertexUniformBuffers[MAX_UNIFORM_BUFFERS_PER_STAGE];
@@ -2598,7 +2598,7 @@ static void METAL_INTERNAL_BindComputeResources(
     MetalCommandBuffer *commandBuffer)
 {
     MetalComputePipeline *computePipeline = commandBuffer->computePipeline;
-    NSUInteger offsets[MAX_STORAGE_BUFFERS_PER_STAGE] = { 0 };
+    NSUInteger offsets[MAX_STORAGE_BUFFERS_PER_STAGE] = { 0 }; /* 8 is the max for both read and read-write */
 
     if (commandBuffer->needComputeTextureBind) {
         /* Bind read-only textures */
@@ -3283,14 +3283,18 @@ static void METAL_INTERNAL_CleanCommandBuffer(
     for (i = 0; i < MAX_STORAGE_TEXTURES_PER_STAGE; i += 1) {
         commandBuffer->vertexStorageTextures[i] = nil;
         commandBuffer->fragmentStorageTextures[i] = nil;
-        commandBuffer->computeReadWriteTextures[i] = nil;
         commandBuffer->computeReadOnlyTextures[i] = nil;
     }
     for (i = 0; i < MAX_STORAGE_BUFFERS_PER_STAGE; i += 1) {
         commandBuffer->vertexStorageBuffers[i] = nil;
         commandBuffer->fragmentStorageBuffers[i] = nil;
-        commandBuffer->computeReadWriteBuffers[i] = nil;
         commandBuffer->computeReadOnlyBuffers[i] = nil;
+    }
+    for (i = 0; i < MAX_COMPUTE_WRITE_TEXTURES; i += 1) {
+        commandBuffer->computeReadWriteTextures[i] = nil;
+    }
+    for (i = 0; i < MAX_COMPUTE_WRITE_BUFFERS; i += 1) {
+        commandBuffer->computeReadWriteBuffers[i] = nil;
     }
 
     /* The fence is now available (unless SubmitAndAcquireFence was called) */

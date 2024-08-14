@@ -622,10 +622,9 @@ struct D3D12CommandBuffer
 
     D3D12TextureSubresource *computeReadOnlyStorageTextures[MAX_STORAGE_TEXTURES_PER_STAGE];
     D3D12Buffer *computeReadOnlyStorageBuffers[MAX_STORAGE_BUFFERS_PER_STAGE];
-    /* FIXME: what's the actual UAV limit? */
-    D3D12TextureSubresource *computeReadWriteStorageTextures[MAX_STORAGE_TEXTURES_PER_STAGE];
+    D3D12TextureSubresource *computeReadWriteStorageTextures[MAX_COMPUTE_WRITE_TEXTURES];
     Uint32 computeReadWriteStorageTextureCount;
-    D3D12Buffer *computeReadWriteStorageBuffers[MAX_STORAGE_BUFFERS_PER_STAGE];
+    D3D12Buffer *computeReadWriteStorageBuffers[MAX_COMPUTE_WRITE_BUFFERS];
     Uint32 computeReadWriteStorageBufferCount;
     D3D12UniformBuffer *computeUniformBuffers[MAX_UNIFORM_BUFFERS_PER_STAGE];
 
@@ -4963,7 +4962,7 @@ static void D3D12_EndComputePass(
 {
     D3D12CommandBuffer *d3d12CommandBuffer = (D3D12CommandBuffer *)commandBuffer;
 
-    for (Uint32 i = 0; i < MAX_STORAGE_TEXTURES_PER_STAGE; i += 1) {
+    for (Uint32 i = 0; i < MAX_COMPUTE_WRITE_TEXTURES; i += 1) {
         if (d3d12CommandBuffer->computeReadWriteStorageTextures[i]) {
             D3D12_INTERNAL_TextureSubresourceTransitionToDefaultUsage(
                 d3d12CommandBuffer,
@@ -4974,7 +4973,7 @@ static void D3D12_EndComputePass(
         }
     }
 
-    for (Uint32 i = 0; i < MAX_STORAGE_BUFFERS_PER_STAGE; i += 1) {
+    for (Uint32 i = 0; i < MAX_COMPUTE_WRITE_BUFFERS; i += 1) {
         if (d3d12CommandBuffer->computeReadWriteStorageBuffers[i]) {
             D3D12_INTERNAL_BufferTransitionToDefaultUsage(
                 d3d12CommandBuffer,
