@@ -595,6 +595,7 @@ struct D3D12CommandBuffer
     Uint32 usedUniformBufferCapacity;
 
     /* Resource slot state */
+    SDL_bool needVertexBufferBind;
     SDL_bool needVertexSamplerBind;
     SDL_bool needVertexStorageTextureBind;
     SDL_bool needVertexStorageBufferBind;
@@ -607,6 +608,10 @@ struct D3D12CommandBuffer
     SDL_bool needComputeReadOnlyStorageTextureBind;
     SDL_bool needComputeReadOnlyStorageBufferBind;
     SDL_bool needComputeUniformBufferBind[MAX_UNIFORM_BUFFERS_PER_STAGE];
+
+    D3D12Buffer *vertexBuffers[MAX_BUFFER_BINDINGS];
+    Uint32 vertexBufferOffsets[MAX_BUFFER_BINDINGS];
+    Uint32 vertexBufferCount;
 
     D3D12Texture *vertexSamplerTextures[MAX_TEXTURE_SAMPLERS_PER_STAGE];
     D3D12Sampler *vertexSamplers[MAX_TEXTURE_SAMPLERS_PER_STAGE];
@@ -3116,7 +3121,6 @@ static D3D12Buffer *D3D12_INTERNAL_CreateBuffer(
     return buffer;
 }
 
-/* TODO */
 static D3D12BufferContainer *D3D12_INTERNAL_CreateBufferContainer(
     D3D12Renderer *renderer,
     SDL_GpuBufferUsageFlags usageFlags,
@@ -4088,22 +4092,18 @@ static void D3D12_BindVertexBuffers(
     Uint32 bindingCount)
 {
     D3D12CommandBuffer *d3d12CommandBuffer = (D3D12CommandBuffer *)commandBuffer;
-    D3D12_VERTEX_BUFFER_VIEW views[MAX_BUFFER_BINDINGS];
 
     for (Uint32 i = 0; i < bindingCount; i += 1) {
         D3D12Buffer *currentBuffer = ((D3D12BufferContainer *)pBindings[i].buffer)->activeBuffer;
-        views[i].BufferLocation = currentBuffer->virtualAddress + pBindings[i].offset;
-        views[i].SizeInBytes = currentBuffer->container->size - pBindings[i].offset;
-        views[i].StrideInBytes = d3d12CommandBuffer->currentGraphicsPipeline->vertexStrides[i];
-
+        d3d12CommandBuffer->vertexBuffers[firstBinding + i] = currentBuffer;
+        d3d12CommandBuffer->vertexBufferOffsets[firstBinding + i] = pBindings[i].offset;
         D3D12_INTERNAL_TrackBuffer(d3d12CommandBuffer, currentBuffer);
     }
 
-    ID3D12GraphicsCommandList_IASetVertexBuffers(
-        d3d12CommandBuffer->graphicsCommandList,
-        firstBinding,
-        bindingCount,
-        views);
+    d3d12CommandBuffer->vertexBufferCount =
+        SDL_max(d3d12CommandBuffer->vertexBufferCount, firstBinding + bindingCount);
+
+    d3d12CommandBuffer->needVertexBufferBind = SDL_TRUE;
 }
 
 static void D3D12_BindIndexBuffer(
@@ -4339,6 +4339,21 @@ static void D3D12_INTERNAL_BindGraphicsResources(
 
     D3D12_CPU_DESCRIPTOR_HANDLE cpuHandles[MAX_TEXTURE_SAMPLERS_PER_STAGE];
     D3D12_GPU_DESCRIPTOR_HANDLE gpuDescriptorHandle;
+    D3D12_VERTEX_BUFFER_VIEW vertexBufferViews[MAX_BUFFER_BINDINGS];
+
+    if (commandBuffer->needVertexBufferBind) {
+        for (Uint32 i = 0; i < commandBuffer->vertexBufferCount; i += 1) {
+            vertexBufferViews[i].BufferLocation = commandBuffer->vertexBuffers[i]->virtualAddress + commandBuffer->vertexBufferOffsets[i];
+            vertexBufferViews[i].SizeInBytes = commandBuffer->vertexBuffers[i]->container->size - commandBuffer->vertexBufferOffsets[i];
+            vertexBufferViews[i].StrideInBytes = graphicsPipeline->vertexStrides[i];
+        }
+
+        ID3D12GraphicsCommandList_IASetVertexBuffers(
+            commandBuffer->graphicsCommandList,
+            0,
+            commandBuffer->vertexBufferCount,
+            vertexBufferViews);
+    }
 
     if (commandBuffer->needVertexSamplerBind) {
         if (graphicsPipeline->vertexSamplerCount > 0) {
@@ -4640,6 +4655,10 @@ static void D3D12_EndRenderPass(
     /* Reset bind state */
     SDL_zeroa(d3d12CommandBuffer->colorAttachmentTextureSubresources);
     d3d12CommandBuffer->depthStencilTextureSubresource = NULL;
+
+    SDL_zeroa(d3d12CommandBuffer->vertexBuffers);
+    SDL_zeroa(d3d12CommandBuffer->vertexBufferOffsets);
+    d3d12CommandBuffer->vertexBufferCount = 0;
 
     SDL_zeroa(d3d12CommandBuffer->vertexSamplerTextures);
     SDL_zeroa(d3d12CommandBuffer->vertexSamplers);
@@ -6460,6 +6479,10 @@ static SDL_GpuCommandBuffer *D3D12_AcquireCommandBuffer(
     SDL_zeroa(commandBuffer->colorAttachmentTextureSubresources);
     commandBuffer->colorAttachmentCount = 0;
     commandBuffer->depthStencilTextureSubresource = NULL;
+
+    SDL_zeroa(commandBuffer->vertexBuffers);
+    SDL_zeroa(commandBuffer->vertexBufferOffsets);
+    commandBuffer->vertexBufferCount = 0;
 
     SDL_zeroa(commandBuffer->vertexSamplerTextures);
     SDL_zeroa(commandBuffer->vertexSamplers);
