@@ -651,6 +651,14 @@ typedef struct D3D11CommandBuffer
     Uint32 usedTextureSubresourceCount;
     Uint32 usedTextureSubresourceCapacity;
 
+    ID3D11ShaderResourceView **bufferOffsetSRVs;
+    Uint32 bufferOffsetSRVCount;
+    Uint32 bufferOffsetSRVCapacity;
+
+    ID3D11UnorderedAccessView **bufferOffsetUAVs;
+    Uint32 bufferOffsetUAVCount;
+    Uint32 bufferOffsetUAVCapacity;
+
     D3D11UniformBuffer **usedUniformBuffers;
     Uint32 usedUniformBufferCount;
     Uint32 usedUniformBufferCapacity;
@@ -1002,12 +1010,53 @@ static void D3D11_INTERNAL_TrackTextureSubresource(
         usedTextureSubresourceCapacity);
 }
 
+static void D3D11_INTERNAL_TrackBufferOffsetSRV(
+    D3D11CommandBuffer *commandBuffer,
+    ID3D11ShaderResourceView *srv)
+{
+    for (Uint32 i = 0; i < commandBuffer->bufferOffsetSRVCount; i += 1) {
+        if (commandBuffer->bufferOffsetSRVs[i] == srv) {
+            return;
+        }
+    }
+
+    if (commandBuffer->bufferOffsetSRVCount == commandBuffer->bufferOffsetSRVCapacity) {
+        commandBuffer->bufferOffsetSRVCapacity += 1;
+        commandBuffer->bufferOffsetSRVs = SDL_realloc(
+            commandBuffer->bufferOffsetSRVs,
+            commandBuffer->bufferOffsetSRVCapacity * sizeof(ID3D11ShaderResourceView *));
+    }
+
+    commandBuffer->bufferOffsetSRVs[commandBuffer->bufferOffsetSRVCount] = srv;
+    commandBuffer->bufferOffsetSRVCount += 1;
+}
+
+static void D3D11_INTERNAL_TrackBufferOffsetUAV(
+    D3D11CommandBuffer *commandBuffer,
+    ID3D11UnorderedAccessView *uav)
+{
+    for (Uint32 i = 0; i < commandBuffer->bufferOffsetUAVCount; i += 1) {
+        if (commandBuffer->bufferOffsetUAVs[i] == uav) {
+            return;
+        }
+    }
+
+    if (commandBuffer->bufferOffsetUAVCount == commandBuffer->bufferOffsetUAVCapacity) {
+        commandBuffer->bufferOffsetUAVCapacity += 1;
+        commandBuffer->bufferOffsetUAVs = SDL_realloc(
+            commandBuffer->bufferOffsetUAVs,
+            commandBuffer->bufferOffsetUAVCapacity * sizeof(ID3D11ShaderResourceView *));
+    }
+
+    commandBuffer->bufferOffsetUAVs[commandBuffer->bufferOffsetUAVCount] = uav;
+    commandBuffer->bufferOffsetUAVCount += 1;
+}
+
 static void D3D11_INTERNAL_TrackUniformBuffer(
     D3D11CommandBuffer *commandBuffer,
     D3D11UniformBuffer *uniformBuffer)
 {
-    Uint32 i;
-    for (i = 0; i < commandBuffer->usedUniformBufferCount; i += 1) {
+    for (Uint32 i = 0; i < commandBuffer->usedUniformBufferCount; i += 1) {
         if (commandBuffer->usedUniformBuffers[i] == uniformBuffer) {
             return;
         }
@@ -3086,6 +3135,16 @@ static void D3D11_INTERNAL_AllocateCommandBuffers(
         commandBuffer->usedTextureSubresources = SDL_malloc(
             commandBuffer->usedTextureSubresourceCapacity * sizeof(D3D11TextureSubresource *));
 
+        commandBuffer->bufferOffsetSRVCapacity = 4;
+        commandBuffer->bufferOffsetSRVCount = 0;
+        commandBuffer->bufferOffsetSRVs = SDL_malloc(
+            commandBuffer->bufferOffsetSRVCapacity * sizeof(ID3D11ShaderResourceView *));
+
+        commandBuffer->bufferOffsetUAVCapacity = 4;
+        commandBuffer->bufferOffsetUAVCount = 0;
+        commandBuffer->bufferOffsetUAVs = SDL_malloc(
+            commandBuffer->bufferOffsetUAVCapacity * sizeof(ID3D11UnorderedAccessView *));
+
         commandBuffer->usedUniformBufferCapacity = 4;
         commandBuffer->usedUniformBufferCount = 0;
         commandBuffer->usedUniformBuffers = SDL_malloc(
@@ -3736,23 +3795,52 @@ static void D3D11_BindVertexStorageTextures(
 static void D3D11_BindVertexStorageBuffers(
     SDL_GpuCommandBuffer *commandBuffer,
     Uint32 firstSlot,
-    SDL_GpuBuffer **storageBuffers,
+    SDL_GpuBufferLocation *storageBufferLocations,
     Uint32 bindingCount)
 {
     D3D11CommandBuffer *d3d11CommandBuffer = (D3D11CommandBuffer *)commandBuffer;
     D3D11BufferContainer *bufferContainer;
     Uint32 i;
+    HRESULT res;
 
     for (i = 0; i < bindingCount; i += 1) {
-        bufferContainer = (D3D11BufferContainer *)storageBuffers[i];
+        bufferContainer = (D3D11BufferContainer *)storageBufferLocations[i].buffer;
 
         D3D11_INTERNAL_TrackBuffer(
             d3d11CommandBuffer,
             bufferContainer->activeBuffer);
 
+        ID3D11ShaderResourceView *srv = NULL;
+
+        if (storageBufferLocations[i].offset != 0) {
+            /* We have to create a temporary SRV to represent a storage buffer offset. */
+            D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc;
+            srvDesc.Format = DXGI_FORMAT_R32_TYPELESS;
+            srvDesc.ViewDimension = D3D11_SRV_DIMENSION_BUFFEREX;
+            srvDesc.BufferEx.FirstElement = 0;
+            srvDesc.BufferEx.NumElements = storageBufferLocations[i].offset / sizeof(Uint32);
+            srvDesc.BufferEx.Flags = D3D11_BUFFEREX_SRV_FLAG_RAW;
+
+            res = ID3D11Device_CreateShaderResourceView(
+                d3d11CommandBuffer->renderer->device,
+                (ID3D11Resource *)bufferContainer->activeBuffer->handle,
+                &srvDesc,
+                &srv);
+            if (FAILED(res)) {
+                SDL_LogError(SDL_LOG_CATEGORY_GPU, "Failed to create buffer offset shader resource view!");
+                return;
+            }
+
+            D3D11_INTERNAL_TrackBufferOffsetSRV(d3d11CommandBuffer, srv);
+        }
+        else
+        {
+            srv = bufferContainer->activeBuffer->srv;
+        }
+
         d3d11CommandBuffer->vertexShaderResourceViews[firstSlot + i +
                                                       d3d11CommandBuffer->graphicsPipeline->vertexSamplerCount +
-                                                      d3d11CommandBuffer->graphicsPipeline->vertexStorageTextureCount] = bufferContainer->activeBuffer->srv;
+                                                      d3d11CommandBuffer->graphicsPipeline->vertexStorageTextureCount] = srv;
     }
 
     d3d11CommandBuffer->needVertexResourceBind = SDL_TRUE;
@@ -3820,23 +3908,52 @@ static void D3D11_BindFragmentStorageTextures(
 static void D3D11_BindFragmentStorageBuffers(
     SDL_GpuCommandBuffer *commandBuffer,
     Uint32 firstSlot,
-    SDL_GpuBuffer **storageBuffers,
+    SDL_GpuBufferLocation *storageBuffers,
     Uint32 bindingCount)
 {
     D3D11CommandBuffer *d3d11CommandBuffer = (D3D11CommandBuffer *)commandBuffer;
     D3D11BufferContainer *bufferContainer;
     Uint32 i;
+    HRESULT res;
 
     for (i = 0; i < bindingCount; i += 1) {
-        bufferContainer = (D3D11BufferContainer *)storageBuffers[i];
+        bufferContainer = (D3D11BufferContainer *)storageBuffers[i].buffer;
 
         D3D11_INTERNAL_TrackBuffer(
             d3d11CommandBuffer,
             bufferContainer->activeBuffer);
 
+        ID3D11ShaderResourceView *srv = NULL;
+
+        if (storageBuffers[i].offset != 0) {
+            /* We have to create a temporary SRV to represent a storage buffer offset. */
+            D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc;
+            srvDesc.Format = DXGI_FORMAT_R32_TYPELESS;
+            srvDesc.ViewDimension = D3D11_SRV_DIMENSION_BUFFEREX;
+            srvDesc.BufferEx.FirstElement = 0;
+            srvDesc.BufferEx.NumElements = storageBuffers[i].offset / sizeof(Uint32);
+            srvDesc.BufferEx.Flags = D3D11_BUFFEREX_SRV_FLAG_RAW;
+
+            res = ID3D11Device_CreateShaderResourceView(
+                d3d11CommandBuffer->renderer->device,
+                (ID3D11Resource *)bufferContainer->activeBuffer->handle,
+                &srvDesc,
+                &srv);
+            if (FAILED(res)) {
+                SDL_LogError(SDL_LOG_CATEGORY_GPU, "Failed to create buffer offset shader resource view!");
+                return;
+            }
+
+            D3D11_INTERNAL_TrackBufferOffsetSRV(d3d11CommandBuffer, srv);
+        }
+        else
+        {
+            srv = bufferContainer->activeBuffer->srv;
+        }
+
         d3d11CommandBuffer->fragmentShaderResourceViews[firstSlot + i +
                                                         d3d11CommandBuffer->graphicsPipeline->fragmentSamplerCount +
-                                                        d3d11CommandBuffer->graphicsPipeline->fragmentStorageTextureCount] = bufferContainer->activeBuffer->srv;
+                                                        d3d11CommandBuffer->graphicsPipeline->fragmentStorageTextureCount] = srv;
     }
 
     d3d11CommandBuffer->needFragmentResourceBind = SDL_TRUE;
@@ -4231,6 +4348,7 @@ static void D3D11_BeginComputePass(
     D3D11BufferContainer *bufferContainer;
     D3D11Buffer *buffer;
     Uint32 i;
+    HRESULT res;
 
     for (i = 0; i < storageTextureBindingCount; i += 1) {
         textureContainer = (D3D11TextureContainer *)storageTextureBindings[i].textureSlice.texture;
@@ -4265,7 +4383,33 @@ static void D3D11_BeginComputePass(
             d3d11CommandBuffer,
             buffer);
 
-        d3d11CommandBuffer->computeUnorderedAccessViews[i + storageTextureBindingCount] = buffer->uav;
+        ID3D11UnorderedAccessView *uav = NULL;
+
+        if (storageBufferBindings[i].offset != 0) {
+            /* We have to create a temporary UAV to represent a storage buffer offset. */
+            D3D11_UNORDERED_ACCESS_VIEW_DESC uavDesc;
+            uavDesc.Format = DXGI_FORMAT_R32_TYPELESS;
+            uavDesc.ViewDimension = D3D11_SRV_DIMENSION_BUFFEREX;
+            uavDesc.Buffer.FirstElement = 0;
+            uavDesc.Buffer.NumElements = storageBufferBindings[i].offset / sizeof(Uint32);
+            uavDesc.Buffer.Flags = D3D11_BUFFEREX_SRV_FLAG_RAW;
+
+            res = ID3D11Device_CreateUnorderedAccessView(
+                d3d11CommandBuffer->renderer->device,
+                (ID3D11Resource *)buffer->handle,
+                &uavDesc,
+                &uav);
+            if (FAILED(res)) {
+                SDL_LogError(SDL_LOG_CATEGORY_GPU, "Failed to create buffer offset UAV!");
+                return;
+            }
+
+            D3D11_INTERNAL_TrackBufferOffsetUAV(d3d11CommandBuffer, uav);
+        } else {
+            uav = buffer->uav;
+        }
+
+        d3d11CommandBuffer->computeUnorderedAccessViews[i + storageTextureBindingCount] = uav;
     }
 
     d3d11CommandBuffer->needComputeUAVBind = SDL_TRUE;
@@ -4329,22 +4473,51 @@ static void D3D11_BindComputeStorageTextures(
 static void D3D11_BindComputeStorageBuffers(
     SDL_GpuCommandBuffer *commandBuffer,
     Uint32 firstSlot,
-    SDL_GpuBuffer **storageBuffers,
+    SDL_GpuBufferLocation *storageBufferLocations,
     Uint32 bindingCount)
 {
     D3D11CommandBuffer *d3d11CommandBuffer = (D3D11CommandBuffer *)commandBuffer;
     D3D11BufferContainer *bufferContainer;
     Uint32 i;
+    HRESULT res;
 
     for (i = 0; i < bindingCount; i += 1) {
-        bufferContainer = (D3D11BufferContainer *)storageBuffers[i];
+        bufferContainer = (D3D11BufferContainer *)storageBufferLocations[i].buffer;
 
         D3D11_INTERNAL_TrackBuffer(
             d3d11CommandBuffer,
             bufferContainer->activeBuffer);
 
+        ID3D11ShaderResourceView *srv = NULL;
+
+        if (storageBufferLocations[i].offset != 0) {
+            /* We have to create a temporary SRV to represent a storage buffer offset. */
+            D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc;
+            srvDesc.Format = DXGI_FORMAT_R32_TYPELESS;
+            srvDesc.ViewDimension = D3D11_SRV_DIMENSION_BUFFEREX;
+            srvDesc.BufferEx.FirstElement = 0;
+            srvDesc.BufferEx.NumElements = storageBufferLocations[i].offset / sizeof(Uint32);
+            srvDesc.BufferEx.Flags = D3D11_BUFFEREX_SRV_FLAG_RAW;
+
+            res = ID3D11Device_CreateShaderResourceView(
+                d3d11CommandBuffer->renderer->device,
+                (ID3D11Resource *)bufferContainer->activeBuffer->handle,
+                &srvDesc,
+                &srv);
+            if (FAILED(res)) {
+                SDL_LogError(SDL_LOG_CATEGORY_GPU, "Failed to create buffer offset shader resource view!");
+                return;
+            }
+
+            D3D11_INTERNAL_TrackBufferOffsetSRV(d3d11CommandBuffer, srv);
+        }
+        else
+        {
+            srv = bufferContainer->activeBuffer->srv;
+        }
+
         d3d11CommandBuffer->computeShaderResourceViews[firstSlot + i +
-                                                       d3d11CommandBuffer->computePipeline->readOnlyStorageTextureCount] = bufferContainer->activeBuffer->srv;
+                                                       d3d11CommandBuffer->computePipeline->readOnlyStorageTextureCount] = srv;
     }
 
     d3d11CommandBuffer->needComputeSRVBind = SDL_TRUE;
@@ -4639,6 +4812,17 @@ static void D3D11_INTERNAL_CleanCommandBuffer(
     commandBuffer->usedUniformBufferCount = 0;
 
     SDL_UnlockMutex(renderer->acquireUniformBufferLock);
+
+    /* Buffer Offset temporary views can be released */
+    for (i = 0; i < commandBuffer->bufferOffsetSRVCount; i += 1) {
+        ID3D11ShaderResourceView_Release(commandBuffer->bufferOffsetSRVs[i]);
+    }
+    commandBuffer->bufferOffsetSRVCount = 0;
+
+    for (i = 0; i < commandBuffer->bufferOffsetUAVCount; i += 1) {
+        ID3D11UnorderedAccessView_Release(commandBuffer->bufferOffsetUAVs[i]);
+    }
+    commandBuffer->bufferOffsetUAVCount = 0;
 
     /* Reference Counting */
 

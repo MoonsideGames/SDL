@@ -335,7 +335,7 @@ struct SDL_GpuDevice
     void (*BindVertexStorageBuffers)(
         SDL_GpuCommandBuffer *commandBuffer,
         Uint32 firstSlot,
-        SDL_GpuBuffer **storageBuffers,
+        SDL_GpuBufferLocation *storageBufferLocations,
         Uint32 bindingCount);
 
     void (*BindFragmentSamplers)(
@@ -353,7 +353,7 @@ struct SDL_GpuDevice
     void (*BindFragmentStorageBuffers)(
         SDL_GpuCommandBuffer *commandBuffer,
         Uint32 firstSlot,
-        SDL_GpuBuffer **storageBuffers,
+        SDL_GpuBufferLocation *storageBufferLocations,
         Uint32 bindingCount);
 
     void (*PushVertexUniformData)(
@@ -419,7 +419,7 @@ struct SDL_GpuDevice
     void (*BindComputeStorageBuffers)(
         SDL_GpuCommandBuffer *commandBuffer,
         Uint32 firstSlot,
-        SDL_GpuBuffer **storageBuffers,
+        SDL_GpuBufferLocation *storageBufferLocations,
         Uint32 bindingCount);
 
     void (*PushComputeUniformData)(

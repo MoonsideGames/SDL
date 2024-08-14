@@ -1054,17 +1054,18 @@ void SDL_GpuBindVertexStorageTextures(
         bindingCount);
 }
 
+/* FIXME: need to verify that the locations are a multiple of 4 */
 void SDL_GpuBindVertexStorageBuffers(
     SDL_GpuRenderPass *renderPass,
     Uint32 firstSlot,
-    SDL_GpuBuffer **storageBuffers,
+    SDL_GpuBufferLocation *storageBufferLocations,
     Uint32 bindingCount)
 {
     if (renderPass == NULL) {
         SDL_InvalidParamError("renderPass");
         return;
     }
-    if (storageBuffers == NULL && bindingCount > 0) {
+    if (storageBufferLocations == NULL && bindingCount > 0) {
         SDL_InvalidParamError("storageBuffers");
         return;
     }
@@ -1076,7 +1077,7 @@ void SDL_GpuBindVertexStorageBuffers(
     RENDERPASS_DEVICE->BindVertexStorageBuffers(
         RENDERPASS_COMMAND_BUFFER,
         firstSlot,
-        storageBuffers,
+        storageBufferLocations,
         bindingCount);
 }
 
@@ -1135,14 +1136,14 @@ void SDL_GpuBindFragmentStorageTextures(
 void SDL_GpuBindFragmentStorageBuffers(
     SDL_GpuRenderPass *renderPass,
     Uint32 firstSlot,
-    SDL_GpuBuffer **storageBuffers,
+    SDL_GpuBufferLocation *storageBufferLocations,
     Uint32 bindingCount)
 {
     if (renderPass == NULL) {
         SDL_InvalidParamError("renderPass");
         return;
     }
-    if (storageBuffers == NULL && bindingCount > 0) {
+    if (storageBufferLocations == NULL && bindingCount > 0) {
         SDL_InvalidParamError("storageBuffers");
         return;
     }
@@ -1154,7 +1155,7 @@ void SDL_GpuBindFragmentStorageBuffers(
     RENDERPASS_DEVICE->BindFragmentStorageBuffers(
         RENDERPASS_COMMAND_BUFFER,
         firstSlot,
-        storageBuffers,
+        storageBufferLocations,
         bindingCount);
 }
 
@@ -1286,6 +1287,7 @@ void SDL_GpuEndRenderPass(
 
 /* Compute Pass */
 
+/* FIXME: verify that storage buffer offset is a multiple of 4 */
 SDL_GpuComputePass *SDL_GpuBeginComputePass(
     SDL_GpuCommandBuffer *commandBuffer,
     SDL_GpuStorageTextureReadWriteBinding *storageTextureBindings,
@@ -1388,14 +1390,14 @@ void SDL_GpuBindComputeStorageTextures(
 void SDL_GpuBindComputeStorageBuffers(
     SDL_GpuComputePass *computePass,
     Uint32 firstSlot,
-    SDL_GpuBuffer **storageBuffers,
+    SDL_GpuBufferLocation *storageBufferLocations,
     Uint32 bindingCount)
 {
     if (computePass == NULL) {
         SDL_InvalidParamError("computePass");
         return;
     }
-    if (storageBuffers == NULL && bindingCount > 0) {
+    if (storageBufferLocations == NULL && bindingCount > 0) {
         SDL_InvalidParamError("storageBuffers");
         return;
     }
@@ -1407,7 +1409,7 @@ void SDL_GpuBindComputeStorageBuffers(
     COMPUTEPASS_DEVICE->BindComputeStorageBuffers(
         COMPUTEPASS_COMMAND_BUFFER,
         firstSlot,
-        storageBuffers,
+        storageBufferLocations,
         bindingCount);
 }
 

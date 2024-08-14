@@ -1158,17 +1158,21 @@ typedef struct VulkanCommandBuffer
     VulkanSampler *vertexSamplers[MAX_TEXTURE_SAMPLERS_PER_STAGE];
     VulkanTextureSlice *vertexStorageTextureSlices[MAX_STORAGE_TEXTURES_PER_STAGE];
     VulkanBuffer *vertexStorageBuffers[MAX_STORAGE_BUFFERS_PER_STAGE];
+    Uint32 vertexStorageBufferOffsets[MAX_STORAGE_BUFFERS_PER_STAGE];
 
     VulkanTexture *fragmentSamplerTextures[MAX_TEXTURE_SAMPLERS_PER_STAGE];
     VulkanSampler *fragmentSamplers[MAX_TEXTURE_SAMPLERS_PER_STAGE];
     VulkanTextureSlice *fragmentStorageTextureSlices[MAX_STORAGE_TEXTURES_PER_STAGE];
     VulkanBuffer *fragmentStorageBuffers[MAX_STORAGE_BUFFERS_PER_STAGE];
+    Uint32 fragmentStorageBufferOffsets[MAX_STORAGE_BUFFERS_PER_STAGE];
 
     VulkanTextureSlice *readWriteComputeStorageTextureSlices[MAX_COMPUTE_WRITE_TEXTURES];
     VulkanBuffer *readWriteComputeStorageBuffers[MAX_COMPUTE_WRITE_BUFFERS];
+    Uint32 readWriteComputeStorageBufferOffsets[MAX_COMPUTE_WRITE_BUFFERS];
 
     VulkanTextureSlice *readOnlyComputeStorageTextureSlices[MAX_STORAGE_TEXTURES_PER_STAGE];
     VulkanBuffer *readOnlyComputeStorageBuffers[MAX_STORAGE_BUFFERS_PER_STAGE];
+    Uint32 readOnlyComputeStorageBufferOffsets[MAX_STORAGE_BUFFERS_PER_STAGE];
 
     /* Uniform buffers */
 
@@ -5049,7 +5053,7 @@ static void VULKAN_INTERNAL_BindGraphicsDescriptorSets(
             currentWriteDescriptorSet->pImageInfo = NULL;
 
             bufferInfos[bufferInfoCount].buffer = commandBuffer->vertexStorageBuffers[i]->buffer;
-            bufferInfos[bufferInfoCount].offset = 0;
+            bufferInfos[bufferInfoCount].offset = commandBuffer->vertexStorageBufferOffsets[i];
             bufferInfos[bufferInfoCount].range = VK_WHOLE_SIZE;
 
             currentWriteDescriptorSet->pBufferInfo = &bufferInfos[bufferInfoCount];
@@ -5219,7 +5223,7 @@ static void VULKAN_INTERNAL_BindGraphicsDescriptorSets(
             currentWriteDescriptorSet->pImageInfo = NULL;
 
             bufferInfos[bufferInfoCount].buffer = commandBuffer->fragmentStorageBuffers[i]->buffer;
-            bufferInfos[bufferInfoCount].offset = 0;
+            bufferInfos[bufferInfoCount].offset = commandBuffer->fragmentStorageBufferOffsets[i];
             bufferInfos[bufferInfoCount].range = VK_WHOLE_SIZE;
 
             currentWriteDescriptorSet->pBufferInfo = &bufferInfos[bufferInfoCount];
@@ -7510,7 +7514,7 @@ static void VULKAN_BindVertexStorageTextures(
 static void VULKAN_BindVertexStorageBuffers(
     SDL_GpuCommandBuffer *commandBuffer,
     Uint32 firstSlot,
-    SDL_GpuBuffer **storageBuffers,
+    SDL_GpuBufferLocation *storageBufferLocations,
     Uint32 bindingCount)
 {
     VulkanCommandBuffer *vulkanCommandBuffer = (VulkanCommandBuffer *)commandBuffer;
@@ -7518,9 +7522,10 @@ static void VULKAN_BindVertexStorageBuffers(
     Uint32 i;
 
     for (i = 0; i < bindingCount; i += 1) {
-        bufferContainer = (VulkanBufferContainer *)storageBuffers[i];
+        bufferContainer = (VulkanBufferContainer *)storageBufferLocations[i].buffer;
 
         vulkanCommandBuffer->vertexStorageBuffers[firstSlot + i] = bufferContainer->activeBufferHandle->vulkanBuffer;
+        vulkanCommandBuffer->vertexStorageBufferOffsets[firstSlot + i] = storageBufferLocations[i].offset;
 
         VULKAN_INTERNAL_TrackBuffer(
             vulkanCommandBuffer,
@@ -7590,7 +7595,7 @@ static void VULKAN_BindFragmentStorageTextures(
 static void VULKAN_BindFragmentStorageBuffers(
     SDL_GpuCommandBuffer *commandBuffer,
     Uint32 firstSlot,
-    SDL_GpuBuffer **storageBuffers,
+    SDL_GpuBufferLocation *storageBufferLocations,
     Uint32 bindingCount)
 {
     VulkanCommandBuffer *vulkanCommandBuffer = (VulkanCommandBuffer *)commandBuffer;
@@ -7598,9 +7603,10 @@ static void VULKAN_BindFragmentStorageBuffers(
     Uint32 i;
 
     for (i = 0; i < bindingCount; i += 1) {
-        bufferContainer = (VulkanBufferContainer *)storageBuffers[i];
+        bufferContainer = (VulkanBufferContainer *)storageBufferLocations[i].buffer;
 
         vulkanCommandBuffer->fragmentStorageBuffers[firstSlot + i] = bufferContainer->activeBufferHandle->vulkanBuffer;
+        vulkanCommandBuffer->fragmentStorageBufferOffsets[firstSlot + i] = storageBufferLocations[i].offset;
 
         VULKAN_INTERNAL_TrackBuffer(
             vulkanCommandBuffer,
@@ -8142,11 +8148,13 @@ static void VULKAN_EndRenderPass(
     SDL_zeroa(vulkanCommandBuffer->vertexSamplerTextures);
     SDL_zeroa(vulkanCommandBuffer->vertexStorageTextureSlices);
     SDL_zeroa(vulkanCommandBuffer->vertexStorageBuffers);
+    SDL_zeroa(vulkanCommandBuffer->vertexStorageBufferOffsets);
 
     SDL_zeroa(vulkanCommandBuffer->fragmentSamplers);
     SDL_zeroa(vulkanCommandBuffer->fragmentSamplerTextures);
     SDL_zeroa(vulkanCommandBuffer->fragmentStorageTextureSlices);
     SDL_zeroa(vulkanCommandBuffer->fragmentStorageBuffers);
+    SDL_zeroa(vulkanCommandBuffer->fragmentStorageBufferOffsets);
 }
 
 static void VULKAN_BeginComputePass(
@@ -8195,6 +8203,7 @@ static void VULKAN_BeginComputePass(
             VULKAN_BUFFER_USAGE_MODE_COMPUTE_STORAGE_READ);
 
         vulkanCommandBuffer->readWriteComputeStorageBuffers[i] = buffer;
+        vulkanCommandBuffer->readWriteComputeStorageBufferOffsets[i] = storageBufferBindings[i].offset;
 
         VULKAN_INTERNAL_TrackBuffer(
             vulkanCommandBuffer,
@@ -8280,7 +8289,7 @@ static void VULKAN_BindComputeStorageTextures(
 static void VULKAN_BindComputeStorageBuffers(
     SDL_GpuCommandBuffer *commandBuffer,
     Uint32 firstSlot,
-    SDL_GpuBuffer **storageBuffers,
+    SDL_GpuBufferLocation *storageBufferLocations,
     Uint32 bindingCount)
 {
     VulkanCommandBuffer *vulkanCommandBuffer = (VulkanCommandBuffer *)commandBuffer;
@@ -8297,9 +8306,10 @@ static void VULKAN_BindComputeStorageBuffers(
                 vulkanCommandBuffer->readOnlyComputeStorageBuffers[firstSlot + i]);
         }
 
-        bufferContainer = (VulkanBufferContainer *)storageBuffers[i];
+        bufferContainer = (VulkanBufferContainer *)storageBufferLocations[i].buffer;
 
         vulkanCommandBuffer->readOnlyComputeStorageBuffers[firstSlot + i] = bufferContainer->activeBufferHandle->vulkanBuffer;
+        vulkanCommandBuffer->readOnlyComputeStorageBufferOffsets[firstSlot + i] = storageBufferLocations[i].offset;
 
         VULKAN_INTERNAL_BufferTransitionFromDefaultUsage(
             renderer,
@@ -8396,7 +8406,7 @@ static void VULKAN_INTERNAL_BindComputeDescriptorSets(
             currentWriteDescriptorSet->pImageInfo = NULL;
 
             bufferInfos[bufferInfoCount].buffer = commandBuffer->readOnlyComputeStorageBuffers[i]->buffer;
-            bufferInfos[bufferInfoCount].offset = 0;
+            bufferInfos[bufferInfoCount].offset = commandBuffer->readOnlyComputeStorageBufferOffsets[i];
             bufferInfos[bufferInfoCount].range = VK_WHOLE_SIZE;
 
             currentWriteDescriptorSet->pBufferInfo = &bufferInfos[bufferInfoCount];
@@ -8477,7 +8487,7 @@ static void VULKAN_INTERNAL_BindComputeDescriptorSets(
             currentWriteDescriptorSet->pImageInfo = NULL;
 
             bufferInfos[bufferInfoCount].buffer = commandBuffer->readWriteComputeStorageBuffers[i]->buffer;
-            bufferInfos[bufferInfoCount].offset = 0;
+            bufferInfos[bufferInfoCount].offset = commandBuffer->readWriteComputeStorageBufferOffsets[i];
             bufferInfos[bufferInfoCount].range = VK_WHOLE_SIZE;
 
             currentWriteDescriptorSet->pBufferInfo = &bufferInfos[bufferInfoCount];
@@ -8641,6 +8651,7 @@ static void VULKAN_EndComputePass(
                 vulkanCommandBuffer->readWriteComputeStorageBuffers[i]);
 
             vulkanCommandBuffer->readWriteComputeStorageBuffers[i] = NULL;
+            vulkanCommandBuffer->readWriteComputeStorageBufferOffsets[i] = 0;
         }
     }
 
@@ -8665,6 +8676,7 @@ static void VULKAN_EndComputePass(
                 vulkanCommandBuffer->readOnlyComputeStorageBuffers[i]);
 
             vulkanCommandBuffer->readOnlyComputeStorageBuffers[i] = NULL;
+            vulkanCommandBuffer->readOnlyComputeStorageBufferOffsets[i] = 0;
         }
     }
 
@@ -9498,16 +9510,20 @@ static SDL_GpuCommandBuffer *VULKAN_AcquireCommandBuffer(
     SDL_zeroa(commandBuffer->vertexSamplers);
     SDL_zeroa(commandBuffer->vertexStorageTextureSlices);
     SDL_zeroa(commandBuffer->vertexStorageBuffers);
+    SDL_zeroa(commandBuffer->vertexStorageBufferOffsets);
 
     SDL_zeroa(commandBuffer->fragmentSamplerTextures);
     SDL_zeroa(commandBuffer->fragmentSamplers);
     SDL_zeroa(commandBuffer->fragmentStorageTextureSlices);
     SDL_zeroa(commandBuffer->fragmentStorageBuffers);
+    SDL_zeroa(commandBuffer->fragmentStorageBufferOffsets);
 
     SDL_zeroa(commandBuffer->readWriteComputeStorageTextureSlices);
     SDL_zeroa(commandBuffer->readWriteComputeStorageBuffers);
+    SDL_zeroa(commandBuffer->readWriteComputeStorageBufferOffsets);
     SDL_zeroa(commandBuffer->readOnlyComputeStorageTextureSlices);
     SDL_zeroa(commandBuffer->readOnlyComputeStorageBuffers);
+    SDL_zeroa(commandBuffer->readOnlyComputeStorageBufferOffsets);
 
     commandBuffer->autoReleaseFence = 1;
 

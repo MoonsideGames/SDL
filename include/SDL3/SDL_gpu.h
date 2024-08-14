@@ -748,6 +748,7 @@ typedef struct SDL_GpuTextureSamplerBinding
 typedef struct SDL_GpuStorageBufferReadWriteBinding
 {
     SDL_GpuBuffer *buffer;
+    Uint32 offset;
 
     /* if SDL_TRUE, cycles the buffer if it is bound. */
     SDL_bool cycle;
@@ -1461,7 +1462,7 @@ extern SDL_DECLSPEC void SDLCALL SDL_GpuBindVertexStorageTextures(
  *
  * \param renderPass a render pass handle
  * \param firstSlot the vertex storage buffer slot to begin binding from
- * \param storageBuffers an array of buffers
+ * \param storageBuffers an array of buffer locations
  * \param bindingCount the number of buffers to bind from the array
  *
  * \since This function is available since SDL 3.x.x
@@ -1469,7 +1470,7 @@ extern SDL_DECLSPEC void SDLCALL SDL_GpuBindVertexStorageTextures(
 extern SDL_DECLSPEC void SDLCALL SDL_GpuBindVertexStorageBuffers(
     SDL_GpuRenderPass *renderPass,
     Uint32 firstSlot,
-    SDL_GpuBuffer **storageBuffers,
+    SDL_GpuBufferLocation *storageBufferLocations,
     Uint32 bindingCount);
 
 /**
@@ -1512,7 +1513,7 @@ extern SDL_DECLSPEC void SDLCALL SDL_GpuBindFragmentStorageTextures(
  *
  * \param renderPass a render pass handle
  * \param firstSlot the fragment storage buffer slot to begin binding from
- * \param storageBuffers an array of storage buffers
+ * \param storageBuffers an array of storage buffer locations
  * \param bindingCount the number of storage buffers to bind from the array
  *
  * \since This function is available since SDL 3.x.x
@@ -1520,7 +1521,7 @@ extern SDL_DECLSPEC void SDLCALL SDL_GpuBindFragmentStorageTextures(
 extern SDL_DECLSPEC void SDLCALL SDL_GpuBindFragmentStorageBuffers(
     SDL_GpuRenderPass *renderPass,
     Uint32 firstSlot,
-    SDL_GpuBuffer **storageBuffers,
+    SDL_GpuBufferLocation *storageBufferLocations,
     Uint32 bindingCount);
 
 /* Drawing */
@@ -1678,7 +1679,7 @@ extern SDL_DECLSPEC void SDLCALL SDL_GpuBindComputeStorageTextures(
  *
  * \param computePass a compute pass handle
  * \param firstSlot the compute storage buffer slot to begin binding from
- * \param storageBuffers an array of storage buffer binding structs
+ * \param storageBuffers an array of buffer locations
  * \param bindingCount the number of storage buffers to bind from the array
  *
  * \since This function is available since SDL 3.x.x
@@ -1686,7 +1687,7 @@ extern SDL_DECLSPEC void SDLCALL SDL_GpuBindComputeStorageTextures(
 extern SDL_DECLSPEC void SDLCALL SDL_GpuBindComputeStorageBuffers(
     SDL_GpuComputePass *computePass,
     Uint32 firstSlot,
-    SDL_GpuBuffer **storageBuffers,
+    SDL_GpuBufferLocation *storageBufferLocations,
     Uint32 bindingCount);
 
 /**
