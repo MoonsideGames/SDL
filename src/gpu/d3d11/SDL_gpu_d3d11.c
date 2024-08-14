@@ -3817,8 +3817,8 @@ static void D3D11_BindVertexStorageBuffers(
             D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc;
             srvDesc.Format = DXGI_FORMAT_R32_TYPELESS;
             srvDesc.ViewDimension = D3D11_SRV_DIMENSION_BUFFEREX;
-            srvDesc.BufferEx.FirstElement = 0;
-            srvDesc.BufferEx.NumElements = storageBufferLocations[i].offset / sizeof(Uint32);
+            srvDesc.BufferEx.FirstElement = storageBufferLocations[i].offset / sizeof(Uint32);
+            srvDesc.BufferEx.NumElements = (bufferContainer->activeBuffer->size - storageBufferLocations[i].offset) / sizeof(Uint32);
             srvDesc.BufferEx.Flags = D3D11_BUFFEREX_SRV_FLAG_RAW;
 
             res = ID3D11Device_CreateShaderResourceView(
@@ -3908,7 +3908,7 @@ static void D3D11_BindFragmentStorageTextures(
 static void D3D11_BindFragmentStorageBuffers(
     SDL_GpuCommandBuffer *commandBuffer,
     Uint32 firstSlot,
-    SDL_GpuBufferLocation *storageBuffers,
+    SDL_GpuBufferLocation *storageBufferLocations,
     Uint32 bindingCount)
 {
     D3D11CommandBuffer *d3d11CommandBuffer = (D3D11CommandBuffer *)commandBuffer;
@@ -3917,7 +3917,7 @@ static void D3D11_BindFragmentStorageBuffers(
     HRESULT res;
 
     for (i = 0; i < bindingCount; i += 1) {
-        bufferContainer = (D3D11BufferContainer *)storageBuffers[i].buffer;
+        bufferContainer = (D3D11BufferContainer *)storageBufferLocations[i].buffer;
 
         D3D11_INTERNAL_TrackBuffer(
             d3d11CommandBuffer,
@@ -3925,13 +3925,13 @@ static void D3D11_BindFragmentStorageBuffers(
 
         ID3D11ShaderResourceView *srv = NULL;
 
-        if (storageBuffers[i].offset != 0) {
+        if (storageBufferLocations[i].offset != 0) {
             /* We have to create a temporary SRV to represent a storage buffer offset. */
             D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc;
             srvDesc.Format = DXGI_FORMAT_R32_TYPELESS;
             srvDesc.ViewDimension = D3D11_SRV_DIMENSION_BUFFEREX;
-            srvDesc.BufferEx.FirstElement = 0;
-            srvDesc.BufferEx.NumElements = storageBuffers[i].offset / sizeof(Uint32);
+            srvDesc.BufferEx.FirstElement = storageBufferLocations[i].offset / sizeof(Uint32);
+            srvDesc.BufferEx.NumElements = (bufferContainer->activeBuffer->size - storageBufferLocations[i].offset) / sizeof(Uint32);
             srvDesc.BufferEx.Flags = D3D11_BUFFEREX_SRV_FLAG_RAW;
 
             res = ID3D11Device_CreateShaderResourceView(
@@ -4390,8 +4390,8 @@ static void D3D11_BeginComputePass(
             D3D11_UNORDERED_ACCESS_VIEW_DESC uavDesc;
             uavDesc.Format = DXGI_FORMAT_R32_TYPELESS;
             uavDesc.ViewDimension = D3D11_SRV_DIMENSION_BUFFEREX;
-            uavDesc.Buffer.FirstElement = 0;
-            uavDesc.Buffer.NumElements = storageBufferBindings[i].offset / sizeof(Uint32);
+            uavDesc.Buffer.FirstElement = storageBufferBindings[i].offset / sizeof(Uint32);
+            uavDesc.Buffer.NumElements = (bufferContainer->activeBuffer->size - storageBufferBindings[i].offset) / sizeof(Uint32);
             uavDesc.Buffer.Flags = D3D11_BUFFEREX_SRV_FLAG_RAW;
 
             res = ID3D11Device_CreateUnorderedAccessView(
@@ -4495,8 +4495,8 @@ static void D3D11_BindComputeStorageBuffers(
             D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc;
             srvDesc.Format = DXGI_FORMAT_R32_TYPELESS;
             srvDesc.ViewDimension = D3D11_SRV_DIMENSION_BUFFEREX;
-            srvDesc.BufferEx.FirstElement = 0;
-            srvDesc.BufferEx.NumElements = storageBufferLocations[i].offset / sizeof(Uint32);
+            srvDesc.BufferEx.FirstElement = storageBufferLocations[i].offset / sizeof(Uint32);
+            srvDesc.BufferEx.NumElements = (bufferContainer->activeBuffer->size - storageBufferLocations[i].offset) / sizeof(Uint32);
             srvDesc.BufferEx.Flags = D3D11_BUFFEREX_SRV_FLAG_RAW;
 
             res = ID3D11Device_CreateShaderResourceView(

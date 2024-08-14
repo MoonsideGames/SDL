@@ -617,19 +617,23 @@ struct D3D12CommandBuffer
     D3D12Sampler *vertexSamplers[MAX_TEXTURE_SAMPLERS_PER_STAGE];
     D3D12TextureSubresource *vertexStorageTextureSubresources[MAX_STORAGE_TEXTURES_PER_STAGE];
     D3D12Buffer *vertexStorageBuffers[MAX_STORAGE_BUFFERS_PER_STAGE];
+    Uint32 vertexStorageBufferOffsets[MAX_STORAGE_BUFFERS_PER_STAGE];
     D3D12UniformBuffer *vertexUniformBuffers[MAX_UNIFORM_BUFFERS_PER_STAGE];
 
     D3D12Texture *fragmentSamplerTextures[MAX_TEXTURE_SAMPLERS_PER_STAGE];
     D3D12Sampler *fragmentSamplers[MAX_TEXTURE_SAMPLERS_PER_STAGE];
     D3D12TextureSubresource *fragmentStorageTextureSubresources[MAX_STORAGE_TEXTURES_PER_STAGE];
     D3D12Buffer *fragmentStorageBuffers[MAX_STORAGE_BUFFERS_PER_STAGE];
+    Uint32 fragmentStorageBufferOffsets[MAX_STORAGE_BUFFERS_PER_STAGE];
     D3D12UniformBuffer *fragmentUniformBuffers[MAX_UNIFORM_BUFFERS_PER_STAGE];
 
     D3D12TextureSubresource *computeReadOnlyStorageTextures[MAX_STORAGE_TEXTURES_PER_STAGE];
     D3D12Buffer *computeReadOnlyStorageBuffers[MAX_STORAGE_BUFFERS_PER_STAGE];
+    Uint32 computeReadOnlyStorageBufferOffsets[MAX_STORAGE_BUFFERS_PER_STAGE];
     D3D12TextureSubresource *computeReadWriteStorageTextures[MAX_COMPUTE_WRITE_TEXTURES];
     Uint32 computeReadWriteStorageTextureCount;
     D3D12Buffer *computeReadWriteStorageBuffers[MAX_COMPUTE_WRITE_BUFFERS];
+    Uint32 computeReadWriteStorageBufferOffsets[MAX_COMPUTE_WRITE_BUFFERS];
     Uint32 computeReadWriteStorageBufferCount;
     D3D12UniformBuffer *computeUniformBuffers[MAX_UNIFORM_BUFFERS_PER_STAGE];
 
@@ -658,6 +662,11 @@ struct D3D12CommandBuffer
     D3D12TextureDownload **textureDownloads;
     Uint32 textureDownloadCount;
     Uint32 textureDownloadCapacity;
+
+    /* Temporary views for storage buffer offsets */
+    D3D12CPUDescriptor *temporaryDescriptors;
+    Uint32 temporaryDescriptorCount;
+    Uint32 temporaryDescriptorCapacity;
 };
 
 struct D3D12Shader
@@ -1595,6 +1604,21 @@ static void D3D12_INTERNAL_TrackComputePipeline(
 }
 
 #undef TRACK_RESOURCE
+
+static void D3D12_INTERNAL_TrackTemporaryDescriptor(
+    D3D12CommandBuffer *commandBuffer,
+    D3D12CPUDescriptor *descriptor)
+{
+    if (commandBuffer->temporaryDescriptorCount == commandBuffer->temporaryDescriptorCapacity) {
+        commandBuffer->temporaryDescriptorCapacity *= 2;
+        commandBuffer->temporaryDescriptors = SDL_realloc(
+            commandBuffer->temporaryDescriptors,
+            commandBuffer->temporaryDescriptorCapacity * sizeof(D3D12CPUDescriptor));
+    }
+
+    commandBuffer->temporaryDescriptors[commandBuffer->temporaryDescriptorCount] = *descriptor;
+    commandBuffer->temporaryDescriptorCount += 1;
+}
 
 /* State Creation */
 
@@ -4182,13 +4206,13 @@ static void D3D12_BindVertexStorageTextures(
 static void D3D12_BindVertexStorageBuffers(
     SDL_GpuCommandBuffer *commandBuffer,
     Uint32 firstSlot,
-    SDL_GpuBuffer **storageBuffers,
+    SDL_GpuBufferLocation *storageBufferLocations,
     Uint32 bindingCount)
 {
     D3D12CommandBuffer *d3d12CommandBuffer = (D3D12CommandBuffer *)commandBuffer;
 
     for (Uint32 i = 0; i < bindingCount; i += 1) {
-        D3D12BufferContainer *container = (D3D12BufferContainer *)storageBuffers[i];
+        D3D12BufferContainer *container = (D3D12BufferContainer *)storageBufferLocations[i].buffer;
 
         D3D12_INTERNAL_TrackBuffer(
             d3d12CommandBuffer,
@@ -4255,13 +4279,13 @@ static void D3D12_BindFragmentStorageTextures(
 static void D3D12_BindFragmentStorageBuffers(
     SDL_GpuCommandBuffer *commandBuffer,
     Uint32 firstSlot,
-    SDL_GpuBuffer **storageBuffers,
+    SDL_GpuBufferLocation *storageBufferLocations,
     Uint32 bindingCount)
 {
     D3D12CommandBuffer *d3d12CommandBuffer = (D3D12CommandBuffer *)commandBuffer;
 
     for (Uint32 i = 0; i < bindingCount; i += 1) {
-        D3D12BufferContainer *container = (D3D12BufferContainer *)storageBuffers[i];
+        D3D12BufferContainer *container = (D3D12BufferContainer *)storageBufferLocations[i].buffer;
 
         D3D12_INTERNAL_TrackBuffer(
             d3d12CommandBuffer,
@@ -4416,7 +4440,34 @@ static void D3D12_INTERNAL_BindGraphicsResources(
     if (commandBuffer->needVertexStorageBufferBind) {
         if (graphicsPipeline->vertexStorageBufferCount > 0) {
             for (Uint32 i = 0; i < graphicsPipeline->vertexStorageBufferCount; i += 1) {
-                cpuHandles[i] = commandBuffer->vertexStorageBuffers[i]->srvDescriptor.cpuHandle;
+                if (commandBuffer->vertexStorageBufferOffsets[i] != 0) {
+                    /* We have to create a temporary SRV to represent a storage buffer offset. */
+                    D3D12CPUDescriptor descriptor;
+                    D3D12_INTERNAL_AssignCpuDescriptorHandle(
+                        commandBuffer->renderer,
+                        D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
+                        &descriptor);
+
+                    D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc;
+                    srvDesc.Format = DXGI_FORMAT_R32_TYPELESS;
+                    srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+                    srvDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+                    srvDesc.Buffer.FirstElement = commandBuffer->vertexStorageBufferOffsets[i] / sizeof(Uint32);
+                    srvDesc.Buffer.NumElements = (commandBuffer->vertexStorageBuffers[i]->container->size - commandBuffer->vertexStorageBufferOffsets[i]) / sizeof(Uint32);
+                    srvDesc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_RAW;
+                    srvDesc.Buffer.StructureByteStride = 0;
+
+                    ID3D12Device_CreateShaderResourceView(
+                        commandBuffer->renderer->device,
+                        commandBuffer->vertexStorageBuffers[i]->handle,
+                        &srvDesc,
+                        descriptor.cpuHandle);
+
+                    D3D12_INTERNAL_TrackTemporaryDescriptor(commandBuffer, &descriptor);
+                    cpuHandles[i] = descriptor.cpuHandle;
+                } else {
+                    cpuHandles[i] = commandBuffer->vertexStorageBuffers[i]->srvDescriptor.cpuHandle;
+                }
             }
 
             D3D12_INTERNAL_WriteGPUDescriptors(
@@ -4507,7 +4558,34 @@ static void D3D12_INTERNAL_BindGraphicsResources(
     if (commandBuffer->needFragmentStorageBufferBind) {
         if (graphicsPipeline->fragmentStorageBufferCount > 0) {
             for (Uint32 i = 0; i < graphicsPipeline->fragmentStorageBufferCount; i += 1) {
-                cpuHandles[i] = commandBuffer->fragmentStorageBuffers[i]->srvDescriptor.cpuHandle;
+                if (commandBuffer->fragmentStorageBufferOffsets[i] != 0) {
+                    /* We have to create a temporary SRV to represent a storage buffer offset. */
+                    D3D12CPUDescriptor descriptor;
+                    D3D12_INTERNAL_AssignCpuDescriptorHandle(
+                        commandBuffer->renderer,
+                        D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
+                        &descriptor);
+
+                    D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc;
+                    srvDesc.Format = DXGI_FORMAT_R32_TYPELESS;
+                    srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+                    srvDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+                    srvDesc.Buffer.FirstElement = commandBuffer->fragmentStorageBufferOffsets[i] / sizeof(Uint32);
+                    srvDesc.Buffer.NumElements = (commandBuffer->fragmentStorageBuffers[i]->container->size - commandBuffer->fragmentStorageBufferOffsets[i]) / sizeof(Uint32);
+                    srvDesc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_RAW;
+                    srvDesc.Buffer.StructureByteStride = 0;
+
+                    ID3D12Device_CreateShaderResourceView(
+                        commandBuffer->renderer->device,
+                        commandBuffer->fragmentStorageBuffers[i]->handle,
+                        &srvDesc,
+                        descriptor.cpuHandle);
+
+                    D3D12_INTERNAL_TrackTemporaryDescriptor(commandBuffer, &descriptor);
+                    cpuHandles[i] = descriptor.cpuHandle;
+                } else {
+                    cpuHandles[i] = commandBuffer->fragmentStorageBuffers[i]->srvDescriptor.cpuHandle;
+                }
             }
 
             D3D12_INTERNAL_WriteGPUDescriptors(
@@ -4664,11 +4742,13 @@ static void D3D12_EndRenderPass(
     SDL_zeroa(d3d12CommandBuffer->vertexSamplers);
     SDL_zeroa(d3d12CommandBuffer->vertexStorageTextureSubresources);
     SDL_zeroa(d3d12CommandBuffer->vertexStorageBuffers);
+    SDL_zeroa(d3d12CommandBuffer->vertexStorageBufferOffsets);
 
     SDL_zeroa(d3d12CommandBuffer->fragmentSamplerTextures);
     SDL_zeroa(d3d12CommandBuffer->fragmentSamplers);
     SDL_zeroa(d3d12CommandBuffer->fragmentStorageTextureSubresources);
     SDL_zeroa(d3d12CommandBuffer->fragmentStorageBuffers);
+    SDL_zeroa(d3d12CommandBuffer->fragmentStorageBufferOffsets);
 }
 
 /* Compute Pass */
@@ -4724,6 +4804,7 @@ static void D3D12_BeginComputePass(
                 D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
             d3d12CommandBuffer->computeReadWriteStorageBuffers[i] = buffer;
+            d3d12CommandBuffer->computeReadWriteStorageBufferOffsets[i] = storageBufferBindings[i].offset;
 
             D3D12_INTERNAL_TrackBuffer(
                 d3d12CommandBuffer,
@@ -4788,7 +4869,35 @@ static void D3D12_BindComputePipeline(
 
     if (d3d12CommandBuffer->computeReadWriteStorageBufferCount > 0) {
         for (Uint32 i = 0; i < d3d12CommandBuffer->computeReadWriteStorageBufferCount; i += 1) {
-            cpuHandles[i] = d3d12CommandBuffer->computeReadWriteStorageBuffers[i]->uavDescriptor.cpuHandle;
+            if (d3d12CommandBuffer->computeReadWriteStorageBufferOffsets[i] != 0) {
+                /* We have to create a temporary UAV to represent a storage buffer offset. */
+                D3D12CPUDescriptor descriptor;
+                D3D12_INTERNAL_AssignCpuDescriptorHandle(
+                    d3d12CommandBuffer->renderer,
+                    D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
+                    &descriptor);
+
+                D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc;
+                uavDesc.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
+                uavDesc.Format = DXGI_FORMAT_R32_TYPELESS;
+                uavDesc.Buffer.FirstElement = d3d12CommandBuffer->computeReadWriteStorageBufferOffsets[i] / sizeof(Uint32);
+                uavDesc.Buffer.NumElements = (d3d12CommandBuffer->computeReadWriteStorageBuffers[i]->container->size - d3d12CommandBuffer->computeReadWriteStorageBufferOffsets[i]) / sizeof(Uint32);
+                uavDesc.Buffer.Flags = D3D12_BUFFER_UAV_FLAG_RAW;
+                uavDesc.Buffer.CounterOffsetInBytes = 0; /* TODO: support counters? */
+                uavDesc.Buffer.StructureByteStride = 0;
+
+                ID3D12Device_CreateUnorderedAccessView(
+                    d3d12CommandBuffer->renderer->device,
+                    d3d12CommandBuffer->computeReadWriteStorageBuffers[i]->handle,
+                    NULL,
+                    &uavDesc,
+                    descriptor.cpuHandle);
+
+                D3D12_INTERNAL_TrackTemporaryDescriptor(d3d12CommandBuffer, &descriptor);
+                cpuHandles[i] = descriptor.cpuHandle;
+            } else {
+                cpuHandles[i] = d3d12CommandBuffer->computeReadWriteStorageBuffers[i]->uavDescriptor.cpuHandle;
+            }
         }
 
         D3D12_INTERNAL_WriteGPUDescriptors(
@@ -4845,7 +4954,7 @@ static void D3D12_BindComputeStorageTextures(
 static void D3D12_BindComputeStorageBuffers(
     SDL_GpuCommandBuffer *commandBuffer,
     Uint32 firstSlot,
-    SDL_GpuBuffer **storageBuffers,
+    SDL_GpuBufferLocation *storageBufferLocations,
     Uint32 bindingCount)
 {
     D3D12CommandBuffer *d3d12CommandBuffer = (D3D12CommandBuffer *)commandBuffer;
@@ -4858,10 +4967,8 @@ static void D3D12_BindComputeStorageBuffers(
                 d3d12CommandBuffer->computeReadOnlyStorageBuffers[firstSlot + i]);
         }
 
-        D3D12BufferContainer *container = (D3D12BufferContainer *)storageBuffers[i];
+        D3D12BufferContainer *container = (D3D12BufferContainer *)storageBufferLocations[i].buffer;
         D3D12Buffer *buffer = container->activeBuffer;
-
-        d3d12CommandBuffer->computeReadOnlyStorageBuffers[firstSlot + i] = buffer;
 
         D3D12_INTERNAL_BufferTransitionFromDefaultUsage(
             d3d12CommandBuffer,
@@ -4871,6 +4978,9 @@ static void D3D12_BindComputeStorageBuffers(
         D3D12_INTERNAL_TrackBuffer(
             d3d12CommandBuffer,
             buffer);
+
+        d3d12CommandBuffer->computeReadOnlyStorageBuffers[firstSlot + i] = buffer;
+        d3d12CommandBuffer->computeReadOnlyStorageBufferOffsets[firstSlot + i] = storageBufferLocations[i].offset;
     }
 
     d3d12CommandBuffer->needComputeReadOnlyStorageBufferBind = SDL_TRUE;
@@ -4924,7 +5034,34 @@ static void D3D12_INTERNAL_BindComputeResources(
     if (commandBuffer->needComputeReadOnlyStorageBufferBind) {
         if (computePipeline->readOnlyStorageBufferCount > 0) {
             for (Uint32 i = 0; i < computePipeline->readOnlyStorageBufferCount; i += 1) {
-                cpuHandles[i] = commandBuffer->computeReadOnlyStorageBuffers[i]->srvDescriptor.cpuHandle;
+                if (commandBuffer->computeReadOnlyStorageBufferOffsets[i] != 0) {
+                    /* We have to create a temporary SRV to represent a storage buffer offset. */
+                    D3D12CPUDescriptor descriptor;
+                    D3D12_INTERNAL_AssignCpuDescriptorHandle(
+                        commandBuffer->renderer,
+                        D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
+                        &descriptor);
+
+                    D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc;
+                    srvDesc.Format = DXGI_FORMAT_R32_TYPELESS;
+                    srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+                    srvDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+                    srvDesc.Buffer.FirstElement = commandBuffer->computeReadOnlyStorageBufferOffsets[i] / sizeof(Uint32);
+                    srvDesc.Buffer.NumElements = (commandBuffer->computeReadOnlyStorageBuffers[i]->container->size - commandBuffer->computeReadOnlyStorageBufferOffsets[i]) / sizeof(Uint32);
+                    srvDesc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_RAW;
+                    srvDesc.Buffer.StructureByteStride = 0;
+
+                    ID3D12Device_CreateShaderResourceView(
+                        commandBuffer->renderer->device,
+                        commandBuffer->computeReadOnlyStorageBuffers[i]->handle,
+                        &srvDesc,
+                        descriptor.cpuHandle);
+
+                    D3D12_INTERNAL_TrackTemporaryDescriptor(commandBuffer, &descriptor);
+                    cpuHandles[i] = descriptor.cpuHandle;
+                } else {
+                    cpuHandles[i] = commandBuffer->computeReadOnlyStorageBuffers[i]->srvDescriptor.cpuHandle;
+                }
             }
 
             D3D12_INTERNAL_WriteGPUDescriptors(
@@ -5036,6 +5173,7 @@ static void D3D12_EndComputePass(
                 d3d12CommandBuffer->computeReadOnlyStorageBuffers[i]);
 
             d3d12CommandBuffer->computeReadOnlyStorageBuffers[i] = NULL;
+            d3d12CommandBuffer->computeReadOnlyStorageBufferOffsets[i] = 0;
         }
     }
 
@@ -6383,6 +6521,11 @@ static void D3D12_INTERNAL_AllocateCommandBuffer(
     commandBuffer->textureDownloads = SDL_calloc(
         commandBuffer->textureDownloadCapacity, sizeof(D3D12TextureDownload *));
 
+    commandBuffer->temporaryDescriptorCapacity = 4;
+    commandBuffer->temporaryDescriptorCount = 0;
+    commandBuffer->temporaryDescriptors = SDL_calloc(
+        commandBuffer->temporaryDescriptorCapacity, sizeof(D3D12CPUDescriptor));
+
     if (
         (!commandBuffer->presentDatas) ||
         (!commandBuffer->usedTextureSubresources) ||
@@ -6391,7 +6534,8 @@ static void D3D12_INTERNAL_AllocateCommandBuffer(
         (!commandBuffer->usedGraphicsPipelines) ||
         (!commandBuffer->usedComputePipelines) ||
         (!commandBuffer->usedUniformBuffers) ||
-        (!commandBuffer->textureDownloads)) {
+        (!commandBuffer->textureDownloads) ||
+        (!commandBuffer->temporaryDescriptors)) {
         SDL_LogError(SDL_LOG_CATEGORY_GPU, "Failed to create ID3D12CommandList. Out of Memory");
         D3D12_INTERNAL_DestroyCommandBuffer(commandBuffer);
         return;
@@ -6488,16 +6632,19 @@ static SDL_GpuCommandBuffer *D3D12_AcquireCommandBuffer(
     SDL_zeroa(commandBuffer->vertexSamplers);
     SDL_zeroa(commandBuffer->vertexStorageTextureSubresources);
     SDL_zeroa(commandBuffer->vertexStorageBuffers);
+    SDL_zeroa(commandBuffer->vertexStorageBufferOffsets);
     SDL_zeroa(commandBuffer->vertexUniformBuffers);
 
     SDL_zeroa(commandBuffer->fragmentSamplerTextures);
     SDL_zeroa(commandBuffer->fragmentSamplers);
     SDL_zeroa(commandBuffer->fragmentStorageTextureSubresources);
     SDL_zeroa(commandBuffer->fragmentStorageBuffers);
+    SDL_zeroa(commandBuffer->fragmentStorageBufferOffsets);
     SDL_zeroa(commandBuffer->fragmentUniformBuffers);
 
     SDL_zeroa(commandBuffer->computeReadOnlyStorageTextures);
     SDL_zeroa(commandBuffer->computeReadOnlyStorageBuffers);
+    SDL_zeroa(commandBuffer->computeReadOnlyStorageBufferOffsets);
     SDL_zeroa(commandBuffer->computeReadWriteStorageTextures);
     SDL_zeroa(commandBuffer->computeReadWriteStorageBuffers);
     SDL_zeroa(commandBuffer->computeUniformBuffers);
@@ -6735,6 +6882,14 @@ static void D3D12_INTERNAL_CleanCommandBuffer(
         commandBuffer->commandAllocator,
         NULL);
     ERROR_CHECK("Could not reset graphicsCommandList")
+
+    /* Release temporary descriptors */
+    for (i = 0; i < commandBuffer->temporaryDescriptorCount; i += 1) {
+        D3D12_INTERNAL_ReleaseCpuDescriptorHandle(
+            commandBuffer->renderer,
+            &commandBuffer->temporaryDescriptors[i]);
+    }
+    commandBuffer->temporaryDescriptorCount = 0;
 
     /* Return descriptor heaps to pool */
     D3D12_INTERNAL_ReturnDescriptorHeapToPool(
