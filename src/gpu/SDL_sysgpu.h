@@ -123,6 +123,23 @@ static inline SDL_bool IsStencilFormat(
     }
 }
 
+static inline SDL_bool IsIntegerFormat(
+    SDL_GpuTextureFormat format)
+{
+    switch (format) {
+    case SDL_GPU_TEXTUREFORMAT_R8_UINT:
+    case SDL_GPU_TEXTUREFORMAT_R8G8_UINT:
+    case SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UINT:
+    case SDL_GPU_TEXTUREFORMAT_R16_UINT:
+    case SDL_GPU_TEXTUREFORMAT_R16G16_UINT:
+    case SDL_GPU_TEXTUREFORMAT_R16G16B16A16_UINT:
+        return SDL_TRUE;
+
+    default:
+        return SDL_FALSE;
+    }
+}
+
 static inline Uint32 IndexSize(SDL_GpuIndexElementSize size)
 {
     return (size == SDL_GPU_INDEXELEMENTSIZE_16BIT) ? 2 : 4;

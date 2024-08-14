@@ -418,6 +418,10 @@ SDL_GpuTexture *SDL_GpuCreateTexture(
             SDL_assert_release(!"For any texture: usageFlags cannot contain both GRAPHICS_STORAGE_READ_BIT and SAMPLER_BIT");
             failed = SDL_TRUE;
         }
+        if (IsIntegerFormat(textureCreateInfo->format) && (textureCreateInfo->usageFlags & SDL_GPU_TEXTUREUSAGE_SAMPLER_BIT)) {
+            SDL_assert_release(!"For any texture: usageFlags cannot contain SAMPLER_BIT for textures with an integer format");
+            failed = SDL_TRUE;
+        }
 
         if (textureCreateInfo->isCube) {
             /* Cubemap validation */
