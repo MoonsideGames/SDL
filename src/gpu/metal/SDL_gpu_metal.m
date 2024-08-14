@@ -2756,6 +2756,21 @@ static void METAL_EndRenderPass(
         MetalCommandBuffer *metalCommandBuffer = (MetalCommandBuffer *)commandBuffer;
         [metalCommandBuffer->renderEncoder endEncoding];
         metalCommandBuffer->renderEncoder = nil;
+
+        for (Uint32 i = 0; i < MAX_TEXTURE_SAMPLERS_PER_STAGE; i += 1) {
+            metalCommandBuffer->vertexSamplers[i] = nil;
+            metalCommandBuffer->vertexTextures[i] = nil;
+            metalCommandBuffer->fragmentSamplers[i] = nil;
+            metalCommandBuffer->fragmentTextures[i] = nil;
+        }
+        for (Uint32 i = 0; i < MAX_STORAGE_TEXTURES_PER_STAGE; i += 1) {
+            metalCommandBuffer->vertexStorageTextures[i] = nil;
+            metalCommandBuffer->fragmentStorageTextures[i] = nil;
+        }
+        for (Uint32 i = 0; i < MAX_STORAGE_BUFFERS_PER_STAGE; i += 1) {
+            metalCommandBuffer->vertexStorageBuffers[i] = nil;
+            metalCommandBuffer->fragmentStorageBuffers[i] = nil;
+        }
     }
 }
 
@@ -3204,6 +3219,19 @@ static void METAL_EndComputePass(
         MetalCommandBuffer *metalCommandBuffer = (MetalCommandBuffer *)commandBuffer;
         [metalCommandBuffer->computeEncoder endEncoding];
         metalCommandBuffer->computeEncoder = nil;
+
+        for (Uint32 i = 0; i < MAX_COMPUTE_WRITE_TEXTURES; i += 1) {
+            metalCommandBuffer->computeReadWriteTextures[i] = nil;
+        }
+        for (Uint32 i = 0; i < MAX_COMPUTE_WRITE_BUFFERS; i += 1) {
+            metalCommandBuffer->computeReadWriteBuffers[i] = nil;
+        }
+        for (Uint32 i = 0; i < MAX_STORAGE_TEXTURES_PER_STAGE; i += 1) {
+            metalCommandBuffer->computeReadOnlyTextures[i] = nil;
+        }
+        for (Uint32 i = 0; i < MAX_STORAGE_BUFFERS_PER_STAGE; i += 1) {
+            metalCommandBuffer->computeReadOnlyBuffers[i] = nil;
+        }
     }
 }
 

@@ -969,7 +969,6 @@ void SDL_GpuBindVertexBuffers(
 
     if (RENDERPASS_DEVICE->debugMode) {
         CHECK_RENDERPASS
-        CHECK_GRAPHICS_PIPELINE_BOUND
     }
 
     RENDERPASS_DEVICE->BindVertexBuffers(
@@ -995,7 +994,6 @@ void SDL_GpuBindIndexBuffer(
 
     if (RENDERPASS_DEVICE->debugMode) {
         CHECK_RENDERPASS
-        CHECK_GRAPHICS_PIPELINE_BOUND
     }
 
     RENDERPASS_DEVICE->BindIndexBuffer(
@@ -1021,7 +1019,6 @@ void SDL_GpuBindVertexSamplers(
 
     if (RENDERPASS_DEVICE->debugMode) {
         CHECK_RENDERPASS
-        CHECK_GRAPHICS_PIPELINE_BOUND
     }
 
     RENDERPASS_DEVICE->BindVertexSamplers(
@@ -1048,7 +1045,6 @@ void SDL_GpuBindVertexStorageTextures(
 
     if (RENDERPASS_DEVICE->debugMode) {
         CHECK_RENDERPASS
-        CHECK_GRAPHICS_PIPELINE_BOUND
     }
 
     RENDERPASS_DEVICE->BindVertexStorageTextures(
@@ -1075,7 +1071,6 @@ void SDL_GpuBindVertexStorageBuffers(
 
     if (RENDERPASS_DEVICE->debugMode) {
         CHECK_RENDERPASS
-        CHECK_GRAPHICS_PIPELINE_BOUND
     }
 
     RENDERPASS_DEVICE->BindVertexStorageBuffers(
@@ -1102,7 +1097,6 @@ void SDL_GpuBindFragmentSamplers(
 
     if (RENDERPASS_DEVICE->debugMode) {
         CHECK_RENDERPASS
-        CHECK_GRAPHICS_PIPELINE_BOUND
     }
 
     RENDERPASS_DEVICE->BindFragmentSamplers(
@@ -1129,7 +1123,6 @@ void SDL_GpuBindFragmentStorageTextures(
 
     if (RENDERPASS_DEVICE->debugMode) {
         CHECK_RENDERPASS
-        CHECK_GRAPHICS_PIPELINE_BOUND
     }
 
     RENDERPASS_DEVICE->BindFragmentStorageTextures(
@@ -1156,7 +1149,6 @@ void SDL_GpuBindFragmentStorageBuffers(
 
     if (RENDERPASS_DEVICE->debugMode) {
         CHECK_RENDERPASS
-        CHECK_GRAPHICS_PIPELINE_BOUND
     }
 
     RENDERPASS_DEVICE->BindFragmentStorageBuffers(
@@ -1384,7 +1376,6 @@ void SDL_GpuBindComputeStorageTextures(
 
     if (COMPUTEPASS_DEVICE->debugMode) {
         CHECK_COMPUTEPASS
-        CHECK_COMPUTE_PIPELINE_BOUND
     }
 
     COMPUTEPASS_DEVICE->BindComputeStorageTextures(
@@ -1411,7 +1402,6 @@ void SDL_GpuBindComputeStorageBuffers(
 
     if (COMPUTEPASS_DEVICE->debugMode) {
         CHECK_COMPUTEPASS
-        CHECK_COMPUTE_PIPELINE_BOUND
     }
 
     COMPUTEPASS_DEVICE->BindComputeStorageBuffers(
