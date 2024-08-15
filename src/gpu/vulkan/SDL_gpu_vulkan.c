@@ -1406,7 +1406,7 @@ static VulkanTexture *VULKAN_INTERNAL_CreateTexture(
     Uint32 width,
     Uint32 height,
     Uint32 depth,
-    Uint32 isCube,
+    SDL_GpuTextureType type,
     Uint32 layerCount,
     Uint32 levelCount,
     VkSampleCountFlagBits sampleCount,
