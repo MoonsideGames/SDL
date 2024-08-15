@@ -594,8 +594,6 @@ typedef struct VulkanTextureSlice
     Uint32 layerOrDepth;
     Uint32 level;
 
-    SDL_AtomicInt referenceCount;
-
     VkImageView view;
     VulkanTextureHandle *msaaTexHandle; /* NULL if parent sample count is 1 or is depth target */
 
@@ -629,6 +627,7 @@ struct VulkanTexture
     VulkanTextureHandle *handle;
 
     Uint8 markedForDestroy; /* so that defrag doesn't double-free */
+    SDL_AtomicInt referenceCount;
 };
 
 /* Texture resources consist of multiple backing texture handles so that data transfers
@@ -1181,9 +1180,9 @@ typedef struct VulkanCommandBuffer
     Uint32 usedBufferCount;
     Uint32 usedBufferCapacity;
 
-    VulkanTextureSlice **usedTextureSlices;
-    Uint32 usedTextureSliceCount;
-    Uint32 usedTextureSliceCapacity;
+    VulkanTexture **usedTextures;
+    Uint32 usedTextureCount;
+    Uint32 usedTextureCapacity;
 
     VulkanSampler **usedSamplers;
     Uint32 usedSamplerCount;
@@ -2619,27 +2618,16 @@ static void VULKAN_INTERNAL_TrackBuffer(
         usedBufferCapacity)
 }
 
-static void VULKAN_INTERNAL_TrackTextureSlice(
-    VulkanCommandBuffer *commandBuffer,
-    VulkanTextureSlice *textureSlice)
-{
-    TRACK_RESOURCE(
-        textureSlice,
-        VulkanTextureSlice *,
-        usedTextureSlices,
-        usedTextureSliceCount,
-        usedTextureSliceCapacity)
-}
-
 static void VULKAN_INTERNAL_TrackTexture(
     VulkanCommandBuffer *commandBuffer,
     VulkanTexture *texture)
 {
-    for (Uint32 i = 0; i < texture->sliceCount; i += 1) {
-        VULKAN_INTERNAL_TrackTextureSlice(
-            commandBuffer,
-            &texture->slices[i]);
-    }
+    TRACK_RESOURCE(
+        texture,
+        VulkanTexture *,
+        usedTextures,
+        usedTextureCount,
+        usedTextureCapacity)
 }
 
 static void VULKAN_INTERNAL_TrackSampler(
@@ -3253,7 +3241,7 @@ static void VULKAN_INTERNAL_DestroyCommandPool(
         SDL_free(commandBuffer->signalSemaphores);
         SDL_free(commandBuffer->boundDescriptorSetDatas);
         SDL_free(commandBuffer->usedBuffers);
-        SDL_free(commandBuffer->usedTextureSlices);
+        SDL_free(commandBuffer->usedTextures);
         SDL_free(commandBuffer->usedSamplers);
         SDL_free(commandBuffer->usedGraphicsPipelines);
         SDL_free(commandBuffer->usedComputePipelines);
@@ -4726,6 +4714,7 @@ static SDL_bool VULKAN_INTERNAL_CreateSwapchain(
         swapchainData->textureContainers[i].activeTextureHandle->vulkanTexture->usageFlags =
             SDL_GPU_TEXTUREUSAGE_COLOR_TARGET_BIT;
         swapchainData->textureContainers[i].activeTextureHandle->vulkanTexture->aspectFlags = VK_IMAGE_ASPECT_COLOR_BIT;
+        SDL_AtomicSet(&swapchainData->textureContainers[i].activeTextureHandle->vulkanTexture->referenceCount, 0);
 
         swapchainData->textureContainers[i].activeTextureHandle->container = NULL;
 
@@ -4745,7 +4734,6 @@ static SDL_bool VULKAN_INTERNAL_CreateSwapchain(
             0,
             swapchainData->swapchainSwizzle,
             &swapchainData->textureContainers[i].activeTextureHandle->vulkanTexture->slices[0].view);
-        SDL_AtomicSet(&swapchainData->textureContainers[i].activeTextureHandle->vulkanTexture->slices[0].referenceCount, 0);
     }
 
     SDL_stack_free(swapchainImages);
@@ -5805,6 +5793,7 @@ static VulkanTexture *VULKAN_INTERNAL_CreateTexture(
     texture->sampleCount = sampleCount;
     texture->usageFlags = textureUsageFlags;
     texture->aspectFlags = aspectMask;
+    SDL_AtomicSet(&texture->referenceCount, 0);
 
     Uint32 layerOrDepthCount =
         type == SDL_GPU_TEXTURETYPE_3D ? depth : layerCount;
@@ -5837,7 +5826,6 @@ static VulkanTexture *VULKAN_INTERNAL_CreateTexture(
             texture->slices[sliceIndex].level = j;
             texture->slices[sliceIndex].msaaTexHandle = NULL;
             texture->slices[sliceIndex].transitioned = SDL_FALSE;
-            SDL_AtomicSet(&texture->slices[sliceIndex].referenceCount, 0);
 
             if (
                 sampleCount > VK_SAMPLE_COUNT_1_BIT &&
@@ -5915,20 +5903,11 @@ static void VULKAN_INTERNAL_CycleActiveTexture(
     VulkanRenderer *renderer,
     VulkanTextureContainer *textureContainer)
 {
-    VulkanTextureHandle *textureHandle;
-    Uint32 i, j;
-    Sint32 refCountTotal;
-
     /* If a previously-cycled texture is available, we can use that. */
-    for (i = 0; i < textureContainer->textureCount; i += 1) {
-        textureHandle = textureContainer->textureHandles[i];
+    for (Uint32 i = 0; i < textureContainer->textureCount; i += 1) {
+        VulkanTextureHandle *textureHandle = textureContainer->textureHandles[i];
 
-        refCountTotal = 0;
-        for (j = 0; j < textureHandle->vulkanTexture->sliceCount; j += 1) {
-            refCountTotal += SDL_AtomicGet(&textureHandle->vulkanTexture->slices[j].referenceCount);
-        }
-
-        if (refCountTotal == 0) {
+        if (SDL_AtomicGet(&textureHandle->vulkanTexture->referenceCount) == 0) {
             textureContainer->activeTextureHandle = textureHandle;
             return;
         }
@@ -6014,7 +5993,7 @@ static VulkanTextureSlice *VULKAN_INTERNAL_PrepareTextureSliceForWrite(
     if (
         cycle &&
         textureContainer->canBeCycled &&
-        SDL_AtomicGet(&textureSlice->referenceCount) > 0) {
+        SDL_AtomicGet(&textureContainer->activeTextureHandle->vulkanTexture->referenceCount) > 0) {
         VULKAN_INTERNAL_CycleActiveTexture(
             renderer,
             textureContainer);
@@ -7857,7 +7836,7 @@ static void VULKAN_BeginRenderPass(
 
         vulkanCommandBuffer->colorAttachmentSlices[i] = textureSlice;
 
-        VULKAN_INTERNAL_TrackTextureSlice(vulkanCommandBuffer, textureSlice);
+        VULKAN_INTERNAL_TrackTexture(vulkanCommandBuffer, textureSlice->parent);
         /* TODO: do we need to track the msaa texture? or is it implicitly only used when the regular texture is used? */
     }
 
@@ -7888,7 +7867,7 @@ static void VULKAN_BeginRenderPass(
 
         vulkanCommandBuffer->depthStencilAttachmentSlice = textureSlice;
 
-        VULKAN_INTERNAL_TrackTextureSlice(vulkanCommandBuffer, textureSlice);
+        VULKAN_INTERNAL_TrackTexture(vulkanCommandBuffer, textureSlice->parent);
     }
 
     /* Fetch required render objects */
@@ -8198,9 +8177,9 @@ static void VULKAN_BeginComputePass(
 
         vulkanCommandBuffer->readWriteComputeStorageTextureSlices[i] = textureSlice;
 
-        VULKAN_INTERNAL_TrackTextureSlice(
+        VULKAN_INTERNAL_TrackTexture(
             vulkanCommandBuffer,
-            textureSlice);
+            textureSlice->parent);
     }
 
     for (i = 0; i < storageBufferBindingCount; i += 1) {
@@ -8780,7 +8759,7 @@ static void VULKAN_UploadToTexture(
         vulkanTextureSlice);
 
     VULKAN_INTERNAL_TrackBuffer(vulkanCommandBuffer, transferBufferContainer->activeBufferHandle->vulkanBuffer);
-    VULKAN_INTERNAL_TrackTextureSlice(vulkanCommandBuffer, vulkanTextureSlice);
+    VULKAN_INTERNAL_TrackTexture(vulkanCommandBuffer, vulkanTextureSlice->parent);
 }
 
 static void VULKAN_UploadToBuffer(
@@ -8876,7 +8855,7 @@ static void VULKAN_DownloadFromTexture(
         vulkanTextureSlice);
 
     VULKAN_INTERNAL_TrackBuffer(vulkanCommandBuffer, transferBufferContainer->activeBufferHandle->vulkanBuffer);
-    VULKAN_INTERNAL_TrackTextureSlice(vulkanCommandBuffer, vulkanTextureSlice);
+    VULKAN_INTERNAL_TrackTexture(vulkanCommandBuffer, vulkanTextureSlice->parent);
 }
 
 static void VULKAN_DownloadFromBuffer(
@@ -8991,8 +8970,8 @@ static void VULKAN_CopyTextureToTexture(
         VULKAN_TEXTURE_USAGE_MODE_COPY_DESTINATION,
         dstSlice);
 
-    VULKAN_INTERNAL_TrackTextureSlice(vulkanCommandBuffer, srcSlice);
-    VULKAN_INTERNAL_TrackTextureSlice(vulkanCommandBuffer, dstSlice);
+    VULKAN_INTERNAL_TrackTexture(vulkanCommandBuffer, srcSlice->parent);
+    VULKAN_INTERNAL_TrackTexture(vulkanCommandBuffer, dstSlice->parent);
 }
 
 static void VULKAN_CopyBufferToBuffer(
@@ -9137,8 +9116,8 @@ static void VULKAN_GenerateMipmaps(
                 VULKAN_TEXTURE_USAGE_MODE_COPY_DESTINATION,
                 dstTextureSlice);
 
-            VULKAN_INTERNAL_TrackTextureSlice(vulkanCommandBuffer, srcTextureSlice);
-            VULKAN_INTERNAL_TrackTextureSlice(vulkanCommandBuffer, dstTextureSlice);
+            VULKAN_INTERNAL_TrackTexture(vulkanCommandBuffer, srcTextureSlice->parent);
+            VULKAN_INTERNAL_TrackTexture(vulkanCommandBuffer, dstTextureSlice->parent);
         }
 }
 
@@ -9225,8 +9204,8 @@ static void VULKAN_Blit(
         VULKAN_TEXTURE_USAGE_MODE_COPY_DESTINATION,
         dstTextureSlice);
 
-    VULKAN_INTERNAL_TrackTextureSlice(vulkanCommandBuffer, srcTextureSlice);
-    VULKAN_INTERNAL_TrackTextureSlice(vulkanCommandBuffer, dstTextureSlice);
+    VULKAN_INTERNAL_TrackTexture(vulkanCommandBuffer, srcTextureSlice->parent);
+    VULKAN_INTERNAL_TrackTexture(vulkanCommandBuffer, dstTextureSlice->parent);
 }
 
 static void VULKAN_INTERNAL_AllocateCommandBuffers(
@@ -9326,10 +9305,10 @@ static void VULKAN_INTERNAL_AllocateCommandBuffers(
         commandBuffer->usedBuffers = SDL_malloc(
             commandBuffer->usedBufferCapacity * sizeof(VulkanBuffer *));
 
-        commandBuffer->usedTextureSliceCapacity = 4;
-        commandBuffer->usedTextureSliceCount = 0;
-        commandBuffer->usedTextureSlices = SDL_malloc(
-            commandBuffer->usedTextureSliceCapacity * sizeof(VulkanTextureSlice *));
+        commandBuffer->usedTextureCapacity = 4;
+        commandBuffer->usedTextureCount = 0;
+        commandBuffer->usedTextures = SDL_malloc(
+            commandBuffer->usedTextureCapacity * sizeof(VulkanTexture *));
 
         commandBuffer->usedSamplerCapacity = 4;
         commandBuffer->usedSamplerCount = 0;
@@ -10126,17 +10105,10 @@ static VulkanFenceHandle *VULKAN_INTERNAL_AcquireFenceFromPool(
 static void VULKAN_INTERNAL_PerformPendingDestroys(
     VulkanRenderer *renderer)
 {
-    Sint32 refCountTotal;
-
     SDL_LockMutex(renderer->disposeLock);
 
     for (Sint32 i = renderer->texturesToDestroyCount - 1; i >= 0; i -= 1) {
-        refCountTotal = 0;
-        for (Uint32 sliceIndex = 0; sliceIndex < renderer->texturesToDestroy[i]->sliceCount; sliceIndex += 1) {
-            refCountTotal += SDL_AtomicGet(&renderer->texturesToDestroy[i]->slices[sliceIndex].referenceCount);
-        }
-
-        if (refCountTotal == 0) {
+        if (SDL_AtomicGet(&renderer->texturesToDestroy[i]->referenceCount) == 0) {
             VULKAN_INTERNAL_DestroyTexture(
                 renderer,
                 renderer->texturesToDestroy[i]);
@@ -10272,10 +10244,10 @@ static void VULKAN_INTERNAL_CleanCommandBuffer(
     }
     commandBuffer->usedBufferCount = 0;
 
-    for (i = 0; i < commandBuffer->usedTextureSliceCount; i += 1) {
-        (void)SDL_AtomicDecRef(&commandBuffer->usedTextureSlices[i]->referenceCount);
+    for (i = 0; i < commandBuffer->usedTextureCount; i += 1) {
+        (void)SDL_AtomicDecRef(&commandBuffer->usedTextures[i]->referenceCount);
     }
-    commandBuffer->usedTextureSliceCount = 0;
+    commandBuffer->usedTextureCount = 0;
 
     for (i = 0; i < commandBuffer->usedSamplerCount; i += 1) {
         (void)SDL_AtomicDecRef(&commandBuffer->usedSamplers[i]->referenceCount);
@@ -10773,8 +10745,8 @@ static Uint8 VULKAN_INTERNAL_DefragmentMemory(
                         VULKAN_TEXTURE_USAGE_MODE_COPY_DESTINATION,
                         dstSlice);
 
-                    VULKAN_INTERNAL_TrackTextureSlice(commandBuffer, srcSlice);
-                    VULKAN_INTERNAL_TrackTextureSlice(commandBuffer, dstSlice);
+                    VULKAN_INTERNAL_TrackTexture(commandBuffer, srcSlice->parent);
+                    VULKAN_INTERNAL_TrackTexture(commandBuffer, dstSlice->parent);
                 }
             }
 
