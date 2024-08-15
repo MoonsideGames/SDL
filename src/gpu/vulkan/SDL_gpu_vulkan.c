@@ -585,7 +585,7 @@ typedef struct VulkanTextureHandle
     VulkanTextureContainer *container;
 } VulkanTextureHandle;
 
-/* Textures are made up of individual slices.
+/* Textures are made up of individual subresources.
  * This helps us barrier the resource efficiently.
  */
 typedef struct VulkanTextureSubresource
@@ -2839,12 +2839,12 @@ static void VULKAN_INTERNAL_BufferMemoryBarrier(
     buffer->transitioned = SDL_TRUE;
 }
 
-static void VULKAN_INTERNAL_TextureSliceMemoryBarrier(
+static void VULKAN_INTERNAL_TextureSubresourceMemoryBarrier(
     VulkanRenderer *renderer,
     VulkanCommandBuffer *commandBuffer,
     VulkanTextureUsageMode sourceUsageMode,
     VulkanTextureUsageMode destinationUsageMode,
-    VulkanTextureSubresource *textureSlice)
+    VulkanTextureSubresource *textureSubresource)
 {
     VkPipelineStageFlags srcStages = 0;
     VkPipelineStageFlags dstStages = 0;
@@ -2858,11 +2858,11 @@ static void VULKAN_INTERNAL_TextureSliceMemoryBarrier(
     memoryBarrier.newLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     memoryBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
     memoryBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    memoryBarrier.image = textureSlice->parent->image;
-    memoryBarrier.subresourceRange.aspectMask = textureSlice->parent->aspectFlags;
-    memoryBarrier.subresourceRange.baseArrayLayer = textureSlice->layer;
+    memoryBarrier.image = textureSubresource->parent->image;
+    memoryBarrier.subresourceRange.aspectMask = textureSubresource->parent->aspectFlags;
+    memoryBarrier.subresourceRange.baseArrayLayer = textureSubresource->layer;
     memoryBarrier.subresourceRange.layerCount = 1;
-    memoryBarrier.subresourceRange.baseMipLevel = textureSlice->level;
+    memoryBarrier.subresourceRange.baseMipLevel = textureSubresource->level;
     memoryBarrier.subresourceRange.levelCount = 1;
 
     if (sourceUsageMode == VULKAN_TEXTURE_USAGE_MODE_COPY_SOURCE) {
@@ -2902,7 +2902,7 @@ static void VULKAN_INTERNAL_TextureSliceMemoryBarrier(
         return;
     }
 
-    if (!textureSlice->transitioned) {
+    if (!textureSubresource->transitioned) {
         memoryBarrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     }
 
@@ -2959,7 +2959,7 @@ static void VULKAN_INTERNAL_TextureSliceMemoryBarrier(
         1,
         &memoryBarrier);
 
-    textureSlice->transitioned = SDL_TRUE;
+    textureSubresource->transitioned = SDL_TRUE;
 }
 
 static VulkanBufferUsageMode VULKAN_INTERNAL_DefaultBufferUsageMode(
@@ -3043,7 +3043,7 @@ static void VULKAN_INTERNAL_TextureSubresourceTransitionFromDefaultUsage(
     VulkanTextureUsageMode destinationUsageMode,
     VulkanTextureSubresource *textureSubresource)
 {
-    VULKAN_INTERNAL_TextureSliceMemoryBarrier(
+    VULKAN_INTERNAL_TextureSubresourceMemoryBarrier(
         renderer,
         commandBuffer,
         VULKAN_INTERNAL_DefaultTextureUsageMode(textureSubresource->parent),
@@ -3072,7 +3072,7 @@ static void VULKAN_INTERNAL_TextureSubresourceTransitionToDefaultUsage(
     VulkanTextureUsageMode sourceUsageMode,
     VulkanTextureSubresource *textureSubresource)
 {
-    VULKAN_INTERNAL_TextureSliceMemoryBarrier(
+    VULKAN_INTERNAL_TextureSubresourceMemoryBarrier(
         renderer,
         commandBuffer,
         sourceUsageMode,
@@ -3165,7 +3165,7 @@ static void VULKAN_INTERNAL_DestroyTexture(
     VulkanRenderer *renderer,
     VulkanTexture *texture)
 {
-    /* Clean up slices */
+    /* Clean up subresources */
     for (Uint32 subresourceIndex = 0; subresourceIndex < texture->subresourceCount; subresourceIndex += 1) {
         if (texture->isRenderTarget) {
             for (Uint32 depthIndex = 0; depthIndex < texture->depth; depthIndex += 1) {
@@ -4181,7 +4181,7 @@ static VulkanBufferContainer *VULKAN_INTERNAL_CreateBufferContainer(
     return bufferContainer;
 }
 
-/* Texture Slice Utilities */
+/* Texture Subresource Utilities */
 
 static Uint32 VULKAN_INTERNAL_GetTextureSubresourceIndex(
     VulkanTexture *texture,
@@ -5695,7 +5695,6 @@ static VulkanTexture *VULKAN_INTERNAL_CreateTexture(
     Uint8 isRenderTarget =
         ((textureUsageFlags & SDL_GPU_TEXTUREUSAGE_COLOR_TARGET_BIT) != 0) ||
         ((textureUsageFlags & SDL_GPU_TEXTUREUSAGE_DEPTH_STENCIL_TARGET_BIT) != 0);
-    Uint32 i, j, sliceIndex;
     VkImageUsageFlags vkUsageFlags = VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
     VulkanTexture *texture = SDL_malloc(sizeof(VulkanTexture));
 
@@ -5821,14 +5820,14 @@ static VulkanTexture *VULKAN_INTERNAL_CreateTexture(
     texture->subresources = SDL_malloc(
         texture->subresourceCount * sizeof(VulkanTextureSubresource));
 
-    for (i = 0; i < texture->layerCount; i += 1) {
-        for (j = 0; j < texture->levelCount; j += 1) {
-            sliceIndex = VULKAN_INTERNAL_GetTextureSubresourceIndex(
+    for (Uint32 i = 0; i < texture->layerCount; i += 1) {
+        for (Uint32 j = 0; j < texture->levelCount; j += 1) {
+            Uint32 subresourceIndex = VULKAN_INTERNAL_GetTextureSubresourceIndex(
                 texture,
                 i,
                 j);
 
-            texture->subresources[sliceIndex].views = SDL_malloc(
+            texture->subresources[subresourceIndex].views = SDL_malloc(
                 texture->depth * sizeof(VkImageView));
 
             if (texture->depth > 1) {
@@ -5839,7 +5838,7 @@ static VulkanTexture *VULKAN_INTERNAL_CreateTexture(
                         k,
                         j,
                         swizzle,
-                        &texture->subresources[sliceIndex].views[k]);
+                        &texture->subresources[subresourceIndex].views[k]);
                 }
             } else {
                 VULKAN_INTERNAL_CreateSliceView(
@@ -5848,21 +5847,21 @@ static VulkanTexture *VULKAN_INTERNAL_CreateTexture(
                     i,
                     j,
                     swizzle,
-                    &texture->subresources[sliceIndex].views[0]);
+                    &texture->subresources[subresourceIndex].views[0]);
             }
 
-            texture->subresources[sliceIndex].parent = texture;
-            texture->subresources[sliceIndex].layer = i;
-            texture->subresources[sliceIndex].level = j;
-            texture->subresources[sliceIndex].msaaTexHandle = NULL;
-            texture->subresources[sliceIndex].transitioned = SDL_FALSE;
+            texture->subresources[subresourceIndex].parent = texture;
+            texture->subresources[subresourceIndex].layer = i;
+            texture->subresources[subresourceIndex].level = j;
+            texture->subresources[subresourceIndex].msaaTexHandle = NULL;
+            texture->subresources[subresourceIndex].transitioned = SDL_FALSE;
 
             if (
                 sampleCount > VK_SAMPLE_COUNT_1_BIT &&
                 isRenderTarget &&
                 !isMSAAColorTarget &&
                 !VULKAN_INTERNAL_IsVulkanDepthFormat(texture->format)) {
-                texture->subresources[sliceIndex].msaaTexHandle = VULKAN_INTERNAL_CreateTextureHandle(
+                texture->subresources[subresourceIndex].msaaTexHandle = VULKAN_INTERNAL_CreateTextureHandle(
                     renderer,
                     texture->dimensions.width >> j,
                     texture->dimensions.height >> j,
@@ -6015,7 +6014,7 @@ static VulkanTextureSubresource *VULKAN_INTERNAL_PrepareTextureSubresourceForWri
     SDL_bool cycle,
     VulkanTextureUsageMode destinationUsageMode)
 {
-    VulkanTextureSubresource *textureSlice = VULKAN_INTERNAL_FetchTextureSubresource(
+    VulkanTextureSubresource *textureSubresource = VULKAN_INTERNAL_FetchTextureSubresource(
         textureContainer->activeTextureHandle->vulkanTexture,
         layer,
         level);
@@ -6028,7 +6027,7 @@ static VulkanTextureSubresource *VULKAN_INTERNAL_PrepareTextureSubresourceForWri
             renderer,
             textureContainer);
 
-        textureSlice = VULKAN_INTERNAL_FetchTextureSubresource(
+        textureSubresource = VULKAN_INTERNAL_FetchTextureSubresource(
             textureContainer->activeTextureHandle->vulkanTexture,
             layer,
             level);
@@ -6039,9 +6038,9 @@ static VulkanTextureSubresource *VULKAN_INTERNAL_PrepareTextureSubresourceForWri
         renderer,
         commandBuffer,
         destinationUsageMode,
-        textureSlice);
+        textureSubresource);
 
-    return textureSlice;
+    return textureSubresource;
 }
 
 static VkRenderPass VULKAN_INTERNAL_CreateRenderPass(
@@ -8792,12 +8791,12 @@ static void VULKAN_UploadToTexture(
     VulkanRenderer *renderer = (VulkanRenderer *)vulkanCommandBuffer->renderer;
     VulkanBufferContainer *transferBufferContainer = (VulkanBufferContainer *)source->transferBuffer;
     VulkanTextureContainer *vulkanTextureContainer = (VulkanTextureContainer *)destination->texture;
-    VulkanTextureSubresource *vulkanTextureSlice;
+    VulkanTextureSubresource *vulkanTextureSubresource;
     VkBufferImageCopy imageCopy;
 
     /* Note that the transfer buffer does not need a barrier, as it is synced by the client */
 
-    vulkanTextureSlice = VULKAN_INTERNAL_PrepareTextureSubresourceForWrite(
+    vulkanTextureSubresource = VULKAN_INTERNAL_PrepareTextureSubresourceForWrite(
         renderer,
         vulkanCommandBuffer,
         vulkanTextureContainer,
@@ -8812,7 +8811,7 @@ static void VULKAN_UploadToTexture(
     imageCopy.imageOffset.x = destination->x;
     imageCopy.imageOffset.y = destination->y;
     imageCopy.imageOffset.z = destination->z;
-    imageCopy.imageSubresource.aspectMask = vulkanTextureSlice->parent->aspectFlags;
+    imageCopy.imageSubresource.aspectMask = vulkanTextureSubresource->parent->aspectFlags;
     imageCopy.imageSubresource.baseArrayLayer = destination->layer;
     imageCopy.imageSubresource.layerCount = 1;
     imageCopy.imageSubresource.mipLevel = destination->mipLevel;
@@ -8823,7 +8822,7 @@ static void VULKAN_UploadToTexture(
     renderer->vkCmdCopyBufferToImage(
         vulkanCommandBuffer->commandBuffer,
         transferBufferContainer->activeBufferHandle->vulkanBuffer->buffer,
-        vulkanTextureSlice->parent->image,
+        vulkanTextureSubresource->parent->image,
         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
         1,
         &imageCopy);
@@ -8832,10 +8831,10 @@ static void VULKAN_UploadToTexture(
         renderer,
         vulkanCommandBuffer,
         VULKAN_TEXTURE_USAGE_MODE_COPY_DESTINATION,
-        vulkanTextureSlice);
+        vulkanTextureSubresource);
 
     VULKAN_INTERNAL_TrackBuffer(vulkanCommandBuffer, transferBufferContainer->activeBufferHandle->vulkanBuffer);
-    VULKAN_INTERNAL_TrackTexture(vulkanCommandBuffer, vulkanTextureSlice->parent);
+    VULKAN_INTERNAL_TrackTexture(vulkanCommandBuffer, vulkanTextureSubresource->parent);
 }
 
 static void VULKAN_UploadToBuffer(
@@ -8890,10 +8889,10 @@ static void VULKAN_DownloadFromTexture(
     VulkanCommandBuffer *vulkanCommandBuffer = (VulkanCommandBuffer *)commandBuffer;
     VulkanRenderer *renderer = vulkanCommandBuffer->renderer;
     VulkanTextureContainer *textureContainer = (VulkanTextureContainer *)source->texture;
-    VulkanTextureSubresource *vulkanTextureSlice;
+    VulkanTextureSubresource *vulkanTextureSubresource;
     VulkanBufferContainer *transferBufferContainer = (VulkanBufferContainer *)destination->transferBuffer;
     VkBufferImageCopy imageCopy;
-    vulkanTextureSlice = VULKAN_INTERNAL_FetchTextureSubresource(
+    vulkanTextureSubresource = VULKAN_INTERNAL_FetchTextureSubresource(
         textureContainer->activeTextureHandle->vulkanTexture,
         source->layer,
         source->mipLevel);
@@ -8904,7 +8903,7 @@ static void VULKAN_DownloadFromTexture(
         renderer,
         vulkanCommandBuffer,
         VULKAN_TEXTURE_USAGE_MODE_COPY_SOURCE,
-        vulkanTextureSlice);
+        vulkanTextureSubresource);
 
     imageCopy.imageExtent.width = source->w;
     imageCopy.imageExtent.height = source->h;
@@ -8912,7 +8911,7 @@ static void VULKAN_DownloadFromTexture(
     imageCopy.imageOffset.x = source->x;
     imageCopy.imageOffset.y = source->y;
     imageCopy.imageOffset.z = source->z;
-    imageCopy.imageSubresource.aspectMask = vulkanTextureSlice->parent->aspectFlags;
+    imageCopy.imageSubresource.aspectMask = vulkanTextureSubresource->parent->aspectFlags;
     imageCopy.imageSubresource.baseArrayLayer = source->layer;
     imageCopy.imageSubresource.layerCount = 1;
     imageCopy.imageSubresource.mipLevel = source->mipLevel;
@@ -8922,7 +8921,7 @@ static void VULKAN_DownloadFromTexture(
 
     renderer->vkCmdCopyImageToBuffer(
         vulkanCommandBuffer->commandBuffer,
-        vulkanTextureSlice->parent->image,
+        vulkanTextureSubresource->parent->image,
         VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
         transferBufferContainer->activeBufferHandle->vulkanBuffer->buffer,
         1,
@@ -8932,10 +8931,10 @@ static void VULKAN_DownloadFromTexture(
         renderer,
         vulkanCommandBuffer,
         VULKAN_TEXTURE_USAGE_MODE_COPY_SOURCE,
-        vulkanTextureSlice);
+        vulkanTextureSubresource);
 
     VULKAN_INTERNAL_TrackBuffer(vulkanCommandBuffer, transferBufferContainer->activeBufferHandle->vulkanBuffer);
-    VULKAN_INTERNAL_TrackTexture(vulkanCommandBuffer, vulkanTextureSlice->parent);
+    VULKAN_INTERNAL_TrackTexture(vulkanCommandBuffer, vulkanTextureSubresource->parent);
 }
 
 static void VULKAN_DownloadFromBuffer(
@@ -9116,8 +9115,8 @@ static void VULKAN_GenerateMipmaps(
     VulkanCommandBuffer *vulkanCommandBuffer = (VulkanCommandBuffer *)commandBuffer;
     VulkanRenderer *renderer = (VulkanRenderer *)vulkanCommandBuffer->renderer;
     VulkanTexture *vulkanTexture = ((VulkanTextureContainer *)texture)->activeTextureHandle->vulkanTexture;
-    VulkanTextureSubresource *srcTextureSlice;
-    VulkanTextureSubresource *dstTextureSlice;
+    VulkanTextureSubresource *srcTextureSubresource;
+    VulkanTextureSubresource *dstTextureSubresource;
     VkImageBlit blit;
     Uint32 layer, level;
 
@@ -9128,12 +9127,12 @@ static void VULKAN_GenerateMipmaps(
     /* Blit each slice sequentially. Barriers, barriers everywhere! */
     for (layer = 0; layer < vulkanTexture->layerCount; layer += 1)
         for (level = 1; level < vulkanTexture->levelCount; level += 1) {
-            srcTextureSlice = VULKAN_INTERNAL_FetchTextureSubresource(
+            srcTextureSubresource = VULKAN_INTERNAL_FetchTextureSubresource(
                 vulkanTexture,
                 layer,
                 level - 1);
 
-            dstTextureSlice = VULKAN_INTERNAL_FetchTextureSubresource(
+            dstTextureSubresource = VULKAN_INTERNAL_FetchTextureSubresource(
                 vulkanTexture,
                 layer,
                 level);
@@ -9142,13 +9141,13 @@ static void VULKAN_GenerateMipmaps(
                 renderer,
                 vulkanCommandBuffer,
                 VULKAN_TEXTURE_USAGE_MODE_COPY_SOURCE,
-                srcTextureSlice);
+                srcTextureSubresource);
 
             VULKAN_INTERNAL_TextureSubresourceTransitionFromDefaultUsage(
                 renderer,
                 vulkanCommandBuffer,
                 VULKAN_TEXTURE_USAGE_MODE_COPY_DESTINATION,
-                dstTextureSlice);
+                dstTextureSubresource);
 
             blit.srcOffsets[0].x = 0;
             blit.srcOffsets[0].y = 0;
@@ -9190,16 +9189,16 @@ static void VULKAN_GenerateMipmaps(
                 renderer,
                 vulkanCommandBuffer,
                 VULKAN_TEXTURE_USAGE_MODE_COPY_SOURCE,
-                srcTextureSlice);
+                srcTextureSubresource);
 
             VULKAN_INTERNAL_TextureSubresourceTransitionToDefaultUsage(
                 renderer,
                 vulkanCommandBuffer,
                 VULKAN_TEXTURE_USAGE_MODE_COPY_DESTINATION,
-                dstTextureSlice);
+                dstTextureSubresource);
 
-            VULKAN_INTERNAL_TrackTexture(vulkanCommandBuffer, srcTextureSlice->parent);
-            VULKAN_INTERNAL_TrackTexture(vulkanCommandBuffer, dstTextureSlice->parent);
+            VULKAN_INTERNAL_TrackTexture(vulkanCommandBuffer, srcTextureSubresource->parent);
+            VULKAN_INTERNAL_TrackTexture(vulkanCommandBuffer, dstTextureSubresource->parent);
         }
 }
 
@@ -10486,7 +10485,7 @@ static void VULKAN_Submit(
     VkResult vulkanResult, presentResult = VK_SUCCESS;
     VkPipelineStageFlags waitStages[MAX_PRESENT_COUNT];
     Uint32 swapchainImageIndex;
-    VulkanTextureSubresource *swapchainTextureSlice;
+    VulkanTextureSubresource *swapchainTextureSubresource;
     Uint8 commandBufferCleaned = 0;
     VulkanMemorySubAllocator *allocator;
     SDL_bool presenting = SDL_FALSE;
@@ -10500,7 +10499,7 @@ static void VULKAN_Submit(
 
     for (Uint32 j = 0; j < vulkanCommandBuffer->presentDataCount; j += 1) {
         swapchainImageIndex = vulkanCommandBuffer->presentDatas[j].swapchainImageIndex;
-        swapchainTextureSlice = VULKAN_INTERNAL_FetchTextureSubresource(
+        swapchainTextureSubresource = VULKAN_INTERNAL_FetchTextureSubresource(
             vulkanCommandBuffer->presentDatas[j].windowData->swapchainData->textureContainers[swapchainImageIndex].activeTextureHandle->vulkanTexture,
             0,
             0);
@@ -10509,7 +10508,7 @@ static void VULKAN_Submit(
             renderer,
             vulkanCommandBuffer,
             VULKAN_TEXTURE_USAGE_MODE_PRESENT,
-            swapchainTextureSlice);
+            swapchainTextureSubresource);
     }
 
     VULKAN_INTERNAL_EndCommandBuffer(renderer, vulkanCommandBuffer);
@@ -10650,7 +10649,7 @@ static Uint8 VULKAN_INTERNAL_DefragmentMemory(
     VulkanCommandBuffer *commandBuffer;
     VulkanTextureSubresource *srcSubresource;
     VulkanTextureSubresource *dstSubresource;
-    Uint32 i, sliceIndex;
+    Uint32 i, subresourceIndex;
 
     SDL_LockMutex(renderer->allocatorLock);
 
@@ -10764,10 +10763,10 @@ static Uint8 VULKAN_INTERNAL_DefragmentMemory(
                 return 0;
             }
 
-            for (sliceIndex = 0; sliceIndex < currentRegion->vulkanTexture->subresourceCount; sliceIndex += 1) {
-                /* copy slice if necessary */
-                srcSubresource = &currentRegion->vulkanTexture->subresources[sliceIndex];
-                dstSubresource = &newTexture->subresources[sliceIndex];
+            for (subresourceIndex = 0; subresourceIndex < currentRegion->vulkanTexture->subresourceCount; subresourceIndex += 1) {
+                /* copy subresource if necessary */
+                srcSubresource = &currentRegion->vulkanTexture->subresources[subresourceIndex];
+                dstSubresource = &newTexture->subresources[subresourceIndex];
 
                 /* Set debug name if it exists */
                 if (
