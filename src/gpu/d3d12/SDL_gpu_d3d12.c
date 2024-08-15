@@ -162,6 +162,13 @@ typedef enum D3D12BufferType
 
 /* Conversions */
 
+static SDL_GpuTextureFormat SwapchainCompositionToSDLTextureFormat[] = {
+    SDL_GPU_TEXTUREFORMAT_B8G8R8A8,            /* SDR */
+    SDL_GPU_TEXTUREFORMAT_B8G8R8A8_SRGB,       /* SDR_SRGB */
+    SDL_GPU_TEXTUREFORMAT_R16G16B16A16_SFLOAT, /* HDR */
+    SDL_GPU_TEXTUREFORMAT_R10G10B10A2,         /* HDR_ADVANCED */
+};
+
 static DXGI_FORMAT SwapchainCompositionToTextureFormat[] = {
     DXGI_FORMAT_B8G8R8A8_UNORM,                /* SDR */
     DXGI_FORMAT_B8G8R8A8_UNORM, /* SDR_SRGB */ /* NOTE: The RTV uses the sRGB format */
@@ -462,7 +469,6 @@ typedef struct D3D12WindowData
     IDXGISwapChain3 *swapchain;
     SDL_GpuPresentMode presentMode;
     SDL_GpuSwapchainComposition swapchainComposition;
-    DXGI_FORMAT swapchainFormat;
     DXGI_COLOR_SPACE_TYPE swapchainColorSpace;
     Uint32 frameCounter;
 
@@ -5868,8 +5874,7 @@ static D3D12WindowData *D3D12_INTERNAL_FetchWindowData(
 static SDL_bool D3D12_INTERNAL_InitializeSwapchainTexture(
     D3D12Renderer *renderer,
     IDXGISwapChain3 *swapchain,
-    DXGI_FORMAT swapchainFormat,
-    DXGI_FORMAT rtvFormat,
+    SDL_GpuSwapchainComposition composition,
     Uint32 index,
     D3D12TextureContainer *pTextureContainer)
 {
@@ -5878,6 +5883,7 @@ static SDL_bool D3D12_INTERNAL_InitializeSwapchainTexture(
     D3D12_RESOURCE_DESC textureDesc;
     D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc;
     D3D12_RENDER_TARGET_VIEW_DESC rtvDesc;
+    DXGI_FORMAT swapchainFormat = SwapchainCompositionToTextureFormat[composition];
     HRESULT res;
 
     res = IDXGISwapChain_GetBuffer(
@@ -5921,7 +5927,7 @@ static SDL_bool D3D12_INTERNAL_InitializeSwapchainTexture(
         SDL_GPU_TEXTUREUSAGE_COLOR_TARGET_BIT |
         SDL_GPU_TEXTUREUSAGE_SAMPLER_BIT;
     pTextureContainer->header.info.sampleCount = SDL_GPU_SAMPLECOUNT_1;
-    pTextureContainer->header.info.format = SDL_GPU_TEXTUREFORMAT_INVALID; /* FIXME: Set this to the actual format! */
+    pTextureContainer->header.info.format = SwapchainCompositionToSDLTextureFormat[composition];
 
     pTextureContainer->debugName = NULL;
     pTextureContainer->textures = (D3D12Texture **)SDL_calloc(1, sizeof(D3D12Texture *));
@@ -5947,7 +5953,7 @@ static SDL_bool D3D12_INTERNAL_InitializeSwapchainTexture(
         D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
         &pTexture->srvHandle);
 
-    srvDesc.Format = swapchainFormat;
+    srvDesc.Format = SwapchainCompositionToTextureFormat[composition];
     srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
     srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
     srvDesc.Texture2D.MipLevels = 1;
@@ -5967,7 +5973,7 @@ static SDL_bool D3D12_INTERNAL_InitializeSwapchainTexture(
         D3D12_DESCRIPTOR_HEAP_TYPE_RTV,
         &pTexture->subresources[0].rtvHandles[0]);
 
-    rtvDesc.Format = rtvFormat;
+    rtvDesc.Format = (composition == SDL_GPU_SWAPCHAINCOMPOSITION_SDR_LINEAR) ? DXGI_FORMAT_B8G8R8A8_UNORM_SRGB : swapchainFormat;
     rtvDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D;
     rtvDesc.Texture2D.MipSlice = 0;
     rtvDesc.Texture2D.PlaneSlice = 0;
@@ -6022,8 +6028,7 @@ static SDL_bool D3D12_INTERNAL_ResizeSwapchain(
         if (!D3D12_INTERNAL_InitializeSwapchainTexture(
                 renderer,
                 windowData->swapchain,
-                windowData->swapchainFormat,
-                (windowData->swapchainComposition == SDL_GPU_SWAPCHAINCOMPOSITION_SDR_LINEAR) ? DXGI_FORMAT_B8G8R8A8_UNORM_SRGB : windowData->swapchainFormat,
+                windowData->swapchainComposition,
                 i,
                 &windowData->textureContainers[i])) {
             return SDL_FALSE;
@@ -6186,7 +6191,6 @@ static SDL_bool D3D12_INTERNAL_CreateSwapchain(
     windowData->swapchain = swapchain3;
     windowData->presentMode = presentMode;
     windowData->swapchainComposition = swapchainComposition;
-    windowData->swapchainFormat = swapchainFormat;
     windowData->swapchainColorSpace = SwapchainCompositionToColorSpace[swapchainComposition];
     windowData->frameCounter = 0;
 
@@ -6197,8 +6201,7 @@ static SDL_bool D3D12_INTERNAL_CreateSwapchain(
         if (!D3D12_INTERNAL_InitializeSwapchainTexture(
                 renderer,
                 swapchain3,
-                swapchainFormat,
-                (swapchainComposition == SDL_GPU_SWAPCHAINCOMPOSITION_SDR_LINEAR) ? DXGI_FORMAT_B8G8R8A8_UNORM_SRGB : windowData->swapchainFormat,
+                swapchainComposition,
                 i,
                 &windowData->textureContainers[i])) {
             IDXGISwapChain3_Release(swapchain3);
@@ -6347,23 +6350,7 @@ static SDL_GpuTextureFormat D3D12_GetSwapchainTextureFormat(
         return SDL_GPU_TEXTUREFORMAT_INVALID;
     }
 
-    switch (windowData->swapchainFormat) {
-    case DXGI_FORMAT_B8G8R8A8_UNORM:
-        return SDL_GPU_TEXTUREFORMAT_B8G8R8A8;
-
-    case DXGI_FORMAT_B8G8R8A8_UNORM_SRGB:
-        return SDL_GPU_TEXTUREFORMAT_B8G8R8A8_SRGB;
-
-    case DXGI_FORMAT_R16G16B16A16_FLOAT:
-        return SDL_GPU_TEXTUREFORMAT_R16G16B16A16_SFLOAT;
-
-    case DXGI_FORMAT_R10G10B10A2_UNORM:
-        return SDL_GPU_TEXTUREFORMAT_R10G10B10A2;
-
-    default:
-        SDL_LogError(SDL_LOG_CATEGORY_GPU, "Unrecognized swapchain format!");
-        return SDL_GPU_TEXTUREFORMAT_INVALID;
-    }
+    return windowData->textureContainers[windowData->frameCounter].header.info.format;
 }
 
 static D3D12Fence *D3D12_INTERNAL_AcquireFence(
