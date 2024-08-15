@@ -118,6 +118,206 @@ static const SDL_GpuBootstrap *backends[] = {
     NULL
 };
 
+/* Internal Utility Functions */
+
+SDL_GpuGraphicsPipeline *SDL_Gpu_FetchBlitPipeline(
+    SDL_GpuDevice *device,
+    TextureCommonHeader *srcHeader,
+    TextureCommonHeader *dstHeader,
+    SDL_GpuShader *blitVertexShader,
+    SDL_GpuShader *blitFrom2DShader,
+    SDL_GpuShader *blitFrom2DArrayShader,
+    SDL_GpuShader *blitFromCubeShader,
+    BlitPipelineCacheEntry **blitPipelines,
+    Uint32 *blitPipelineCount,
+    Uint32 *blitPipelineCapacity)
+{
+    int type = 0; /* FIXME: Use an actual texture type! */
+    SDL_GpuTextureFormat destinationFormat = dstHeader->info.format;
+    SDL_GpuGraphicsPipelineCreateInfo blitPipelineCreateInfo;
+    SDL_GpuColorAttachmentDescription colorAttachmentDesc;
+    SDL_GpuGraphicsPipeline *pipeline;
+
+    if (srcHeader->info.isCube) {
+        type = 1;
+    } else if (srcHeader->info.layerCount > 1) {
+        type = 2;
+    }
+
+    if (blitPipelineCount == NULL) {
+        /* use pre-created, format-agnostic pipelines */
+        return (*blitPipelines)[type].pipeline;
+    }
+
+    for (Uint32 i = 0; i < *blitPipelineCount; i += 1) {
+        if ((*blitPipelines)[i].type == type && (*blitPipelines)[i].format == destinationFormat) {
+            return (*blitPipelines)[i].pipeline;
+        }
+    }
+
+    /* No pipeline found, we'll need to make one! */
+    SDL_zero(blitPipelineCreateInfo);
+
+    SDL_zero(colorAttachmentDesc);
+    colorAttachmentDesc.blendState.colorWriteMask = 0xF;
+    colorAttachmentDesc.format = destinationFormat;
+
+    blitPipelineCreateInfo.attachmentInfo.colorAttachmentDescriptions = &colorAttachmentDesc;
+    blitPipelineCreateInfo.attachmentInfo.colorAttachmentCount = 1;
+    blitPipelineCreateInfo.attachmentInfo.depthStencilFormat = SDL_GPU_TEXTUREFORMAT_D16_UNORM; /* arbitrary */
+    blitPipelineCreateInfo.attachmentInfo.hasDepthStencilAttachment = SDL_FALSE;
+
+    blitPipelineCreateInfo.vertexShader = blitVertexShader;
+    if (type == 1) {
+        blitPipelineCreateInfo.fragmentShader = blitFromCubeShader;
+    } else if (type == 2) {
+        blitPipelineCreateInfo.fragmentShader = blitFrom2DArrayShader;
+    } else {
+        blitPipelineCreateInfo.fragmentShader = blitFrom2DShader;
+    }
+
+    blitPipelineCreateInfo.multisampleState.sampleCount = SDL_GPU_SAMPLECOUNT_1;
+    blitPipelineCreateInfo.multisampleState.sampleMask = 0xFFFFFFFF;
+
+    blitPipelineCreateInfo.primitiveType = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST;
+
+    blitPipelineCreateInfo.blendConstants[0] = 1.0f;
+    blitPipelineCreateInfo.blendConstants[1] = 1.0f;
+    blitPipelineCreateInfo.blendConstants[2] = 1.0f;
+    blitPipelineCreateInfo.blendConstants[3] = 1.0f;
+
+    pipeline = SDL_GpuCreateGraphicsPipeline(
+        device,
+        &blitPipelineCreateInfo);
+
+    if (pipeline == NULL) {
+        SDL_LogError(SDL_LOG_CATEGORY_GPU, "Failed to create graphics pipeline for blit");
+        return NULL;
+    }
+
+    /* Cache the new pipeline */
+    EXPAND_ARRAY_IF_NEEDED(
+        (*blitPipelines),
+        BlitPipelineCacheEntry,
+        *blitPipelineCount + 1,
+        *blitPipelineCapacity,
+        *blitPipelineCapacity * 2)
+
+    (*blitPipelines)[*blitPipelineCount].pipeline = pipeline;
+    (*blitPipelines)[*blitPipelineCount].type = type;
+    (*blitPipelines)[*blitPipelineCount].format = destinationFormat;
+    *blitPipelineCount += 1;
+
+    return pipeline;
+}
+
+void SDL_Gpu_BlitCommon(
+    SDL_GpuCommandBuffer *commandBuffer,
+    SDL_GpuTextureRegion *source,
+    SDL_GpuTextureRegion *destination,
+    SDL_GpuFilter filterMode,
+    SDL_bool cycle,
+    SDL_GpuSampler *blitLinearSampler,
+    SDL_GpuSampler *blitNearestSampler,
+    SDL_GpuShader *blitVertexShader,
+    SDL_GpuShader *blitFrom2DShader,
+    SDL_GpuShader *blitFrom2DArrayShader,
+    SDL_GpuShader *blitFromCubeShader,
+    BlitPipelineCacheEntry **blitPipelines,
+    Uint32 *blitPipelineCount,
+    Uint32 *blitPipelineCapacity)
+{
+    CommandBufferCommonHeader *cmdbufHeader = (CommandBufferCommonHeader *)commandBuffer;
+    SDL_GpuRenderPass *renderPass;
+    TextureCommonHeader *srcHeader = (TextureCommonHeader *)source->textureSlice.texture;
+    TextureCommonHeader *dstHeader = (TextureCommonHeader *)destination->textureSlice.texture;
+    SDL_GpuGraphicsPipeline *blitPipeline;
+    SDL_GpuColorAttachmentInfo colorAttachmentInfo;
+    SDL_GpuViewport viewport;
+    SDL_GpuTextureSamplerBinding textureSamplerBinding;
+    BlitFragmentUniforms blitFragmentUniforms;
+
+    blitPipeline = SDL_Gpu_FetchBlitPipeline(
+        cmdbufHeader->device,
+        srcHeader,
+        dstHeader,
+        blitVertexShader,
+        blitFrom2DShader,
+        blitFrom2DArrayShader,
+        blitFromCubeShader,
+        blitPipelines,
+        blitPipelineCount,
+        blitPipelineCapacity);
+
+    if (blitPipeline == NULL) {
+        SDL_LogWarn(SDL_LOG_CATEGORY_GPU, "Could not fetch blit pipeline");
+        return;
+    }
+
+    /* If the entire destination is blitted, we don't have to load */
+    if (
+        dstHeader->info.layerCount == 1 &&
+        dstHeader->info.levelCount == 1 &&
+        destination->w == dstHeader->info.width &&
+        destination->h == dstHeader->info.height) {
+        colorAttachmentInfo.loadOp = SDL_GPU_LOADOP_DONT_CARE;
+    } else {
+        colorAttachmentInfo.loadOp = SDL_GPU_LOADOP_LOAD;
+    }
+
+    colorAttachmentInfo.storeOp = SDL_GPU_STOREOP_STORE;
+
+    colorAttachmentInfo.textureSlice = destination->textureSlice;
+    colorAttachmentInfo.cycle = cycle;
+
+    renderPass = SDL_GpuBeginRenderPass(
+        commandBuffer,
+        &colorAttachmentInfo,
+        1,
+        NULL);
+
+    viewport.x = (float)destination->x;
+    viewport.y = (float)destination->y;
+    viewport.w = (float)destination->w;
+    viewport.h = (float)destination->h;
+    viewport.minDepth = 0;
+    viewport.maxDepth = 1;
+
+    SDL_GpuSetViewport(
+        renderPass,
+        &viewport);
+
+    SDL_GpuBindGraphicsPipeline(
+        renderPass,
+        blitPipeline);
+
+    textureSamplerBinding.texture = source->textureSlice.texture;
+    textureSamplerBinding.sampler =
+        filterMode == SDL_GPU_FILTER_NEAREST ? blitNearestSampler : blitLinearSampler;
+
+    SDL_GpuBindFragmentSamplers(
+        renderPass,
+        0,
+        &textureSamplerBinding,
+        1);
+
+    blitFragmentUniforms.left = (float)source->x / srcHeader->info.width;
+    blitFragmentUniforms.top = (float)source->y / srcHeader->info.height;
+    blitFragmentUniforms.width = (float)source->w / srcHeader->info.width;
+    blitFragmentUniforms.height = (float)source->h / srcHeader->info.height;
+    blitFragmentUniforms.mipLevel = source->textureSlice.mipLevel;
+    blitFragmentUniforms.layer = source->textureSlice.layer;
+
+    SDL_GpuPushFragmentUniformData(
+        commandBuffer,
+        0,
+        &blitFragmentUniforms,
+        sizeof(blitFragmentUniforms));
+
+    SDL_GpuDrawPrimitives(renderPass, 0, 3);
+    SDL_GpuEndRenderPass(renderPass);
+}
+
 /* Driver Functions */
 
 static SDL_GpuDriver SDL_GpuSelectBackend(

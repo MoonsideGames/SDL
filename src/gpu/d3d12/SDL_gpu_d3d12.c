@@ -58,14 +58,6 @@
         return ret;                                          \
     }
 
-#define EXPAND_ARRAY_IF_NEEDED(arr, elementType, newCount, capacity, newCapacity) \
-    if (newCount >= capacity) {                                                   \
-        capacity = newCapacity;                                                   \
-        arr = (elementType *)SDL_realloc(                                         \
-            arr,                                                                  \
-            sizeof(elementType) * capacity);                                      \
-    }
-
 /* Defines */
 #if defined(_WIN32)
 #define D3D12_DLL     "d3d12.dll"
@@ -482,13 +474,6 @@ typedef struct D3D12PresentData
     Uint32 swapchainImageIndex;
 } D3D12PresentData;
 
-typedef struct D3D12BlitPipelineCacheEntry
-{
-    int type;
-    SDL_GpuTextureFormat format;
-    SDL_GpuGraphicsPipeline *pipeline;
-} D3D12BlitPipelineCacheEntry;
-
 struct D3D12Renderer
 {
     void *dxgidebug_dll;
@@ -527,7 +512,7 @@ struct D3D12Renderer
     SDL_GpuSampler *blitNearestSampler;
     SDL_GpuSampler *blitLinearSampler;
 
-    D3D12BlitPipelineCacheEntry *blitPipelines;
+    BlitPipelineCacheEntry *blitPipelines;
     Uint32 blitPipelineCount;
     Uint32 blitPipelineCapacity;
 
@@ -817,18 +802,6 @@ struct D3D12UniformBuffer
     Uint32 drawOffset;
     Uint32 currentBlockSize;
 };
-
-typedef struct BlitFragmentUniforms
-{
-    /* texcoord space */
-    float left;
-    float top;
-    float width;
-    float height;
-
-    Uint32 mipLevel;
-    Uint32 layer;
-} BlitFragmentUniforms;
 
 /* Foward function declarations */
 
@@ -5621,86 +5594,6 @@ static void D3D12_GenerateMipmaps(
     SDL_GpuCommandBuffer *commandBuffer,
     SDL_GpuTexture *texture) { SDL_assert(SDL_FALSE); }
 
-static SDL_GpuGraphicsPipeline* D3D12_INTERNAL_FetchBlitPipeline(
-    D3D12Renderer* renderer,
-    D3D12TextureContainer* sourceContainer,
-    SDL_GpuTextureFormat destinationFormat)
-{
-    SDL_GpuGraphicsPipelineCreateInfo blitPipelineCreateInfo;
-    SDL_GpuColorAttachmentDescription colorAttachmentDesc;
-    SDL_GpuGraphicsPipeline *pipeline;
-
-    int type = 0; /* FIXME: Use an actual texture type! */
-    if (sourceContainer->header.info.isCube) {
-        type = 1;
-    } else if (sourceContainer->header.info.layerCount > 1) {
-        type = 2;
-    } else {
-        type = 3;
-    }
-
-    for (Uint32 i = 0; i < renderer->blitPipelineCount; i += 1) {
-        if (renderer->blitPipelines[i].type == type && renderer->blitPipelines[i].format == destinationFormat) {
-            return renderer->blitPipelines[i].pipeline;
-        }
-    }
-
-    /* No pipeline found, we'll need to make one! */
-    SDL_zero(blitPipelineCreateInfo);
-
-    SDL_zero(colorAttachmentDesc);
-    colorAttachmentDesc.blendState.colorWriteMask = 0xF;
-    colorAttachmentDesc.format = destinationFormat;
-
-    blitPipelineCreateInfo.attachmentInfo.colorAttachmentDescriptions = &colorAttachmentDesc;
-    blitPipelineCreateInfo.attachmentInfo.colorAttachmentCount = 1;
-    blitPipelineCreateInfo.attachmentInfo.depthStencilFormat = SDL_GPU_TEXTUREFORMAT_D16_UNORM; /* arbitrary */
-    blitPipelineCreateInfo.attachmentInfo.hasDepthStencilAttachment = SDL_FALSE;
-
-    blitPipelineCreateInfo.vertexShader = renderer->blitVertexShader;
-    if (type == 1) {
-        blitPipelineCreateInfo.fragmentShader = renderer->blitFromCubeShader;
-    } else if (type == 2) {
-        blitPipelineCreateInfo.fragmentShader = renderer->blitFrom2DArrayShader;
-    } else {
-        blitPipelineCreateInfo.fragmentShader = renderer->blitFrom2DShader;
-    }
-
-    blitPipelineCreateInfo.multisampleState.sampleCount = SDL_GPU_SAMPLECOUNT_1;
-    blitPipelineCreateInfo.multisampleState.sampleMask = 0xFFFFFFFF;
-
-    blitPipelineCreateInfo.primitiveType = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST;
-
-    blitPipelineCreateInfo.blendConstants[0] = 1.0f;
-    blitPipelineCreateInfo.blendConstants[1] = 1.0f;
-    blitPipelineCreateInfo.blendConstants[2] = 1.0f;
-    blitPipelineCreateInfo.blendConstants[3] = 1.0f;
-
-    pipeline = D3D12_CreateGraphicsPipeline(
-        (SDL_GpuRenderer *)renderer,
-        &blitPipelineCreateInfo);
-
-    if (pipeline == NULL) {
-        SDL_LogError(SDL_LOG_CATEGORY_GPU, "Failed to create graphics pipeline for blit");
-        return NULL;
-    }
-
-    /* Cache the new pipeline */
-    EXPAND_ARRAY_IF_NEEDED(
-        renderer->blitPipelines,
-        D3D12BlitPipelineCacheEntry,
-        renderer->blitPipelineCount + 1,
-        renderer->blitPipelineCapacity,
-        renderer->blitPipelineCapacity * 2)
-
-    renderer->blitPipelines[renderer->blitPipelineCount].pipeline = pipeline;
-    renderer->blitPipelines[renderer->blitPipelineCount].type = type;
-    renderer->blitPipelines[renderer->blitPipelineCount].format = destinationFormat;
-    renderer->blitPipelineCount += 1;
-
-    return pipeline;
-}
-
 static void D3D12_Blit(
     SDL_GpuCommandBuffer *commandBuffer,
     SDL_GpuTextureRegion *source,
@@ -5710,89 +5603,22 @@ static void D3D12_Blit(
 {
     D3D12CommandBuffer *d3d12CommandBuffer = (D3D12CommandBuffer *)commandBuffer;
     D3D12Renderer *renderer = (D3D12Renderer *)d3d12CommandBuffer->renderer;
-    D3D12TextureContainer *sourceTextureContainer = (D3D12TextureContainer *)source->textureSlice.texture;
-    D3D12TextureContainer *destinationTextureContainer = (D3D12TextureContainer *)destination->textureSlice.texture;
-    SDL_GpuGraphicsPipeline *blitPipeline;
-    SDL_GpuColorAttachmentInfo colorAttachmentInfo;
-    SDL_GpuViewport viewport;
-    SDL_GpuTextureSamplerBinding textureSamplerBinding;
-    BlitFragmentUniforms blitFragmentUniforms;
 
-    blitPipeline = D3D12_INTERNAL_FetchBlitPipeline(
-        renderer,
-        sourceTextureContainer,
-        destinationTextureContainer->header.info.format);
-
-    if (blitPipeline == NULL) {
-        SDL_LogWarn(SDL_LOG_CATEGORY_GPU, "Could not fetch blit pipeline");
-        return;
-    }
-
-    /* If the entire destination is blitted, we don't have to load */
-    if (
-        destinationTextureContainer->header.info.layerCount == 1 &&
-        destinationTextureContainer->header.info.levelCount == 1 &&
-        destination->w == destinationTextureContainer->header.info.width &&
-        destination->h == destinationTextureContainer->header.info.height) {
-        colorAttachmentInfo.loadOp = SDL_GPU_LOADOP_DONT_CARE;
-    } else {
-        colorAttachmentInfo.loadOp = SDL_GPU_LOADOP_LOAD;
-    }
-
-    colorAttachmentInfo.storeOp = SDL_GPU_STOREOP_STORE;
-
-    colorAttachmentInfo.texture = destination->texture;
-    colorAttachmentInfo.layerOrDepthPlane =
-        destinationTextureContainer->header.info.type == SDL_GPU_TEXTURETYPE_3D ? destination->z : destination->layer;
-    colorAttachmentInfo.mipLevel = destination->mipLevel;
-    colorAttachmentInfo.cycle = cycle;
-
-    D3D12_BeginRenderPass(
+    SDL_Gpu_BlitCommon(
         commandBuffer,
-        &colorAttachmentInfo,
-        1,
-        NULL);
-
-    viewport.x = (float)destination->x;
-    viewport.y = (float)destination->y;
-    viewport.w = (float)destination->w;
-    viewport.h = (float)destination->h;
-    viewport.minDepth = 0;
-    viewport.maxDepth = 1;
-
-    D3D12_SetViewport(
-        commandBuffer,
-        &viewport);
-
-    D3D12_BindGraphicsPipeline(
-        commandBuffer,
-        blitPipeline);
-
-    textureSamplerBinding.texture = source->texture;
-    textureSamplerBinding.sampler =
-        filterMode == SDL_GPU_FILTER_NEAREST ? renderer->blitNearestSampler : renderer->blitLinearSampler;
-
-    D3D12_BindFragmentSamplers(
-        commandBuffer,
-        0,
-        &textureSamplerBinding,
-        1);
-
-    blitFragmentUniforms.left = (float)source->x / sourceTextureContainer->header.info.width;
-    blitFragmentUniforms.top = (float)source->y / sourceTextureContainer->header.info.height;
-    blitFragmentUniforms.width = (float)source->w / sourceTextureContainer->header.info.width;
-    blitFragmentUniforms.height = (float)source->h / sourceTextureContainer->header.info.height;
-    blitFragmentUniforms.mipLevel = source->textureSlice.mipLevel;
-    blitFragmentUniforms.layer = source->textureSlice.layer;
-
-    D3D12_PushFragmentUniformData(
-        commandBuffer,
-        0,
-        &blitFragmentUniforms,
-        sizeof(blitFragmentUniforms));
-
-    D3D12_DrawPrimitives(commandBuffer, 0, 3);
-    D3D12_EndRenderPass(commandBuffer);
+        source,
+        destination,
+        filterMode,
+        cycle,
+        renderer->blitLinearSampler,
+        renderer->blitNearestSampler,
+        renderer->blitVertexShader,
+        renderer->blitFrom2DShader,
+        renderer->blitFrom2DArrayShader,
+        renderer->blitFromCubeShader,
+        &renderer->blitPipelines,
+        &renderer->blitPipelineCount,
+        &renderer->blitPipelineCapacity);
 }
 
 /* Submission/Presentation */
@@ -7909,8 +7735,8 @@ static SDL_GpuDevice *D3D12_CreateDevice(SDL_bool debugMode, SDL_bool preferLowP
     D3D12_INTERNAL_InitBlitResources(renderer);
     renderer->blitPipelineCapacity = 2;
     renderer->blitPipelineCount = 0;
-    renderer->blitPipelines = (D3D12BlitPipelineCacheEntry *)SDL_calloc(
-        renderer->blitPipelineCapacity, sizeof(D3D12BlitPipelineCacheEntry));
+    renderer->blitPipelines = (BlitPipelineCacheEntry *)SDL_calloc(
+        renderer->blitPipelineCapacity, sizeof(BlitPipelineCacheEntry));
     if (!renderer->blitPipelines) {
         D3D12_INTERNAL_DestroyRenderer(renderer);
         return NULL;

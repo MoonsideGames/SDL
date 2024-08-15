@@ -34,14 +34,6 @@
 #define WINDOW_PROPERTY_DATA        "SDL_GpuMetalWindowPropertyData"
 #define SDL_GPU_SHADERSTAGE_COMPUTE 2
 
-#define EXPAND_ARRAY_IF_NEEDED(arr, elementType, newCount, capacity, newCapacity) \
-    if (newCount >= capacity) {                                                   \
-        capacity = newCapacity;                                                   \
-        arr = (elementType *)SDL_realloc(                                         \
-            arr,                                                                  \
-            sizeof(elementType) * capacity);                                      \
-    }
-
 #define TRACK_RESOURCE(resource, type, array, count, capacity) \
     Uint32 i;                                                  \
                                                                \
@@ -581,7 +573,7 @@ struct MetalRenderer
     SDL_GpuSampler *blitNearestSampler;
     SDL_GpuSampler *blitLinearSampler;
 
-    BlitPipeline *blitPipelines;
+    BlitPipelineCacheEntry *blitPipelines;
     Uint32 blitPipelineCount;
     Uint32 blitPipelineCapacity;
 
@@ -2880,72 +2872,6 @@ static void METAL_PushFragmentUniformData(
 
 /* Blit */
 
-static SDL_GpuGraphicsPipeline *METAL_INTERNAL_FetchBlitPipeline(
-    MetalRenderer *renderer,
-    SDL_GpuTextureFormat destinationFormat)
-{
-    SDL_GpuGraphicsPipelineCreateInfo blitPipelineCreateInfo;
-    SDL_GpuColorAttachmentDescription colorAttachmentDesc;
-    SDL_GpuGraphicsPipeline *pipeline;
-
-    /* FIXME: is there a better lock we can use? */
-    SDL_LockMutex(renderer->submitLock);
-
-    /* Try to use an existing pipeline */
-    for (Uint32 i = 0; i < renderer->blitPipelineCount; i += 1) {
-        if (renderer->blitPipelines[i].format == destinationFormat) {
-            SDL_UnlockMutex(renderer->submitLock);
-            return renderer->blitPipelines[i].pipeline;
-        }
-    }
-
-    /* Create a new pipeline! */
-    SDL_zero(blitPipelineCreateInfo);
-
-    SDL_zero(colorAttachmentDesc);
-    colorAttachmentDesc.format = destinationFormat;
-    colorAttachmentDesc.blendState.blendEnable = 0;
-    colorAttachmentDesc.blendState.colorWriteMask = 0xFF;
-
-    blitPipelineCreateInfo.attachmentInfo.colorAttachmentDescriptions = &colorAttachmentDesc;
-    blitPipelineCreateInfo.attachmentInfo.colorAttachmentCount = 1;
-
-    blitPipelineCreateInfo.vertexShader = renderer->fullscreenVertexShader;
-    blitPipelineCreateInfo.fragmentShader = renderer->blitFrom2DPixelShader;
-
-    blitPipelineCreateInfo.multisampleState.sampleCount = SDL_GPU_SAMPLECOUNT_1;
-    blitPipelineCreateInfo.multisampleState.sampleMask = 0xFFFFFFFF;
-
-    blitPipelineCreateInfo.primitiveType = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST;
-
-    blitPipelineCreateInfo.blendConstants[0] = 1.0f;
-    blitPipelineCreateInfo.blendConstants[1] = 1.0f;
-    blitPipelineCreateInfo.blendConstants[2] = 1.0f;
-    blitPipelineCreateInfo.blendConstants[3] = 1.0f;
-
-    pipeline = METAL_CreateGraphicsPipeline(
-        (SDL_GpuRenderer *)renderer,
-        &blitPipelineCreateInfo);
-    if (pipeline == NULL) {
-        SDL_LogError(SDL_LOG_CATEGORY_GPU, "Failed to create blit pipeline!");
-        SDL_UnlockMutex(renderer->submitLock);
-        return NULL;
-    }
-
-    if (renderer->blitPipelineCount >= renderer->blitPipelineCapacity) {
-        renderer->blitPipelineCapacity *= 2;
-        renderer->blitPipelines = SDL_realloc(
-            renderer->blitPipelines,
-            sizeof(BlitPipeline) * renderer->blitPipelineCapacity);
-    }
-    renderer->blitPipelines[renderer->blitPipelineCount].pipeline = pipeline;
-    renderer->blitPipelines[renderer->blitPipelineCount].format = destinationFormat;
-    renderer->blitPipelineCount += 1;
-
-    SDL_UnlockMutex(renderer->submitLock);
-    return pipeline;
-}
-
 static void METAL_Blit(
     SDL_GpuCommandBuffer *commandBuffer,
     SDL_GpuTextureRegion *source,
@@ -2955,74 +2881,22 @@ static void METAL_Blit(
 {
     MetalCommandBuffer *metalCommandBuffer = (MetalCommandBuffer *)commandBuffer;
     MetalRenderer *renderer = (MetalRenderer *)metalCommandBuffer->renderer;
-    MetalTextureContainer *destinationTextureContainer = (MetalTextureContainer *)destination->texture;
-    SDL_GpuGraphicsPipeline *pipeline;
-    SDL_GpuColorAttachmentInfo colorAttachmentInfo;
-    SDL_GpuViewport viewport;
-    SDL_GpuTextureSamplerBinding textureSamplerBinding;
 
-    /* FIXME: cube copies? texture arrays? */
-
-    pipeline = METAL_INTERNAL_FetchBlitPipeline(
-        renderer,
-        destinationTextureContainer->header.info.format);
-    if (pipeline == NULL) {
-        /* Drop the blit if the pipeline fetch failed! */
-        return;
-    }
-
-    /* Unused */
-    colorAttachmentInfo.clearColor.r = 0;
-    colorAttachmentInfo.clearColor.g = 0;
-    colorAttachmentInfo.clearColor.b = 0;
-    colorAttachmentInfo.clearColor.a = 0;
-
-    /* If the entire destination is blitted, we don't have to load */
-    if (
-        destinationTextureContainer->header.info.levelCount == 1 &&
-        destination->w == destinationTextureContainer->header.info.width &&
-        destination->h == destinationTextureContainer->header.info.height &&
-        destination->d == destinationTextureContainer->header.info.depth) {
-        colorAttachmentInfo.loadOp = SDL_GPU_LOADOP_DONT_CARE;
-    } else {
-        colorAttachmentInfo.loadOp = SDL_GPU_LOADOP_LOAD;
-    }
-
-    colorAttachmentInfo.storeOp = SDL_GPU_STOREOP_STORE;
-    colorAttachmentInfo.texture = destination->texture;
-    colorAttachmentInfo.layerOrDepthPlane = destination->layer;
-    colorAttachmentInfo.mipLevel = destination->mipLevel;
-    colorAttachmentInfo.cycle = cycle;
-
-    METAL_BeginRenderPass(
+    SDL_Gpu_BlitCommon(
         commandBuffer,
-        &colorAttachmentInfo,
-        1,
-        NULL);
-
-    viewport.x = (float)destination->x;
-    viewport.y = (float)destination->y;
-    viewport.w = (float)destination->w;
-    viewport.h = (float)destination->h;
-    viewport.minDepth = 0;
-    viewport.maxDepth = 1;
-
-    METAL_SetViewport(commandBuffer, &viewport);
-    METAL_BindGraphicsPipeline(commandBuffer, pipeline);
-
-    textureSamplerBinding.texture = source->texture;
-    textureSamplerBinding.sampler = (filterMode == SDL_GPU_FILTER_NEAREST)
-                                        ? renderer->blitNearestSampler
-                                        : renderer->blitLinearSampler;
-
-    METAL_BindFragmentSamplers(
-        commandBuffer,
-        0,
-        &textureSamplerBinding,
-        1);
-
-    METAL_DrawPrimitives(commandBuffer, 0, 3);
-    METAL_EndRenderPass(commandBuffer);
+        source,
+        destination,
+        filterMode,
+        cycle,
+        renderer->blitLinearSampler,
+        renderer->blitNearestSampler,
+        NULL, /* FIXME */
+        NULL, /* FIXME */
+        NULL, /* FIXME */
+        NULL, /* FIXME */
+        &renderer->blitPipelines,
+        &renderer->blitPipelineCount,
+        &renderer->blitPipelineCapacity);
 }
 
 /* Compute State */
@@ -3872,10 +3746,10 @@ static void METAL_INTERNAL_InitBlitResources(
     SDL_GpuSamplerCreateInfo samplerCreateInfo;
 
     /* Allocate the dynamic blit pipeline list */
-    renderer->blitPipelineCapacity = 1;
+    renderer->blitPipelineCapacity = 2;
     renderer->blitPipelineCount = 0;
     renderer->blitPipelines = SDL_malloc(
-        sizeof(BlitPipeline) * renderer->blitPipelineCapacity);
+        sizeof(BlitPipelineCacheEntry) * renderer->blitPipelineCapacity);
 
     /* Fullscreen vertex shader */
     SDL_zero(shaderModuleCreateInfo);
