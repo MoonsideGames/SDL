@@ -2389,14 +2389,14 @@ static void METAL_BindVertexSamplers(
 static void METAL_BindVertexStorageTextures(
     SDL_GpuCommandBuffer *commandBuffer,
     Uint32 firstSlot,
-    SDL_GpuTextureSlice *storageTextureSlices,
+    SDL_GpuTexture **storageTextures,
     Uint32 bindingCount)
 {
     MetalCommandBuffer *metalCommandBuffer = (MetalCommandBuffer *)commandBuffer;
     MetalTextureContainer *textureContainer;
 
     for (Uint32 i = 0; i < bindingCount; i += 1) {
-        textureContainer = (MetalTextureContainer *)storageTextureSlices[i].texture;
+        textureContainer = (MetalTextureContainer *)storageTextures[i];
 
         METAL_INTERNAL_TrackTexture(
             metalCommandBuffer,
@@ -2461,14 +2461,14 @@ static void METAL_BindFragmentSamplers(
 static void METAL_BindFragmentStorageTextures(
     SDL_GpuCommandBuffer *commandBuffer,
     Uint32 firstSlot,
-    SDL_GpuTextureSlice *storageTextureSlices,
+    SDL_GpuTexture **storageTextures,
     Uint32 bindingCount)
 {
     MetalCommandBuffer *metalCommandBuffer = (MetalCommandBuffer *)commandBuffer;
     MetalTextureContainer *textureContainer;
 
     for (Uint32 i = 0; i < bindingCount; i += 1) {
-        textureContainer = (MetalTextureContainer *)storageTextureSlices[i].texture;
+        textureContainer = (MetalTextureContainer *)storageTextures[i];
 
         METAL_INTERNAL_TrackTexture(
             metalCommandBuffer,
@@ -3107,14 +3107,14 @@ static void METAL_BindComputePipeline(
 static void METAL_BindComputeStorageTextures(
     SDL_GpuCommandBuffer *commandBuffer,
     Uint32 firstSlot,
-    SDL_GpuTextureSlice *storageTextureSlices,
+    SDL_GpuTexture **storageTextures,
     Uint32 bindingCount)
 {
     MetalCommandBuffer *metalCommandBuffer = (MetalCommandBuffer *)commandBuffer;
     MetalTextureContainer *textureContainer;
 
     for (Uint32 i = 0; i < bindingCount; i += 1) {
-        textureContainer = (MetalTextureContainer *)storageTextureSlices[i].texture;
+        textureContainer = (MetalTextureContainer *)storageTextures[i];
 
         METAL_INTERNAL_TrackTexture(
             metalCommandBuffer,
