@@ -120,10 +120,9 @@ static const SDL_GpuBootstrap *backends[] = {
 
 /* Driver Functions */
 
-static SDL_GpuDriver SDL_GpuSelectBackend(SDL_VideoDevice *_this, SDL_PropertiesID props)
+static SDL_GpuDriver SDL_GpuSelectBackend(SDL_VideoDevice *_this, const char *gpudriver)
 {
     Uint32 i;
-    const char *gpudriver = SDL_GetStringProperty(props, SDL_PROP_GPU_CREATEDEVICE_NAME_STRING, SDL_GetHint(SDL_HINT_GPU_DRIVER));
 
     /* Environment/Properties override... */
     if (gpudriver != NULL) {
@@ -147,12 +146,14 @@ static SDL_GpuDriver SDL_GpuSelectBackend(SDL_VideoDevice *_this, SDL_Properties
     return SDL_GPU_DRIVER_INVALID;
 }
 
-SDL_GpuDevice *SDL_GpuCreateDevice(
+static SDL_GpuDevice *SDL_GpuCreateDeviceCommon(
     SDL_bool debugMode,
     SDL_bool preferLowPower,
+    const char *name,
     SDL_PropertiesID props)
 {
     int i;
+    const char *gpudriver;
     SDL_GpuDevice *result = NULL;
     SDL_GpuDriver selectedBackend;
     SDL_VideoDevice *_this = SDL_GetVideoDevice();
@@ -162,7 +163,12 @@ SDL_GpuDevice *SDL_GpuCreateDevice(
         return NULL;
     }
 
-    selectedBackend = SDL_GpuSelectBackend(_this, props);
+    gpudriver = SDL_GetHint(SDL_HINT_GPU_DRIVER);
+    if (gpudriver == NULL) {
+        gpudriver = name;
+    }
+
+    selectedBackend = SDL_GpuSelectBackend(_this, gpudriver);
     if (selectedBackend != SDL_GPU_DRIVER_INVALID) {
         for (i = 0; backends[i]; i += 1) {
             if (backends[i]->backendflag == selectedBackend) {
@@ -176,6 +182,22 @@ SDL_GpuDevice *SDL_GpuCreateDevice(
         }
     }
     return result;
+}
+
+SDL_GpuDevice *SDL_GpuCreateDevice(
+    SDL_bool debugMode,
+    SDL_bool preferLowPower,
+    const char *name)
+{
+    return SDL_GpuCreateDeviceCommon(debugMode, preferLowPower, name, 0);
+}
+
+SDL_GpuDevice *SDL_GpuCreateDeviceWithProperties(SDL_PropertiesID props)
+{
+    SDL_bool debugMode = SDL_GetBooleanProperty(props, SDL_PROP_GPU_CREATEDEVICE_DEBUGMODE_BOOL, SDL_TRUE);
+    SDL_bool preferLowPower = SDL_GetBooleanProperty(props, SDL_PROP_GPU_CREATEDEVICE_PREFERLOWPOWER_BOOL, SDL_TRUE);
+    const char *name = SDL_GetStringProperty(props, SDL_PROP_GPU_CREATEDEVICE_NAME_STRING, NULL);
+    return SDL_GpuCreateDeviceCommon(debugMode, preferLowPower, name, props);
 }
 
 void SDL_GpuDestroyDevice(SDL_GpuDevice *device)
@@ -507,28 +529,34 @@ SDL_GpuTexture *SDL_GpuCreateTexture(
 
 SDL_GpuBuffer *SDL_GpuCreateBuffer(
     SDL_GpuDevice *device,
-    SDL_GpuBufferUsageFlags usageFlags,
-    Uint32 sizeInBytes)
+    SDL_GpuBufferCreateInfo *bufferCreateInfo)
 {
     CHECK_DEVICE_MAGIC(device, NULL);
+    if (bufferCreateInfo == NULL) {
+        SDL_InvalidParamError("bufferCreateInfo");
+        return NULL;
+    }
 
     return device->CreateBuffer(
         device->driverData,
-        usageFlags,
-        sizeInBytes);
+        bufferCreateInfo->usageFlags,
+        bufferCreateInfo->sizeInBytes);
 }
 
 SDL_GpuTransferBuffer *SDL_GpuCreateTransferBuffer(
     SDL_GpuDevice *device,
-    SDL_GpuTransferBufferUsage usage,
-    Uint32 sizeInBytes)
+    SDL_GpuTransferBufferCreateInfo *transferBufferCreateInfo)
 {
     CHECK_DEVICE_MAGIC(device, NULL);
+    if (transferBufferCreateInfo == NULL) {
+        SDL_InvalidParamError("transferBufferCreateInfo");
+        return NULL;
+    }
 
     return device->CreateTransferBuffer(
         device->driverData,
-        usage,
-        sizeInBytes);
+        transferBufferCreateInfo->usage,
+        transferBufferCreateInfo->sizeInBytes);
 }
 
 /* Debug Naming */
