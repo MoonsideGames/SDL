@@ -93,21 +93,21 @@ static const GUID D3D_IID_DXGI_DEBUG_ALL = { 0xe48ae283, 0xda80, 0x490b, { 0x87,
 
 /* Built-in shaders, compiled with compile_shaders.bat */
 
-#define g_main D3D11_FullscreenVert
+#define g_FullscreenVert D3D11_FullscreenVert
 #include "D3D11_FullscreenVert.h"
-#undef g_main
+#undef g_FullscreenVert
 
-#define g_main D3D11_BlitFrom2D
+#define g_Blit D3D11_BlitFrom2D
 #include "D3D11_BlitFrom2D.h"
-#undef g_main
+#undef g_Blit
 
-#define g_main D3D11_BlitFrom2DArray
+#define g_Blit D3D11_BlitFrom2DArray
 #include "D3D11_BlitFrom2DArray.h"
-#undef g_main
+#undef g_Blit
 
-#define g_main D3D11_BlitFromCube
+#define g_Blit D3D11_BlitFromCube
 #include "D3D11_BlitFromCube.h"
-#undef g_main
+#undef g_Blit
 
 /* Macros */
 
@@ -737,6 +737,18 @@ struct D3D11Renderer
     SDL_Mutex *fenceLock;
     SDL_Mutex *windowLock;
 };
+
+typedef struct BlitFragmentUniforms
+{
+    /* texcoord space */
+    float left;
+    float top;
+    float width;
+    float height;
+
+    Uint32 mipLevel;
+    Uint32 layer;
+} BlitFragmentUniforms;
 
 /* Null arrays for resetting shader resource slots */
 
@@ -4085,18 +4097,6 @@ static void D3D11_PushFragmentUniformData(
 
 /* Blit */
 
-typedef struct BlitUniforms
-{
-    float textureWidth;
-    float textureHeight;
-    float regionOriginX;
-    float regionOriginY;
-    float regionWidth;
-    float regionHeight;
-    Uint32 mipLevel;
-    Uint32 layer;
-} BlitUniforms;
-
 static void D3D11_Blit(
     SDL_GpuCommandBuffer *commandBuffer,
     SDL_GpuTextureRegion *source,
@@ -4111,7 +4111,7 @@ static void D3D11_Blit(
     SDL_GpuColorAttachmentInfo colorAttachmentInfo;
     SDL_GpuViewport viewport;
     SDL_GpuTextureSamplerBinding textureSamplerBinding;
-    BlitUniforms uniforms;
+    BlitFragmentUniforms blitFragmentUniforms;
 
     /* If the entire destination is blitted, we don't have to load */
     if (
@@ -4173,20 +4173,18 @@ static void D3D11_Blit(
         &textureSamplerBinding,
         1);
 
-    uniforms.textureWidth = (float)sourceTextureContainer->header.info.width;
-    uniforms.textureHeight = (float)sourceTextureContainer->header.info.height;
-    uniforms.regionOriginX = (float)source->x;
-    uniforms.regionOriginY = (float)source->y;
-    uniforms.regionWidth = (float)source->w;
-    uniforms.regionHeight = (float)source->h;
-    uniforms.mipLevel = source->textureSlice.mipLevel;
-    uniforms.layer = source->textureSlice.layer;
+    blitFragmentUniforms.left = (float)source->x / sourceTextureContainer->header.info.width;
+    blitFragmentUniforms.top = (float)source->y / sourceTextureContainer->header.info.height;
+    blitFragmentUniforms.width = (float)source->w / sourceTextureContainer->header.info.width;
+    blitFragmentUniforms.height = (float)source->h / sourceTextureContainer->header.info.height;
+    blitFragmentUniforms.mipLevel = source->textureSlice.mipLevel;
+    blitFragmentUniforms.layer = source->textureSlice.layer;
 
     D3D11_PushFragmentUniformData(
         commandBuffer,
         0,
-        &uniforms,
-        sizeof(uniforms));
+        &blitFragmentUniforms,
+        sizeof(blitFragmentUniforms));
 
     D3D11_DrawPrimitives(commandBuffer, 0, 3);
     D3D11_EndRenderPass(commandBuffer);

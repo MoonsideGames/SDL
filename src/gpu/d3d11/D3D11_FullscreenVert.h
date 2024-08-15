@@ -34,7 +34,7 @@ ret
 // Approximately 7 instruction slots used
 #endif
 
-const BYTE g_main[] =
+const BYTE g_FullscreenVert[] =
 {
      68,  88,  66,  67,  35, 105, 
     237, 237, 146, 210, 147,  25, 
