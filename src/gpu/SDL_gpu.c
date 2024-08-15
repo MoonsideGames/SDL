@@ -1795,8 +1795,8 @@ void SDL_GpuBlit(
 
         /* Validation */
         SDL_bool failed = SDL_FALSE;
-        TextureCommonHeader *srcHeader = (TextureCommonHeader *)source->textureSlice.texture;
-        TextureCommonHeader *dstHeader = (TextureCommonHeader *)destination->textureSlice.texture;
+        TextureCommonHeader *srcHeader = (TextureCommonHeader *)source->texture;
+        TextureCommonHeader *dstHeader = (TextureCommonHeader *)destination->texture;
 
         if ((srcHeader->info.usageFlags & SDL_GPU_TEXTUREUSAGE_SAMPLER_BIT) == 0) {
             SDL_assert_release(!"Blit source texture must be created with the SAMPLER_BIT usage flag");

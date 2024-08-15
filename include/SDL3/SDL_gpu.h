@@ -410,12 +410,15 @@ typedef struct SDL_GpuTextureSlice
 {
     SDL_GpuTexture *texture;
     Uint32 mipLevel;
-    Uint32 layerOrDepth;
+    Uint32 layer;
+    Uint32 depth;
 } SDL_GpuTextureSlice;
 
 typedef struct SDL_GpuTextureLocation
 {
-    SDL_GpuTextureSlice textureSlice;
+    SDL_GpuTexture *texture;
+    Uint32 mipLevel;
+    Uint32 layer;
     Uint32 x;
     Uint32 y;
     Uint32 z;
@@ -423,7 +426,9 @@ typedef struct SDL_GpuTextureLocation
 
 typedef struct SDL_GpuTextureRegion
 {
-    SDL_GpuTextureSlice textureSlice;
+    SDL_GpuTexture *texture;
+    Uint32 mipLevel;
+    Uint32 layer;
     Uint32 x;
     Uint32 y;
     Uint32 z;
