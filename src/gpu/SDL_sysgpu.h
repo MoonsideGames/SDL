@@ -329,7 +329,7 @@ struct SDL_GpuDevice
     void (*BindVertexStorageTextures)(
         SDL_GpuCommandBuffer *commandBuffer,
         Uint32 firstSlot,
-        SDL_GpuTextureSlice *storageTextureSlices,
+        SDL_GpuTexture **storageTextures,
         Uint32 bindingCount);
 
     void (*BindVertexStorageBuffers)(
@@ -347,7 +347,7 @@ struct SDL_GpuDevice
     void (*BindFragmentStorageTextures)(
         SDL_GpuCommandBuffer *commandBuffer,
         Uint32 firstSlot,
-        SDL_GpuTextureSlice *storageTextureSlices,
+        SDL_GpuTexture **storageTextures,
         Uint32 bindingCount);
 
     void (*BindFragmentStorageBuffers)(
@@ -413,7 +413,7 @@ struct SDL_GpuDevice
     void (*BindComputeStorageTextures)(
         SDL_GpuCommandBuffer *commandBuffer,
         Uint32 firstSlot,
-        SDL_GpuTextureSlice *storageTextureSlices,
+        SDL_GpuTexture **storageTextures,
         Uint32 bindingCount);
 
     void (*BindComputeStorageBuffers)(

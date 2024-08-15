@@ -427,7 +427,6 @@ typedef struct D3D12TextureSubresource
 
     D3D12CPUDescriptor rtvHandle; /* NULL if not a color target */
     D3D12CPUDescriptor dsvHandle; /* NULL if not a depth stencil target */
-    D3D12CPUDescriptor srvHandle; /* NULL if not a storage texture */
     D3D12CPUDescriptor uavHandle; /* NULL if not a compute storage write texture */
 
     SDL_AtomicInt referenceCount;
@@ -615,17 +614,17 @@ struct D3D12CommandBuffer
 
     D3D12Texture *vertexSamplerTextures[MAX_TEXTURE_SAMPLERS_PER_STAGE];
     D3D12Sampler *vertexSamplers[MAX_TEXTURE_SAMPLERS_PER_STAGE];
-    D3D12TextureSubresource *vertexStorageTextureSubresources[MAX_STORAGE_TEXTURES_PER_STAGE];
+    D3D12Texture *vertexStorageTextures[MAX_STORAGE_TEXTURES_PER_STAGE];
     D3D12Buffer *vertexStorageBuffers[MAX_STORAGE_BUFFERS_PER_STAGE];
     D3D12UniformBuffer *vertexUniformBuffers[MAX_UNIFORM_BUFFERS_PER_STAGE];
 
     D3D12Texture *fragmentSamplerTextures[MAX_TEXTURE_SAMPLERS_PER_STAGE];
     D3D12Sampler *fragmentSamplers[MAX_TEXTURE_SAMPLERS_PER_STAGE];
-    D3D12TextureSubresource *fragmentStorageTextureSubresources[MAX_STORAGE_TEXTURES_PER_STAGE];
+    D3D12Texture *fragmentStorageTextures[MAX_STORAGE_TEXTURES_PER_STAGE];
     D3D12Buffer *fragmentStorageBuffers[MAX_STORAGE_BUFFERS_PER_STAGE];
     D3D12UniformBuffer *fragmentUniformBuffers[MAX_UNIFORM_BUFFERS_PER_STAGE];
 
-    D3D12TextureSubresource *computeReadOnlyStorageTextures[MAX_STORAGE_TEXTURES_PER_STAGE];
+    D3D12Texture *computeReadOnlyStorageTextures[MAX_STORAGE_TEXTURES_PER_STAGE];
     D3D12Buffer *computeReadOnlyStorageBuffers[MAX_STORAGE_BUFFERS_PER_STAGE];
     D3D12TextureSubresource *computeReadWriteStorageTextures[MAX_COMPUTE_WRITE_TEXTURES];
     Uint32 computeReadWriteStorageTextureCount;
@@ -995,9 +994,6 @@ static void D3D12_INTERNAL_DestroyTexture(
             &subresource->dsvHandle);
         D3D12_INTERNAL_ReleaseCpuDescriptorHandle(
             renderer,
-            &subresource->srvHandle);
-        D3D12_INTERNAL_ReleaseCpuDescriptorHandle(
-            renderer,
             &subresource->uavHandle);
     }
     SDL_free(texture->subresources);
@@ -1345,10 +1341,10 @@ static void D3D12_DestroyDevice(SDL_GpuDevice *device)
 
 static inline Uint32 D3D12_INTERNAL_CalcSubresource(
     Uint32 mipLevel,
-    Uint32 layer,
+    Uint32 layerOrDepth,
     Uint32 numLevels)
 {
-    return mipLevel + (layer * numLevels);
+    return mipLevel + (layerOrDepth * numLevels);
 }
 
 static void D3D12_INTERNAL_ResourceBarrier(
@@ -1544,6 +1540,17 @@ static void D3D12_INTERNAL_TrackTextureSubresource(
         usedTextureSubresources,
         usedTextureSubresourceCount,
         usedTextureSubresourceCapacity)
+}
+
+static void D3D12_INTERNAL_TrackTexture(
+    D3D12CommandBuffer *commandBuffer,
+    D3D12Texture *texture)
+{
+    for (Uint32 i = 0; i < texture->subresourceCount; i += 1) {
+        D3D12_INTERNAL_TrackTextureSubresource(
+            commandBuffer,
+            &texture->subresources[i]);
+    }
 }
 
 static void D3D12_INTERNAL_TrackBuffer(
@@ -2644,12 +2651,12 @@ static D3D12Texture *D3D12_INTERNAL_CreateTexture(
 
     heapFlags = D3D12_HEAP_FLAG_NONE;
 
-    if (textureCreateInfo->depth <= 1) {
+    if (textureCreateInfo->type != SDL_GPU_TEXTURETYPE_3D) {
         desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
         desc.Alignment = D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT;
         desc.Width = textureCreateInfo->width;
         desc.Height = textureCreateInfo->height;
-        desc.DepthOrArraySize = textureCreateInfo->isCube ? 6 : textureCreateInfo->layerCount;
+        desc.DepthOrArraySize = textureCreateInfo->layerCount;
         desc.MipLevels = textureCreateInfo->levelCount;
         desc.Format = SDLToD3D12_TextureFormat[textureCreateInfo->format];
         desc.SampleDesc.Count = 1;
@@ -2702,12 +2709,12 @@ static D3D12Texture *D3D12_INTERNAL_CreateTexture(
         srvDesc.Format = SDLToD3D12_TextureFormat[textureCreateInfo->format];
         srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
 
-        if (textureCreateInfo->isCube) {
+        if (textureCreateInfo->type == SDL_GPU_TEXTURETYPE_CUBE) {
             srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBE;
             srvDesc.TextureCube.MipLevels = textureCreateInfo->levelCount;
             srvDesc.TextureCube.MostDetailedMip = 0;
             srvDesc.TextureCube.ResourceMinLODClamp = 0;
-        } else if (textureCreateInfo->layerCount > 1) {
+        } else if (textureCreateInfo->type == SDL_GPU_TEXTURETYPE_2D_ARRAY) {
             srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2DARRAY;
             srvDesc.Texture2DArray.MipLevels = textureCreateInfo->levelCount;
             srvDesc.Texture2DArray.MostDetailedMip = 0;
@@ -2715,7 +2722,7 @@ static D3D12Texture *D3D12_INTERNAL_CreateTexture(
             srvDesc.Texture2DArray.ArraySize = textureCreateInfo->layerCount;
             srvDesc.Texture2DArray.ResourceMinLODClamp = 0;
             srvDesc.Texture2DArray.PlaneSlice = 0;
-        } else if (textureCreateInfo->depth > 1) {
+        } else if (textureCreateInfo->type == SDL_GPU_TEXTURETYPE_3D) {
             srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE3D;
             srvDesc.Texture3D.MipLevels = textureCreateInfo->levelCount;
             srvDesc.Texture3D.MostDetailedMip = 0;
@@ -2735,14 +2742,17 @@ static D3D12Texture *D3D12_INTERNAL_CreateTexture(
             texture->srvHandle.cpuHandle);
     }
 
-    texture->subresourceCount = textureCreateInfo->levelCount * textureCreateInfo->layerCount;
+    Uint32 layerOrDepthCount =
+        textureCreateInfo->type == SDL_GPU_TEXTURETYPE_3D ? textureCreateInfo->depth : textureCreateInfo->layerCount;
+
+    texture->subresourceCount = textureCreateInfo->levelCount * layerOrDepthCount;
     texture->subresources = (D3D12TextureSubresource *)SDL_calloc(
         texture->subresourceCount, sizeof(D3D12TextureSubresource));
     if (!texture->subresources) {
         D3D12_INTERNAL_DestroyTexture(renderer, texture);
         return NULL;
     }
-    for (Uint32 layerIndex = 0; layerIndex < textureCreateInfo->layerCount; layerIndex += 1) {
+    for (Uint32 layerIndex = 0; layerIndex < layerOrDepthCount; layerIndex += 1) {
         for (Uint32 levelIndex = 0; levelIndex < textureCreateInfo->levelCount; levelIndex += 1) {
             Uint32 subresourceIndex = D3D12_INTERNAL_CalcSubresource(
                 levelIndex,
@@ -2756,7 +2766,6 @@ static D3D12Texture *D3D12_INTERNAL_CreateTexture(
 
             texture->subresources[subresourceIndex].rtvHandle.heap = NULL;
             texture->subresources[subresourceIndex].dsvHandle.heap = NULL;
-            texture->subresources[subresourceIndex].srvHandle.heap = NULL;
             texture->subresources[subresourceIndex].uavHandle.heap = NULL;
             SDL_AtomicSet(&texture->subresources[subresourceIndex].referenceCount, 0);
 
@@ -2771,13 +2780,13 @@ static D3D12Texture *D3D12_INTERNAL_CreateTexture(
 
                 rtvDesc.Format = SDLToD3D12_TextureFormat[textureCreateInfo->format];
 
-                if (textureCreateInfo->layerCount > 1) {
+                if (textureCreateInfo->type == SDL_GPU_TEXTURETYPE_2D_ARRAY || textureCreateInfo->type == SDL_GPU_TEXTURETYPE_CUBE) {
                     rtvDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2DARRAY;
                     rtvDesc.Texture2DArray.MipSlice = levelIndex;
                     rtvDesc.Texture2DArray.FirstArraySlice = layerIndex;
                     rtvDesc.Texture2DArray.ArraySize = 1;
                     rtvDesc.Texture2DArray.PlaneSlice = 0;
-                } else if (textureCreateInfo->depth > 1) {
+                } else if (textureCreateInfo->type == SDL_GPU_TEXTURETYPE_3D) {
                     rtvDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE3D;
                     rtvDesc.Texture3D.MipSlice = levelIndex;
                     rtvDesc.Texture3D.FirstWSlice = 0;
@@ -2816,48 +2825,6 @@ static D3D12Texture *D3D12_INTERNAL_CreateTexture(
                     texture->subresources[subresourceIndex].dsvHandle.cpuHandle);
             }
 
-            /* Create subresource SRV if needed */
-            if (
-                (textureCreateInfo->usageFlags & SDL_GPU_TEXTUREUSAGE_GRAPHICS_STORAGE_READ_BIT) ||
-                (textureCreateInfo->usageFlags & SDL_GPU_TEXTUREUSAGE_COMPUTE_STORAGE_READ_BIT)) {
-                D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc;
-
-                D3D12_INTERNAL_AssignCpuDescriptorHandle(
-                    renderer,
-                    D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
-                    &texture->subresources[subresourceIndex].srvHandle);
-
-                srvDesc.Format = SDLToD3D12_TextureFormat[textureCreateInfo->format];
-                srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-
-                if (textureCreateInfo->layerCount > 1) {
-                    srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2DARRAY;
-                    srvDesc.Texture2DArray.ArraySize = 1;
-                    srvDesc.Texture2DArray.FirstArraySlice = layerIndex;
-                    srvDesc.Texture2DArray.MipLevels = 1;
-                    srvDesc.Texture2DArray.MostDetailedMip = levelIndex;
-                    srvDesc.Texture2DArray.PlaneSlice = 0;
-                    srvDesc.Texture2DArray.ResourceMinLODClamp = 0;
-                } else if (textureCreateInfo->depth > 1) {
-                    srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE3D;
-                    srvDesc.Texture3D.MipLevels = 1;
-                    srvDesc.Texture3D.MostDetailedMip = levelIndex;
-                    srvDesc.Texture3D.ResourceMinLODClamp = 0;
-                } else {
-                    srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-                    srvDesc.Texture2D.MipLevels = 1;
-                    srvDesc.Texture2D.MostDetailedMip = levelIndex;
-                    srvDesc.Texture2D.PlaneSlice = 0;
-                    srvDesc.Texture2D.ResourceMinLODClamp = 0;
-                }
-
-                ID3D12Device_CreateShaderResourceView(
-                    renderer->device,
-                    texture->resource,
-                    &srvDesc,
-                    texture->subresources[subresourceIndex].srvHandle.cpuHandle);
-            }
-
             /* Create subresource UAV if necessary */
             if (textureCreateInfo->usageFlags & SDL_GPU_TEXTUREUSAGE_COMPUTE_STORAGE_WRITE_BIT) {
                 D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc;
@@ -2869,12 +2836,12 @@ static D3D12Texture *D3D12_INTERNAL_CreateTexture(
 
                 uavDesc.Format = SDLToD3D12_TextureFormat[textureCreateInfo->format];
 
-                if (textureCreateInfo->layerCount > 1) {
+                if (textureCreateInfo->type == SDL_GPU_TEXTURETYPE_2D_ARRAY || textureCreateInfo->type == SDL_GPU_TEXTURETYPE_CUBE) {
                     uavDesc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2DARRAY;
                     uavDesc.Texture2DArray.MipSlice = levelIndex;
                     uavDesc.Texture2DArray.FirstArraySlice = layerIndex;
                     uavDesc.Texture2DArray.ArraySize = 1;
-                } else if (textureCreateInfo->depth > 1) {
+                } else if (textureCreateInfo->type == SDL_GPU_TEXTURETYPE_3D) {
                     uavDesc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE3D;
                     uavDesc.Texture3D.MipSlice = levelIndex;
                     uavDesc.Texture3D.FirstWSlice = 0;
@@ -3764,7 +3731,7 @@ static void D3D12_BeginRenderPass(
             D3D12_INTERNAL_PrepareTextureSubresourceForWrite(
                 d3d12CommandBuffer,
                 container,
-                colorAttachmentInfos[i].textureSlice.layer,
+                colorAttachmentInfos[i].textureSlice.layerOrDepth,
                 colorAttachmentInfos[i].textureSlice.mipLevel,
                 cycle,
                 D3D12_RESOURCE_STATE_RENDER_TARGET);
@@ -3805,7 +3772,7 @@ static void D3D12_BeginRenderPass(
         D3D12TextureSubresource *subresource = D3D12_INTERNAL_PrepareTextureSubresourceForWrite(
             d3d12CommandBuffer,
             container,
-            depthStencilAttachmentInfo->textureSlice.layer,
+            depthStencilAttachmentInfo->textureSlice.layerOrDepth,
             depthStencilAttachmentInfo->textureSlice.mipLevel,
             cycle,
             D3D12_RESOURCE_STATE_DEPTH_WRITE);
@@ -4170,21 +4137,18 @@ static void D3D12_BindVertexSamplers(
 static void D3D12_BindVertexStorageTextures(
     SDL_GpuCommandBuffer *commandBuffer,
     Uint32 firstSlot,
-    SDL_GpuTextureSlice *storageTextureSlices,
+    SDL_GpuTexture **storageTextures,
     Uint32 bindingCount)
 {
     D3D12CommandBuffer *d3d12CommandBuffer = (D3D12CommandBuffer *)commandBuffer;
 
     for (Uint32 i = 0; i < bindingCount; i += 1) {
-        D3D12TextureContainer *container = (D3D12TextureContainer *)storageTextureSlices[i].texture;
-        D3D12TextureSubresource *subresource = D3D12_INTERNAL_FetchTextureSubresource(
-            container,
-            storageTextureSlices[i].layer,
-            storageTextureSlices[i].mipLevel);
+        D3D12TextureContainer *container = (D3D12TextureContainer *)storageTextures[i];
+        D3D12Texture *texture = container->activeTexture;
 
-        D3D12_INTERNAL_TrackTextureSubresource(d3d12CommandBuffer, subresource);
+        D3D12_INTERNAL_TrackTexture(d3d12CommandBuffer, texture);
 
-        d3d12CommandBuffer->vertexStorageTextureSubresources[firstSlot + i] = subresource;
+        d3d12CommandBuffer->vertexStorageTextures[firstSlot + i] = texture;
     }
 
     d3d12CommandBuffer->needVertexStorageTextureBind = SDL_TRUE;
@@ -4243,21 +4207,18 @@ static void D3D12_BindFragmentSamplers(
 static void D3D12_BindFragmentStorageTextures(
     SDL_GpuCommandBuffer *commandBuffer,
     Uint32 firstSlot,
-    SDL_GpuTextureSlice *storageTextureSlices,
+    SDL_GpuTexture **storageTextures,
     Uint32 bindingCount)
 {
     D3D12CommandBuffer *d3d12CommandBuffer = (D3D12CommandBuffer *)commandBuffer;
 
     for (Uint32 i = 0; i < bindingCount; i += 1) {
-        D3D12TextureContainer *container = (D3D12TextureContainer *)storageTextureSlices[i].texture;
-        D3D12TextureSubresource *subresource = D3D12_INTERNAL_FetchTextureSubresource(
-            container,
-            storageTextureSlices[i].layer,
-            storageTextureSlices[i].mipLevel);
+        D3D12TextureContainer *container = (D3D12TextureContainer *)storageTextures[i];
+        D3D12Texture *texture = container->activeTexture;
 
-        D3D12_INTERNAL_TrackTextureSubresource(d3d12CommandBuffer, subresource);
+        D3D12_INTERNAL_TrackTexture(d3d12CommandBuffer, texture);
 
-        d3d12CommandBuffer->fragmentStorageTextureSubresources[firstSlot + i] = subresource;
+        d3d12CommandBuffer->fragmentStorageTextures[firstSlot + i] = texture;
     }
 
     d3d12CommandBuffer->needFragmentStorageTextureBind = SDL_TRUE;
@@ -4406,7 +4367,7 @@ static void D3D12_INTERNAL_BindGraphicsResources(
     if (commandBuffer->needVertexStorageTextureBind) {
         if (graphicsPipeline->vertexStorageTextureCount > 0) {
             for (Uint32 i = 0; i < graphicsPipeline->vertexStorageTextureCount; i += 1) {
-                cpuHandles[i] = commandBuffer->vertexStorageTextureSubresources[i]->srvHandle.cpuHandle;
+                cpuHandles[i] = commandBuffer->vertexStorageTextures[i]->srvHandle.cpuHandle;
             }
 
             D3D12_INTERNAL_WriteGPUDescriptors(
@@ -4497,7 +4458,7 @@ static void D3D12_INTERNAL_BindGraphicsResources(
     if (commandBuffer->needFragmentStorageTextureBind) {
         if (graphicsPipeline->fragmentStorageTextureCount > 0) {
             for (Uint32 i = 0; i < graphicsPipeline->fragmentStorageTextureCount; i += 1) {
-                cpuHandles[i] = commandBuffer->fragmentStorageTextureSubresources[i]->srvHandle.cpuHandle;
+                cpuHandles[i] = commandBuffer->fragmentStorageTextures[i]->srvHandle.cpuHandle;
             }
 
             D3D12_INTERNAL_WriteGPUDescriptors(
@@ -4673,12 +4634,12 @@ static void D3D12_EndRenderPass(
 
     SDL_zeroa(d3d12CommandBuffer->vertexSamplerTextures);
     SDL_zeroa(d3d12CommandBuffer->vertexSamplers);
-    SDL_zeroa(d3d12CommandBuffer->vertexStorageTextureSubresources);
+    SDL_zeroa(d3d12CommandBuffer->vertexStorageTextures);
     SDL_zeroa(d3d12CommandBuffer->vertexStorageBuffers);
 
     SDL_zeroa(d3d12CommandBuffer->fragmentSamplerTextures);
     SDL_zeroa(d3d12CommandBuffer->fragmentSamplers);
-    SDL_zeroa(d3d12CommandBuffer->fragmentStorageTextureSubresources);
+    SDL_zeroa(d3d12CommandBuffer->fragmentStorageTextures);
     SDL_zeroa(d3d12CommandBuffer->fragmentStorageBuffers);
 }
 
@@ -4709,7 +4670,7 @@ static void D3D12_BeginComputePass(
             D3D12TextureSubresource *subresource = D3D12_INTERNAL_PrepareTextureSubresourceForWrite(
                 d3d12CommandBuffer,
                 container,
-                storageTextureBindings[i].textureSlice.layer,
+                storageTextureBindings[i].textureSlice.layerOrDepth,
                 storageTextureBindings[i].textureSlice.mipLevel,
                 storageTextureBindings[i].cycle,
                 D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
@@ -4835,7 +4796,7 @@ static void D3D12_BindComputeStorageTextures(
         D3D12TextureContainer *container = (D3D12TextureContainer *)storageTextureSlices[i].texture;
         D3D12TextureSubresource *subresource = D3D12_INTERNAL_FetchTextureSubresource(
             container,
-            storageTextureSlices[i].layer,
+            storageTextureSlices[i].layerOrDepth,
             storageTextureSlices[i].mipLevel);
 
         d3d12CommandBuffer->computeReadOnlyStorageTextures[firstSlot + i] = subresource;
@@ -5134,7 +5095,7 @@ static void D3D12_UploadToTexture(
     D3D12TextureSubresource *textureSubresource = D3D12_INTERNAL_PrepareTextureSubresourceForWrite(
         d3d12CommandBuffer,
         textureContainer,
-        destination->textureSlice.layer,
+        destination->textureSlice.layerOrDepth,
         destination->textureSlice.mipLevel,
         cycle,
         D3D12_RESOURCE_STATE_COPY_DEST);
@@ -5331,13 +5292,13 @@ static void D3D12_CopyTextureToTexture(
 
     D3D12TextureSubresource *sourceSubresource = D3D12_INTERNAL_FetchTextureSubresource(
         sourceContainer,
-        source->textureSlice.layer,
+        source->textureSlice.layerOrDepth,
         source->textureSlice.mipLevel);
 
     D3D12TextureSubresource *destinationSubresource = D3D12_INTERNAL_PrepareTextureSubresourceForWrite(
         d3d12CommandBuffer,
         destinationContainer,
-        destination->textureSlice.layer,
+        destination->textureSlice.layerOrDepth,
         destination->textureSlice.mipLevel,
         cycle,
         D3D12_RESOURCE_STATE_COPY_DEST);
@@ -5448,7 +5409,7 @@ static void D3D12_DownloadFromTexture(
     D3D12TextureContainer *sourceContainer = (D3D12TextureContainer *)source->textureSlice.texture;
     D3D12TextureSubresource *sourceSubresource = D3D12_INTERNAL_FetchTextureSubresource(
         sourceContainer,
-        source->textureSlice.layer,
+        source->textureSlice.layerOrDepth,
         source->textureSlice.mipLevel);
     D3D12BufferContainer *destinationContainer = (D3D12BufferContainer *)destination->transferBuffer;
     D3D12Buffer *destinationBuffer = destinationContainer->activeBuffer;
@@ -5802,7 +5763,6 @@ static SDL_bool D3D12_INTERNAL_InitializeSwapchainTexture(
         ID3D12Resource_Release(swapchainTexture);
         return SDL_FALSE;
     }
-    pTexture->subresources[0].srvHandle.heap = NULL;
     pTexture->subresources[0].dsvHandle.heap = NULL;
     pTexture->subresources[0].rtvHandle.heap = NULL;
     pTexture->subresources[0].uavHandle.heap = NULL;
@@ -5818,7 +5778,7 @@ static SDL_bool D3D12_INTERNAL_InitializeSwapchainTexture(
     pTextureContainer->header.info.depth = 1;
     pTextureContainer->header.info.layerCount = 1;
     pTextureContainer->header.info.levelCount = 1;
-    pTextureContainer->header.info.isCube = 0;
+    pTextureContainer->header.info.type = SDL_GPU_TEXTURETYPE_2D;
     pTextureContainer->header.info.usageFlags =
         SDL_GPU_TEXTUREUSAGE_COLOR_TARGET_BIT |
         SDL_GPU_TEXTUREUSAGE_SAMPLER_BIT;
@@ -6497,13 +6457,13 @@ static SDL_GpuCommandBuffer *D3D12_AcquireCommandBuffer(
 
     SDL_zeroa(commandBuffer->vertexSamplerTextures);
     SDL_zeroa(commandBuffer->vertexSamplers);
-    SDL_zeroa(commandBuffer->vertexStorageTextureSubresources);
+    SDL_zeroa(commandBuffer->vertexStorageTextures);
     SDL_zeroa(commandBuffer->vertexStorageBuffers);
     SDL_zeroa(commandBuffer->vertexUniformBuffers);
 
     SDL_zeroa(commandBuffer->fragmentSamplerTextures);
     SDL_zeroa(commandBuffer->fragmentSamplers);
-    SDL_zeroa(commandBuffer->fragmentStorageTextureSubresources);
+    SDL_zeroa(commandBuffer->fragmentStorageTextures);
     SDL_zeroa(commandBuffer->fragmentStorageBuffers);
     SDL_zeroa(commandBuffer->fragmentUniformBuffers);
 

@@ -144,8 +144,9 @@ typedef Uint32 SDL_GpuTextureUsageFlags;
 typedef enum SDL_GpuTextureType
 {
     SDL_GPU_TEXTURETYPE_2D,
+    SDL_GPU_TEXTURETYPE_2D_ARRAY,
     SDL_GPU_TEXTURETYPE_3D,
-    SDL_GPU_TEXTURETYPE_CUBE,
+    SDL_GPU_TEXTURETYPE_CUBE
 } SDL_GpuTextureType;
 
 typedef enum SDL_GpuSampleCount
@@ -409,7 +410,7 @@ typedef struct SDL_GpuTextureSlice
 {
     SDL_GpuTexture *texture;
     Uint32 mipLevel;
-    Uint32 layer;
+    Uint32 layerOrDepth;
 } SDL_GpuTextureSlice;
 
 typedef struct SDL_GpuTextureLocation
@@ -553,7 +554,7 @@ typedef struct SDL_GpuTextureCreateInfo
     Uint32 width;
     Uint32 height;
     Uint32 depth;
-    SDL_bool isCube;
+    SDL_GpuTextureType type;
     Uint32 layerCount;
     Uint32 levelCount;
     SDL_GpuSampleCount sampleCount;
@@ -1503,15 +1504,15 @@ extern SDL_DECLSPEC void SDLCALL SDL_GpuBindVertexSamplers(
  *
  * \param renderPass a render pass handle
  * \param firstSlot the vertex storage texture slot to begin binding from
- * \param storageTextureSlices an array of storage texture slices
- * \param bindingCount the number of storage texture slices to bind from the array
+ * \param storageTextures an array of storage textures
+ * \param bindingCount the number of storage texture to bind from the array
  *
  * \since This function is available since SDL 3.x.x
  */
 extern SDL_DECLSPEC void SDLCALL SDL_GpuBindVertexStorageTextures(
     SDL_GpuRenderPass *renderPass,
     Uint32 firstSlot,
-    SDL_GpuTextureSlice *storageTextureSlices,
+    SDL_GpuTexture **storageTextures,
     Uint32 bindingCount);
 
 /**
@@ -1554,15 +1555,15 @@ extern SDL_DECLSPEC void SDLCALL SDL_GpuBindFragmentSamplers(
  *
  * \param renderPass a render pass handle
  * \param firstSlot the fragment storage texture slot to begin binding from
- * \param storageTextureSlices an array of storage texture slices
- * \param bindingCount the number of storage texture slices to bind from the array
+ * \param storageTextures an array of storage textures
+ * \param bindingCount the number of storage textures to bind from the array
  *
  * \since This function is available since SDL 3.x.x
  */
 extern SDL_DECLSPEC void SDLCALL SDL_GpuBindFragmentStorageTextures(
     SDL_GpuRenderPass *renderPass,
     Uint32 firstSlot,
-    SDL_GpuTextureSlice *storageTextureSlices,
+    SDL_GpuTexture **storageTextures,
     Uint32 bindingCount);
 
 /**
@@ -1720,7 +1721,7 @@ extern SDL_DECLSPEC void SDLCALL SDL_GpuBindComputePipeline(
  *
  * \param computePass a compute pass handle
  * \param firstSlot the compute storage texture slot to begin binding from
- * \param storageTextureSlices an array of storage texture binding structs
+ * \param storageTextures an array of storage textures
  * \param bindingCount the number of storage textures to bind from the array
  *
  * \since This function is available since SDL 3.x.x
@@ -1728,7 +1729,7 @@ extern SDL_DECLSPEC void SDLCALL SDL_GpuBindComputePipeline(
 extern SDL_DECLSPEC void SDLCALL SDL_GpuBindComputeStorageTextures(
     SDL_GpuComputePass *computePass,
     Uint32 firstSlot,
-    SDL_GpuTextureSlice *storageTextureSlices,
+    SDL_GpuTexture **storageTextures,
     Uint32 bindingCount);
 
 /**
