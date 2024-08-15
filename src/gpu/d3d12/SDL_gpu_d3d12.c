@@ -29,19 +29,21 @@
 
 /* Built-in shaders, compiled with compile_shaders.bat */
 
-#define g_main D3D12_BlitFrom2D
-#include "D3D12_BlitFrom2D.h"
-#undef g_main
-
-/*
-#define g_main D3D11_BlitFrom2DArray
-#include "D3D11_BlitFrom2DArray.h"
-#undef g_main
-*/
-
-#define g_main D3D12_FullscreenVert
+#define g_FullscreenVert D3D12_FullscreenVert
 #include "D3D12_FullscreenVert.h"
-#undef g_main
+#undef g_FullscreenVert
+
+#define g_Blit D3D12_BlitFrom2D
+#include "D3D12_BlitFrom2D.h"
+#undef g_Blit
+
+#define g_Blit D3D12_BlitFrom2DArray
+#include "D3D12_BlitFrom2DArray.h"
+#undef g_Blit
+
+#define g_Blit D3D12_BlitFromCube
+#include "D3D12_BlitFromCube.h"
+#undef g_Blit
 
 /* Macros */
 
@@ -474,6 +476,13 @@ typedef struct D3D12PresentData
     Uint32 swapchainImageIndex;
 } D3D12PresentData;
 
+typedef struct D3D12BlitPipelineCacheEntry
+{
+    int type;
+    SDL_GpuTextureFormat format;
+    SDL_GpuGraphicsPipeline *pipeline;
+} D3D12BlitPipelineCacheEntry;
+
 struct D3D12Renderer
 {
     void *dxgidebug_dll;
@@ -504,9 +513,17 @@ struct D3D12Renderer
     ID3D12CommandSignature *indirectDispatchCommandSignature;
 
     /* Blit */
-    SDL_GpuGraphicsPipeline *blitFrom2DPipeline;
+    SDL_GpuShader *blitVertexShader;
+    SDL_GpuShader *blitFrom2DShader;
+    SDL_GpuShader *blitFrom2DArrayShader;
+    SDL_GpuShader *blitFromCubeShader;
+
     SDL_GpuSampler *blitNearestSampler;
     SDL_GpuSampler *blitLinearSampler;
+
+    D3D12BlitPipelineCacheEntry *blitPipelines;
+    Uint32 blitPipelineCount;
+    Uint32 blitPipelineCapacity;
 
     /* Resources */
 
@@ -802,6 +819,9 @@ typedef struct BlitFragmentUniforms
     float top;
     float width;
     float height;
+
+    Uint32 mipLevel;
+    Uint32 layer;
 } BlitFragmentUniforms;
 
 /* Foward function declarations */
@@ -809,7 +829,7 @@ typedef struct BlitFragmentUniforms
 static void D3D12_UnclaimWindow(SDL_GpuRenderer *driverData, SDL_Window *window);
 static void D3D12_Wait(SDL_GpuRenderer *driverData);
 static void D3D12_WaitForFences(SDL_GpuRenderer *driverData, SDL_bool waitAll, SDL_GpuFence **pFences, Uint32 fenceCount);
-static void D3D12_INTERNAL_ReleaseBlitPipelines(D3D12Renderer *renderer);
+static void D3D12_INTERNAL_ReleaseBlitPipelines(SDL_GpuRenderer *driverData);
 
 /* Helpers */
 
@@ -1210,7 +1230,7 @@ static void D3D12_INTERNAL_DestroyRenderer(D3D12Renderer *renderer)
     }
 
     /* Release blit pipeline structures */
-    D3D12_INTERNAL_ReleaseBlitPipelines(renderer);
+    D3D12_INTERNAL_ReleaseBlitPipelines((SDL_GpuRenderer *)renderer);
 
     /* Flush any remaining GPU work... */
     D3D12_Wait((SDL_GpuRenderer *)renderer);
@@ -3472,13 +3492,20 @@ static void D3D12_ReleaseGraphicsPipeline(
     SDL_UnlockMutex(renderer->disposeLock);
 }
 
-static void D3D12_INTERNAL_ReleaseBlitPipelines(D3D12Renderer *renderer)
+static void D3D12_INTERNAL_ReleaseBlitPipelines(SDL_GpuRenderer *driverData)
 {
-    /* Release blit pipeline structures */
-    D3D12_ReleaseSampler((SDL_GpuRenderer *)renderer, renderer->blitLinearSampler);
-    D3D12_ReleaseSampler((SDL_GpuRenderer *)renderer, renderer->blitNearestSampler);
+    D3D12Renderer *renderer = (D3D12Renderer *)driverData;
+    D3D12_ReleaseSampler(driverData, renderer->blitLinearSampler);
+    D3D12_ReleaseSampler(driverData, renderer->blitNearestSampler);
+    D3D12_ReleaseShader(driverData, renderer->blitVertexShader);
+    D3D12_ReleaseShader(driverData, renderer->blitFrom2DShader);
+    D3D12_ReleaseShader(driverData, renderer->blitFrom2DArrayShader);
+    D3D12_ReleaseShader(driverData, renderer->blitFromCubeShader);
 
-    D3D12_ReleaseGraphicsPipeline((SDL_GpuRenderer *)renderer, renderer->blitFrom2DPipeline);
+    for (Uint32 i = 0; i < renderer->blitPipelineCount; i += 1) {
+        D3D12_ReleaseGraphicsPipeline(driverData, renderer->blitPipelines[i].pipeline);
+    }
+    SDL_free(renderer->blitPipelines);
 }
 
 /* Render Pass */
@@ -5588,6 +5615,104 @@ static void D3D12_GenerateMipmaps(
     SDL_GpuCommandBuffer *commandBuffer,
     SDL_GpuTexture *texture) { SDL_assert(SDL_FALSE); }
 
+static SDL_GpuGraphicsPipeline* D3D12_INTERNAL_FetchBlitPipeline(
+    D3D12Renderer* renderer,
+    D3D12TextureContainer* sourceContainer,
+    SDL_GpuTextureFormat destinationFormat)
+{
+    SDL_GpuGraphicsPipelineCreateInfo createInfo;
+    SDL_GpuVertexBinding binding;
+    SDL_GpuVertexAttribute attribute;
+    SDL_GpuColorAttachmentDescription colorAttachmentDesc;
+    SDL_GpuGraphicsPipeline *pipeline;
+
+    int type = 0; /* FIXME: Use an actual texture type! */
+    if (sourceContainer->header.info.isCube) {
+        type = 1;
+    } else if (sourceContainer->header.info.layerCount > 1) {
+        type = 2;
+    } else {
+        type = 3;
+    }
+
+    for (Uint32 i = 0; i < renderer->blitPipelineCount; i += 1) {
+        if (renderer->blitPipelines[i].type == type && renderer->blitPipelines[i].format == destinationFormat) {
+            return renderer->blitPipelines[i].pipeline;
+        }
+    }
+
+    /* No pipeline found, we'll need to make one! */
+    SDL_zero(createInfo);
+
+    SDL_zero(colorAttachmentDesc);
+    colorAttachmentDesc.blendState.colorWriteMask = 0xF;
+    colorAttachmentDesc.format = destinationFormat;
+
+    createInfo.attachmentInfo.colorAttachmentDescriptions = &colorAttachmentDesc;
+    createInfo.attachmentInfo.colorAttachmentCount = 1;
+    createInfo.attachmentInfo.depthStencilFormat = SDL_GPU_TEXTUREFORMAT_D16_UNORM; /* arbitrary */
+    createInfo.attachmentInfo.hasDepthStencilAttachment = 0;
+
+    binding.binding = 0;
+    binding.inputRate = SDL_GPU_VERTEXINPUTRATE_VERTEX;
+    binding.stepRate = 0;
+    binding.stride = 64;
+
+    attribute.binding = 0;
+    attribute.format = SDL_GPU_VERTEXELEMENTFORMAT_VECTOR2;
+    attribute.location = 0;
+    attribute.offset = 0;
+
+    createInfo.vertexInputState.vertexAttributeCount = 1;
+    createInfo.vertexInputState.vertexAttributes = &attribute;
+    createInfo.vertexInputState.vertexBindingCount = 1;
+    createInfo.vertexInputState.vertexBindings = &binding;
+
+    createInfo.vertexShader = renderer->blitVertexShader;
+
+    if (type == 1) {
+        createInfo.fragmentShader = renderer->blitFromCubeShader;
+    } else if (type == 2) {
+        createInfo.fragmentShader = renderer->blitFrom2DArrayShader;
+    } else {
+        createInfo.fragmentShader = renderer->blitFrom2DShader;
+    }
+
+    createInfo.multisampleState.sampleCount = SDL_GPU_SAMPLECOUNT_1;
+    createInfo.multisampleState.sampleMask = 0xFFFFFFFF;
+
+    createInfo.primitiveType = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST;
+
+    createInfo.blendConstants[0] = 1.0f;
+    createInfo.blendConstants[1] = 1.0f;
+    createInfo.blendConstants[2] = 1.0f;
+    createInfo.blendConstants[3] = 1.0f;
+
+    pipeline = D3D12_CreateGraphicsPipeline(
+        (SDL_GpuRenderer *)renderer,
+        &createInfo);
+
+    if (pipeline == NULL) {
+        SDL_LogError(SDL_LOG_CATEGORY_GPU, "Failed to create graphics pipeline for blit");
+        return NULL;
+    }
+
+    /* Cache the new pipeline */
+    EXPAND_ARRAY_IF_NEEDED(
+        renderer->blitPipelines,
+        D3D12BlitPipelineCacheEntry,
+        renderer->blitPipelineCount + 1,
+        renderer->blitPipelineCapacity,
+        renderer->blitPipelineCapacity * 2)
+
+    renderer->blitPipelines[renderer->blitPipelineCount].pipeline = pipeline;
+    renderer->blitPipelines[renderer->blitPipelineCount].type = type;
+    renderer->blitPipelines[renderer->blitPipelineCount].format = destinationFormat;
+    renderer->blitPipelineCount += 1;
+
+    return pipeline;
+}
+
 static void D3D12_Blit(
     SDL_GpuCommandBuffer *commandBuffer,
     SDL_GpuTextureRegion *source,
@@ -5596,29 +5721,31 @@ static void D3D12_Blit(
     SDL_bool cycle)
 {
     D3D12CommandBuffer *d3d12CommandBuffer = (D3D12CommandBuffer *)commandBuffer;
-    D3D12Renderer *renderer = d3d12CommandBuffer->renderer;
-    D3D12TextureContainer *sourceTextureContainer = (D3D12TextureContainer *)source->texture;
-    D3D12TextureContainer *destinationTextureContainer = (D3D12TextureContainer *)destination->texture;
+    D3D12Renderer *renderer = (D3D12Renderer *)d3d12CommandBuffer->renderer;
+    D3D12TextureContainer *sourceTextureContainer = (D3D12TextureContainer *)source->textureSlice.texture;
+    D3D12TextureContainer *destinationTextureContainer = (D3D12TextureContainer *)destination->textureSlice.texture;
+    SDL_GpuGraphicsPipeline *blitPipeline;
     SDL_GpuColorAttachmentInfo colorAttachmentInfo;
     SDL_GpuViewport viewport;
     SDL_GpuTextureSamplerBinding textureSamplerBinding;
     BlitFragmentUniforms blitFragmentUniforms;
-    SDL_GpuTextureCreateInfo *sourceTextureCreateInfo = &sourceTextureContainer->header.info;
-    SDL_GpuTextureCreateInfo *destinationTextureCreateInfo = &destinationTextureContainer->header.info;
 
-    /* Unused */
-    colorAttachmentInfo.clearColor.r = 0;
-    colorAttachmentInfo.clearColor.g = 0;
-    colorAttachmentInfo.clearColor.b = 0;
-    colorAttachmentInfo.clearColor.a = 0;
+    blitPipeline = D3D12_INTERNAL_FetchBlitPipeline(
+        renderer,
+        sourceTextureContainer,
+        destinationTextureContainer->header.info.format);
+
+    if (blitPipeline == NULL) {
+        SDL_LogWarn(SDL_LOG_CATEGORY_GPU, "Could not fetch blit pipeline");
+        return;
+    }
 
     /* If the entire destination is blitted, we don't have to load */
     if (
-        destinationTextureCreateInfo->layerCount == 1 &&
-        destinationTextureCreateInfo->levelCount == 1 &&
-        destination->w == destinationTextureCreateInfo->width &&
-        destination->h == destinationTextureCreateInfo->height &&
-        destination->d == destinationTextureCreateInfo->depth) {
+        destinationTextureContainer->header.info.layerCount == 1 &&
+        destinationTextureContainer->header.info.levelCount == 1 &&
+        destination->w == destinationTextureContainer->header.info.width &&
+        destination->h == destinationTextureContainer->header.info.height) {
         colorAttachmentInfo.loadOp = SDL_GPU_LOADOP_DONT_CARE;
     } else {
         colorAttachmentInfo.loadOp = SDL_GPU_LOADOP_LOAD;
@@ -5649,17 +5776,9 @@ static void D3D12_Blit(
         commandBuffer,
         &viewport);
 
-    if (
-        sourceTextureCreateInfo->layerCount == 1 &&
-        sourceTextureCreateInfo->depth == 1) {
-        /* 2D source */
-        D3D12_BindGraphicsPipeline(
-            commandBuffer,
-            renderer->blitFrom2DPipeline);
-    } else {
-        SDL_LogError(SDL_LOG_CATEGORY_GPU, "3D blit source not implemented!");
-        return;
-    }
+    D3D12_BindGraphicsPipeline(
+        commandBuffer,
+        blitPipeline);
 
     textureSamplerBinding.texture = source->texture;
     textureSamplerBinding.sampler =
@@ -5671,16 +5790,18 @@ static void D3D12_Blit(
         &textureSamplerBinding,
         1);
 
-    blitFragmentUniforms.left = (float)source->x / sourceTextureCreateInfo->width;
-    blitFragmentUniforms.top = (float)source->y / sourceTextureCreateInfo->height;
-    blitFragmentUniforms.width = (float)source->w / sourceTextureCreateInfo->width;
-    blitFragmentUniforms.height = (float)source->h / sourceTextureCreateInfo->height;
+    blitFragmentUniforms.left = (float)source->x / sourceTextureContainer->header.info.width;
+    blitFragmentUniforms.top = (float)source->y / sourceTextureContainer->header.info.height;
+    blitFragmentUniforms.width = (float)source->w / sourceTextureContainer->header.info.width;
+    blitFragmentUniforms.height = (float)source->h / sourceTextureContainer->header.info.height;
+    blitFragmentUniforms.mipLevel = source->textureSlice.mipLevel;
+    blitFragmentUniforms.layer = source->textureSlice.layer;
 
     D3D12_PushFragmentUniformData(
         commandBuffer,
         0,
         &blitFragmentUniforms,
-        sizeof(BlitFragmentUniforms));
+        sizeof(blitFragmentUniforms));
 
     D3D12_DrawPrimitives(commandBuffer, 0, 3);
     D3D12_EndRenderPass(commandBuffer);
@@ -7126,17 +7247,11 @@ static SDL_GpuSampleCount D3D12_GetBestSampleCount(
     return (SDL_GpuSampleCount)SDL_min(maxSupported, desiredSampleCount);
 }
 
-static void D3D12_INTERNAL_InitBlitPipelines(
+static void D3D12_INTERNAL_InitBlitResources(
     D3D12Renderer *renderer)
 {
     SDL_GpuShaderCreateInfo shaderCreateInfo;
-    SDL_GpuShader *fullscreenVertexShader;
-    SDL_GpuShader *blitFrom2DPixelShader;
-    SDL_GpuGraphicsPipelineCreateInfo blitPipelineCreateInfo;
     SDL_GpuSamplerCreateInfo samplerCreateInfo;
-    SDL_GpuVertexBinding binding;
-    SDL_GpuVertexAttribute attribute;
-    SDL_GpuColorAttachmentDescription colorAttachmentDesc;
 
     /* Fullscreen vertex shader */
     SDL_zero(shaderCreateInfo);
@@ -7146,75 +7261,51 @@ static void D3D12_INTERNAL_InitBlitPipelines(
     shaderCreateInfo.format = SDL_GPU_SHADERFORMAT_DXBC;
     shaderCreateInfo.entryPointName = "main";
 
-    fullscreenVertexShader = D3D12_CreateShader(
+    renderer->blitVertexShader = D3D12_CreateShader(
         (SDL_GpuRenderer *)renderer,
         &shaderCreateInfo);
 
-    if (fullscreenVertexShader == NULL) {
-        SDL_LogError(SDL_LOG_CATEGORY_GPU, "Failed to compile fullscreen vertex shader for blit!");
+    if (renderer->blitVertexShader == NULL) {
+        SDL_LogError(SDL_LOG_CATEGORY_GPU, "Failed to compile vertex shader for blit!");
     }
 
-    /* Blit from 2D pixel shader */
+    /* BlitFrom2D pixel shader */
     shaderCreateInfo.code = (Uint8 *)D3D12_BlitFrom2D;
     shaderCreateInfo.codeSize = sizeof(D3D12_BlitFrom2D);
     shaderCreateInfo.stage = SDL_GPU_SHADERSTAGE_FRAGMENT;
     shaderCreateInfo.samplerCount = 1;
     shaderCreateInfo.uniformBufferCount = 1;
 
-    blitFrom2DPixelShader = D3D12_CreateShader(
+    renderer->blitFrom2DShader = D3D12_CreateShader(
         (SDL_GpuRenderer *)renderer,
         &shaderCreateInfo);
 
-    if (blitFrom2DPixelShader == NULL) {
-        SDL_LogError(SDL_LOG_CATEGORY_GPU, "Failed to compile blit from 2D pixel shader!");
+    if (renderer->blitFrom2DShader == NULL) {
+        SDL_LogError(SDL_LOG_CATEGORY_GPU, "Failed to compile BlitFrom2D pixel shader!");
     }
 
-    /* Blit from 2D pipeline */
-    SDL_zero(blitPipelineCreateInfo);
+    /* BlitFrom2DArray pixel shader */
+    shaderCreateInfo.code = (Uint8 *)D3D12_BlitFrom2DArray;
+    shaderCreateInfo.codeSize = sizeof(D3D12_BlitFrom2DArray);
 
-    SDL_zero(colorAttachmentDesc);
-    colorAttachmentDesc.blendState.colorWriteMask = 0xF;
-    colorAttachmentDesc.format = SDL_GPU_TEXTUREFORMAT_B8G8R8A8; /* FIXME: we are gonna need a pipeline per output format */
-
-    blitPipelineCreateInfo.attachmentInfo.colorAttachmentDescriptions = &colorAttachmentDesc;
-    blitPipelineCreateInfo.attachmentInfo.colorAttachmentCount = 1;
-    blitPipelineCreateInfo.attachmentInfo.depthStencilFormat = SDL_GPU_TEXTUREFORMAT_D16_UNORM; /* arbitrary */
-    blitPipelineCreateInfo.attachmentInfo.hasDepthStencilAttachment = 0;
-
-    binding.binding = 0;
-    binding.inputRate = SDL_GPU_VERTEXINPUTRATE_VERTEX;
-    binding.stepRate = 0;
-    binding.stride = 64;
-
-    attribute.binding = 0;
-    attribute.format = SDL_GPU_VERTEXELEMENTFORMAT_VECTOR2;
-    attribute.location = 0;
-    attribute.offset = 0;
-
-    blitPipelineCreateInfo.vertexInputState.vertexAttributeCount = 1;
-    blitPipelineCreateInfo.vertexInputState.vertexAttributes = &attribute;
-    blitPipelineCreateInfo.vertexInputState.vertexBindingCount = 1;
-    blitPipelineCreateInfo.vertexInputState.vertexBindings = &binding;
-
-    blitPipelineCreateInfo.vertexShader = fullscreenVertexShader;
-    blitPipelineCreateInfo.fragmentShader = blitFrom2DPixelShader;
-
-    blitPipelineCreateInfo.multisampleState.sampleCount = SDL_GPU_SAMPLECOUNT_1;
-    blitPipelineCreateInfo.multisampleState.sampleMask = 0xFFFFFFFF;
-
-    blitPipelineCreateInfo.primitiveType = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST;
-
-    blitPipelineCreateInfo.blendConstants[0] = 1.0f;
-    blitPipelineCreateInfo.blendConstants[1] = 1.0f;
-    blitPipelineCreateInfo.blendConstants[2] = 1.0f;
-    blitPipelineCreateInfo.blendConstants[3] = 1.0f;
-
-    renderer->blitFrom2DPipeline = D3D12_CreateGraphicsPipeline(
+    renderer->blitFrom2DArrayShader = D3D12_CreateShader(
         (SDL_GpuRenderer *)renderer,
-        &blitPipelineCreateInfo);
+        &shaderCreateInfo);
 
-    if (renderer->blitFrom2DPipeline == NULL) {
-        SDL_LogError(SDL_LOG_CATEGORY_GPU, "Failed to create blit pipeline!");
+    if (renderer->blitFrom2DArrayShader == NULL) {
+        SDL_LogError(SDL_LOG_CATEGORY_GPU, "Failed to compile BlitFrom2DArray pixel shader!");
+    }
+
+    /* BlitFromCube pixel shader */
+    shaderCreateInfo.code = (Uint8 *)D3D12_BlitFromCube;
+    shaderCreateInfo.codeSize = sizeof(D3D12_BlitFromCube);
+
+    renderer->blitFromCubeShader = D3D12_CreateShader(
+        (SDL_GpuRenderer *)renderer,
+        &shaderCreateInfo);
+
+    if (renderer->blitFromCubeShader == NULL) {
+        SDL_LogError(SDL_LOG_CATEGORY_GPU, "Failed to compile BlitFromCube pixel shader!");
     }
 
     /* Create samplers */
@@ -7251,10 +7342,6 @@ static void D3D12_INTERNAL_InitBlitPipelines(
     if (renderer->blitLinearSampler == NULL) {
         SDL_LogError(SDL_LOG_CATEGORY_GPU, "Failed to create blit linear sampler!");
     }
-
-    /* Clean up */
-    D3D12_ReleaseShader((SDL_GpuRenderer *)renderer, fullscreenVertexShader);
-    D3D12_ReleaseShader((SDL_GpuRenderer *)renderer, blitFrom2DPixelShader);
 }
 
 static SDL_bool D3D12_PrepareDriver(SDL_VideoDevice *_this)
@@ -7849,8 +7936,16 @@ static SDL_GpuDevice *D3D12_CreateDevice(SDL_bool debugMode, SDL_bool preferLowP
 
     renderer->semantic = SDL_GetStringProperty(props, SDL_PROP_GPU_CREATEDEVICE_D3D12_SEMANTIC_NAME_STRING, "TEXCOORD");
 
-    /* Blit pipelines */
-    D3D12_INTERNAL_InitBlitPipelines(renderer);
+    /* Blit resources */
+    D3D12_INTERNAL_InitBlitResources(renderer);
+    renderer->blitPipelineCapacity = 2;
+    renderer->blitPipelineCount = 0;
+    renderer->blitPipelines = (D3D12BlitPipelineCacheEntry *)SDL_calloc(
+        renderer->blitPipelineCapacity, sizeof(D3D12BlitPipelineCacheEntry));
+    if (!renderer->blitPipelines) {
+        D3D12_INTERNAL_DestroyRenderer(renderer);
+        return NULL;
+    }
 
     /* Create the SDL_Gpu Device */
     result = (SDL_GpuDevice *)SDL_calloc(1, sizeof(SDL_GpuDevice));

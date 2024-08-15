@@ -5725,7 +5725,7 @@ static void D3D11_INTERNAL_InitBlitPipelines(
         &shaderCreateInfo);
 
     if (fullscreenVertexShader == NULL) {
-        SDL_LogError(SDL_LOG_CATEGORY_GPU, "Failed to compile fullscreen vertex shader!");
+        SDL_LogError(SDL_LOG_CATEGORY_GPU, "Failed to compile vertex shader for blit!");
     }
 
     /* BlitFrom2D pixel shader */

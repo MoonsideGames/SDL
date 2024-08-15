@@ -11,7 +11,7 @@
 //   float2 UVLeftTop;                  // Offset:    0 Size:     8
 //   float2 UVDimensions;               // Offset:    8 Size:     8
 //   uint MipLevel;                     // Offset:   16 Size:     4
-//   uint Layer;                        // Offset:   20 Size:     4 [unused]
+//   uint Layer;                        // Offset:   20 Size:     4
 //
 // }
 //
@@ -21,7 +21,7 @@
 // Name                                 Type  Format         Dim      ID      HLSL Bind  Count
 // ------------------------------ ---------- ------- ----------- ------- -------------- ------
 // SourceSampler                     sampler      NA          NA      S0      s0,space2      1 
-// SourceTexture                     texture  float4          2d      T0      t0,space2      1 
+// SourceTexture                     texture  float4     2darray      T0      t0,space2      1 
 // SourceRegionBuffer                cbuffer      NA          NA     CB0     cb0,space3      1 
 //
 //
@@ -44,23 +44,23 @@ ps_5_1
 dcl_globalFlags refactoringAllowed
 dcl_constantbuffer CB0[0:0][2], immediateIndexed, space=3
 dcl_sampler S0[0:0], mode_default, space=2
-dcl_resource_texture2d (float,float,float,float) T0[0:0], space=2
+dcl_resource_texture2darray (float,float,float,float) T0[0:0], space=2
 dcl_input_ps linear v0.xy
 dcl_output o0.xyzw
 dcl_temps 1
 mad r0.xy, CB0[0][0].zwzz, v0.xyxx, CB0[0][0].xyxx
-utof r0.z, CB0[0][1].x
-sample_l o0.xyzw, r0.xyxx, T0[0].xyzw, S0[0], r0.z
+utof r0.zw, CB0[0][1].yyyx
+sample_l o0.xyzw, r0.xyzx, T0[0].xyzw, S0[0], r0.w
 ret 
 // Approximately 4 instruction slots used
 #endif
 
 const BYTE g_Blit[] =
 {
-     68,  88,  66,  67, 215, 236, 
-     61, 142,  30,  46,  96, 212, 
-    199, 175, 234, 215, 181,  60, 
-     84, 202,   1,   0,   0,   0, 
+     68,  88,  66,  67, 107,  71, 
+     97, 212, 184,  72, 119, 142, 
+    198, 185, 235, 208, 122,  29, 
+    191, 154,   1,   0,   0,   0, 
     180,   4,   0,   0,   5,   0, 
       0,   0,  52,   0,   0,   0, 
     128,   2,   0,   0, 216,   2, 
@@ -85,7 +85,7 @@ const BYTE g_Blit[] =
       0,   0,   2,   0,   0,   0, 
       0,   0,   0,   0, 194,   0, 
       0,   0,   2,   0,   0,   0, 
-      5,   0,   0,   0,   4,   0, 
+      5,   0,   0,   0,   5,   0, 
       0,   0, 255, 255, 255, 255, 
       0,   0,   0,   0,   1,   0, 
       0,   0,  12,   0,   0,   0, 
@@ -131,7 +131,7 @@ const BYTE g_Blit[] =
     255, 255,   0,   0,   0,   0, 
      20,   2,   0,   0,  20,   0, 
       0,   0,   4,   0,   0,   0, 
-      0,   0,   0,   0, 240,   1, 
+      2,   0,   0,   0, 240,   1, 
       0,   0,   0,   0,   0,   0, 
     255, 255, 255, 255,   0,   0, 
       0,   0, 255, 255, 255, 255, 
@@ -199,7 +199,7 @@ const BYTE g_Blit[] =
      48,   0,   0,   0,   0,   0, 
       0,   0,   0,   0,   0,   0, 
       0,   0,   2,   0,   0,   0, 
-     88,  24,   0,   7,  70, 126, 
+     88,  64,   0,   7,  70, 126, 
      48,   0,   0,   0,   0,   0, 
       0,   0,   0,   0,   0,   0, 
       0,   0,  85,  85,   0,   0, 
@@ -218,18 +218,18 @@ const BYTE g_Blit[] =
      70, 128,  48,   0,   0,   0, 
       0,   0,   0,   0,   0,   0, 
       0,   0,   0,   0,  86,   0, 
-      0,   7,  66,   0,  16,   0, 
-      0,   0,   0,   0,  10, 128, 
+      0,   7, 194,   0,  16,   0, 
+      0,   0,   0,   0,  86, 129, 
      48,   0,   0,   0,   0,   0, 
       0,   0,   0,   0,   1,   0, 
       0,   0,  72,   0,   0,  13, 
     242,  32,  16,   0,   0,   0, 
-      0,   0,  70,   0,  16,   0, 
+      0,   0,  70,   2,  16,   0, 
       0,   0,   0,   0,  70, 126, 
      32,   0,   0,   0,   0,   0, 
       0,   0,   0,   0,   0,  96, 
      32,   0,   0,   0,   0,   0, 
-      0,   0,   0,   0,  42,   0, 
+      0,   0,   0,   0,  58,   0, 
      16,   0,   0,   0,   0,   0, 
      62,   0,   0,   1,  83,  84, 
      65,  84, 148,   0,   0,   0, 

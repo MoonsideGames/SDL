@@ -47,8 +47,8 @@ float4 Blit(VertexToPixel input) : SV_Target0
 #if CUBE
     // Thanks, Wikipedia! https://en.wikipedia.org/wiki/Cube_mapping
     float2 scaledUV = UVLeftTop + UVDimensions * input.tex;
-    float u = 2.0 * scaledUV.u - 1.0;
-    float v = 2.0 * scaledUV.v - 1.0;
+    float u = 2.0 * scaledUV.x - 1.0;
+    float v = 2.0 * scaledUV.y - 1.0;
     switch (Layer) {
         case 0: newCoord = float3(1.0, -v, -u); break; // POSITIVE X
         case 1: newCoord = float3(-1.0, -v, u); break; // NEGATIVE X
