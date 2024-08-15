@@ -5575,6 +5575,9 @@ static SDL_bool D3D11_SupportsTextureFormat(
     if (type == SDL_GPU_TEXTURETYPE_2D && !(formatSupport & D3D11_FORMAT_SUPPORT_TEXTURE2D)) {
         return SDL_FALSE;
     }
+    if (type == SDL_GPU_TEXTURETYPE_2D_ARRAY && !(formatSupport & D3D11_FORMAT_SUPPORT_TEXTURE2D)) {
+        return SDL_FALSE;
+    }
     if (type == SDL_GPU_TEXTURETYPE_3D && !(formatSupport & D3D11_FORMAT_SUPPORT_TEXTURE3D)) {
         return SDL_FALSE;
     }
