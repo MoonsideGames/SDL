@@ -5708,8 +5708,6 @@ static void D3D11_INTERNAL_InitBlitPipelines(
     SDL_GpuShader *blitFromCubePixelShader;
     SDL_GpuGraphicsPipelineCreateInfo blitPipelineCreateInfo;
     SDL_GpuSamplerCreateInfo samplerCreateInfo;
-    SDL_GpuVertexBinding binding;
-    SDL_GpuVertexAttribute attribute;
     SDL_GpuColorAttachmentDescription colorAttachmentDesc;
 
     /* Fullscreen vertex shader */
@@ -5777,22 +5775,7 @@ static void D3D11_INTERNAL_InitBlitPipelines(
     blitPipelineCreateInfo.attachmentInfo.colorAttachmentDescriptions = &colorAttachmentDesc;
     blitPipelineCreateInfo.attachmentInfo.colorAttachmentCount = 1;
     blitPipelineCreateInfo.attachmentInfo.depthStencilFormat = SDL_GPU_TEXTUREFORMAT_D16_UNORM; /* arbitrary */
-    blitPipelineCreateInfo.attachmentInfo.hasDepthStencilAttachment = 0;
-
-    binding.binding = 0;
-    binding.inputRate = SDL_GPU_VERTEXINPUTRATE_VERTEX;
-    binding.stepRate = 0;
-    binding.stride = 64;
-
-    attribute.binding = 0;
-    attribute.format = SDL_GPU_VERTEXELEMENTFORMAT_VECTOR2;
-    attribute.location = 0;
-    attribute.offset = 0;
-
-    blitPipelineCreateInfo.vertexInputState.vertexAttributeCount = 1;
-    blitPipelineCreateInfo.vertexInputState.vertexAttributes = &attribute;
-    blitPipelineCreateInfo.vertexInputState.vertexBindingCount = 1;
-    blitPipelineCreateInfo.vertexInputState.vertexBindings = &binding;
+    blitPipelineCreateInfo.attachmentInfo.hasDepthStencilAttachment = SDL_FALSE;
 
     blitPipelineCreateInfo.vertexShader = fullscreenVertexShader;
     blitPipelineCreateInfo.fragmentShader = blitFrom2DPixelShader;

@@ -5626,9 +5626,7 @@ static SDL_GpuGraphicsPipeline* D3D12_INTERNAL_FetchBlitPipeline(
     D3D12TextureContainer* sourceContainer,
     SDL_GpuTextureFormat destinationFormat)
 {
-    SDL_GpuGraphicsPipelineCreateInfo createInfo;
-    SDL_GpuVertexBinding binding;
-    SDL_GpuVertexAttribute attribute;
+    SDL_GpuGraphicsPipelineCreateInfo blitPipelineCreateInfo;
     SDL_GpuColorAttachmentDescription colorAttachmentDesc;
     SDL_GpuGraphicsPipeline *pipeline;
 
@@ -5648,55 +5646,39 @@ static SDL_GpuGraphicsPipeline* D3D12_INTERNAL_FetchBlitPipeline(
     }
 
     /* No pipeline found, we'll need to make one! */
-    SDL_zero(createInfo);
+    SDL_zero(blitPipelineCreateInfo);
 
     SDL_zero(colorAttachmentDesc);
     colorAttachmentDesc.blendState.colorWriteMask = 0xF;
     colorAttachmentDesc.format = destinationFormat;
 
-    createInfo.attachmentInfo.colorAttachmentDescriptions = &colorAttachmentDesc;
-    createInfo.attachmentInfo.colorAttachmentCount = 1;
-    createInfo.attachmentInfo.depthStencilFormat = SDL_GPU_TEXTUREFORMAT_D16_UNORM; /* arbitrary */
-    createInfo.attachmentInfo.hasDepthStencilAttachment = 0;
+    blitPipelineCreateInfo.attachmentInfo.colorAttachmentDescriptions = &colorAttachmentDesc;
+    blitPipelineCreateInfo.attachmentInfo.colorAttachmentCount = 1;
+    blitPipelineCreateInfo.attachmentInfo.depthStencilFormat = SDL_GPU_TEXTUREFORMAT_D16_UNORM; /* arbitrary */
+    blitPipelineCreateInfo.attachmentInfo.hasDepthStencilAttachment = SDL_FALSE;
 
-    binding.binding = 0;
-    binding.inputRate = SDL_GPU_VERTEXINPUTRATE_VERTEX;
-    binding.stepRate = 0;
-    binding.stride = 64;
-
-    attribute.binding = 0;
-    attribute.format = SDL_GPU_VERTEXELEMENTFORMAT_VECTOR2;
-    attribute.location = 0;
-    attribute.offset = 0;
-
-    createInfo.vertexInputState.vertexAttributeCount = 1;
-    createInfo.vertexInputState.vertexAttributes = &attribute;
-    createInfo.vertexInputState.vertexBindingCount = 1;
-    createInfo.vertexInputState.vertexBindings = &binding;
-
-    createInfo.vertexShader = renderer->blitVertexShader;
-
+    blitPipelineCreateInfo.vertexShader = renderer->blitVertexShader;
     if (type == 1) {
-        createInfo.fragmentShader = renderer->blitFromCubeShader;
+        blitPipelineCreateInfo.fragmentShader = renderer->blitFromCubeShader;
     } else if (type == 2) {
-        createInfo.fragmentShader = renderer->blitFrom2DArrayShader;
+        blitPipelineCreateInfo.fragmentShader = renderer->blitFrom2DArrayShader;
     } else {
-        createInfo.fragmentShader = renderer->blitFrom2DShader;
+        blitPipelineCreateInfo.fragmentShader = renderer->blitFrom2DShader;
     }
 
-    createInfo.multisampleState.sampleCount = SDL_GPU_SAMPLECOUNT_1;
-    createInfo.multisampleState.sampleMask = 0xFFFFFFFF;
+    blitPipelineCreateInfo.multisampleState.sampleCount = SDL_GPU_SAMPLECOUNT_1;
+    blitPipelineCreateInfo.multisampleState.sampleMask = 0xFFFFFFFF;
 
-    createInfo.primitiveType = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST;
+    blitPipelineCreateInfo.primitiveType = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST;
 
-    createInfo.blendConstants[0] = 1.0f;
-    createInfo.blendConstants[1] = 1.0f;
-    createInfo.blendConstants[2] = 1.0f;
-    createInfo.blendConstants[3] = 1.0f;
+    blitPipelineCreateInfo.blendConstants[0] = 1.0f;
+    blitPipelineCreateInfo.blendConstants[1] = 1.0f;
+    blitPipelineCreateInfo.blendConstants[2] = 1.0f;
+    blitPipelineCreateInfo.blendConstants[3] = 1.0f;
 
     pipeline = D3D12_CreateGraphicsPipeline(
         (SDL_GpuRenderer *)renderer,
-        &createInfo);
+        &blitPipelineCreateInfo);
 
     if (pipeline == NULL) {
         SDL_LogError(SDL_LOG_CATEGORY_GPU, "Failed to create graphics pipeline for blit");
