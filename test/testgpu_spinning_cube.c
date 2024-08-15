@@ -252,11 +252,11 @@ CreateDepthTexture(Uint32 drawablew, Uint32 drawableh)
     SDL_GpuTextureCreateInfo depthtex_createinfo;
     SDL_GpuTexture *result;
 
+    depthtex_createinfo.type = SDL_GPU_TEXTURETYPE_2D;
+    depthtex_createinfo.format = SDL_GPU_TEXTUREFORMAT_D16_UNORM;
     depthtex_createinfo.width = drawablew;
     depthtex_createinfo.height = drawableh;
     depthtex_createinfo.depth = 1;
-    depthtex_createinfo.format = SDL_GPU_TEXTUREFORMAT_D16_UNORM;
-    depthtex_createinfo.isCube = 0;
     depthtex_createinfo.layerCount = 1;
     depthtex_createinfo.levelCount = 1;
     depthtex_createinfo.sampleCount = render_state.sample_count;
@@ -279,11 +279,11 @@ CreateMSAATexture(Uint32 drawablew, Uint32 drawableh)
         return NULL;
     }
 
+    msaatex_createinfo.type = SDL_GPU_TEXTURETYPE_2D;
+    msaatex_createinfo.format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8;
     msaatex_createinfo.width = drawablew;
     msaatex_createinfo.height = drawableh;
     msaatex_createinfo.depth = 1;
-    msaatex_createinfo.format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8;
-    msaatex_createinfo.isCube = 0;
     msaatex_createinfo.layerCount = 1;
     msaatex_createinfo.levelCount = 1;
     msaatex_createinfo.sampleCount = SDL_GPU_SAMPLECOUNT_4;
