@@ -1374,13 +1374,12 @@ extern SDL_DECLSPEC void SDLCALL SDL_GpuPushComputeUniformData(
  * Another example: If you are using a texture in a render pass every frame, this can cause a data dependency between frames.
  * If you set cycle to SDL_TRUE in the ColorAttachmentInfo struct, you can prevent this data dependency.
  *
- * Note that all functions which write to a texture specifically write to a GpuTextureSlice,
- * and these slices themselves are tracked for binding.
- * The GpuTexture will only cycle if the specific GpuTextureSlice being written to is bound.
- *
  * Cycling will never undefine already bound data.
  * When cycling, all data in the resource is considered to be undefined for subsequent commands until that data is written again.
  * You must take care not to read undefined data.
+ *
+ * Note that when cycling a texture, the entire texture, meaning all slices, will be cycled,
+ * so you must consider each slice of the texture to contain undefined data after cycling.
  *
  * You must also take care not to overwrite a section of data that has been referenced in a command without cycling first.
  * It is OK to overwrite unreferenced data in a bound resource without cycling,
