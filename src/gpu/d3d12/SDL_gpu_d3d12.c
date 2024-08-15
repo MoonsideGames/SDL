@@ -429,7 +429,6 @@ typedef struct D3D12TextureSubresource
     D3D12CPUDescriptor dsvHandle; /* NULL if not a depth stencil target */
     D3D12CPUDescriptor uavHandle; /* NULL if not a compute storage write texture */
 
-    SDL_AtomicInt referenceCount;
 } D3D12TextureSubresource;
 
 struct D3D12Texture
@@ -442,6 +441,8 @@ struct D3D12Texture
 
     ID3D12Resource *resource;
     D3D12CPUDescriptor srvHandle;
+
+    SDL_AtomicInt referenceCount;
 };
 
 typedef struct D3D12Sampler
@@ -633,9 +634,9 @@ struct D3D12CommandBuffer
     D3D12UniformBuffer *computeUniformBuffers[MAX_UNIFORM_BUFFERS_PER_STAGE];
 
     /* Resource tracking */
-    D3D12TextureSubresource **usedTextureSubresources;
-    Uint32 usedTextureSubresourceCount;
-    Uint32 usedTextureSubresourceCapacity;
+    D3D12Texture **usedTextures;
+    Uint32 usedTextureCount;
+    Uint32 usedTextureCapacity;
 
     D3D12Buffer **usedBuffers;
     Uint32 usedBufferCount;
@@ -1169,7 +1170,7 @@ static void D3D12_INTERNAL_DestroyCommandBuffer(D3D12CommandBuffer *commandBuffe
         ID3D12CommandAllocator_Release(commandBuffer->commandAllocator);
     }
     SDL_free(commandBuffer->presentDatas);
-    SDL_free(commandBuffer->usedTextureSubresources);
+    SDL_free(commandBuffer->usedTextures);
     SDL_free(commandBuffer->usedBuffers);
     SDL_free(commandBuffer->usedSamplers);
     SDL_free(commandBuffer->usedGraphicsPipelines);
@@ -1556,27 +1557,16 @@ static void D3D12_INTERNAL_BufferTransitionToDefaultUsage(
     commandBuffer->count += 1;                                 \
     SDL_AtomicIncRef(&resource->referenceCount);
 
-static void D3D12_INTERNAL_TrackTextureSubresource(
-    D3D12CommandBuffer *commandBuffer,
-    D3D12TextureSubresource *textureSubresource)
-{
-    TRACK_RESOURCE(
-        textureSubresource,
-        D3D12TextureSubresource *,
-        usedTextureSubresources,
-        usedTextureSubresourceCount,
-        usedTextureSubresourceCapacity)
-}
-
 static void D3D12_INTERNAL_TrackTexture(
     D3D12CommandBuffer *commandBuffer,
     D3D12Texture *texture)
 {
-    for (Uint32 i = 0; i < texture->subresourceCount; i += 1) {
-        D3D12_INTERNAL_TrackTextureSubresource(
-            commandBuffer,
-            &texture->subresources[i]);
-    }
+    TRACK_RESOURCE(
+        texture,
+        D3D12Texture *,
+        usedTextures,
+        usedTextureCount,
+        usedTextureCapacity)
 }
 
 static void D3D12_INTERNAL_TrackBuffer(
@@ -2773,6 +2763,8 @@ static D3D12Texture *D3D12_INTERNAL_CreateTexture(
     Uint32 layerOrDepthCount =
         textureCreateInfo->type == SDL_GPU_TEXTURETYPE_3D ? textureCreateInfo->depth : textureCreateInfo->layerCount;
 
+    SDL_AtomicSet(&texture->referenceCount, 0);
+
     texture->subresourceCount = textureCreateInfo->levelCount * layerOrDepthCount;
     texture->subresources = (D3D12TextureSubresource *)SDL_calloc(
         texture->subresourceCount, sizeof(D3D12TextureSubresource));
@@ -2795,7 +2787,6 @@ static D3D12Texture *D3D12_INTERNAL_CreateTexture(
             texture->subresources[subresourceIndex].rtvHandle.heap = NULL;
             texture->subresources[subresourceIndex].dsvHandle.heap = NULL;
             texture->subresources[subresourceIndex].uavHandle.heap = NULL;
-            SDL_AtomicSet(&texture->subresources[subresourceIndex].referenceCount, 0);
 
             /* Create RTV if needed */
             if (textureCreateInfo->usageFlags & SDL_GPU_TEXTUREUSAGE_COLOR_TARGET_BIT) {
@@ -3532,18 +3523,12 @@ static void D3D12_INTERNAL_CycleActiveTexture(
     D3D12TextureContainer *container)
 {
     D3D12Texture *texture;
-    Sint32 refCountTotal;
 
     /* If a previously-cycled texture is available, we can use that. */
     for (Uint32 i = 0; i < container->textureCount; i += 1) {
         texture = container->textures[i];
 
-        refCountTotal = 0;
-        for (Uint32 j = 0; j < texture->subresourceCount; j += 1) {
-            refCountTotal += SDL_AtomicGet(&texture->subresources[j].referenceCount);
-        }
-
-        if (refCountTotal == 0) {
+        if (SDL_AtomicGet(&texture->referenceCount) == 0) {
             container->activeTexture = texture;
             return;
         }
@@ -3597,7 +3582,7 @@ static D3D12TextureSubresource *D3D12_INTERNAL_PrepareTextureSubresourceForWrite
     if (
         container->canBeCycled &&
         cycle &&
-        SDL_AtomicGet(&subresource->referenceCount) > 0) {
+        SDL_AtomicGet(&subresource->parent->referenceCount) > 0) {
         D3D12_INTERNAL_CycleActiveTexture(
             commandBuffer->renderer,
             container);
@@ -3781,7 +3766,7 @@ static void D3D12_BeginRenderPass(
 
         rtvs[i] = subresource->rtvHandle.cpuHandle;
         d3d12CommandBuffer->colorAttachmentTextureSubresources[i] = subresource;
-        D3D12_INTERNAL_TrackTextureSubresource(d3d12CommandBuffer, subresource);
+        D3D12_INTERNAL_TrackTexture(d3d12CommandBuffer, subresource->parent);
     }
 
     D3D12_CPU_DESCRIPTOR_HANDLE dsv;
@@ -3828,7 +3813,7 @@ static void D3D12_BeginRenderPass(
 
         dsv = subresource->dsvHandle.cpuHandle;
         d3d12CommandBuffer->depthStencilTextureSubresource = subresource;
-        D3D12_INTERNAL_TrackTextureSubresource(d3d12CommandBuffer, subresource);
+        D3D12_INTERNAL_TrackTexture(d3d12CommandBuffer, subresource->parent);
     }
 
     ID3D12GraphicsCommandList_OMSetRenderTargets(
@@ -4145,11 +4130,9 @@ static void D3D12_BindVertexSamplers(
         D3D12TextureContainer *container = (D3D12TextureContainer *)textureSamplerBindings[i].texture;
         D3D12Sampler *sampler = (D3D12Sampler *)textureSamplerBindings[i].sampler;
 
-        for (Uint32 j = 0; j < container->activeTexture->subresourceCount; j += 1) {
-            D3D12_INTERNAL_TrackTextureSubresource(
-                d3d12CommandBuffer,
-                &container->activeTexture->subresources[j]);
-        }
+        D3D12_INTERNAL_TrackTexture(
+            d3d12CommandBuffer,
+            container->activeTexture);
 
         D3D12_INTERNAL_TrackSampler(
             d3d12CommandBuffer,
@@ -4215,11 +4198,9 @@ static void D3D12_BindFragmentSamplers(
         D3D12TextureContainer *container = (D3D12TextureContainer *)textureSamplerBindings[i].texture;
         D3D12Sampler *sampler = (D3D12Sampler *)textureSamplerBindings[i].sampler;
 
-        for (Uint32 j = 0; j < container->activeTexture->subresourceCount; j += 1) {
-            D3D12_INTERNAL_TrackTextureSubresource(
-                d3d12CommandBuffer,
-                &container->activeTexture->subresources[j]);
-        }
+        D3D12_INTERNAL_TrackTexture(
+            d3d12CommandBuffer,
+            container->activeTexture);
 
         D3D12_INTERNAL_TrackSampler(
             d3d12CommandBuffer,
@@ -4705,9 +4686,9 @@ static void D3D12_BeginComputePass(
 
             d3d12CommandBuffer->computeReadWriteStorageTextures[i] = subresource;
 
-            D3D12_INTERNAL_TrackTextureSubresource(
+            D3D12_INTERNAL_TrackTexture(
                 d3d12CommandBuffer,
-                subresource);
+                subresource->parent);
         }
     }
 
@@ -5260,7 +5241,7 @@ static void D3D12_UploadToTexture(
         textureSubresource);
 
     D3D12_INTERNAL_TrackBuffer(d3d12CommandBuffer, transferBufferContainer->activeBuffer);
-    D3D12_INTERNAL_TrackTextureSubresource(d3d12CommandBuffer, textureSubresource);
+    D3D12_INTERNAL_TrackTexture(d3d12CommandBuffer, textureSubresource->parent);
 }
 
 static void D3D12_UploadToBuffer(
@@ -5360,13 +5341,13 @@ static void D3D12_CopyTextureToTexture(
         D3D12_RESOURCE_STATE_COPY_DEST,
         destinationSubresource);
 
-    D3D12_INTERNAL_TrackTextureSubresource(
+    D3D12_INTERNAL_TrackTexture(
         d3d12CommandBuffer,
-        sourceSubresource);
+        sourceSubresource->parent);
 
-    D3D12_INTERNAL_TrackTextureSubresource(
+    D3D12_INTERNAL_TrackTexture(
         d3d12CommandBuffer,
-        destinationSubresource);
+        destinationSubresource->parent);
 }
 
 static void D3D12_CopyBufferToBuffer(
@@ -5534,7 +5515,7 @@ static void D3D12_DownloadFromTexture(
         sourceSubresource);
 
     D3D12_INTERNAL_TrackBuffer(d3d12CommandBuffer, destinationBuffer);
-    D3D12_INTERNAL_TrackTextureSubresource(d3d12CommandBuffer, sourceSubresource);
+    D3D12_INTERNAL_TrackTexture(d3d12CommandBuffer, sourceSubresource->parent);
 
     if (textureDownload != NULL) {
         D3D12_INTERNAL_TrackBuffer(d3d12CommandBuffer, textureDownload->temporaryBuffer);
@@ -5779,6 +5760,7 @@ static SDL_bool D3D12_INTERNAL_InitializeSwapchainTexture(
         return SDL_FALSE;
     }
     pTexture->resource = NULL; /* This will be set in AcquireSwapchainTexture */
+    SDL_AtomicSet(&pTexture->referenceCount, 0);
     pTexture->subresourceCount = 1;
     pTexture->subresources = (D3D12TextureSubresource *)SDL_calloc(1, sizeof(D3D12TextureSubresource));
     if (!pTexture->subresources) {
@@ -5793,7 +5775,6 @@ static SDL_bool D3D12_INTERNAL_InitializeSwapchainTexture(
     pTexture->subresources[0].index = 0;
     pTexture->subresources[0].layer = 0;
     pTexture->subresources[0].level = 0;
-    SDL_AtomicSet(&pTexture->subresources[0].referenceCount, 0);
 
     ID3D12Resource_GetDesc(swapchainTexture, &textureDesc);
     pTextureContainer->header.info.width = (Uint32)textureDesc.Width;
@@ -6342,10 +6323,10 @@ static void D3D12_INTERNAL_AllocateCommandBuffer(
         commandBuffer->presentDataCapacity, sizeof(D3D12PresentData));
 
     /* Resource tracking */
-    commandBuffer->usedTextureSubresourceCapacity = 4;
-    commandBuffer->usedTextureSubresourceCount = 0;
-    commandBuffer->usedTextureSubresources = (D3D12TextureSubresource **)SDL_calloc(
-        commandBuffer->usedTextureSubresourceCapacity, sizeof(D3D12TextureSubresource *));
+    commandBuffer->usedTextureCapacity = 4;
+    commandBuffer->usedTextureCount = 0;
+    commandBuffer->usedTextures = (D3D12Texture **)SDL_calloc(
+        commandBuffer->usedTextureCapacity, sizeof(D3D12Texture *));
 
     commandBuffer->usedBufferCapacity = 4;
     commandBuffer->usedBufferCount = 0;
@@ -6379,7 +6360,7 @@ static void D3D12_INTERNAL_AllocateCommandBuffer(
 
     if (
         (!commandBuffer->presentDatas) ||
-        (!commandBuffer->usedTextureSubresources) ||
+        (!commandBuffer->usedTextures) ||
         (!commandBuffer->usedBuffers) ||
         (!commandBuffer->usedSamplers) ||
         (!commandBuffer->usedGraphicsPipelines) ||
@@ -6605,12 +6586,7 @@ static void D3D12_INTERNAL_PerformPendingDestroys(D3D12Renderer *renderer)
     }
 
     for (Sint32 i = renderer->texturesToDestroyCount - 1; i >= 0; i -= 1) {
-        Sint32 refCountTotal = 0;
-        for (Uint32 subresourceIndex = 0; subresourceIndex < renderer->texturesToDestroy[i]->subresourceCount; subresourceIndex += 1) {
-            refCountTotal += SDL_AtomicGet(&renderer->texturesToDestroy[i]->subresources[subresourceIndex].referenceCount);
-        }
-
-        if (refCountTotal == 0) {
+        if (SDL_AtomicGet(&renderer->texturesToDestroy[i]->referenceCount) == 0) {
             D3D12_INTERNAL_DestroyTexture(
                 renderer,
                 renderer->texturesToDestroy[i]);
@@ -6752,10 +6728,10 @@ static void D3D12_INTERNAL_CleanCommandBuffer(
 
     /* TODO: More reference counting */
 
-    for (i = 0; i < commandBuffer->usedTextureSubresourceCount; i += 1) {
-        (void)SDL_AtomicDecRef(&commandBuffer->usedTextureSubresources[i]->referenceCount);
+    for (i = 0; i < commandBuffer->usedTextureCount; i += 1) {
+        (void)SDL_AtomicDecRef(&commandBuffer->usedTextures[i]->referenceCount);
     }
-    commandBuffer->usedTextureSubresourceCount = 0;
+    commandBuffer->usedTextureCount = 0;
 
     for (i = 0; i < commandBuffer->usedBufferCount; i += 1) {
         (void)SDL_AtomicDecRef(&commandBuffer->usedBuffers[i]->referenceCount);
