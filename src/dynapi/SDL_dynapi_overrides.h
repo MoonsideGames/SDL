@@ -1086,6 +1086,7 @@
 #define SDL_wcsstr SDL_wcsstr_REAL
 #define SDL_wcstol SDL_wcstol_REAL
 #define SDL_GpuCreateDevice SDL_GpuCreateDevice_REAL
+#define SDL_GpuCreateDeviceWithProperties SDL_GpuCreateDeviceWithProperties_REAL
 #define SDL_GpuDestroyDevice SDL_GpuDestroyDevice_REAL
 #define SDL_GpuGetDriver SDL_GpuGetDriver_REAL
 #define SDL_GpuCreateComputePipeline SDL_GpuCreateComputePipeline_REAL

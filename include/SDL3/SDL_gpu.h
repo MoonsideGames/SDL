@@ -485,6 +485,8 @@ typedef struct SDL_GpuSamplerCreateInfo
     SDL_GpuCompareOp compareOp;
     float minLod;
     float maxLod;
+
+    SDL_PropertiesID props;
 } SDL_GpuSamplerCreateInfo;
 
 typedef struct SDL_GpuVertexBinding
@@ -542,6 +544,8 @@ typedef struct SDL_GpuShaderCreateInfo
     Uint32 storageTextureCount;
     Uint32 storageBufferCount;
     Uint32 uniformBufferCount;
+
+    SDL_PropertiesID props;
 } SDL_GpuShaderCreateInfo;
 
 typedef struct SDL_GpuTextureCreateInfo
@@ -555,7 +559,25 @@ typedef struct SDL_GpuTextureCreateInfo
     SDL_GpuSampleCount sampleCount;
     SDL_GpuTextureFormat format;
     SDL_GpuTextureUsageFlags usageFlags;
+
+    SDL_PropertiesID props;
 } SDL_GpuTextureCreateInfo;
+
+typedef struct SDL_GpuBufferCreateInfo
+{
+    SDL_GpuBufferUsageFlags usageFlags;
+    Uint32 sizeInBytes;
+
+    SDL_PropertiesID props;
+} SDL_GpuBufferCreateInfo;
+
+typedef struct SDL_GpuTransferBufferCreateInfo
+{
+    SDL_GpuTransferBufferUsage usage;
+    Uint32 sizeInBytes;
+
+    SDL_PropertiesID props;
+} SDL_GpuTransferBufferCreateInfo;
 
 /* Pipeline state structures */
 
@@ -614,6 +636,8 @@ typedef struct SDL_GpuGraphicsPipelineCreateInfo
     SDL_GpuDepthStencilState depthStencilState;
     SDL_GpuGraphicsPipelineAttachmentInfo attachmentInfo;
     float blendConstants[4];
+
+    SDL_PropertiesID props;
 } SDL_GpuGraphicsPipelineCreateInfo;
 
 typedef struct SDL_GpuComputePipelineCreateInfo
@@ -630,6 +654,8 @@ typedef struct SDL_GpuComputePipelineCreateInfo
     Uint32 threadCountX;
     Uint32 threadCountY;
     Uint32 threadCountZ;
+
+    SDL_PropertiesID props;
 } SDL_GpuComputePipelineCreateInfo;
 
 typedef struct SDL_GpuColorAttachmentInfo
@@ -768,16 +794,9 @@ typedef struct SDL_GpuStorageTextureReadWriteBinding
 /**
  * Creates a GPU context.
  *
- * These are the supported properties:
- *
- * - `SDL_PROP_GPU_CREATEDEVICE_NAME_STRING`: the name of the GPU driver to use, if a specific one is desired
- *
- * With the D3D12 renderer:
- * - `SDL_PROP_GPU_CREATEDEVICE_D3D12_SEMANTIC_NAME_STRING`: the prefix to use for all vertex semantics, default is "TEXCOORD"
- *
  * \param debugMode enable debug mode properties and validations
  * \param preferLowPower set this to SDL_TRUE if your app prefers energy efficiency over maximum GPU performance
- * \param props the properties to use.
+ * \param name the preferred GPU driver, or NULL to let SDL pick the optimal driver
  * \returns a GPU context on success or NULL on failure
  *
  * \since This function is available since SDL 3.x.x
@@ -788,8 +807,33 @@ typedef struct SDL_GpuStorageTextureReadWriteBinding
 extern SDL_DECLSPEC SDL_GpuDevice *SDLCALL SDL_GpuCreateDevice(
     SDL_bool debugMode,
     SDL_bool preferLowPower,
+    const char *name);
+
+/**
+ * Creates a GPU context.
+ *
+ * These are the supported properties:
+ *
+ * - `SDL_PROP_GPU_CREATEDEVICE_DEBUGMODE_BOOL`: enable debug mode properties and validations, default is true
+ * - `SDL_PROP_GPU_CREATEDEVICE_PREFERLOWPOWER_BOOL`: enable to prefer energy efficiency over maximum GPU performance
+ * - `SDL_PROP_GPU_CREATEDEVICE_NAME_STRING`: the name of the GPU driver to use, if a specific one is desired
+ *
+ * With the D3D12 renderer:
+ * - `SDL_PROP_GPU_CREATEDEVICE_D3D12_SEMANTIC_NAME_STRING`: the prefix to use for all vertex semantics, default is "TEXCOORD"
+ *
+ * \param props the properties to use.
+ * \returns a GPU context on success or NULL on failure
+ *
+ * \since This function is available since SDL 3.x.x
+ *
+ * \sa SDL_GpuGetDriver
+ * \sa SDL_GpuDestroyDevice
+ */
+extern SDL_DECLSPEC SDL_GpuDevice *SDLCALL SDL_GpuCreateDeviceWithProperties(
     SDL_PropertiesID props);
 
+#define SDL_PROP_GPU_CREATEDEVICE_DEBUGMODE_BOOL              "debugmode"
+#define SDL_PROP_GPU_CREATEDEVICE_PREFERLOWPOWER_BOOL         "preferlowpower"
 #define SDL_PROP_GPU_CREATEDEVICE_NAME_STRING                 "name"
 #define SDL_PROP_GPU_CREATEDEVICE_D3D12_SEMANTIC_NAME_STRING  "d3d12.semantic"
 
@@ -977,8 +1021,7 @@ extern SDL_DECLSPEC SDL_GpuTexture *SDLCALL SDL_GpuCreateTexture(
  * For example, a buffer cannot have both the VERTEX and INDEX flags.
  *
  * \param device a GPU Context
- * \param usageFlags bitflag mask hinting at how the buffer will be used
- * \param sizeInBytes the size of the buffer
+ * \param bufferCreateInfo a struct describing the state of the buffer to create
  * \returns a buffer object on success, or NULL on failure
  *
  * \since This function is available since SDL 3.x.x
@@ -993,15 +1036,13 @@ extern SDL_DECLSPEC SDL_GpuTexture *SDLCALL SDL_GpuCreateTexture(
  */
 extern SDL_DECLSPEC SDL_GpuBuffer *SDLCALL SDL_GpuCreateBuffer(
     SDL_GpuDevice *device,
-    SDL_GpuBufferUsageFlags usageFlags,
-    Uint32 sizeInBytes);
+    SDL_GpuBufferCreateInfo *bufferCreateInfo);
 
 /**
  * Creates a transfer buffer to be used when uploading to or downloading from graphics resources.
  *
  * \param device a GPU Context
- * \param usage whether the transfer buffer will be used for uploads or downloads
- * \param sizeInBytes the size of the transfer buffer
+ * \param transferBufferCreateInfo a struct describing the state of the transfer buffer to create
  * \returns a transfer buffer on success, or NULL on failure
  *
  * \since This function is available since SDL 3.x.x
@@ -1014,8 +1055,7 @@ extern SDL_DECLSPEC SDL_GpuBuffer *SDLCALL SDL_GpuCreateBuffer(
  */
 extern SDL_DECLSPEC SDL_GpuTransferBuffer *SDLCALL SDL_GpuCreateTransferBuffer(
     SDL_GpuDevice *device,
-    SDL_GpuTransferBufferUsage usage,
-    Uint32 sizeInBytes);
+    SDL_GpuTransferBufferCreateInfo *transferBufferCreateInfo);
 
 /* Debug Naming */
 

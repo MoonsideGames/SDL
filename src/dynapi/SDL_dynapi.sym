@@ -1061,6 +1061,7 @@ SDL3_0.0.0 {
     SDL_wcsstr;
     SDL_wcstol;
     SDL_GpuCreateDevice;
+    SDL_GpuCreateDeviceWithProperties;
     SDL_GpuDestroyDevice;
     SDL_GpuGetDriver;
     SDL_GpuCreateComputePipeline;
