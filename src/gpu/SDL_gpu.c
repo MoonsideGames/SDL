@@ -122,8 +122,8 @@ static const SDL_GpuBootstrap *backends[] = {
 
 SDL_GpuGraphicsPipeline *SDL_Gpu_FetchBlitPipeline(
     SDL_GpuDevice *device,
-    TextureCommonHeader *srcHeader,
-    TextureCommonHeader *dstHeader,
+    int sourceTextureType, /* FIXME: Replace with an actual texture type! */
+    SDL_GpuTextureFormat destinationFormat,
     SDL_GpuShader *blitVertexShader,
     SDL_GpuShader *blitFrom2DShader,
     SDL_GpuShader *blitFrom2DArrayShader,
@@ -132,25 +132,17 @@ SDL_GpuGraphicsPipeline *SDL_Gpu_FetchBlitPipeline(
     Uint32 *blitPipelineCount,
     Uint32 *blitPipelineCapacity)
 {
-    int type = 0; /* FIXME: Use an actual texture type! */
-    SDL_GpuTextureFormat destinationFormat = dstHeader->info.format;
     SDL_GpuGraphicsPipelineCreateInfo blitPipelineCreateInfo;
     SDL_GpuColorAttachmentDescription colorAttachmentDesc;
     SDL_GpuGraphicsPipeline *pipeline;
 
-    if (srcHeader->info.isCube) {
-        type = 1;
-    } else if (srcHeader->info.layerCount > 1) {
-        type = 2;
-    }
-
     if (blitPipelineCount == NULL) {
         /* use pre-created, format-agnostic pipelines */
-        return (*blitPipelines)[type].pipeline;
+        return (*blitPipelines)[sourceTextureType].pipeline;
     }
 
     for (Uint32 i = 0; i < *blitPipelineCount; i += 1) {
-        if ((*blitPipelines)[i].type == type && (*blitPipelines)[i].format == destinationFormat) {
+        if ((*blitPipelines)[i].type == sourceTextureType && (*blitPipelines)[i].format == destinationFormat) {
             return (*blitPipelines)[i].pipeline;
         }
     }
@@ -168,9 +160,9 @@ SDL_GpuGraphicsPipeline *SDL_Gpu_FetchBlitPipeline(
     blitPipelineCreateInfo.attachmentInfo.hasDepthStencilAttachment = SDL_FALSE;
 
     blitPipelineCreateInfo.vertexShader = blitVertexShader;
-    if (type == 1) {
+    if (sourceTextureType == 1) {
         blitPipelineCreateInfo.fragmentShader = blitFromCubeShader;
-    } else if (type == 2) {
+    } else if (sourceTextureType == 2) {
         blitPipelineCreateInfo.fragmentShader = blitFrom2DArrayShader;
     } else {
         blitPipelineCreateInfo.fragmentShader = blitFrom2DShader;
@@ -204,7 +196,7 @@ SDL_GpuGraphicsPipeline *SDL_Gpu_FetchBlitPipeline(
         *blitPipelineCapacity * 2)
 
     (*blitPipelines)[*blitPipelineCount].pipeline = pipeline;
-    (*blitPipelines)[*blitPipelineCount].type = type;
+    (*blitPipelines)[*blitPipelineCount].type = sourceTextureType;
     (*blitPipelines)[*blitPipelineCount].format = destinationFormat;
     *blitPipelineCount += 1;
 
@@ -229,6 +221,7 @@ void SDL_Gpu_BlitCommon(
 {
     CommandBufferCommonHeader *cmdbufHeader = (CommandBufferCommonHeader *)commandBuffer;
     SDL_GpuRenderPass *renderPass;
+    int type = 0; /* FIXME: Remove this! */
     TextureCommonHeader *srcHeader = (TextureCommonHeader *)source->textureSlice.texture;
     TextureCommonHeader *dstHeader = (TextureCommonHeader *)destination->textureSlice.texture;
     SDL_GpuGraphicsPipeline *blitPipeline;
@@ -237,10 +230,16 @@ void SDL_Gpu_BlitCommon(
     SDL_GpuTextureSamplerBinding textureSamplerBinding;
     BlitFragmentUniforms blitFragmentUniforms;
 
+    if (srcHeader->info.isCube) {
+        type = 1;
+    } else if (srcHeader->info.layerCount > 1) {
+        type = 2;
+    }
+
     blitPipeline = SDL_Gpu_FetchBlitPipeline(
         cmdbufHeader->device,
-        srcHeader,
-        dstHeader,
+        type,
+        dstHeader->info.format,
         blitVertexShader,
         blitFrom2DShader,
         blitFrom2DArrayShader,

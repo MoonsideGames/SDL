@@ -476,6 +476,9 @@ typedef struct D3D12PresentData
 
 struct D3D12Renderer
 {
+    /* Reference to the parent device */
+    SDL_GpuDevice *sdlGpuDevice;
+
     void *dxgidebug_dll;
     IDXGIDebug *dxgiDebug;
     IDXGIInfoQueue *dxgiInfoQueue;
@@ -5995,12 +5998,28 @@ static SDL_bool D3D12_INTERNAL_CreateSwapchain(
         /* We're done with the parent now */
         IDXGIFactory1_Release(pParent);
     }
+
     /* Initialize the swapchain data */
     windowData->swapchain = swapchain3;
     windowData->presentMode = presentMode;
     windowData->swapchainComposition = swapchainComposition;
     windowData->swapchainColorSpace = SwapchainCompositionToColorSpace[swapchainComposition];
     windowData->frameCounter = 0;
+
+    /* Precache blit pipelines for the swapchain format */
+    for (Uint32 i = 0; i < 3; i += 1) {
+        SDL_Gpu_FetchBlitPipeline(
+            renderer->sdlGpuDevice,
+            i, /* FIXME */
+            SwapchainCompositionToSDLTextureFormat[swapchainComposition],
+            renderer->blitVertexShader,
+            renderer->blitFrom2DShader,
+            renderer->blitFrom2DArrayShader,
+            renderer->blitFromCubeShader,
+            &renderer->blitPipelines,
+            &renderer->blitPipelineCount,
+            &renderer->blitPipelineCapacity);
+    }
 
     /* If a you are using a FLIP model format you can't create the swapchain as DXGI_FORMAT_B8G8R8A8_UNORM_SRGB.
      * You have to create the swapchain as DXGI_FORMAT_B8G8R8A8_UNORM and then set the render target view's format to DXGI_FORMAT_B8G8R8A8_UNORM_SRGB
@@ -7753,6 +7772,7 @@ static SDL_GpuDevice *D3D12_CreateDevice(SDL_bool debugMode, SDL_bool preferLowP
     ASSIGN_DRIVER(D3D12)
     result->driverData = (SDL_GpuRenderer *)renderer;
     result->debugMode = debugMode;
+    renderer->sdlGpuDevice = result;
 
     return result;
 }

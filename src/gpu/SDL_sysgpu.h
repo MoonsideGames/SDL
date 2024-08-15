@@ -227,8 +227,8 @@ static inline Sint32 BytesPerImage(
 
 SDL_GpuGraphicsPipeline *SDL_Gpu_FetchBlitPipeline(
     SDL_GpuDevice *device,
-    TextureCommonHeader *srcHeader,
-    TextureCommonHeader *dstHeader,
+    int sourceTextureType,
+    SDL_GpuTextureFormat destinationFormat,
     SDL_GpuShader *blitVertexShader,
     SDL_GpuShader *blitFrom2DShader,
     SDL_GpuShader *blitFrom2DArrayShader,
