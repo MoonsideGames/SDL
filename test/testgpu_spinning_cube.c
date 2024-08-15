@@ -261,6 +261,7 @@ CreateDepthTexture(Uint32 drawablew, Uint32 drawableh)
     depthtex_createinfo.levelCount = 1;
     depthtex_createinfo.sampleCount = render_state.sample_count;
     depthtex_createinfo.usageFlags = SDL_GPU_TEXTUREUSAGE_DEPTH_STENCIL_TARGET_BIT;
+    depthtex_createinfo.props = 0;
 
     result = SDL_GpuCreateTexture(gpu_device, &depthtex_createinfo);
     CHECK_CREATE(result, "Depth Texture")
@@ -287,6 +288,7 @@ CreateMSAATexture(Uint32 drawablew, Uint32 drawableh)
     msaatex_createinfo.levelCount = 1;
     msaatex_createinfo.sampleCount = SDL_GPU_SAMPLECOUNT_4;
     msaatex_createinfo.usageFlags = SDL_GPU_TEXTUREUSAGE_COLOR_TARGET_BIT | SDL_GPU_TEXTUREUSAGE_SAMPLER_BIT;
+    msaatex_createinfo.props = 0;
 
     result = SDL_GpuCreateTexture(gpu_device, &msaatex_createinfo);
     CHECK_CREATE(result, "MSAA Texture")
@@ -419,6 +421,7 @@ load_shader(SDL_bool is_vertex)
     createinfo.storageBufferCount = 0;
     createinfo.storageTextureCount = 0;
     createinfo.uniformBufferCount = is_vertex ? 1 : 0;
+    createinfo.props = 0;
 
 #if !FORCE_SPIRV_CROSS
     SDL_GpuDriver backend = SDL_GpuGetDriver(gpu_device);
@@ -456,6 +459,8 @@ init_render_state(int msaa)
     SDL_GpuTransferBufferLocation buf_location;
     SDL_GpuBufferRegion dst_region;
     SDL_GpuCopyPass *copy_pass;
+    SDL_GpuBufferCreateInfo buffer_desc;
+    SDL_GpuTransferBufferCreateInfo transfer_buffer_desc;
     SDL_GpuGraphicsPipelineCreateInfo pipelinedesc;
     SDL_GpuColorAttachmentDescription color_attachment_desc;
     Uint32 drawablew, drawableh;
@@ -463,11 +468,9 @@ init_render_state(int msaa)
     SDL_GpuVertexBinding vertex_binding;
     SDL_GpuShader *vertex_shader;
     SDL_GpuShader *fragment_shader;
-    SDL_PropertiesID props;
     int i;
 
-    props = SDL_CreateProperties(); /* TODO: Arg to allow forcing a backend */
-    gpu_device = SDL_GpuCreateDevice(1, 0, props);
+    gpu_device = SDL_GpuCreateDevice(1, 0, NULL);
     CHECK_CREATE(gpu_device, "GPU device");
 
     /* Claim the windows */
@@ -490,19 +493,23 @@ init_render_state(int msaa)
 
     /* Create buffers */
 
+    buffer_desc.usageFlags = SDL_GPU_BUFFERUSAGE_VERTEX_BIT;
+    buffer_desc.sizeInBytes = sizeof(vertex_data);
+    buffer_desc.props = 0;
     render_state.buf_vertex = SDL_GpuCreateBuffer(
         gpu_device,
-        SDL_GPU_BUFFERUSAGE_VERTEX_BIT,
-        sizeof(vertex_data)
+        &buffer_desc
     );
     CHECK_CREATE(render_state.buf_vertex, "Static vertex buffer")
 
     SDL_GpuSetBufferName(gpu_device, render_state.buf_vertex, "космонавт");
 
+    transfer_buffer_desc.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
+    transfer_buffer_desc.sizeInBytes = sizeof(vertex_data);
+    transfer_buffer_desc.props = 0;
     buf_transfer = SDL_GpuCreateTransferBuffer(
         gpu_device,
-        SDL_TRUE,
-        sizeof(vertex_data)
+        &transfer_buffer_desc
     );
     CHECK_CREATE(buf_transfer, "Vertex transfer buffer")
 
@@ -582,6 +589,8 @@ init_render_state(int msaa)
     pipelinedesc.vertexInputState.vertexBindings = &vertex_binding;
     pipelinedesc.vertexInputState.vertexAttributeCount = 2;
     pipelinedesc.vertexInputState.vertexAttributes = (SDL_GpuVertexAttribute*) &vertex_attributes;
+
+    pipelinedesc.props = 0;
 
     render_state.pipeline = SDL_GpuCreateGraphicsPipeline(gpu_device, &pipelinedesc);
     CHECK_CREATE(render_state.pipeline, "Render Pipeline")
