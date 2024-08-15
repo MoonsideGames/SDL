@@ -1435,6 +1435,19 @@ static void D3D12_INTERNAL_TextureSubresourceTransitionFromDefaultUsage(
         textureSubresource);
 }
 
+static void D3D12_INTERNAL_TextureTransitionFromDefaultUsage(
+    D3D12CommandBuffer *commandBuffer,
+    D3D12_RESOURCE_STATES destinationUsageMode,
+    D3D12Texture *texture)
+{
+    for (Uint32 i = 0; i < texture->subresourceCount; i += 1) {
+        D3D12_INTERNAL_TextureSubresourceTransitionFromDefaultUsage(
+            commandBuffer,
+            destinationUsageMode,
+            &texture->subresources[i]);
+    }
+}
+
 static void D3D12_INTERNAL_TextureSubresourceTransitionToDefaultUsage(
     D3D12CommandBuffer *commandBuffer,
     D3D12_RESOURCE_STATES sourceUsageMode,
@@ -1445,6 +1458,19 @@ static void D3D12_INTERNAL_TextureSubresourceTransitionToDefaultUsage(
         sourceUsageMode,
         D3D12_INTERNAL_DefaultTextureResourceState(textureSubresource->parent->container->header.info.usageFlags),
         textureSubresource);
+}
+
+static void D3D12_INTERNAL_TextureTransitionToDefaultUsage(
+    D3D12CommandBuffer *commandBuffer,
+    D3D12_RESOURCE_STATES sourceUsageMode,
+    D3D12Texture *texture)
+{
+    for (Uint32 i = 0; i < texture->subresourceCount; i += 1) {
+        D3D12_INTERNAL_TextureSubresourceTransitionToDefaultUsage(
+            commandBuffer,
+            sourceUsageMode,
+            &texture->subresources[i]);
+    }
 }
 
 static D3D12_RESOURCE_STATES D3D12_INTERNAL_DefaultBufferResourceState(
@@ -2698,7 +2724,9 @@ static D3D12Texture *D3D12_INTERNAL_CreateTexture(
     texture->resource = handle;
 
     /* Create the SRV if applicable */
-    if (textureCreateInfo->usageFlags & SDL_GPU_TEXTUREUSAGE_SAMPLER_BIT) {
+    if ((textureCreateInfo->usageFlags & SDL_GPU_TEXTUREUSAGE_SAMPLER_BIT) ||
+        (textureCreateInfo->usageFlags & SDL_GPU_TEXTUREUSAGE_GRAPHICS_STORAGE_READ_BIT) ||
+        (textureCreateInfo->usageFlags & SDL_GPU_TEXTUREUSAGE_COMPUTE_STORAGE_READ_BIT)) {
         D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc;
 
         D3D12_INTERNAL_AssignCpuDescriptorHandle(
@@ -4780,35 +4808,30 @@ static void D3D12_BindComputePipeline(
 static void D3D12_BindComputeStorageTextures(
     SDL_GpuCommandBuffer *commandBuffer,
     Uint32 firstSlot,
-    SDL_GpuTextureSlice *storageTextureSlices,
+    SDL_GpuTexture **storageTextures,
     Uint32 bindingCount)
 {
     D3D12CommandBuffer *d3d12CommandBuffer = (D3D12CommandBuffer *)commandBuffer;
 
     for (Uint32 i = 0; i < bindingCount; i += 1) {
         if (d3d12CommandBuffer->computeReadOnlyStorageTextures[firstSlot + i] != NULL) {
-            D3D12_INTERNAL_TextureSubresourceTransitionFromDefaultUsage(
+            D3D12_INTERNAL_TextureTransitionToDefaultUsage(
                 d3d12CommandBuffer,
                 D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
                 d3d12CommandBuffer->computeReadOnlyStorageTextures[firstSlot + i]);
         }
 
-        D3D12TextureContainer *container = (D3D12TextureContainer *)storageTextureSlices[i].texture;
-        D3D12TextureSubresource *subresource = D3D12_INTERNAL_FetchTextureSubresource(
-            container,
-            storageTextureSlices[i].layerOrDepth,
-            storageTextureSlices[i].mipLevel);
+        D3D12TextureContainer *container = (D3D12TextureContainer *)storageTextures[i];
+        d3d12CommandBuffer->computeReadOnlyStorageTextures[firstSlot + i] = container->activeTexture;
 
-        d3d12CommandBuffer->computeReadOnlyStorageTextures[firstSlot + i] = subresource;
-
-        D3D12_INTERNAL_TextureSubresourceTransitionFromDefaultUsage(
+        D3D12_INTERNAL_TextureTransitionFromDefaultUsage(
             d3d12CommandBuffer,
             D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
-            subresource);
+            container->activeTexture);
 
-        D3D12_INTERNAL_TrackTextureSubresource(
+        D3D12_INTERNAL_TrackTexture(
             d3d12CommandBuffer,
-            subresource);
+            container->activeTexture);
     }
 
     d3d12CommandBuffer->needComputeReadOnlyStorageTextureBind = SDL_TRUE;
@@ -4991,7 +5014,7 @@ static void D3D12_EndComputePass(
 
     for (Uint32 i = 0; i < MAX_STORAGE_TEXTURES_PER_STAGE; i += 1) {
         if (d3d12CommandBuffer->computeReadOnlyStorageTextures[i]) {
-            D3D12_INTERNAL_TextureSubresourceTransitionToDefaultUsage(
+            D3D12_INTERNAL_TextureTransitionToDefaultUsage(
                 d3d12CommandBuffer,
                 D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
                 d3d12CommandBuffer->computeReadOnlyStorageTextures[i]);

@@ -1841,7 +1841,7 @@ static D3D11Texture *D3D11_INTERNAL_CreateTexture(
     SDL_GpuTextureCreateInfo *createInfo,
     D3D11_SUBRESOURCE_DATA *initialData)
 {
-    Uint8 isSampler, isColorTarget, isDepthStencil, isMultisample, isStaging, needSubresourceUAV;
+    Uint8 needsSRV, isColorTarget, isDepthStencil, isMultisample, isStaging, needSubresourceUAV;
     DXGI_FORMAT format;
     ID3D11Resource *textureHandle;
     ID3D11ShaderResourceView *srv = NULL;
@@ -1850,7 +1850,10 @@ static D3D11Texture *D3D11_INTERNAL_CreateTexture(
 
     isColorTarget = createInfo->usageFlags & SDL_GPU_TEXTUREUSAGE_COLOR_TARGET_BIT;
     isDepthStencil = createInfo->usageFlags & SDL_GPU_TEXTUREUSAGE_DEPTH_STENCIL_TARGET_BIT;
-    isSampler = createInfo->usageFlags & SDL_GPU_TEXTUREUSAGE_SAMPLER_BIT;
+    needsSRV =
+        (createInfo->usageFlags & SDL_GPU_TEXTUREUSAGE_SAMPLER_BIT) ||
+        (createInfo->usageFlags & SDL_GPU_TEXTUREUSAGE_GRAPHICS_STORAGE_READ_BIT) ||
+        (createInfo->usageFlags & SDL_GPU_TEXTUREUSAGE_COMPUTE_STORAGE_READ_BIT);
     needSubresourceUAV =
         (createInfo->usageFlags & SDL_GPU_TEXTUREUSAGE_COMPUTE_STORAGE_WRITE_BIT);
     isMultisample = createInfo->sampleCount > SDL_GPU_SAMPLECOUNT_1;
@@ -1865,7 +1868,7 @@ static D3D11Texture *D3D11_INTERNAL_CreateTexture(
         D3D11_TEXTURE2D_DESC desc2D;
 
         desc2D.BindFlags = 0;
-        if (isSampler) {
+        if (needsSRV) {
             desc2D.BindFlags |= D3D11_BIND_SHADER_RESOURCE;
         }
         if (needSubresourceUAV) {
@@ -1897,7 +1900,7 @@ static D3D11Texture *D3D11_INTERNAL_CreateTexture(
         ERROR_CHECK_RETURN("Could not create Texture2D", NULL);
 
         /* Create the SRV, if applicable */
-        if (isSampler) {
+        if (needsSRV) {
             D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc;
             srvDesc.Format = D3D11_INTERNAL_GetSampleableFormat(format);
 
@@ -1932,7 +1935,7 @@ static D3D11Texture *D3D11_INTERNAL_CreateTexture(
         D3D11_TEXTURE3D_DESC desc3D;
 
         desc3D.BindFlags = 0;
-        if (isSampler) {
+        if (needsSRV) {
             desc3D.BindFlags |= D3D11_BIND_SHADER_RESOURCE;
         }
         if (needSubresourceUAV) {
@@ -1959,7 +1962,7 @@ static D3D11Texture *D3D11_INTERNAL_CreateTexture(
         ERROR_CHECK_RETURN("Could not create Texture3D", NULL);
 
         /* Create the SRV, if applicable */
-        if (isSampler) {
+        if (needsSRV) {
             D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc;
             srvDesc.Format = format;
             srvDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE3D;
