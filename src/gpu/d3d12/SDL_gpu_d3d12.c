@@ -3737,9 +3737,6 @@ static void D3D12_BeginRenderPass(
         }
     }
 
-    /* Layout transitions */
-
-    d3d12CommandBuffer->colorAttachmentTextureSubresourceCount = 0;
     D3D12_CPU_DESCRIPTOR_HANDLE rtvs[MAX_COLOR_TARGET_BINDINGS];
 
     for (Uint32 i = 0; i < colorAttachmentCount; i += 1) {
@@ -3751,43 +3748,13 @@ static void D3D12_BeginRenderPass(
         }
 
         D3D12TextureContainer *container = (D3D12TextureContainer *)colorAttachmentInfos[i].texture;
-        D3D12TextureSubresource *subresource = D3D12_INTERNAL_FetchTextureSubresource(
-            container,
-            container->header.info.type == SDL_GPU_TEXTURETYPE_3D ? 0 : colorAttachmentInfos[i].layerOrDepthPlane,
-            colorAttachmentInfos[i].mipLevel);
-
-        SDL_bool subresourceMatch = SDL_FALSE;
-        for (Uint32 j = 0; j < d3d12CommandBuffer->colorAttachmentTextureSubresourceCount; j += 1) {
-            if (d3d12CommandBuffer->colorAttachmentTextureSubresources[j] == subresource) {
-                subresourceMatch = SDL_TRUE;
-                break;
-            }
-        }
-
-        if (subresourceMatch) {
-            continue;
-        }
-
-        subresource = D3D12_INTERNAL_PrepareTextureSubresourceForWrite(
+        D3D12TextureSubresource *subresource = D3D12_INTERNAL_PrepareTextureSubresourceForWrite(
             d3d12CommandBuffer,
             container,
             container->header.info.type == SDL_GPU_TEXTURETYPE_3D ? 0 : colorAttachmentInfos[i].layerOrDepthPlane,
             colorAttachmentInfos[i].mipLevel,
             cycle,
             D3D12_RESOURCE_STATE_RENDER_TARGET);
-
-        d3d12CommandBuffer->colorAttachmentTextureSubresources[d3d12CommandBuffer->colorAttachmentTextureSubresourceCount] = subresource;
-        d3d12CommandBuffer->colorAttachmentTextureSubresourceCount += 1;
-
-        D3D12_INTERNAL_TrackTexture(d3d12CommandBuffer, subresource->parent);
-    }
-
-    for (Uint32 i = 0; i < colorAttachmentCount; i += 1) {
-        D3D12TextureContainer *container = (D3D12TextureContainer *)colorAttachmentInfos[i].texture;
-        D3D12TextureSubresource *subresource = D3D12_INTERNAL_FetchTextureSubresource(
-            container,
-            container->header.info.type == SDL_GPU_TEXTURETYPE_3D ? 0 : colorAttachmentInfos[i].layerOrDepthPlane,
-            colorAttachmentInfos[i].mipLevel);
 
         Uint32 rtvIndex = container->header.info.type == SDL_GPU_TEXTURETYPE_3D ? colorAttachmentInfos[i].layerOrDepthPlane : 0;
         D3D12_CPU_DESCRIPTOR_HANDLE rtv =
@@ -3809,7 +3776,12 @@ static void D3D12_BeginRenderPass(
         }
 
         rtvs[i] = rtv;
+        d3d12CommandBuffer->colorAttachmentTextureSubresources[i] = subresource;
+
+        D3D12_INTERNAL_TrackTexture(d3d12CommandBuffer, subresource->parent);
     }
+
+    d3d12CommandBuffer->colorAttachmentTextureSubresourceCount = colorAttachmentCount;
 
     D3D12_CPU_DESCRIPTOR_HANDLE dsv;
     if (depthStencilAttachmentInfo != NULL) {

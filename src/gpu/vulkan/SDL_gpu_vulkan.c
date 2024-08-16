@@ -4444,7 +4444,6 @@ static SDL_bool VULKAN_INTERNAL_CreateSwapchain(
     VulkanSwapchainData *swapchainData;
     VkSwapchainCreateInfoKHR swapchainCreateInfo;
     VkImage *swapchainImages;
-    VkImageViewCreateInfo imageViewCreateInfo;
     VkSemaphoreCreateInfo semaphoreCreateInfo;
     SwapchainSupportDetails swapchainSupportDetails;
     SDL_bool hasValidSwapchainComposition, hasValidPresentMode;
@@ -4691,18 +4690,6 @@ static SDL_bool VULKAN_INTERNAL_CreateSwapchain(
         &swapchainData->imageCount,
         swapchainImages);
 
-    imageViewCreateInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-    imageViewCreateInfo.pNext = NULL;
-    imageViewCreateInfo.flags = 0;
-    imageViewCreateInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-    imageViewCreateInfo.format = swapchainData->format;
-    imageViewCreateInfo.components = swapchainData->swapchainSwizzle;
-    imageViewCreateInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-    imageViewCreateInfo.subresourceRange.baseMipLevel = 0;
-    imageViewCreateInfo.subresourceRange.levelCount = 1;
-    imageViewCreateInfo.subresourceRange.baseArrayLayer = 0;
-    imageViewCreateInfo.subresourceRange.layerCount = 1;
-
     for (i = 0; i < swapchainData->imageCount; i += 1) {
 
         /* Initialize dummy container */
@@ -4726,8 +4713,6 @@ static SDL_bool VULKAN_INTERNAL_CreateSwapchain(
         swapchainData->textureContainers[i].activeTextureHandle->vulkanTexture = SDL_malloc(sizeof(VulkanTexture));
 
         swapchainData->textureContainers[i].activeTextureHandle->vulkanTexture->image = swapchainImages[i];
-
-        imageViewCreateInfo.image = swapchainImages[i];
 
         /* Swapchain memory is managed by the driver */
         swapchainData->textureContainers[i].activeTextureHandle->vulkanTexture->usedRegion = NULL;
@@ -7893,10 +7878,6 @@ static void VULKAN_BeginRenderPass(
         }
     }
 
-    /* Layout transitions */
-    /* We have to scan to see which barriers we actually need because depth slices aren't separate subresources */
-    vulkanCommandBuffer->colorAttachmentSubresourceCount = 0;
-
     for (i = 0; i < colorAttachmentCount; i += 1) {
         SDL_bool cycle;
         if (colorAttachmentInfos[i].loadOp == SDL_GPU_LOADOP_LOAD) {
@@ -7906,24 +7887,7 @@ static void VULKAN_BeginRenderPass(
         }
 
         VulkanTextureContainer *textureContainer = (VulkanTextureContainer *)colorAttachmentInfos[i].texture;
-        VulkanTextureSubresource *subresource = VULKAN_INTERNAL_FetchTextureSubresource(
-            textureContainer,
-            textureContainer->header.info.type == SDL_GPU_TEXTURETYPE_3D ? 0 : colorAttachmentInfos[i].layerOrDepthPlane,
-            colorAttachmentInfos[i].mipLevel);
-
-        SDL_bool subresourceMatch = SDL_FALSE;
-        for (Uint32 j = 0; j < vulkanCommandBuffer->colorAttachmentSubresourceCount; j += 1) {
-            if (vulkanCommandBuffer->colorAttachmentSubresources[j] == subresource) {
-                subresourceMatch = SDL_TRUE;
-                break;
-            }
-        }
-
-        if (subresourceMatch) {
-            continue;
-        }
-
-        subresource = VULKAN_INTERNAL_PrepareTextureSubresourceForWrite(
+        VulkanTextureSubresource *subresource = VULKAN_INTERNAL_PrepareTextureSubresourceForWrite(
             renderer,
             vulkanCommandBuffer,
             textureContainer,
@@ -7931,9 +7895,6 @@ static void VULKAN_BeginRenderPass(
             colorAttachmentInfos[i].mipLevel,
             cycle,
             VULKAN_TEXTURE_USAGE_MODE_COLOR_ATTACHMENT);
-
-        vulkanCommandBuffer->colorAttachmentSubresources[vulkanCommandBuffer->colorAttachmentSubresourceCount] = subresource;
-        vulkanCommandBuffer->colorAttachmentSubresourceCount += 1;
 
         if (subresource->msaaTexHandle != NULL) {
             /* Transition the multisample attachment */
@@ -7947,9 +7908,13 @@ static void VULKAN_BeginRenderPass(
             multisampleAttachmentCount += 1;
         }
 
+        vulkanCommandBuffer->colorAttachmentSubresources[i] = subresource;
+
         VULKAN_INTERNAL_TrackTexture(vulkanCommandBuffer, subresource->parent);
         /* TODO: do we need to track the msaa texture? or is it implicitly only used when the regular texture is used? */
     }
+
+    vulkanCommandBuffer->colorAttachmentSubresourceCount = colorAttachmentCount;
 
     if (depthStencilAttachmentInfo != NULL) {
         SDL_bool cycle;
