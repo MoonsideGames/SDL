@@ -3407,7 +3407,7 @@ static void D3D11_BeginRenderPass(
             rtvs[i] = subresource->colorTargetViews[rtvIndex];
         }
 
-        if (colorAttachmentInfos[i].loadOp = SDL_GPU_LOADOP_CLEAR) {
+        if (colorAttachmentInfos[i].loadOp == SDL_GPU_LOADOP_CLEAR) {
             float clearColor[] = {
                 colorAttachmentInfos[i].clearColor.r,
                 colorAttachmentInfos[i].clearColor.g,
