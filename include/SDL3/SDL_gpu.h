@@ -933,7 +933,9 @@ extern SDL_DECLSPEC SDL_GpuSampler *SDLCALL SDL_GpuCreateSampler(
 /**
  * Creates a shader to be used when creating a graphics pipeline.
  *
- * Shader resource bindings must be authored to follow a particular order.
+ * Shader resource bindings must be authored to follow a particular order
+ * depending on the shader format.
+ *
  * For SPIR-V shaders, use the following resource sets:
  *  For vertex shaders:
  *   0: Sampled textures, followed by storage textures, followed by storage buffers
@@ -942,13 +944,23 @@ extern SDL_DECLSPEC SDL_GpuSampler *SDLCALL SDL_GpuCreateSampler(
  *   2: Sampled textures, followed by storage textures, followed by storage buffers
  *   3: Uniform buffers
  *
- * For HLSL/DXBC/DXIL, use the following order:
+ * For DXBC Shader Model 5.0 shaders, use the following register order:
  *  For t registers:
  *   Sampled textures, followed by storage textures, followed by storage buffers
  *  For s registers:
  *   Samplers with indices corresponding to the sampled textures
  *  For b registers:
  *   Uniform buffers
+ *
+ * For DXBC/DXIL Shader Model 5.1+ shaders, use the following register order:
+ *  For vertex shaders:
+ *   (t[n], space0): Sampled textures, followed by storage textures, followed by storage buffers
+ *   (s[n], space0): Samplers with indices corresponding to the sampled textures
+ *   (b[n], space1): Uniform buffers
+ *  For pixel shaders:
+ *   (t[n], space2): Sampled textures, followed by storage textures, followed by storage buffers
+ *   (s[n], space2): Samplers with indices corresponding to the sampled textures
+ *   (b[n], space3): Uniform buffers
  *
  * For MSL/metallib, use the following order:
  *  For [[texture]]:
