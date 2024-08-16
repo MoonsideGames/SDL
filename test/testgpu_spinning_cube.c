@@ -396,13 +396,13 @@ Render(SDL_Window *window, const int windownum)
     /* Blit MSAA to swapchain, if needed */
     if (render_state.sample_count > SDL_GPU_SAMPLECOUNT_1) {
         SDL_zero(src_region);
-        src_region.textureSlice.texture = winstate->tex_msaa;
+        src_region.texture = winstate->tex_msaa;
         src_region.w = drawablew;
         src_region.h = drawableh;
         src_region.d = 1;
 
         dst_region = src_region;
-        dst_region.textureSlice.texture = swapchain;
+        dst_region.texture = swapchain;
 
         SDL_GpuBlit(cmd, &src_region, &dst_region, SDL_GPU_FILTER_LINEAR, SDL_FALSE);
     }
