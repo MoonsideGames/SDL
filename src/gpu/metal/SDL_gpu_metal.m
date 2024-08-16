@@ -2107,7 +2107,7 @@ static void METAL_BeginRenderPass(
         MTLScissorRect scissorRect;
 
         for (Uint32 i = 0; i < colorAttachmentCount; i += 1) {
-            MetalTextureContainer *container = (MetalTextureContainer *)colorAttachmentInfos[i].textureSlice.texture;
+            MetalTextureContainer *container = (MetalTextureContainer *)colorAttachmentInfos[i].texture;
             MetalTexture *texture = METAL_INTERNAL_PrepareTextureForWrite(
                 renderer,
                 container,
@@ -2119,11 +2119,12 @@ static void METAL_BeginRenderPass(
             } else {
                 passDescriptor.colorAttachments[i].texture = texture->handle;
             }
-            passDescriptor.colorAttachments[i].level = colorAttachmentInfos[i].textureSlice.mipLevel;
+            passDescriptor.colorAttachments[i].level = colorAttachmentInfos[i].mipLevel;
             if (container->header.info.type == SDL_GPU_TEXTURETYPE_3D) {
-                passDescriptor.colorAttachments[i].depthPlane = colorAttachmentInfos[i].textureSlice.depth;
+                passDescriptor.colorAttachments[i].depthPlane = colorAttachmentInfos[i].layerOrDepthPlane;
+            } else {
+                passDescriptor.colorAttachments[i].slice = colorAttachmentInfos[i].layerOrDepthPlane;
             }
-            passDescriptor.colorAttachments[i].slice = colorAttachmentInfos[i].textureSlice.layer;
             passDescriptor.colorAttachments[i].clearColor = MTLClearColorMake(
                 colorAttachmentInfos[i].clearColor.r,
                 colorAttachmentInfos[i].clearColor.g,
@@ -2138,7 +2139,7 @@ static void METAL_BeginRenderPass(
         }
 
         if (depthStencilAttachmentInfo != NULL) {
-            MetalTextureContainer *container = (MetalTextureContainer *)depthStencilAttachmentInfo->textureSlice.texture;
+            MetalTextureContainer *container = (MetalTextureContainer *)depthStencilAttachmentInfo->texture;
             MetalTexture *texture = METAL_INTERNAL_PrepareTextureForWrite(
                 renderer,
                 container,
@@ -2150,8 +2151,6 @@ static void METAL_BeginRenderPass(
             } else {
                 passDescriptor.depthAttachment.texture = texture->handle;
             }
-            passDescriptor.depthAttachment.level = depthStencilAttachmentInfo->textureSlice.mipLevel;
-            passDescriptor.depthAttachment.slice = depthStencilAttachmentInfo->textureSlice.layer;
             passDescriptor.depthAttachment.loadAction = SDLToMetal_LoadOp[depthStencilAttachmentInfo->loadOp];
             passDescriptor.depthAttachment.storeAction = SDLToMetal_StoreOp(
                 depthStencilAttachmentInfo->storeOp,
@@ -2165,8 +2164,6 @@ static void METAL_BeginRenderPass(
                 } else {
                     passDescriptor.stencilAttachment.texture = texture->handle;
                 }
-                passDescriptor.stencilAttachment.level = depthStencilAttachmentInfo->textureSlice.mipLevel;
-                passDescriptor.stencilAttachment.slice = depthStencilAttachmentInfo->textureSlice.layer;
                 passDescriptor.stencilAttachment.loadAction = SDLToMetal_LoadOp[depthStencilAttachmentInfo->loadOp];
                 passDescriptor.stencilAttachment.storeAction = SDLToMetal_StoreOp(
                     depthStencilAttachmentInfo->storeOp,
@@ -2181,9 +2178,9 @@ static void METAL_BeginRenderPass(
 
         /* The viewport cannot be larger than the smallest attachment. */
         for (Uint32 i = 0; i < colorAttachmentCount; i += 1) {
-            MetalTextureContainer *container = (MetalTextureContainer *)colorAttachmentInfos[i].textureSlice.texture;
-            Uint32 w = container->header.info.width >> colorAttachmentInfos[i].textureSlice.mipLevel;
-            Uint32 h = container->header.info.height >> colorAttachmentInfos[i].textureSlice.mipLevel;
+            MetalTextureContainer *container = (MetalTextureContainer *)colorAttachmentInfos[i].texture;
+            Uint32 w = container->header.info.width >> colorAttachmentInfos[i].mipLevel;
+            Uint32 h = container->header.info.height >> colorAttachmentInfos[i].mipLevel;
 
             if (w < vpWidth) {
                 vpWidth = w;
@@ -2195,9 +2192,9 @@ static void METAL_BeginRenderPass(
         }
 
         if (depthStencilAttachmentInfo != NULL) {
-            MetalTextureContainer *container = (MetalTextureContainer *)depthStencilAttachmentInfo->textureSlice.texture;
-            Uint32 w = container->header.info.width >> depthStencilAttachmentInfo->textureSlice.mipLevel;
-            Uint32 h = container->header.info.height >> depthStencilAttachmentInfo->textureSlice.mipLevel;
+            MetalTextureContainer *container = (MetalTextureContainer *)depthStencilAttachmentInfo->texture;
+            Uint32 w = container->header.info.width;
+            Uint32 h = container->header.info.height;
 
             if (w < vpWidth) {
                 vpWidth = w;
@@ -2992,9 +2989,9 @@ static void METAL_Blit(
     }
 
     colorAttachmentInfo.storeOp = SDL_GPU_STOREOP_STORE;
-    colorAttachmentInfo.textureSlice.texture = destination->texture;
-    colorAttachmentInfo.textureSlice.layer = destination->layer;
-    colorAttachmentInfo.textureSlice.mipLevel = destination->mipLevel;
+    colorAttachmentInfo.texture = destination->texture;
+    colorAttachmentInfo.layerOrDepthPlane = destination->layer;
+    colorAttachmentInfo.mipLevel = destination->mipLevel;
     colorAttachmentInfo.cycle = cycle;
 
     METAL_BeginRenderPass(
@@ -3048,7 +3045,7 @@ static void METAL_BeginComputePass(
         metalCommandBuffer->computeEncoder = [metalCommandBuffer->handle computeCommandEncoder];
 
         for (Uint32 i = 0; i < storageTextureBindingCount; i += 1) {
-            textureContainer = (MetalTextureContainer *)storageTextureBindings[i].textureSlice.texture;
+            textureContainer = (MetalTextureContainer *)storageTextureBindings[i].texture;
 
             texture = METAL_INTERNAL_PrepareTextureForWrite(
                 metalCommandBuffer->renderer,
@@ -3059,8 +3056,8 @@ static void METAL_BeginComputePass(
 
             textureView = [texture->handle newTextureViewWithPixelFormat:SDLToMetal_SurfaceFormat[textureContainer->header.info.format]
                                                              textureType:SDLToMetal_TextureType[textureContainer->header.info.type]
-                                                                  levels:NSMakeRange(storageTextureBindings[i].textureSlice.mipLevel, 1)
-                                                                  slices:NSMakeRange(storageTextureBindings[i].textureSlice.layer, 1)];
+                                                                  levels:NSMakeRange(storageTextureBindings[i].mipLevel, 1)
+                                                                  slices:NSMakeRange(storageTextureBindings[i].layer, 1)];
 
             metalCommandBuffer->computeReadWriteTextures[i] = textureView;
             metalCommandBuffer->needComputeTextureBind = SDL_TRUE;
