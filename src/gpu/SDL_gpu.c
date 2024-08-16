@@ -120,14 +120,19 @@ static const SDL_GpuBootstrap *backends[] = {
 
 /* Driver Functions */
 
-static SDL_GpuDriver SDL_GpuSelectBackend(SDL_VideoDevice *_this, const char *gpudriver)
+static SDL_GpuDriver SDL_GpuSelectBackend(
+    SDL_VideoDevice *_this,
+    const char *gpudriver,
+    SDL_GpuShaderFormat formatFlags)
 {
     Uint32 i;
 
     /* Environment/Properties override... */
     if (gpudriver != NULL) {
         for (i = 0; backends[i]; i += 1) {
-            if (SDL_strcasecmp(gpudriver, backends[i]->Name) == 0 && backends[i]->PrepareDriver(_this)) {
+            if (SDL_strcasecmp(gpudriver, backends[i]->Name) == 0
+             && (backends[i]->shaderFormats & formatFlags)
+             && backends[i]->PrepareDriver(_this)) {
                 return backends[i]->backendflag;
             }
         }
@@ -146,12 +151,46 @@ static SDL_GpuDriver SDL_GpuSelectBackend(SDL_VideoDevice *_this, const char *gp
     return SDL_GPU_DRIVER_INVALID;
 }
 
-static SDL_GpuDevice *SDL_GpuCreateDeviceCommon(
+SDL_GpuDevice *SDL_GpuCreateDevice(
+    SDL_GpuShaderFormat formatFlags,
     SDL_bool debugMode,
     SDL_bool preferLowPower,
-    const char *name,
-    SDL_PropertiesID props)
+    const char *name)
 {
+    SDL_GpuDevice *result;
+    SDL_PropertiesID props = SDL_CreateProperties();
+    if (formatFlags & SDL_GPU_SHADERFORMAT_SECRET) {
+        SDL_SetBooleanProperty(props, SDL_PROP_GPU_CREATEDEVICE_SHADERS_SECRET_BOOL, SDL_TRUE);
+    }
+    if (formatFlags & SDL_GPU_SHADERFORMAT_SPIRV) {
+        SDL_SetBooleanProperty(props, SDL_PROP_GPU_CREATEDEVICE_SHADERS_SPIRV_BOOL, SDL_TRUE);
+    }
+    if (formatFlags & SDL_GPU_SHADERFORMAT_DXBC) {
+        SDL_SetBooleanProperty(props, SDL_PROP_GPU_CREATEDEVICE_SHADERS_DXBC_BOOL, SDL_TRUE);
+    }
+    if (formatFlags & SDL_GPU_SHADERFORMAT_DXIL) {
+        SDL_SetBooleanProperty(props, SDL_PROP_GPU_CREATEDEVICE_SHADERS_DXIL_BOOL, SDL_TRUE);
+    }
+    if (formatFlags & SDL_GPU_SHADERFORMAT_MSL) {
+        SDL_SetBooleanProperty(props, SDL_PROP_GPU_CREATEDEVICE_SHADERS_MSL_BOOL, SDL_TRUE);
+    }
+    if (formatFlags & SDL_GPU_SHADERFORMAT_METALLIB) {
+        SDL_SetBooleanProperty(props, SDL_PROP_GPU_CREATEDEVICE_SHADERS_METALLIB_BOOL, SDL_TRUE);
+    }
+    SDL_SetBooleanProperty(props, SDL_PROP_GPU_CREATEDEVICE_DEBUGMODE_BOOL, debugMode);
+    SDL_SetBooleanProperty(props, SDL_PROP_GPU_CREATEDEVICE_PREFERLOWPOWER_BOOL, preferLowPower);
+    SDL_SetStringProperty(props, SDL_PROP_GPU_CREATEDEVICE_NAME_STRING, name);
+    result = SDL_GpuCreateDeviceWithProperties(props);
+    SDL_DestroyProperties(props);
+    return result;
+}
+
+SDL_GpuDevice *SDL_GpuCreateDeviceWithProperties(SDL_PropertiesID props)
+{
+    SDL_GpuShaderFormat formatFlags = 0;
+    SDL_bool debugMode;
+    SDL_bool preferLowPower;
+
     int i;
     const char *gpudriver;
     SDL_GpuDevice *result = NULL;
@@ -163,12 +202,34 @@ static SDL_GpuDevice *SDL_GpuCreateDeviceCommon(
         return NULL;
     }
 
-    gpudriver = SDL_GetHint(SDL_HINT_GPU_DRIVER);
-    if (gpudriver == NULL) {
-        gpudriver = name;
+    if (SDL_GetBooleanProperty(props, SDL_PROP_GPU_CREATEDEVICE_SHADERS_SECRET_BOOL, SDL_FALSE)) {
+        formatFlags |= SDL_GPU_SHADERFORMAT_SECRET;
+    }
+    if (SDL_GetBooleanProperty(props, SDL_PROP_GPU_CREATEDEVICE_SHADERS_SPIRV_BOOL, SDL_FALSE)) {
+        formatFlags |= SDL_GPU_SHADERFORMAT_SPIRV;
+    }
+    if (SDL_GetBooleanProperty(props, SDL_PROP_GPU_CREATEDEVICE_SHADERS_DXBC_BOOL, SDL_FALSE)) {
+        formatFlags |= SDL_GPU_SHADERFORMAT_DXBC;
+    }
+    if (SDL_GetBooleanProperty(props, SDL_PROP_GPU_CREATEDEVICE_SHADERS_DXIL_BOOL, SDL_FALSE)) {
+        formatFlags |= SDL_GPU_SHADERFORMAT_DXIL;
+    }
+    if (SDL_GetBooleanProperty(props, SDL_PROP_GPU_CREATEDEVICE_SHADERS_MSL_BOOL, SDL_FALSE)) {
+        formatFlags |= SDL_GPU_SHADERFORMAT_MSL;
+    }
+    if (SDL_GetBooleanProperty(props, SDL_PROP_GPU_CREATEDEVICE_SHADERS_METALLIB_BOOL, SDL_FALSE)) {
+        formatFlags |= SDL_GPU_SHADERFORMAT_METALLIB;
     }
 
-    selectedBackend = SDL_GpuSelectBackend(_this, gpudriver);
+    debugMode = SDL_GetBooleanProperty(props, SDL_PROP_GPU_CREATEDEVICE_DEBUGMODE_BOOL, SDL_TRUE);
+    preferLowPower = SDL_GetBooleanProperty(props, SDL_PROP_GPU_CREATEDEVICE_PREFERLOWPOWER_BOOL, SDL_TRUE);
+
+    gpudriver = SDL_GetHint(SDL_HINT_GPU_DRIVER);
+    if (gpudriver == NULL) {
+        gpudriver = SDL_GetStringProperty(props, SDL_PROP_GPU_CREATEDEVICE_NAME_STRING, NULL);
+    }
+
+    selectedBackend = SDL_GpuSelectBackend(_this, gpudriver, formatFlags);
     if (selectedBackend != SDL_GPU_DRIVER_INVALID) {
         for (i = 0; backends[i]; i += 1) {
             if (backends[i]->backendflag == selectedBackend) {
@@ -182,22 +243,6 @@ static SDL_GpuDevice *SDL_GpuCreateDeviceCommon(
         }
     }
     return result;
-}
-
-SDL_GpuDevice *SDL_GpuCreateDevice(
-    SDL_bool debugMode,
-    SDL_bool preferLowPower,
-    const char *name)
-{
-    return SDL_GpuCreateDeviceCommon(debugMode, preferLowPower, name, 0);
-}
-
-SDL_GpuDevice *SDL_GpuCreateDeviceWithProperties(SDL_PropertiesID props)
-{
-    SDL_bool debugMode = SDL_GetBooleanProperty(props, SDL_PROP_GPU_CREATEDEVICE_DEBUGMODE_BOOL, SDL_TRUE);
-    SDL_bool preferLowPower = SDL_GetBooleanProperty(props, SDL_PROP_GPU_CREATEDEVICE_PREFERLOWPOWER_BOOL, SDL_TRUE);
-    const char *name = SDL_GetStringProperty(props, SDL_PROP_GPU_CREATEDEVICE_NAME_STRING, NULL);
-    return SDL_GpuCreateDeviceCommon(debugMode, preferLowPower, name, props);
 }
 
 void SDL_GpuDestroyDevice(SDL_GpuDevice *device)

@@ -681,6 +681,7 @@ typedef struct SDL_GpuBootstrap
 {
     const char *Name;
     const SDL_GpuDriver backendflag;
+    const SDL_GpuShaderFormat shaderFormats;
     SDL_bool (*PrepareDriver)(SDL_VideoDevice *_this);
     SDL_GpuDevice *(*CreateDevice)(SDL_bool debugMode, SDL_bool preferLowPower, SDL_PropertiesID props);
 } SDL_GpuBootstrap;

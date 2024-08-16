@@ -191,16 +191,18 @@ typedef enum SDL_GpuShaderStage
     SDL_GPU_SHADERSTAGE_FRAGMENT
 } SDL_GpuShaderStage;
 
-typedef enum SDL_GpuShaderFormat
+typedef enum SDL_GpuShaderFormatFlagBits
 {
-    SDL_GPU_SHADERFORMAT_INVALID,
-    SDL_GPU_SHADERFORMAT_SECRET,   /* NDA'd platforms */
-    SDL_GPU_SHADERFORMAT_SPIRV,    /* Vulkan */
-    SDL_GPU_SHADERFORMAT_DXBC,     /* D3D11, D3D12 */
-    SDL_GPU_SHADERFORMAT_DXIL,     /* D3D12 */
-    SDL_GPU_SHADERFORMAT_MSL,      /* Metal */
-    SDL_GPU_SHADERFORMAT_METALLIB, /* Metal */
-} SDL_GpuShaderFormat;
+    SDL_GPU_SHADERFORMAT_INVALID  = 0x00000000,
+    SDL_GPU_SHADERFORMAT_SECRET   = 0x00000001, /* NDA'd platforms */
+    SDL_GPU_SHADERFORMAT_SPIRV    = 0x00000002, /* Vulkan */
+    SDL_GPU_SHADERFORMAT_DXBC     = 0x00000004, /* D3D11, D3D12 */
+    SDL_GPU_SHADERFORMAT_DXIL     = 0x00000008, /* D3D12 */
+    SDL_GPU_SHADERFORMAT_MSL      = 0x00000010, /* Metal */
+    SDL_GPU_SHADERFORMAT_METALLIB = 0x00000020, /* Metal */
+} SDL_GpuShaderFormatFlagBits;
+
+typedef Uint32 SDL_GpuShaderFormat;
 
 typedef enum SDL_GpuVertexElementFormat
 {
@@ -367,7 +369,7 @@ typedef enum SDL_GpuSwapchainComposition
 typedef enum SDL_GpuDriver
 {
     SDL_GPU_DRIVER_INVALID = -1,
-    SDL_GPU_DRIVER_SECRET,
+    SDL_GPU_DRIVER_SECRET, /* NDA'd platforms */
     SDL_GPU_DRIVER_VULKAN,
     SDL_GPU_DRIVER_D3D11,
     SDL_GPU_DRIVER_D3D12,
@@ -803,6 +805,7 @@ typedef struct SDL_GpuStorageTextureReadWriteBinding
 /**
  * Creates a GPU context.
  *
+ * \param formatFlags a bitflag indicating which shader formats the app is able to provide
  * \param debugMode enable debug mode properties and validations
  * \param preferLowPower set this to SDL_TRUE if your app prefers energy efficiency over maximum GPU performance
  * \param name the preferred GPU driver, or NULL to let SDL pick the optimal driver
@@ -814,6 +817,7 @@ typedef struct SDL_GpuStorageTextureReadWriteBinding
  * \sa SDL_GpuDestroyDevice
  */
 extern SDL_DECLSPEC SDL_GpuDevice *SDLCALL SDL_GpuCreateDevice(
+    SDL_GpuShaderFormat formatFlags,
     SDL_bool debugMode,
     SDL_bool preferLowPower,
     const char *name);
@@ -826,6 +830,15 @@ extern SDL_DECLSPEC SDL_GpuDevice *SDLCALL SDL_GpuCreateDevice(
  * - `SDL_PROP_GPU_CREATEDEVICE_DEBUGMODE_BOOL`: enable debug mode properties and validations, default is true
  * - `SDL_PROP_GPU_CREATEDEVICE_PREFERLOWPOWER_BOOL`: enable to prefer energy efficiency over maximum GPU performance
  * - `SDL_PROP_GPU_CREATEDEVICE_NAME_STRING`: the name of the GPU driver to use, if a specific one is desired
+ *
+ * These are the current shader format properties:
+ *
+ * `SDL_PROP_GPU_CREATEDEVICE_SHADERS_SECRET_BOOL`: The app is able to provide shaders for an NDA platform
+ * `SDL_PROP_GPU_CREATEDEVICE_SHADERS_SPIRV_BOOL`: The app is able to provide SPIR-V shaders if applicable
+ * `SDL_PROP_GPU_CREATEDEVICE_SHADERS_DXBC_BOOL`: The app is able to provide DXBC shaders if applicable
+ * `SDL_PROP_GPU_CREATEDEVICE_SHADERS_DXIL_BOOL`: The app is able to provide DXIL shaders if applicable
+ * `SDL_PROP_GPU_CREATEDEVICE_SHADERS_MSL_BOOL`: The app is able to provide MSL shaders if applicable
+ * `SDL_PROP_GPU_CREATEDEVICE_SHADERS_METALLIB_BOOL`: The app is able to provide Metal shader libraries if applicable
  *
  * With the D3D12 renderer:
  * - `SDL_PROP_GPU_CREATEDEVICE_D3D12_SEMANTIC_NAME_STRING`: the prefix to use for all vertex semantics, default is "TEXCOORD"
@@ -841,10 +854,16 @@ extern SDL_DECLSPEC SDL_GpuDevice *SDLCALL SDL_GpuCreateDevice(
 extern SDL_DECLSPEC SDL_GpuDevice *SDLCALL SDL_GpuCreateDeviceWithProperties(
     SDL_PropertiesID props);
 
-#define SDL_PROP_GPU_CREATEDEVICE_DEBUGMODE_BOOL              "SDL.gpu.createdevice.debugmode"
-#define SDL_PROP_GPU_CREATEDEVICE_PREFERLOWPOWER_BOOL         "SDL.gpu.createdevice.preferlowpower"
-#define SDL_PROP_GPU_CREATEDEVICE_NAME_STRING                 "SDL.gpu.createdevice.name"
-#define SDL_PROP_GPU_CREATEDEVICE_D3D12_SEMANTIC_NAME_STRING  "SDL.gpu.createdevice.d3d12.semantic"
+#define SDL_PROP_GPU_CREATEDEVICE_DEBUGMODE_BOOL             "SDL.gpu.createdevice.debugmode"
+#define SDL_PROP_GPU_CREATEDEVICE_PREFERLOWPOWER_BOOL        "SDL.gpu.createdevice.preferlowpower"
+#define SDL_PROP_GPU_CREATEDEVICE_NAME_STRING                "SDL.gpu.createdevice.name"
+#define SDL_PROP_GPU_CREATEDEVICE_SHADERS_SECRET_BOOL        "SDL.gpu.createdevice.shaders.secret"
+#define SDL_PROP_GPU_CREATEDEVICE_SHADERS_SPIRV_BOOL         "SDL.gpu.createdevice.shaders.spirv"
+#define SDL_PROP_GPU_CREATEDEVICE_SHADERS_DXBC_BOOL          "SDL.gpu.createdevice.shaders.dxbc"
+#define SDL_PROP_GPU_CREATEDEVICE_SHADERS_DXIL_BOOL          "SDL.gpu.createdevice.shaders.dxil"
+#define SDL_PROP_GPU_CREATEDEVICE_SHADERS_MSL_BOOL           "SDL.gpu.createdevice.shaders.msl"
+#define SDL_PROP_GPU_CREATEDEVICE_SHADERS_METALLIB_BOOL      "SDL.gpu.createdevice.shaders.metallib"
+#define SDL_PROP_GPU_CREATEDEVICE_D3D12_SEMANTIC_NAME_STRING "SDL.gpu.createdevice.d3d12.semantic"
 
 /**
  * Destroys a GPU context previously returned by SDL_GpuCreateDevice.

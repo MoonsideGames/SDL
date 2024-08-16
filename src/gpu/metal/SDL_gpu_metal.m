@@ -4063,6 +4063,7 @@ static SDL_GpuDevice *METAL_CreateDevice(SDL_bool debugMode, SDL_bool preferLowP
 SDL_GpuBootstrap MetalDriver = {
     "Metal",
     SDL_GPU_DRIVER_METAL,
+    SDL_GPU_SHADERFORMAT_MSL | SDL_GPU_SHADERFORMAT_METALLIB,
     METAL_PrepareDriver,
     METAL_CreateDevice
 };

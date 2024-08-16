@@ -24,6 +24,7 @@
 #include "testgpu/testgpu_spirv.h"
 #include "testgpu/testgpu_dxbc.h"
 #include "testgpu/testgpu_metallib.h"
+#define TESTGPU_SUPPORTED_FORMATS (SDL_GPU_SHADERFORMAT_SPIRV | SDL_GPU_SHADERFORMAT_DXBC | SDL_GPU_SHADERFORMAT_METALLIB)
 
 #define CHECK_CREATE(var, thing) { if (!(var)) { SDL_Log("Failed to create %s: %s\n", thing, SDL_GetError()); quit(2); } }
 
@@ -470,7 +471,12 @@ init_render_state(int msaa)
     SDL_GpuShader *fragment_shader;
     int i;
 
-    gpu_device = SDL_GpuCreateDevice(1, 0, NULL);
+    gpu_device = SDL_GpuCreateDevice(
+        TESTGPU_SUPPORTED_FORMATS,
+        1,
+        0,
+        NULL
+    );
     CHECK_CREATE(gpu_device, "GPU device");
 
     /* Claim the windows */

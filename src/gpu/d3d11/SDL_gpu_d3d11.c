@@ -6103,6 +6103,7 @@ tryCreateDevice:
 SDL_GpuBootstrap D3D11Driver = {
     "D3D11",
     SDL_GPU_DRIVER_D3D11,
+    SDL_GPU_SHADERFORMAT_DXBC,
     D3D11_PrepareDriver,
     D3D11_CreateDevice
 };

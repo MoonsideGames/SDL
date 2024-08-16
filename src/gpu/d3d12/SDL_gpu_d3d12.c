@@ -7876,6 +7876,7 @@ static SDL_GpuDevice *D3D12_CreateDevice(SDL_bool debugMode, SDL_bool preferLowP
 SDL_GpuBootstrap D3D12Driver = {
     "D3D12",
     SDL_GPU_DRIVER_D3D12,
+    SDL_GPU_SHADERFORMAT_DXBC | SDL_GPU_SHADERFORMAT_DXIL,
     D3D12_PrepareDriver,
     D3D12_CreateDevice
 };

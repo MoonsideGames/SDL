@@ -11872,6 +11872,7 @@ static SDL_GpuDevice *VULKAN_CreateDevice(SDL_bool debugMode, SDL_bool preferLow
 SDL_GpuBootstrap VulkanDriver = {
     "Vulkan",
     SDL_GPU_DRIVER_VULKAN,
+    SDL_GPU_SHADERFORMAT_SPIRV,
     VULKAN_PrepareDriver,
     VULKAN_CreateDevice
 };
