@@ -563,6 +563,13 @@ typedef struct SDL_GpuTextureCreateInfo
     SDL_PropertiesID props;
 } SDL_GpuTextureCreateInfo;
 
+#define SDL_PROP_GPU_CREATETEXTURE_D3D12_CLEAR_R "SDL.gpu.createtexture.d3d12.clear.r"
+#define SDL_PROP_GPU_CREATETEXTURE_D3D12_CLEAR_G "SDL.gpu.createtexture.d3d12.clear.g"
+#define SDL_PROP_GPU_CREATETEXTURE_D3D12_CLEAR_B "SDL.gpu.createtexture.d3d12.clear.b"
+#define SDL_PROP_GPU_CREATETEXTURE_D3D12_CLEAR_A "SDL.gpu.createtexture.d3d12.clear.a"
+#define SDL_PROP_GPU_CREATETEXTURE_D3D12_CLEAR_DEPTH "SDL.gpu.createtexture.d3d12.clear.depth"
+#define SDL_PROP_GPU_CREATETEXTURE_D3D12_CLEAR_STENCIL "SDL.gpu.createtexture.d3d12.clear.stencil"
+
 typedef struct SDL_GpuBufferCreateInfo
 {
     SDL_GpuBufferUsageFlags usageFlags;
@@ -832,10 +839,10 @@ extern SDL_DECLSPEC SDL_GpuDevice *SDLCALL SDL_GpuCreateDevice(
 extern SDL_DECLSPEC SDL_GpuDevice *SDLCALL SDL_GpuCreateDeviceWithProperties(
     SDL_PropertiesID props);
 
-#define SDL_PROP_GPU_CREATEDEVICE_DEBUGMODE_BOOL              "debugmode"
-#define SDL_PROP_GPU_CREATEDEVICE_PREFERLOWPOWER_BOOL         "preferlowpower"
-#define SDL_PROP_GPU_CREATEDEVICE_NAME_STRING                 "name"
-#define SDL_PROP_GPU_CREATEDEVICE_D3D12_SEMANTIC_NAME_STRING  "d3d12.semantic"
+#define SDL_PROP_GPU_CREATEDEVICE_DEBUGMODE_BOOL              "SDL.gpu.createdevice.debugmode"
+#define SDL_PROP_GPU_CREATEDEVICE_PREFERLOWPOWER_BOOL         "SDL.gpu.createdevice.preferlowpower"
+#define SDL_PROP_GPU_CREATEDEVICE_NAME_STRING                 "SDL.gpu.createdevice.name"
+#define SDL_PROP_GPU_CREATEDEVICE_D3D12_SEMANTIC_NAME_STRING  "SDL.gpu.createdevice.d3d12.semantic"
 
 /**
  * Destroys a GPU context previously returned by SDL_GpuCreateDevice.
