@@ -406,14 +406,6 @@ typedef struct SDL_GpuTransferBufferLocation
     Uint32 offset;
 } SDL_GpuTransferBufferLocation;
 
-typedef struct SDL_GpuTextureSlice
-{
-    SDL_GpuTexture *texture;
-    Uint32 mipLevel;
-    Uint32 layer;
-    Uint32 depth;
-} SDL_GpuTextureSlice;
-
 typedef struct SDL_GpuTextureLocation
 {
     SDL_GpuTexture *texture;
@@ -673,45 +665,47 @@ typedef struct SDL_GpuComputePipelineCreateInfo
 
 typedef struct SDL_GpuColorAttachmentInfo
 {
-    /* The texture slice that will be used as a color attachment by a render pass. */
-    SDL_GpuTextureSlice textureSlice;
+    /* The texture that will be used as a color attachment by a render pass. */
+    SDL_GpuTexture *texture;
+    Uint32 mipLevel;
+    Uint32 layerOrDepthPlane; /* For 3D textures, you can bind an individual depth plane as an attachment. */
 
     /* Can be ignored by RenderPass if CLEAR is not used */
     SDL_FColor clearColor;
 
-    /* Determines what is done with the texture slice at the beginning of the render pass.
+    /* Determines what is done with the texture at the beginning of the render pass.
      *
      *   LOAD:
-     *     Loads the data currently in the texture slice.
+     *     Loads the data currently in the texture.
      *
      *   CLEAR:
-     *     Clears the texture slice to a single color.
+     *     Clears the texture to a single color.
      *
      *   DONT_CARE:
-     *     The driver will do whatever it wants with the texture slice memory.
+     *     The driver will do whatever it wants with the texture memory.
      *     This is a good option if you know that every single pixel will be touched in the render pass.
      */
     SDL_GpuLoadOp loadOp;
 
-    /* Determines what is done with the texture slice at the end of the render pass.
+    /* Determines what is done with the texture at the end of the render pass.
      *
      *   STORE:
-     *     Stores the results of the render pass in the texture slice.
+     *     Stores the results of the render pass in the texture.
      *
      *   DONT_CARE:
-     *     The driver will do whatever it wants with the texture slice memory.
+     *     The driver will do whatever it wants with the texture memory.
      *     This is often a good option for depth/stencil textures.
      */
     SDL_GpuStoreOp storeOp;
 
-    /* if SDL_TRUE, cycles the texture if the texture slice is bound and loadOp is not LOAD */
+    /* if SDL_TRUE, cycles the texture if the texture is bound and loadOp is not LOAD */
     SDL_bool cycle;
 } SDL_GpuColorAttachmentInfo;
 
 typedef struct SDL_GpuDepthStencilAttachmentInfo
 {
-    /* The texture slice that will be used as the depth stencil attachment by a render pass. */
-    SDL_GpuTextureSlice textureSlice;
+    /* The texture that will be used as the depth stencil attachment by a render pass. */
+    SDL_GpuTexture *texture;
 
     /* Can be ignored by the render pass if CLEAR is not used */
     SDL_GpuDepthStencilValue depthStencilClearValue;
@@ -719,10 +713,10 @@ typedef struct SDL_GpuDepthStencilAttachmentInfo
     /* Determines what is done with the depth values at the beginning of the render pass.
      *
      *   LOAD:
-     *     Loads the depth values currently in the texture slice.
+     *     Loads the depth values currently in the texture.
      *
      *   CLEAR:
-     *     Clears the texture slice to a single depth.
+     *     Clears the texture to a single depth.
      *
      *   DONT_CARE:
      *     The driver will do whatever it wants with the memory.
@@ -733,10 +727,10 @@ typedef struct SDL_GpuDepthStencilAttachmentInfo
     /* Determines what is done with the depth values at the end of the render pass.
      *
      *   STORE:
-     *     Stores the depth results in the texture slice.
+     *     Stores the depth results in the texture.
      *
      *   DONT_CARE:
-     *     The driver will do whatever it wants with the texture slice memory.
+     *     The driver will do whatever it wants with the texture memory.
      *     This is often a good option for depth/stencil textures.
      */
     SDL_GpuStoreOp storeOp;
@@ -744,10 +738,10 @@ typedef struct SDL_GpuDepthStencilAttachmentInfo
     /* Determines what is done with the stencil values at the beginning of the render pass.
      *
      *   LOAD:
-     *     Loads the stencil values currently in the texture slice.
+     *     Loads the stencil values currently in the texture.
      *
      *   CLEAR:
-     *     Clears the texture slice to a single stencil value.
+     *     Clears the texture to a single stencil value.
      *
      *   DONT_CARE:
      *     The driver will do whatever it wants with the memory.
@@ -758,15 +752,15 @@ typedef struct SDL_GpuDepthStencilAttachmentInfo
     /* Determines what is done with the stencil values at the end of the render pass.
      *
      *   STORE:
-     *     Stores the stencil results in the texture slice.
+     *     Stores the stencil results in the texture.
      *
      *   DONT_CARE:
-     *     The driver will do whatever it wants with the texture slice memory.
+     *     The driver will do whatever it wants with the texture memory.
      *     This is often a good option for depth/stencil textures.
      */
     SDL_GpuStoreOp stencilStoreOp;
 
-    /* if SDL_TRUE, cycles the texture if the texture slice is bound and any load ops are not LOAD */
+    /* if SDL_TRUE, cycles the texture if the texture is bound and any load ops are not LOAD */
     SDL_bool cycle;
 } SDL_GpuDepthStencilAttachmentInfo;
 
@@ -794,9 +788,11 @@ typedef struct SDL_GpuStorageBufferReadWriteBinding
 
 typedef struct SDL_GpuStorageTextureReadWriteBinding
 {
-    SDL_GpuTextureSlice textureSlice;
+    SDL_GpuTexture *texture;
+    Uint32 mipLevel;
+    Uint32 layer;
 
-    /* if SDL_TRUE, cycles the texture if the texture slice is bound. */
+    /* if SDL_TRUE, cycles the texture if the texture is bound. */
     SDL_bool cycle;
 } SDL_GpuStorageTextureReadWriteBinding;
 
@@ -1383,8 +1379,9 @@ extern SDL_DECLSPEC void SDLCALL SDL_GpuPushComputeUniformData(
  * When cycling, all data in the resource is considered to be undefined for subsequent commands until that data is written again.
  * You must take care not to read undefined data.
  *
- * Note that when cycling a texture, the entire texture, meaning all slices, will be cycled,
- * so you must consider each slice of the texture to contain undefined data after cycling.
+ * Note that when cycling a texture, the entire texture will be cycled,
+ * even if only part of the texture is used in the call,
+ * so you must consider the entire texture to contain undefined data after cycling.
  *
  * You must also take care not to overwrite a section of data that has been referenced in a command without cycling first.
  * It is OK to overwrite unreferenced data in a bound resource without cycling,
@@ -1395,8 +1392,8 @@ extern SDL_DECLSPEC void SDLCALL SDL_GpuPushComputeUniformData(
 
 /**
  * Begins a render pass on a command buffer.
- * A render pass consists of a set of texture slices, clear values, and load/store operations
- * which will be rendered to during the render pass.
+ * A render pass consists of a set of texture subresources (or depth slices in the 3D texture case),
+ * clear values, and load/store operations which will be rendered to during the render pass.
  * All operations related to graphics pipelines must take place inside of a render pass.
  * A default viewport and scissor state are automatically set when this is called.
  * You cannot begin another render pass, or begin a compute pass or copy pass
@@ -1680,7 +1677,7 @@ extern SDL_DECLSPEC void SDLCALL SDL_GpuEndRenderPass(
 
 /**
  * Begins a compute pass on a command buffer.
- * A compute pass is defined by a set of texture slices and buffers that
+ * A compute pass is defined by a set of texture subresources and buffers that
  * will be written to by compute pipelines.
  * These textures and buffers must have been created with the COMPUTE_STORAGE_WRITE bit.
  * If these resources will also be read during the pass, they must be created with the COMPUTE_STORAGE_READ bit.
@@ -1869,7 +1866,7 @@ extern SDL_DECLSPEC SDL_GpuCopyPass *SDLCALL SDL_GpuBeginCopyPass(
  * \param copyPass a copy pass handle
  * \param source the source transfer buffer with image layout information
  * \param destination the destination texture region
- * \param cycle if SDL_TRUE, cycles the texture if the texture slice is bound, otherwise overwrites the data.
+ * \param cycle if SDL_TRUE, cycles the texture if the texture is bound, otherwise overwrites the data.
  *
  * \since This function is available since SDL 3.x.x
  */
@@ -1910,7 +1907,7 @@ extern SDL_DECLSPEC void SDLCALL SDL_GpuUploadToBuffer(
  * \param w the width of the region to copy
  * \param h the height of the region to copy
  * \param d the depth of the region to copy
- * \param cycle if SDL_TRUE, cycles the destination texture if the destination texture slice is bound, otherwise overwrites the data.
+ * \param cycle if SDL_TRUE, cycles the destination texture if the destination texture is bound, otherwise overwrites the data.
  *
  * \since This function is available since SDL 3.x.x
  */
@@ -2005,7 +2002,7 @@ extern SDL_DECLSPEC void SDLCALL SDL_GpuEndCopyPass(
  * \param source the texture region to copy from
  * \param destination the texture region to copy to
  * \param filterMode the filter mode that will be used when blitting
- * \param cycle if SDL_TRUE, cycles the destination texture if the destination texture slice is bound, otherwise overwrites the data.
+ * \param cycle if SDL_TRUE, cycles the destination texture if the destination texture is bound, otherwise overwrites the data.
  *
  *
  * \since This function is available since SDL 3.x.x

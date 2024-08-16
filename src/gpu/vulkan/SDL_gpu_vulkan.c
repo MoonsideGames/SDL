@@ -594,7 +594,10 @@ typedef struct VulkanTextureSubresource
     Uint32 layer;
     Uint32 level;
 
-    VkImageView *views; /* One view per depth slice */
+    VkImageView *renderTargetViews; /* One render target view per depth slice */
+    VkImageView computeWriteView;
+    VkImageView depthStencilView;
+
     VulkanTextureHandle *msaaTexHandle; /* NULL if parent sample count is 1 or is depth target */
 
     SDL_bool transitioned; /* used for layout tracking */
@@ -605,11 +608,10 @@ struct VulkanTexture
     VulkanMemoryUsedRegion *usedRegion;
 
     VkImage image;
-    VkImageView view;
+    VkImageView fullView; /* used for samplers and storage reads */
     VkExtent2D dimensions;
 
     SDL_GpuTextureType type;
-    Uint8 isRenderTarget;
     Uint8 isMSAAColorTarget;
 
     Uint32 depth;
@@ -1164,7 +1166,6 @@ typedef struct VulkanCommandBuffer
 
     VulkanTextureSubresource *readWriteComputeStorageTextureSubresources[MAX_COMPUTE_WRITE_TEXTURES];
     Uint32 readWriteComputeStorageTextureSubresourceCount;
-    VkImageView readWriteComputeStorageTextureSliceViews[MAX_COMPUTE_WRITE_TEXTURES];
     VulkanBuffer *readWriteComputeStorageBuffers[MAX_COMPUTE_WRITE_BUFFERS];
 
     VulkanTexture *readOnlyComputeStorageTextures[MAX_STORAGE_TEXTURES_PER_STAGE];
@@ -1402,7 +1403,6 @@ static void VULKAN_UnclaimWindow(SDL_GpuRenderer *driverData, SDL_Window *window
 static void VULKAN_Wait(SDL_GpuRenderer *driverData);
 static void VULKAN_WaitForFences(SDL_GpuRenderer *driverData, SDL_bool waitAll, SDL_GpuFence **pFences, Uint32 fenceCount);
 static void VULKAN_Submit(SDL_GpuCommandBuffer *commandBuffer);
-static VulkanTextureSubresource *VULKAN_INTERNAL_FetchTextureSubresource(VulkanTexture *texture, Uint32 layer, Uint32 level);
 static VulkanTexture *VULKAN_INTERNAL_CreateTexture(
     VulkanRenderer *renderer,
     Uint32 width,
@@ -3167,11 +3167,11 @@ static void VULKAN_INTERNAL_DestroyTexture(
 {
     /* Clean up subresources */
     for (Uint32 subresourceIndex = 0; subresourceIndex < texture->subresourceCount; subresourceIndex += 1) {
-        if (texture->isRenderTarget) {
+        if (texture->usageFlags & SDL_GPU_TEXTUREUSAGE_COLOR_TARGET_BIT) {
             for (Uint32 depthIndex = 0; depthIndex < texture->depth; depthIndex += 1) {
                 VULKAN_INTERNAL_RemoveFramebuffersContainingView(
                     renderer,
-                    texture->subresources[subresourceIndex].views[depthIndex]);
+                    texture->subresources[subresourceIndex].renderTargetViews[depthIndex]);
             }
 
             if (texture->subresources[subresourceIndex].msaaTexHandle != NULL) {
@@ -3180,22 +3180,37 @@ static void VULKAN_INTERNAL_DestroyTexture(
                     texture->subresources[subresourceIndex].msaaTexHandle->vulkanTexture);
                 SDL_free(texture->subresources[subresourceIndex].msaaTexHandle);
             }
+
+            for (Uint32 depthIndex = 0; depthIndex < texture->depth; depthIndex += 1) {
+                renderer->vkDestroyImageView(
+                    renderer->logicalDevice,
+                    texture->subresources[subresourceIndex].renderTargetViews[depthIndex],
+                    NULL);
+            }
+            SDL_free(texture->subresources[subresourceIndex].renderTargetViews);
         }
 
-        for (Uint32 depthIndex = 0; depthIndex < texture->depth; depthIndex += 1) {
+        if (texture->usageFlags & SDL_GPU_TEXTUREUSAGE_COMPUTE_STORAGE_WRITE_BIT)
+        {
             renderer->vkDestroyImageView(
                 renderer->logicalDevice,
-                texture->subresources[subresourceIndex].views[depthIndex],
+                texture->subresources[subresourceIndex].computeWriteView,
                 NULL);
         }
-        SDL_free(texture->subresources[subresourceIndex].views);
+
+        if (texture->usageFlags & SDL_GPU_TEXTUREUSAGE_DEPTH_STENCIL_TARGET_BIT) {
+            renderer->vkDestroyImageView(
+                renderer->logicalDevice,
+                texture->subresources[subresourceIndex].depthStencilView,
+                NULL);
+        }
     }
 
     SDL_free(texture->subresources);
 
     renderer->vkDestroyImageView(
         renderer->logicalDevice,
-        texture->view,
+        texture->fullView,
         NULL);
 
     renderer->vkDestroyImage(
@@ -3391,15 +3406,10 @@ static void VULKAN_INTERNAL_DestroySwapchain(
     for (i = 0; i < swapchainData->imageCount; i += 1) {
         renderer->vkDestroyImageView(
             renderer->logicalDevice,
-            swapchainData->textureContainers[i].activeTextureHandle->vulkanTexture->subresources[0].views[0],
+            swapchainData->textureContainers[i].activeTextureHandle->vulkanTexture->subresources[0].renderTargetViews[0],
             NULL);
-        SDL_free(swapchainData->textureContainers[i].activeTextureHandle->vulkanTexture->subresources[0].views);
+        SDL_free(swapchainData->textureContainers[i].activeTextureHandle->vulkanTexture->subresources[0].renderTargetViews);
         SDL_free(swapchainData->textureContainers[i].activeTextureHandle->vulkanTexture->subresources);
-
-        renderer->vkDestroyImageView(
-            renderer->logicalDevice,
-            swapchainData->textureContainers[i].activeTextureHandle->vulkanTexture->view,
-            NULL);
 
         SDL_free(swapchainData->textureContainers[i].activeTextureHandle->vulkanTexture);
         SDL_free(swapchainData->textureContainers[i].activeTextureHandle);
@@ -4184,47 +4194,27 @@ static VulkanBufferContainer *VULKAN_INTERNAL_CreateBufferContainer(
 /* Texture Subresource Utilities */
 
 static Uint32 VULKAN_INTERNAL_GetTextureSubresourceIndex(
-    VulkanTexture *texture,
+    Uint32 mipLevel,
     Uint32 layer,
-    Uint32 level)
+    Uint32 numLevels)
 {
-    return (layer * texture->levelCount) + level;
+    return mipLevel + (layer * numLevels);
 }
 
 static VulkanTextureSubresource *VULKAN_INTERNAL_FetchTextureSubresource(
-    VulkanTexture *texture,
-    Uint32 layer,
-    Uint32 level)
-{
-    return &texture->subresources[VULKAN_INTERNAL_GetTextureSubresourceIndex(
-        texture,
-        layer,
-        level)];
-}
-
-static VulkanTextureSubresource *VULKAN_INTERNAL_FetchTextureSubresourceFromContainer(
     VulkanTextureContainer *textureContainer,
     Uint32 layer,
     Uint32 level)
 {
-    return VULKAN_INTERNAL_FetchTextureSubresource(
-        textureContainer->activeTextureHandle->vulkanTexture,
+    Uint32 index = VULKAN_INTERNAL_GetTextureSubresourceIndex(
+        level,
         layer,
-        level);
+        textureContainer->header.info.levelCount);
+
+    return &textureContainer->activeTextureHandle->vulkanTexture->subresources[index];
 }
 
-static VkImageView VULKAN_INTERNAL_FetchTextureSliceView(
-    SDL_GpuTextureSlice *textureSlice)
-{
-    VulkanTextureSubresource *subresource = VULKAN_INTERNAL_FetchTextureSubresource(
-        ((VulkanTextureContainer *)textureSlice->texture)->activeTextureHandle->vulkanTexture,
-        textureSlice->layer,
-        textureSlice->mipLevel);
-
-    return subresource->views[textureSlice->depth];
-}
-
-static void VULKAN_INTERNAL_CreateSliceView(
+static void VULKAN_INTERNAL_CreateRenderTargetView(
     VulkanRenderer *renderer,
     VulkanTexture *texture,
     Uint32 layerOrDepth,
@@ -4248,6 +4238,47 @@ static void VULKAN_INTERNAL_CreateSliceView(
     imageViewCreateInfo.subresourceRange.baseArrayLayer = layerOrDepth;
     imageViewCreateInfo.subresourceRange.layerCount = 1;
     imageViewCreateInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+
+    vulkanResult = renderer->vkCreateImageView(
+        renderer->logicalDevice,
+        &imageViewCreateInfo,
+        NULL,
+        pView);
+
+    if (vulkanResult != VK_SUCCESS) {
+        LogVulkanResultAsError(
+            "vkCreateImageView",
+            vulkanResult);
+        SDL_LogError(SDL_LOG_CATEGORY_GPU, "Failed to create color attachment image view");
+        *pView = (VkImageView)VK_NULL_HANDLE;
+        return;
+    }
+}
+
+static void VULKAN_INTERNAL_CreateSubresourceView(
+    VulkanRenderer *renderer,
+    VulkanTexture *texture,
+    Uint32 layer,
+    Uint32 level,
+    VkComponentMapping swizzle,
+    VkImageView *pView)
+{
+    VkResult vulkanResult;
+    VkImageViewCreateInfo imageViewCreateInfo;
+
+    /* create framebuffer compatible views for RenderTarget */
+    imageViewCreateInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    imageViewCreateInfo.pNext = NULL;
+    imageViewCreateInfo.flags = 0;
+    imageViewCreateInfo.image = texture->image;
+    imageViewCreateInfo.format = texture->format;
+    imageViewCreateInfo.components = swizzle;
+    imageViewCreateInfo.subresourceRange.aspectMask = texture->aspectFlags;
+    imageViewCreateInfo.subresourceRange.baseMipLevel = level;
+    imageViewCreateInfo.subresourceRange.levelCount = 1;
+    imageViewCreateInfo.subresourceRange.baseArrayLayer = layer;
+    imageViewCreateInfo.subresourceRange.layerCount = 1;
+    imageViewCreateInfo.viewType = texture->depth > 1 ? VK_IMAGE_VIEW_TYPE_3D : VK_IMAGE_VIEW_TYPE_2D;
 
     vulkanResult = renderer->vkCreateImageView(
         renderer->logicalDevice,
@@ -4698,24 +4729,6 @@ static SDL_bool VULKAN_INTERNAL_CreateSwapchain(
 
         imageViewCreateInfo.image = swapchainImages[i];
 
-        vulkanResult = renderer->vkCreateImageView(
-            renderer->logicalDevice,
-            &imageViewCreateInfo,
-            NULL,
-            &swapchainData->textureContainers[i].activeTextureHandle->vulkanTexture->view);
-
-        if (vulkanResult != VK_SUCCESS) {
-            renderer->vkDestroySurfaceKHR(
-                renderer->instance,
-                swapchainData->surface,
-                NULL);
-            SDL_stack_free(swapchainImages);
-            SDL_free(swapchainData->textureContainers);
-            SDL_free(swapchainData);
-            LogVulkanResultAsError("vkCreateImageView", vulkanResult);
-            return SDL_FALSE;
-        }
-
         /* Swapchain memory is managed by the driver */
         swapchainData->textureContainers[i].activeTextureHandle->vulkanTexture->usedRegion = NULL;
 
@@ -4724,7 +4737,6 @@ static SDL_bool VULKAN_INTERNAL_CreateSwapchain(
         swapchainData->textureContainers[i].activeTextureHandle->vulkanTexture->format = swapchainData->format;
         swapchainData->textureContainers[i].activeTextureHandle->vulkanTexture->swizzle = swapchainData->swapchainSwizzle;
         swapchainData->textureContainers[i].activeTextureHandle->vulkanTexture->type = SDL_GPU_TEXTURETYPE_2D;
-        swapchainData->textureContainers[i].activeTextureHandle->vulkanTexture->isRenderTarget = 1;
         swapchainData->textureContainers[i].activeTextureHandle->vulkanTexture->depth = 1;
         swapchainData->textureContainers[i].activeTextureHandle->vulkanTexture->layerCount = 1;
         swapchainData->textureContainers[i].activeTextureHandle->vulkanTexture->levelCount = 1;
@@ -4744,14 +4756,14 @@ static SDL_bool VULKAN_INTERNAL_CreateSwapchain(
         swapchainData->textureContainers[i].activeTextureHandle->vulkanTexture->subresources[0].level = 0;
         swapchainData->textureContainers[i].activeTextureHandle->vulkanTexture->subresources[0].transitioned = SDL_TRUE;
         swapchainData->textureContainers[i].activeTextureHandle->vulkanTexture->subresources[0].msaaTexHandle = NULL;
-        swapchainData->textureContainers[i].activeTextureHandle->vulkanTexture->subresources[0].views = SDL_malloc(sizeof(VkImageView));
-        VULKAN_INTERNAL_CreateSliceView(
+        swapchainData->textureContainers[i].activeTextureHandle->vulkanTexture->subresources[0].renderTargetViews = SDL_malloc(sizeof(VkImageView));
+        VULKAN_INTERNAL_CreateRenderTargetView(
             renderer,
             swapchainData->textureContainers[i].activeTextureHandle->vulkanTexture,
             0,
             0,
             swapchainData->swapchainSwizzle,
-            &swapchainData->textureContainers[i].activeTextureHandle->vulkanTexture->subresources[0].views[0]);
+            &swapchainData->textureContainers[i].activeTextureHandle->vulkanTexture->subresources[0].renderTargetViews[0]);
     }
 
     SDL_stack_free(swapchainImages);
@@ -5051,7 +5063,7 @@ static void VULKAN_INTERNAL_BindGraphicsDescriptorSets(
             currentWriteDescriptorSet->pBufferInfo = NULL;
 
             imageInfos[imageInfoCount].sampler = commandBuffer->vertexSamplers[i]->sampler;
-            imageInfos[imageInfoCount].imageView = commandBuffer->vertexSamplerTextures[i]->view;
+            imageInfos[imageInfoCount].imageView = commandBuffer->vertexSamplerTextures[i]->fullView;
             imageInfos[imageInfoCount].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
             currentWriteDescriptorSet->pImageInfo = &imageInfos[imageInfoCount];
@@ -5073,7 +5085,7 @@ static void VULKAN_INTERNAL_BindGraphicsDescriptorSets(
             currentWriteDescriptorSet->pBufferInfo = NULL;
 
             imageInfos[imageInfoCount].sampler = VK_NULL_HANDLE;
-            imageInfos[imageInfoCount].imageView = commandBuffer->vertexStorageTextures[i]->view;
+            imageInfos[imageInfoCount].imageView = commandBuffer->vertexStorageTextures[i]->fullView;
             imageInfos[imageInfoCount].imageLayout = VK_IMAGE_LAYOUT_GENERAL;
 
             currentWriteDescriptorSet->pImageInfo = &imageInfos[imageInfoCount];
@@ -5221,7 +5233,7 @@ static void VULKAN_INTERNAL_BindGraphicsDescriptorSets(
             currentWriteDescriptorSet->pBufferInfo = NULL;
 
             imageInfos[imageInfoCount].sampler = commandBuffer->fragmentSamplers[i]->sampler;
-            imageInfos[imageInfoCount].imageView = commandBuffer->fragmentSamplerTextures[i]->view;
+            imageInfos[imageInfoCount].imageView = commandBuffer->fragmentSamplerTextures[i]->fullView;
             imageInfos[imageInfoCount].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
             currentWriteDescriptorSet->pImageInfo = &imageInfos[imageInfoCount];
@@ -5243,7 +5255,7 @@ static void VULKAN_INTERNAL_BindGraphicsDescriptorSets(
             currentWriteDescriptorSet->pBufferInfo = NULL;
 
             imageInfos[imageInfoCount].sampler = VK_NULL_HANDLE;
-            imageInfos[imageInfoCount].imageView = commandBuffer->fragmentStorageTextures[i]->view;
+            imageInfos[imageInfoCount].imageView = commandBuffer->fragmentStorageTextures[i]->fullView;
             imageInfos[imageInfoCount].imageLayout = VK_IMAGE_LAYOUT_GENERAL;
 
             currentWriteDescriptorSet->pImageInfo = &imageInfos[imageInfoCount];
@@ -5699,7 +5711,6 @@ static VulkanTexture *VULKAN_INTERNAL_CreateTexture(
     VulkanTexture *texture = SDL_malloc(sizeof(VulkanTexture));
 
     texture->type = type;
-    texture->isRenderTarget = isRenderTarget;
     texture->isMSAAColorTarget = isMSAAColorTarget;
     texture->markedForDestroy = 0;
 
@@ -5766,38 +5777,46 @@ static VulkanTexture *VULKAN_INTERNAL_CreateTexture(
 
     texture->usedRegion->vulkanTexture = texture; /* lol */
 
-    imageViewCreateInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-    imageViewCreateInfo.pNext = NULL;
-    imageViewCreateInfo.flags = 0;
-    imageViewCreateInfo.image = texture->image;
-    imageViewCreateInfo.format = format;
-    imageViewCreateInfo.components = swizzle;
-    imageViewCreateInfo.subresourceRange.aspectMask = aspectMask;
-    imageViewCreateInfo.subresourceRange.baseMipLevel = 0;
-    imageViewCreateInfo.subresourceRange.levelCount = levelCount;
-    imageViewCreateInfo.subresourceRange.baseArrayLayer = 0;
-    imageViewCreateInfo.subresourceRange.layerCount = layerCount;
+    texture->fullView = VK_NULL_HANDLE;
 
-    if (type == SDL_GPU_TEXTURETYPE_CUBE) {
-        imageViewCreateInfo.viewType = VK_IMAGE_VIEW_TYPE_CUBE;
-    } else if (type == SDL_GPU_TEXTURETYPE_3D) {
-        imageViewCreateInfo.viewType = VK_IMAGE_VIEW_TYPE_3D;
-    } else if (type == SDL_GPU_TEXTURETYPE_2D_ARRAY) {
-        imageViewCreateInfo.viewType = VK_IMAGE_VIEW_TYPE_2D_ARRAY;
-    } else {
-        imageViewCreateInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-    }
+    if (
+        (textureUsageFlags & SDL_GPU_TEXTUREUSAGE_SAMPLER_BIT) ||
+        (textureUsageFlags & SDL_GPU_TEXTUREUSAGE_GRAPHICS_STORAGE_READ_BIT) ||
+        (textureUsageFlags & SDL_GPU_TEXTUREUSAGE_COMPUTE_STORAGE_READ_BIT)) {
 
-    vulkanResult = renderer->vkCreateImageView(
-        renderer->logicalDevice,
-        &imageViewCreateInfo,
-        NULL,
-        &texture->view);
+        imageViewCreateInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+        imageViewCreateInfo.pNext = NULL;
+        imageViewCreateInfo.flags = 0;
+        imageViewCreateInfo.image = texture->image;
+        imageViewCreateInfo.format = format;
+        imageViewCreateInfo.components = swizzle;
+        imageViewCreateInfo.subresourceRange.aspectMask = aspectMask;
+        imageViewCreateInfo.subresourceRange.baseMipLevel = 0;
+        imageViewCreateInfo.subresourceRange.levelCount = levelCount;
+        imageViewCreateInfo.subresourceRange.baseArrayLayer = 0;
+        imageViewCreateInfo.subresourceRange.layerCount = layerCount;
 
-    if (vulkanResult != VK_SUCCESS) {
-        LogVulkanResultAsError("vkCreateImageView", vulkanResult);
-        SDL_LogError(SDL_LOG_CATEGORY_GPU, "Failed to create texture image view");
-        return NULL;
+        if (type == SDL_GPU_TEXTURETYPE_CUBE) {
+            imageViewCreateInfo.viewType = VK_IMAGE_VIEW_TYPE_CUBE;
+        } else if (type == SDL_GPU_TEXTURETYPE_3D) {
+            imageViewCreateInfo.viewType = VK_IMAGE_VIEW_TYPE_3D;
+        } else if (type == SDL_GPU_TEXTURETYPE_2D_ARRAY) {
+            imageViewCreateInfo.viewType = VK_IMAGE_VIEW_TYPE_2D_ARRAY;
+        } else {
+            imageViewCreateInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+        }
+
+        vulkanResult = renderer->vkCreateImageView(
+            renderer->logicalDevice,
+            &imageViewCreateInfo,
+            NULL,
+            &texture->fullView);
+
+        if (vulkanResult != VK_SUCCESS) {
+            LogVulkanResultAsError("vkCreateImageView", vulkanResult);
+            SDL_LogError(SDL_LOG_CATEGORY_GPU, "Failed to create texture image view");
+            return NULL;
+        }
     }
 
     texture->dimensions.width = width;
@@ -5823,31 +5842,58 @@ static VulkanTexture *VULKAN_INTERNAL_CreateTexture(
     for (Uint32 i = 0; i < texture->layerCount; i += 1) {
         for (Uint32 j = 0; j < texture->levelCount; j += 1) {
             Uint32 subresourceIndex = VULKAN_INTERNAL_GetTextureSubresourceIndex(
-                texture,
+                j,
                 i,
-                j);
+                texture->levelCount);
 
-            texture->subresources[subresourceIndex].views = SDL_malloc(
-                texture->depth * sizeof(VkImageView));
+            texture->subresources[subresourceIndex].renderTargetViews = NULL;
+            texture->subresources[subresourceIndex].computeWriteView = VK_NULL_HANDLE;
+            texture->subresources[subresourceIndex].depthStencilView = VK_NULL_HANDLE;
 
-            if (texture->depth > 1) {
-                for (Uint32 k = 0; k < texture->depth; k += 1) {
-                    VULKAN_INTERNAL_CreateSliceView(
+            if (textureUsageFlags & SDL_GPU_TEXTUREUSAGE_COLOR_TARGET_BIT)
+            {
+                texture->subresources[subresourceIndex].renderTargetViews = SDL_malloc(
+                    texture->depth * sizeof(VkImageView));
+
+                if (texture->depth > 1) {
+                    for (Uint32 k = 0; k < texture->depth; k += 1) {
+                        VULKAN_INTERNAL_CreateRenderTargetView(
+                            renderer,
+                            texture,
+                            k,
+                            j,
+                            swizzle,
+                            &texture->subresources[subresourceIndex].renderTargetViews[k]);
+                    }
+                } else {
+                    VULKAN_INTERNAL_CreateRenderTargetView(
                         renderer,
                         texture,
-                        k,
+                        i,
                         j,
                         swizzle,
-                        &texture->subresources[subresourceIndex].views[k]);
+                        &texture->subresources[subresourceIndex].renderTargetViews[0]);
                 }
-            } else {
-                VULKAN_INTERNAL_CreateSliceView(
+            }
+
+            if (textureUsageFlags & SDL_GPU_TEXTUREUSAGE_COMPUTE_STORAGE_WRITE_BIT) {
+                VULKAN_INTERNAL_CreateSubresourceView(
                     renderer,
                     texture,
                     i,
                     j,
                     swizzle,
-                    &texture->subresources[subresourceIndex].views[0]);
+                    &texture->subresources[subresourceIndex].computeWriteView);
+            }
+
+            if (textureUsageFlags & SDL_GPU_TEXTUREUSAGE_DEPTH_STENCIL_TARGET_BIT) {
+                VULKAN_INTERNAL_CreateSubresourceView(
+                    renderer,
+                    texture,
+                    i,
+                    j,
+                    swizzle,
+                    &texture->subresources[subresourceIndex].depthStencilView);
             }
 
             texture->subresources[subresourceIndex].parent = texture;
@@ -6015,7 +6061,7 @@ static VulkanTextureSubresource *VULKAN_INTERNAL_PrepareTextureSubresourceForWri
     VulkanTextureUsageMode destinationUsageMode)
 {
     VulkanTextureSubresource *textureSubresource = VULKAN_INTERNAL_FetchTextureSubresource(
-        textureContainer->activeTextureHandle->vulkanTexture,
+        textureContainer,
         layer,
         level);
 
@@ -6028,7 +6074,7 @@ static VulkanTextureSubresource *VULKAN_INTERNAL_PrepareTextureSubresourceForWri
             textureContainer);
 
         textureSubresource = VULKAN_INTERNAL_FetchTextureSubresource(
-            textureContainer->activeTextureHandle->vulkanTexture,
+            textureContainer,
             layer,
             level);
     }
@@ -6067,7 +6113,7 @@ static VkRenderPass VULKAN_INTERNAL_CreateRenderPass(
     VulkanTexture *texture = NULL;
 
     for (i = 0; i < colorAttachmentCount; i += 1) {
-        texture = ((VulkanTextureContainer *)colorAttachmentInfos[i].textureSlice.texture)->activeTextureHandle->vulkanTexture;
+        texture = ((VulkanTextureContainer *)colorAttachmentInfos[i].texture)->activeTextureHandle->vulkanTexture;
 
         if (texture->sampleCount > VK_SAMPLE_COUNT_1_BIT) {
             /* Resolve attachment and multisample attachment */
@@ -6155,7 +6201,7 @@ static VkRenderPass VULKAN_INTERNAL_CreateRenderPass(
     if (depthStencilAttachmentInfo == NULL) {
         subpass.pDepthStencilAttachment = NULL;
     } else {
-        texture = ((VulkanTextureContainer *)depthStencilAttachmentInfo->textureSlice.texture)->activeTextureHandle->vulkanTexture;
+        texture = ((VulkanTextureContainer *)depthStencilAttachmentInfo->texture)->activeTextureHandle->vulkanTexture;
 
         attachmentDescriptions[attachmentDescriptionCount].flags = 0;
         attachmentDescriptions[attachmentDescriptionCount].format = texture->format;
@@ -7258,7 +7304,7 @@ static VkRenderPass VULKAN_INTERNAL_FetchRenderPass(
     SDL_LockMutex(renderer->renderPassFetchLock);
 
     for (i = 0; i < colorAttachmentCount; i += 1) {
-        hash.colorTargetDescriptions[i].format = ((VulkanTextureContainer *)colorAttachmentInfos[i].textureSlice.texture)->activeTextureHandle->vulkanTexture->format;
+        hash.colorTargetDescriptions[i].format = ((VulkanTextureContainer *)colorAttachmentInfos[i].texture)->activeTextureHandle->vulkanTexture->format;
         hash.colorTargetDescriptions[i].clearColor = colorAttachmentInfos[i].clearColor;
         hash.colorTargetDescriptions[i].loadOp = colorAttachmentInfos[i].loadOp;
         hash.colorTargetDescriptions[i].storeOp = colorAttachmentInfos[i].storeOp;
@@ -7266,7 +7312,7 @@ static VkRenderPass VULKAN_INTERNAL_FetchRenderPass(
 
     hash.colorAttachmentSampleCount = VK_SAMPLE_COUNT_1_BIT;
     if (colorAttachmentCount > 0) {
-        hash.colorAttachmentSampleCount = ((VulkanTextureContainer *)colorAttachmentInfos[0].textureSlice.texture)->activeTextureHandle->vulkanTexture->sampleCount;
+        hash.colorAttachmentSampleCount = ((VulkanTextureContainer *)colorAttachmentInfos[0].texture)->activeTextureHandle->vulkanTexture->sampleCount;
     }
 
     hash.colorAttachmentCount = colorAttachmentCount;
@@ -7278,7 +7324,7 @@ static VkRenderPass VULKAN_INTERNAL_FetchRenderPass(
         hash.depthStencilTargetDescription.stencilLoadOp = SDL_GPU_LOADOP_DONT_CARE;
         hash.depthStencilTargetDescription.stencilStoreOp = SDL_GPU_STOREOP_DONT_CARE;
     } else {
-        hash.depthStencilTargetDescription.format = ((VulkanTextureContainer *)depthStencilAttachmentInfo->textureSlice.texture)->activeTextureHandle->vulkanTexture->format;
+        hash.depthStencilTargetDescription.format = ((VulkanTextureContainer *)depthStencilAttachmentInfo->texture)->activeTextureHandle->vulkanTexture->format;
         hash.depthStencilTargetDescription.loadOp = depthStencilAttachmentInfo->loadOp;
         hash.depthStencilTargetDescription.storeOp = depthStencilAttachmentInfo->storeOp;
         hash.depthStencilTargetDescription.stencilLoadOp = depthStencilAttachmentInfo->stencilLoadOp;
@@ -7337,22 +7383,29 @@ static VulkanFramebuffer *VULKAN_INTERNAL_FetchFramebuffer(
     hash.colorAttachmentCount = colorAttachmentCount;
 
     for (i = 0; i < colorAttachmentCount; i += 1) {
-        VulkanTextureSubresource *subresource = VULKAN_INTERNAL_FetchTextureSubresourceFromContainer(
-            (VulkanTextureContainer *)colorAttachmentInfos[i].textureSlice.texture,
-            colorAttachmentInfos[i].textureSlice.layer,
-            colorAttachmentInfos[i].textureSlice.mipLevel);
+        VulkanTextureContainer *container = (VulkanTextureContainer *)colorAttachmentInfos[i].texture;
+        VulkanTextureSubresource *subresource = VULKAN_INTERNAL_FetchTextureSubresource(
+            container,
+            container->header.info.type == SDL_GPU_TEXTURETYPE_3D ? 0 : colorAttachmentInfos[i].layerOrDepthPlane,
+            colorAttachmentInfos[i].mipLevel);
 
-        hash.colorAttachmentViews[i] = subresource->views[colorAttachmentInfos[i].textureSlice.depth];
+        Uint32 rtvIndex =
+            container->header.info.type == SDL_GPU_TEXTURETYPE_3D ? colorAttachmentInfos[i].layerOrDepthPlane : 0;
+        hash.colorAttachmentViews[i] = subresource->renderTargetViews[rtvIndex];
 
         if (subresource->msaaTexHandle != NULL) {
-            hash.colorMultiSampleAttachmentViews[i] = subresource->msaaTexHandle->vulkanTexture->view;
+            hash.colorMultiSampleAttachmentViews[i] = subresource->msaaTexHandle->vulkanTexture->subresources[0].renderTargetViews[0];
         }
     }
 
     if (depthStencilAttachmentInfo == NULL) {
         hash.depthStencilAttachmentView = VK_NULL_HANDLE;
     } else {
-        hash.depthStencilAttachmentView = VULKAN_INTERNAL_FetchTextureSliceView(&depthStencilAttachmentInfo->textureSlice);
+        VulkanTextureSubresource *subresource = VULKAN_INTERNAL_FetchTextureSubresource(
+            (VulkanTextureContainer *)depthStencilAttachmentInfo->texture,
+            0,
+            0);
+        hash.depthStencilAttachmentView = subresource->depthStencilView;
     }
 
     hash.width = width;
@@ -7377,27 +7430,34 @@ static VulkanFramebuffer *VULKAN_INTERNAL_FetchFramebuffer(
     /* Create a new framebuffer */
 
     for (i = 0; i < colorAttachmentCount; i += 1) {
-        VulkanTextureSubresource *subresource = VULKAN_INTERNAL_FetchTextureSubresourceFromContainer(
-            (VulkanTextureContainer *)colorAttachmentInfos[i].textureSlice.texture,
-            colorAttachmentInfos[i].textureSlice.layer,
-            colorAttachmentInfos[i].textureSlice.mipLevel);
+        VulkanTextureContainer *container = (VulkanTextureContainer *)colorAttachmentInfos[i].texture;
+        VulkanTextureSubresource *subresource = VULKAN_INTERNAL_FetchTextureSubresource(
+            container,
+            container->header.info.type == SDL_GPU_TEXTURETYPE_3D ? 0 : colorAttachmentInfos[i].layerOrDepthPlane,
+            colorAttachmentInfos[i].mipLevel);
+
+        Uint32 rtvIndex =
+            container->header.info.type == SDL_GPU_TEXTURETYPE_3D ? colorAttachmentInfos[i].layerOrDepthPlane : 0;
 
         imageViewAttachments[attachmentCount] =
-            subresource->views[colorAttachmentInfos[i].textureSlice.depth];
+            subresource->renderTargetViews[rtvIndex];
 
         attachmentCount += 1;
 
         if (subresource->msaaTexHandle != NULL) {
             imageViewAttachments[attachmentCount] =
-                subresource->msaaTexHandle->vulkanTexture->view;
+                subresource->msaaTexHandle->vulkanTexture->subresources[0].renderTargetViews[0];
 
             attachmentCount += 1;
         }
     }
 
     if (depthStencilAttachmentInfo != NULL) {
-        imageViewAttachments[attachmentCount] =
-            VULKAN_INTERNAL_FetchTextureSliceView(&depthStencilAttachmentInfo->textureSlice);
+        VulkanTextureSubresource *subresource = VULKAN_INTERNAL_FetchTextureSubresource(
+            (VulkanTextureContainer *)depthStencilAttachmentInfo->texture,
+            0,
+            0);
+        imageViewAttachments[attachmentCount] = subresource->depthStencilView;
 
         attachmentCount += 1;
     }
@@ -7788,10 +7848,10 @@ static void VULKAN_BeginRenderPass(
     Uint32 framebufferHeight = UINT32_MAX;
 
     for (i = 0; i < colorAttachmentCount; i += 1) {
-        VulkanTextureContainer *textureContainer = (VulkanTextureContainer *)colorAttachmentInfos[i].textureSlice.texture;
+        VulkanTextureContainer *textureContainer = (VulkanTextureContainer *)colorAttachmentInfos[i].texture;
 
-        w = textureContainer->activeTextureHandle->vulkanTexture->dimensions.width >> colorAttachmentInfos[i].textureSlice.mipLevel;
-        h = textureContainer->activeTextureHandle->vulkanTexture->dimensions.height >> colorAttachmentInfos[i].textureSlice.mipLevel;
+        w = textureContainer->activeTextureHandle->vulkanTexture->dimensions.width >> colorAttachmentInfos[i].mipLevel;
+        h = textureContainer->activeTextureHandle->vulkanTexture->dimensions.height >> colorAttachmentInfos[i].mipLevel;
 
         /* The framebuffer cannot be larger than the smallest attachment. */
 
@@ -7803,17 +7863,18 @@ static void VULKAN_BeginRenderPass(
             framebufferHeight = h;
         }
 
-        if (!textureContainer->activeTextureHandle->vulkanTexture->isRenderTarget) {
+        /* FIXME: validate this in gpu.c */
+        if (!(textureContainer->header.info.usageFlags & SDL_GPU_TEXTUREUSAGE_COLOR_TARGET_BIT)) {
             SDL_LogError(SDL_LOG_CATEGORY_GPU, "Color attachment texture was not designated as a target!");
             return;
         }
     }
 
     if (depthStencilAttachmentInfo != NULL) {
-        VulkanTextureContainer *textureContainer = (VulkanTextureContainer *)depthStencilAttachmentInfo->textureSlice.texture;
+        VulkanTextureContainer *textureContainer = (VulkanTextureContainer *)depthStencilAttachmentInfo->texture;
 
-        w = textureContainer->activeTextureHandle->vulkanTexture->dimensions.width >> depthStencilAttachmentInfo->textureSlice.mipLevel;
-        h = textureContainer->activeTextureHandle->vulkanTexture->dimensions.height >> depthStencilAttachmentInfo->textureSlice.mipLevel;
+        w = textureContainer->activeTextureHandle->vulkanTexture->dimensions.width;
+        h = textureContainer->activeTextureHandle->vulkanTexture->dimensions.height;
 
         /* The framebuffer cannot be larger than the smallest attachment. */
 
@@ -7825,7 +7886,8 @@ static void VULKAN_BeginRenderPass(
             framebufferHeight = h;
         }
 
-        if (!textureContainer->activeTextureHandle->vulkanTexture->isRenderTarget) {
+        /* FIXME: validate this in gpu.c */
+        if (!(textureContainer->header.info.usageFlags & SDL_GPU_TEXTUREUSAGE_DEPTH_STENCIL_TARGET_BIT)) {
             SDL_LogError(SDL_LOG_CATEGORY_GPU, "Depth stencil attachment texture was not designated as a target!");
             return;
         }
@@ -7843,11 +7905,11 @@ static void VULKAN_BeginRenderPass(
             cycle = colorAttachmentInfos[i].cycle;
         }
 
-        VulkanTextureContainer *textureContainer = (VulkanTextureContainer *)colorAttachmentInfos[i].textureSlice.texture;
+        VulkanTextureContainer *textureContainer = (VulkanTextureContainer *)colorAttachmentInfos[i].texture;
         VulkanTextureSubresource *subresource = VULKAN_INTERNAL_FetchTextureSubresource(
-            textureContainer->activeTextureHandle->vulkanTexture,
-            colorAttachmentInfos[i].textureSlice.layer,
-            colorAttachmentInfos[i].textureSlice.mipLevel);
+            textureContainer,
+            textureContainer->header.info.type == SDL_GPU_TEXTURETYPE_3D ? 0 : colorAttachmentInfos[i].layerOrDepthPlane,
+            colorAttachmentInfos[i].mipLevel);
 
         SDL_bool subresourceMatch = SDL_FALSE;
         for (Uint32 j = 0; j < vulkanCommandBuffer->colorAttachmentSubresourceCount; j += 1) {
@@ -7865,8 +7927,8 @@ static void VULKAN_BeginRenderPass(
             renderer,
             vulkanCommandBuffer,
             textureContainer,
-            colorAttachmentInfos[i].textureSlice.layer,
-            colorAttachmentInfos[i].textureSlice.mipLevel,
+            textureContainer->header.info.type == SDL_GPU_TEXTURETYPE_3D ? 0 : colorAttachmentInfos[i].layerOrDepthPlane,
+            colorAttachmentInfos[i].mipLevel,
             cycle,
             VULKAN_TEXTURE_USAGE_MODE_COLOR_ATTACHMENT);
 
@@ -7900,13 +7962,13 @@ static void VULKAN_BeginRenderPass(
             cycle = depthStencilAttachmentInfo->cycle;
         }
 
-        VulkanTextureContainer *textureContainer = (VulkanTextureContainer *)depthStencilAttachmentInfo->textureSlice.texture;
+        VulkanTextureContainer *textureContainer = (VulkanTextureContainer *)depthStencilAttachmentInfo->texture;
         VulkanTextureSubresource *subresource = VULKAN_INTERNAL_PrepareTextureSubresourceForWrite(
             renderer,
             vulkanCommandBuffer,
             textureContainer,
-            depthStencilAttachmentInfo->textureSlice.layer,
-            depthStencilAttachmentInfo->textureSlice.mipLevel,
+            0,
+            0,
             cycle,
             VULKAN_TEXTURE_USAGE_MODE_DEPTH_STENCIL_ATTACHMENT);
 
@@ -7949,10 +8011,11 @@ static void VULKAN_BeginRenderPass(
         clearValues[i].color.float32[2] = colorAttachmentInfos[i].clearColor.b;
         clearValues[i].color.float32[3] = colorAttachmentInfos[i].clearColor.a;
 
+        VulkanTextureContainer *container = (VulkanTextureContainer *)colorAttachmentInfos[i].texture;
         VulkanTextureSubresource *subresource = VULKAN_INTERNAL_FetchTextureSubresource(
-            ((VulkanTextureContainer *)colorAttachmentInfos[i].textureSlice.texture)->activeTextureHandle->vulkanTexture,
-            colorAttachmentInfos[i].textureSlice.layer,
-            colorAttachmentInfos[i].textureSlice.mipLevel);
+            container,
+            container->header.info.type == SDL_GPU_TEXTURETYPE_3D ? 0 : colorAttachmentInfos[i].layerOrDepthPlane,
+            colorAttachmentInfos[i].mipLevel);
 
         if (subresource->parent->sampleCount > VK_SAMPLE_COUNT_1_BIT) {
             clearValues[i + 1].color.float32[0] = colorAttachmentInfos[i].clearColor.r;
@@ -8209,52 +8272,28 @@ static void VULKAN_BeginComputePass(
     VulkanBuffer *buffer;
     Uint32 i;
 
-    /* We have to scan to see which barriers we actually need because depth slices aren't separate subresources */
-    vulkanCommandBuffer->readWriteComputeStorageTextureSubresourceCount = 0;
+    vulkanCommandBuffer->readWriteComputeStorageTextureSubresourceCount = storageTextureBindingCount;
 
     for (i = 0; i < storageTextureBindingCount; i += 1) {
-        VulkanTextureContainer *textureContainer = (VulkanTextureContainer *)storageTextureBindings[i].textureSlice.texture;
+        VulkanTextureContainer *textureContainer = (VulkanTextureContainer *)storageTextureBindings[i].texture;
         if (!(textureContainer->activeTextureHandle->vulkanTexture->usageFlags & SDL_GPU_TEXTUREUSAGE_COMPUTE_STORAGE_WRITE_BIT)) {
             SDL_LogError(SDL_LOG_CATEGORY_GPU, "Attempted to bind read-only texture as compute write texture");
         }
 
-        VulkanTextureSubresource *subresource = VULKAN_INTERNAL_FetchTextureSubresource(
-            textureContainer->activeTextureHandle->vulkanTexture,
-            storageTextureBindings[i].textureSlice.layer,
-            storageTextureBindings[i].textureSlice.mipLevel);
-
-        SDL_bool subresourceMatch = SDL_FALSE;
-        for (Uint32 j = 0; j < vulkanCommandBuffer->readWriteComputeStorageTextureSubresourceCount; j += 1) {
-            if (vulkanCommandBuffer->readWriteComputeStorageTextureSubresources[j] == subresource) {
-                subresourceMatch = SDL_TRUE;
-                break;
-            }
-        }
-
-        if (subresourceMatch) {
-            continue;
-        }
-
-        subresource = VULKAN_INTERNAL_PrepareTextureSubresourceForWrite(
+        VulkanTextureSubresource *subresource = VULKAN_INTERNAL_PrepareTextureSubresourceForWrite(
             renderer,
             vulkanCommandBuffer,
             textureContainer,
-            storageTextureBindings[i].textureSlice.layer,
-            storageTextureBindings[i].textureSlice.mipLevel,
+            storageTextureBindings[i].layer,
+            storageTextureBindings[i].mipLevel,
             storageTextureBindings[i].cycle,
             VULKAN_TEXTURE_USAGE_MODE_COMPUTE_STORAGE_READ_WRITE);
 
-        vulkanCommandBuffer->readWriteComputeStorageTextureSubresources[vulkanCommandBuffer->readWriteComputeStorageTextureSubresourceCount] = subresource;
-        vulkanCommandBuffer->readWriteComputeStorageTextureSubresourceCount += 1;
+        vulkanCommandBuffer->readWriteComputeStorageTextureSubresources[i] = subresource;
 
         VULKAN_INTERNAL_TrackTexture(
             vulkanCommandBuffer,
             subresource->parent);
-    }
-
-    for (i = 0; i < storageTextureBindingCount; i += 1) {
-        vulkanCommandBuffer->readWriteComputeStorageTextureSliceViews[i] =
-            VULKAN_INTERNAL_FetchTextureSliceView(&storageTextureBindings[i].textureSlice);
     }
 
     for (i = 0; i < storageBufferBindingCount; i += 1) {
@@ -8440,7 +8479,7 @@ static void VULKAN_INTERNAL_BindComputeDescriptorSets(
             currentWriteDescriptorSet->pBufferInfo = NULL;
 
             imageInfos[imageInfoCount].sampler = VK_NULL_HANDLE;
-            imageInfos[imageInfoCount].imageView = commandBuffer->readOnlyComputeStorageTextures[i]->view;
+            imageInfos[imageInfoCount].imageView = commandBuffer->readOnlyComputeStorageTextures[i]->fullView;
             imageInfos[imageInfoCount].imageLayout = VK_IMAGE_LAYOUT_GENERAL;
 
             currentWriteDescriptorSet->pImageInfo = &imageInfos[imageInfoCount];
@@ -8521,7 +8560,7 @@ static void VULKAN_INTERNAL_BindComputeDescriptorSets(
             currentWriteDescriptorSet->pBufferInfo = NULL;
 
             imageInfos[imageInfoCount].sampler = VK_NULL_HANDLE;
-            imageInfos[imageInfoCount].imageView = commandBuffer->readWriteComputeStorageTextureSliceViews[i];
+            imageInfos[imageInfoCount].imageView = commandBuffer->readWriteComputeStorageTextureSubresources[i]->computeWriteView;
             imageInfos[imageInfoCount].imageLayout = VK_IMAGE_LAYOUT_GENERAL;
 
             currentWriteDescriptorSet->pImageInfo = &imageInfos[imageInfoCount];
@@ -8695,8 +8734,6 @@ static void VULKAN_EndComputePass(
         vulkanCommandBuffer->readWriteComputeStorageTextureSubresources[i] = NULL;
     }
     vulkanCommandBuffer->readWriteComputeStorageTextureSubresourceCount = 0;
-
-    SDL_zeroa(vulkanCommandBuffer->readWriteComputeStorageTextureSliceViews);
 
     for (i = 0; i < MAX_COMPUTE_WRITE_BUFFERS; i += 1) {
         if (vulkanCommandBuffer->readWriteComputeStorageBuffers[i] != NULL) {
@@ -8893,7 +8930,7 @@ static void VULKAN_DownloadFromTexture(
     VulkanBufferContainer *transferBufferContainer = (VulkanBufferContainer *)destination->transferBuffer;
     VkBufferImageCopy imageCopy;
     vulkanTextureSubresource = VULKAN_INTERNAL_FetchTextureSubresource(
-        textureContainer->activeTextureHandle->vulkanTexture,
+        textureContainer,
         source->layer,
         source->mipLevel);
 
@@ -8992,7 +9029,7 @@ static void VULKAN_CopyTextureToTexture(
     VulkanTextureSubresource *dstSubresource;
     VkImageCopy imageCopy;
 
-    srcSubresource = VULKAN_INTERNAL_FetchTextureSubresourceFromContainer(
+    srcSubresource = VULKAN_INTERNAL_FetchTextureSubresource(
         (VulkanTextureContainer *)source->texture,
         source->layer,
         source->mipLevel);
@@ -9127,15 +9164,17 @@ static void VULKAN_GenerateMipmaps(
     /* Blit each slice sequentially. Barriers, barriers everywhere! */
     for (layer = 0; layer < vulkanTexture->layerCount; layer += 1)
         for (level = 1; level < vulkanTexture->levelCount; level += 1) {
-            srcTextureSubresource = VULKAN_INTERNAL_FetchTextureSubresource(
-                vulkanTexture,
+            Uint32 srcSubresourceIndex = VULKAN_INTERNAL_GetTextureSubresourceIndex(
+                level - 1,
                 layer,
-                level - 1);
+                vulkanTexture->levelCount);
+            Uint32 dstSubresourceIndex = VULKAN_INTERNAL_GetTextureSubresourceIndex(
+                level,
+                layer,
+                vulkanTexture->levelCount);
 
-            dstTextureSubresource = VULKAN_INTERNAL_FetchTextureSubresource(
-                vulkanTexture,
-                layer,
-                level);
+            srcTextureSubresource = &vulkanTexture->subresources[srcSubresourceIndex];
+            dstTextureSubresource = &vulkanTexture->subresources[dstSubresourceIndex];
 
             VULKAN_INTERNAL_TextureSubresourceTransitionFromDefaultUsage(
                 renderer,
@@ -9220,7 +9259,7 @@ static void VULKAN_Blit(
     VulkanRenderer *renderer = (VulkanRenderer *)vulkanCommandBuffer->renderer;
     VkImageBlit region;
 
-    VulkanTextureSubresource *srcSubresource = VULKAN_INTERNAL_FetchTextureSubresourceFromContainer(
+    VulkanTextureSubresource *srcSubresource = VULKAN_INTERNAL_FetchTextureSubresource(
         (VulkanTextureContainer *)source->texture,
         source->layer,
         source->mipLevel);
@@ -9575,7 +9614,6 @@ static SDL_GpuCommandBuffer *VULKAN_AcquireCommandBuffer(
     SDL_zeroa(commandBuffer->fragmentStorageTextures);
     SDL_zeroa(commandBuffer->fragmentStorageBuffers);
 
-    SDL_zeroa(commandBuffer->readWriteComputeStorageTextureSliceViews);
     SDL_zeroa(commandBuffer->readWriteComputeStorageTextureSubresources);
     commandBuffer->readWriteComputeStorageTextureSubresourceCount = 0;
     SDL_zeroa(commandBuffer->readWriteComputeStorageBuffers);
@@ -10500,7 +10538,7 @@ static void VULKAN_Submit(
     for (Uint32 j = 0; j < vulkanCommandBuffer->presentDataCount; j += 1) {
         swapchainImageIndex = vulkanCommandBuffer->presentDatas[j].swapchainImageIndex;
         swapchainTextureSubresource = VULKAN_INTERNAL_FetchTextureSubresource(
-            vulkanCommandBuffer->presentDatas[j].windowData->swapchainData->textureContainers[swapchainImageIndex].activeTextureHandle->vulkanTexture,
+            &vulkanCommandBuffer->presentDatas[j].windowData->swapchainData->textureContainers[swapchainImageIndex],
             0,
             0);
 

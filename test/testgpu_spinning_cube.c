@@ -369,13 +369,13 @@ Render(SDL_Window *window, const int windownum)
     color_attachment.clearColor.a = 1.0f;
     color_attachment.loadOp = SDL_GPU_LOADOP_CLEAR;
     color_attachment.storeOp = SDL_GPU_STOREOP_STORE;
-    color_attachment.textureSlice.texture = winstate->tex_msaa ? winstate->tex_msaa : swapchain;
+    color_attachment.texture = winstate->tex_msaa ? winstate->tex_msaa : swapchain;
 
     SDL_zero(depth_attachment);
     depth_attachment.depthStencilClearValue.depth = 1.0f;
     depth_attachment.loadOp = SDL_GPU_LOADOP_CLEAR;
     depth_attachment.storeOp = SDL_GPU_STOREOP_DONT_CARE;
-    depth_attachment.textureSlice.texture = winstate->tex_depth;
+    depth_attachment.texture = winstate->tex_depth;
     depth_attachment.cycle = SDL_TRUE;
 
     /* Set up the bindings */
