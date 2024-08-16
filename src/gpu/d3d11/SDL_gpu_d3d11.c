@@ -69,13 +69,13 @@ static const GUID D3D_IID_DXGI_DEBUG_ALL = { 0xe48ae283, 0xda80, 0x490b, { 0x87,
 #define DXGI_DLL      "dxgi.dll"
 #define DXGIDEBUG_DLL "dxgidebug.dll"
 #elif defined(__APPLE__)
-#define D3D11_DLL       "libdxvk_d3d11.0.dylib"
-#define DXGI_DLL        "libdxvk_dxgi.0.dylib"
-#define DXGIDEBUG_DLL   "libdxvk_dxgidebug.0.dylib"
+#define D3D11_DLL     "libdxvk_d3d11.0.dylib"
+#define DXGI_DLL      "libdxvk_dxgi.0.dylib"
+#define DXGIDEBUG_DLL "libdxvk_dxgidebug.0.dylib"
 #else
-#define D3D11_DLL       "libdxvk_d3d11.so.0"
-#define DXGI_DLL        "libdxvk_dxgi.so.0"
-#define DXGIDEBUG_DLL   "libdxvk_dxgidebug.so.0"
+#define D3D11_DLL     "libdxvk_d3d11.so.0"
+#define DXGI_DLL      "libdxvk_dxgi.so.0"
+#define DXGIDEBUG_DLL "libdxvk_dxgidebug.so.0"
 #endif
 
 #define D3D11_CREATE_DEVICE_FUNC      "D3D11CreateDevice"
@@ -156,10 +156,10 @@ static void D3D11_INTERNAL_DestroyBlitPipelines(SDL_GpuRenderer *driverData);
 /* Conversions */
 
 static SDL_GpuTextureFormat SwapchainCompositionToSDLTextureFormat[] = {
-    SDL_GPU_TEXTUREFORMAT_B8G8R8A8,             /* SDR */
-    SDL_GPU_TEXTUREFORMAT_B8G8R8A8_SRGB,        /* SDR_SRGB */
-    SDL_GPU_TEXTUREFORMAT_R16G16B16A16_SFLOAT,  /* HDR */
-    SDL_GPU_TEXTUREFORMAT_R10G10B10A2,          /* HDR_ADVANCED */
+    SDL_GPU_TEXTUREFORMAT_B8G8R8A8,            /* SDR */
+    SDL_GPU_TEXTUREFORMAT_B8G8R8A8_SRGB,       /* SDR_SRGB */
+    SDL_GPU_TEXTUREFORMAT_R16G16B16A16_SFLOAT, /* HDR */
+    SDL_GPU_TEXTUREFORMAT_R10G10B10A2,         /* HDR_ADVANCED */
 };
 
 static DXGI_FORMAT SwapchainCompositionToTextureFormat[] = {
@@ -390,13 +390,13 @@ typedef struct D3D11TextureSubresource
     Uint32 index;
 
     /* One RTV per depth slice */
-    ID3D11RenderTargetView **colorTargetViews;      /* NULL if not a color target */
+    ID3D11RenderTargetView **colorTargetViews; /* NULL if not a color target */
 
     ID3D11UnorderedAccessView *uav;                 /* NULL if not a storage texture */
     ID3D11DepthStencilView *depthStencilTargetView; /* NULL if not a depth stencil target */
 
-    ID3D11Resource *msaaHandle;                     /* NULL if not using MSAA */
-    ID3D11RenderTargetView *msaaTargetView;         /* NULL if not an MSAA color target */
+    ID3D11Resource *msaaHandle;             /* NULL if not using MSAA */
+    ID3D11RenderTargetView *msaaTargetView; /* NULL if not an MSAA color target */
 } D3D11TextureSubresource;
 
 struct D3D11Texture
@@ -2118,7 +2118,7 @@ static D3D11Texture *D3D11_INTERNAL_CreateTexture(
                     d3d11Texture->handle,
                     &uavDesc,
                     &d3d11Texture->subresources[subresourceIndex].uav);
-                    ERROR_CHECK_RETURN("Could not create UAV!", NULL);
+                ERROR_CHECK_RETURN("Could not create UAV!", NULL);
             }
         }
     }
@@ -3409,8 +3409,7 @@ static void D3D11_BeginRenderPass(
             ID3D11DeviceContext_ClearRenderTargetView(
                 d3d11CommandBuffer->context,
                 rtvs[i],
-                clearColor
-            );
+                clearColor);
         }
 
         D3D11_INTERNAL_TrackTexture(
@@ -3735,7 +3734,7 @@ static void D3D11_BindFragmentSamplers(
 {
     D3D11CommandBuffer *d3d11CommandBuffer = (D3D11CommandBuffer *)commandBuffer;
 
-    for (Uint32  i = 0; i < bindingCount; i += 1) {
+    for (Uint32 i = 0; i < bindingCount; i += 1) {
         D3D11TextureContainer *textureContainer = (D3D11TextureContainer *)textureSamplerBindings[i].texture;
 
         D3D11_INTERNAL_TrackTexture(
@@ -4850,7 +4849,7 @@ static SDL_bool D3D11_INTERNAL_InitializeSwapchainTexture(
     /* Create container */
 
     /* Fill out the texture struct */
-    pTexture->handle = NULL; /* This will be set in AcquireSwapchainTexture. */
+    pTexture->handle = NULL;     /* This will be set in AcquireSwapchainTexture. */
     pTexture->shaderView = NULL; /* We don't allow swapchain texture to be sampled */
     SDL_AtomicSet(&pTexture->referenceCount, 0);
     pTexture->subresourceCount = 1;

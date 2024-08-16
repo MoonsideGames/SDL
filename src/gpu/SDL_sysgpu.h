@@ -675,7 +675,7 @@ struct SDL_GpuDevice
     ASSIGN_DRIVER_FUNC(WaitForFences, name)                 \
     ASSIGN_DRIVER_FUNC(QueryFence, name)                    \
     ASSIGN_DRIVER_FUNC(ReleaseFence, name)                  \
-    ASSIGN_DRIVER_FUNC(SupportsTextureFormat, name)      \
+    ASSIGN_DRIVER_FUNC(SupportsTextureFormat, name)         \
     ASSIGN_DRIVER_FUNC(GetBestSampleCount, name)
 
 typedef struct SDL_GpuBootstrap

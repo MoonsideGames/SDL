@@ -255,8 +255,8 @@ static VkFormat SwapchainCompositionToFallbackFormat[] = {
 
 static SDL_GpuTextureFormat SwapchainCompositionToSDLFormat(
     SDL_GpuSwapchainComposition composition,
-    SDL_bool usingFallback
-) {
+    SDL_bool usingFallback)
+{
     switch (composition) {
     case SDL_GPU_SWAPCHAINCOMPOSITION_SDR:
         return usingFallback ? SDL_GPU_TEXTUREFORMAT_R8G8B8A8 : SDL_GPU_TEXTUREFORMAT_B8G8R8A8;
@@ -3057,7 +3057,7 @@ static void VULKAN_INTERNAL_TextureTransitionFromDefaultUsage(
     VulkanTextureUsageMode destinationUsageMode,
     VulkanTexture *texture)
 {
-    for (Uint32 i = 0; i < texture->subresourceCount; i += 1){
+    for (Uint32 i = 0; i < texture->subresourceCount; i += 1) {
         VULKAN_INTERNAL_TextureSubresourceTransitionFromDefaultUsage(
             renderer,
             commandBuffer,
@@ -3190,8 +3190,7 @@ static void VULKAN_INTERNAL_DestroyTexture(
             SDL_free(texture->subresources[subresourceIndex].renderTargetViews);
         }
 
-        if (texture->usageFlags & SDL_GPU_TEXTUREUSAGE_COMPUTE_STORAGE_WRITE_BIT)
-        {
+        if (texture->usageFlags & SDL_GPU_TEXTUREUSAGE_COMPUTE_STORAGE_WRITE_BIT) {
             renderer->vkDestroyImageView(
                 renderer->logicalDevice,
                 texture->subresources[subresourceIndex].computeWriteView,
@@ -5835,8 +5834,7 @@ static VulkanTexture *VULKAN_INTERNAL_CreateTexture(
             texture->subresources[subresourceIndex].computeWriteView = VK_NULL_HANDLE;
             texture->subresources[subresourceIndex].depthStencilView = VK_NULL_HANDLE;
 
-            if (textureUsageFlags & SDL_GPU_TEXTUREUSAGE_COLOR_TARGET_BIT)
-            {
+            if (textureUsageFlags & SDL_GPU_TEXTUREUSAGE_COLOR_TARGET_BIT) {
                 texture->subresources[subresourceIndex].renderTargetViews = SDL_malloc(
                     texture->depth * sizeof(VkImageView));
 

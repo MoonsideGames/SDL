@@ -130,9 +130,7 @@ static SDL_GpuDriver SDL_GpuSelectBackend(
     /* Environment/Properties override... */
     if (gpudriver != NULL) {
         for (i = 0; backends[i]; i += 1) {
-            if (SDL_strcasecmp(gpudriver, backends[i]->Name) == 0
-             && (backends[i]->shaderFormats & formatFlags)
-             && backends[i]->PrepareDriver(_this)) {
+            if (SDL_strcasecmp(gpudriver, backends[i]->Name) == 0 && (backends[i]->shaderFormats & formatFlags) && backends[i]->PrepareDriver(_this)) {
                 return backends[i]->backendflag;
             }
         }
@@ -1524,8 +1522,8 @@ void SDL_GpuDispatchCompute(
 void SDL_GpuDispatchComputeIndirect(
     SDL_GpuComputePass *computePass,
     SDL_GpuBuffer *buffer,
-    Uint32 offsetInBytes
-) {
+    Uint32 offsetInBytes)
+{
     if (computePass == NULL) {
         SDL_InvalidParamError("computePass");
         return;

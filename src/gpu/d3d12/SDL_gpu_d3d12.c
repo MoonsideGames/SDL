@@ -428,8 +428,8 @@ typedef struct D3D12TextureSubresource
     /* One per depth slice */
     D3D12CPUDescriptor *rtvHandles; /* NULL if not a color target */
 
-    D3D12CPUDescriptor uavHandle;  /* NULL if not a compute storage write texture */
-    D3D12CPUDescriptor dsvHandle;   /* NULL if not a depth stencil target */
+    D3D12CPUDescriptor uavHandle; /* NULL if not a compute storage write texture */
+    D3D12CPUDescriptor dsvHandle; /* NULL if not a depth stencil target */
 } D3D12TextureSubresource;
 
 struct D3D12Texture
@@ -2655,7 +2655,7 @@ static D3D12Texture *D3D12_INTERNAL_CreateTexture(
         resourceFlags |= D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
         useClearValue = SDL_TRUE;
         clearValue.DepthStencil.Depth = SDL_GetFloatProperty(textureCreateInfo->props, SDL_PROP_GPU_CREATETEXTURE_D3D12_CLEAR_DEPTH_FLOAT, 0);
-        clearValue.DepthStencil.Stencil = (UINT8) SDL_GetNumberProperty(textureCreateInfo->props, SDL_PROP_GPU_CREATETEXTURE_D3D12_CLEAR_STENCIL_UINT8, 0);
+        clearValue.DepthStencil.Stencil = (UINT8)SDL_GetNumberProperty(textureCreateInfo->props, SDL_PROP_GPU_CREATETEXTURE_D3D12_CLEAR_STENCIL_UINT8, 0);
     }
 
     if (textureCreateInfo->usageFlags & SDL_GPU_TEXTUREUSAGE_COMPUTE_STORAGE_WRITE_BIT) {
@@ -3308,11 +3308,11 @@ static void D3D12_InsertDebugLabel(
     Uint32 convSize;
 
     if (!D3D12_INTERNAL_StrToWStr(
-        d3d12CommandBuffer->renderer,
-        text,
-        wstr,
-        sizeof(wstr),
-        &convSize)) {
+            d3d12CommandBuffer->renderer,
+            text,
+            wstr,
+            sizeof(wstr),
+            &convSize)) {
         return;
     }
 
@@ -3332,11 +3332,11 @@ static void D3D12_PushDebugGroup(
     Uint32 convSize;
 
     if (!D3D12_INTERNAL_StrToWStr(
-        d3d12CommandBuffer->renderer,
-        name,
-        wstr,
-        sizeof(wstr),
-        &convSize)) {
+            d3d12CommandBuffer->renderer,
+            name,
+            wstr,
+            sizeof(wstr),
+            &convSize)) {
         return;
     }
 

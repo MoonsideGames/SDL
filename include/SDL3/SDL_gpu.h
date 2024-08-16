@@ -193,12 +193,12 @@ typedef enum SDL_GpuShaderStage
 
 typedef enum SDL_GpuShaderFormatFlagBits
 {
-    SDL_GPU_SHADERFORMAT_INVALID  = 0x00000000,
-    SDL_GPU_SHADERFORMAT_SECRET   = 0x00000001, /* NDA'd platforms */
-    SDL_GPU_SHADERFORMAT_SPIRV    = 0x00000002, /* Vulkan */
-    SDL_GPU_SHADERFORMAT_DXBC     = 0x00000004, /* D3D11, D3D12 */
-    SDL_GPU_SHADERFORMAT_DXIL     = 0x00000008, /* D3D12 */
-    SDL_GPU_SHADERFORMAT_MSL      = 0x00000010, /* Metal */
+    SDL_GPU_SHADERFORMAT_INVALID = 0x00000000,
+    SDL_GPU_SHADERFORMAT_SECRET = 0x00000001,   /* NDA'd platforms */
+    SDL_GPU_SHADERFORMAT_SPIRV = 0x00000002,    /* Vulkan */
+    SDL_GPU_SHADERFORMAT_DXBC = 0x00000004,     /* D3D11, D3D12 */
+    SDL_GPU_SHADERFORMAT_DXIL = 0x00000008,     /* D3D12 */
+    SDL_GPU_SHADERFORMAT_MSL = 0x00000010,      /* Metal */
     SDL_GPU_SHADERFORMAT_METALLIB = 0x00000020, /* Metal */
 } SDL_GpuShaderFormatFlagBits;
 
@@ -563,11 +563,11 @@ typedef struct SDL_GpuTextureCreateInfo
     SDL_PropertiesID props;
 } SDL_GpuTextureCreateInfo;
 
-#define SDL_PROP_GPU_CREATETEXTURE_D3D12_CLEAR_R_FLOAT "SDL.gpu.createtexture.d3d12.clear.r"
-#define SDL_PROP_GPU_CREATETEXTURE_D3D12_CLEAR_G_FLOAT "SDL.gpu.createtexture.d3d12.clear.g"
-#define SDL_PROP_GPU_CREATETEXTURE_D3D12_CLEAR_B_FLOAT "SDL.gpu.createtexture.d3d12.clear.b"
-#define SDL_PROP_GPU_CREATETEXTURE_D3D12_CLEAR_A_FLOAT "SDL.gpu.createtexture.d3d12.clear.a"
-#define SDL_PROP_GPU_CREATETEXTURE_D3D12_CLEAR_DEPTH_FLOAT "SDL.gpu.createtexture.d3d12.clear.depth"
+#define SDL_PROP_GPU_CREATETEXTURE_D3D12_CLEAR_R_FLOAT       "SDL.gpu.createtexture.d3d12.clear.r"
+#define SDL_PROP_GPU_CREATETEXTURE_D3D12_CLEAR_G_FLOAT       "SDL.gpu.createtexture.d3d12.clear.g"
+#define SDL_PROP_GPU_CREATETEXTURE_D3D12_CLEAR_B_FLOAT       "SDL.gpu.createtexture.d3d12.clear.b"
+#define SDL_PROP_GPU_CREATETEXTURE_D3D12_CLEAR_A_FLOAT       "SDL.gpu.createtexture.d3d12.clear.a"
+#define SDL_PROP_GPU_CREATETEXTURE_D3D12_CLEAR_DEPTH_FLOAT   "SDL.gpu.createtexture.d3d12.clear.depth"
 #define SDL_PROP_GPU_CREATETEXTURE_D3D12_CLEAR_STENCIL_UINT8 "SDL.gpu.createtexture.d3d12.clear.stencil"
 
 typedef struct SDL_GpuBufferCreateInfo
@@ -1812,8 +1812,7 @@ extern SDL_DECLSPEC void SDLCALL SDL_GpuDispatchCompute(
 extern SDL_DECLSPEC void SDLCALL SDL_GpuDispatchComputeIndirect(
     SDL_GpuComputePass *computePass,
     SDL_GpuBuffer *buffer,
-    Uint32 offsetInBytes
-);
+    Uint32 offsetInBytes);
 
 /**
  * Ends the current compute pass.
