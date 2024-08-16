@@ -236,6 +236,7 @@ SDL_GpuDevice *SDL_GpuCreateDeviceWithProperties(SDL_PropertiesID props)
                 result = backends[i]->CreateDevice(debugMode, preferLowPower, props);
                 if (result != NULL) {
                     result->backend = backends[i]->backendflag;
+                    result->shaderFormats = backends[i]->shaderFormats;
                     result->debugMode = debugMode;
                     break;
                 }
@@ -346,7 +347,13 @@ SDL_GpuComputePipeline *SDL_GpuCreateComputePipeline(
         SDL_InvalidParamError("computePipelineCreateInfo");
         return NULL;
     }
+
     if (device->debugMode) {
+        if (!(computePipelineCreateInfo->format & device->shaderFormats)) {
+            SDL_assert_release(!"Incompatible shader format for GPU backend");
+            return NULL;
+        }
+
         if (computePipelineCreateInfo->readWriteStorageTextureCount > MAX_COMPUTE_WRITE_TEXTURES) {
             SDL_assert_release(!"Compute pipeline read-write texture count cannot be higher than 8!");
             return NULL;
@@ -445,6 +452,13 @@ SDL_GpuShader *SDL_GpuCreateShader(
     if (shaderCreateInfo == NULL) {
         SDL_InvalidParamError("shaderCreateInfo");
         return NULL;
+    }
+
+    if (device->debugMode) {
+        if (!(shaderCreateInfo->format & device->shaderFormats)) {
+            SDL_assert_release(!"Incompatible shader format for GPU backend");
+            return NULL;
+        }
     }
 
     return device->CreateShader(

@@ -6895,11 +6895,6 @@ static SDL_GpuShader *VULKAN_CreateShader(
     VulkanRenderer *renderer = (VulkanRenderer *)driverData;
     size_t entryPointNameLength;
 
-    if (shaderCreateInfo->format != SDL_GPU_SHADERFORMAT_SPIRV) {
-        SDL_LogError(SDL_LOG_CATEGORY_GPU, "Incompatible shader format for Vulkan");
-        return NULL;
-    }
-
     vulkanShader = SDL_malloc(sizeof(VulkanShader));
     vkShaderModuleCreateInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
     vkShaderModuleCreateInfo.pNext = NULL;

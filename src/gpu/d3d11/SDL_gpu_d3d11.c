@@ -1405,7 +1405,6 @@ static ID3D11InputLayout *D3D11_INTERNAL_FetchInputLayout(
 static ID3D11DeviceChild *D3D11_INTERNAL_CreateID3D11Shader(
     D3D11Renderer *renderer,
     Uint32 stage,
-    SDL_GpuShaderFormat format,
     const Uint8 *code,
     size_t codeSize,
     const char *entryPointName,
@@ -1414,11 +1413,6 @@ static ID3D11DeviceChild *D3D11_INTERNAL_CreateID3D11Shader(
 {
     ID3D11DeviceChild *handle = NULL;
     HRESULT res;
-
-    if (format != SDL_GPU_SHADERFORMAT_DXBC) {
-        SDL_LogError(SDL_LOG_CATEGORY_GPU, "Incompatible shader format for D3D11");
-        return NULL;
-    }
 
     /* Create the shader from the byte blob */
     if (stage == SDL_GPU_SHADERSTAGE_VERTEX) {
@@ -1476,7 +1470,6 @@ static SDL_GpuComputePipeline *D3D11_CreateComputePipeline(
     shader = (ID3D11ComputeShader *)D3D11_INTERNAL_CreateID3D11Shader(
         renderer,
         SDL_GPU_SHADERSTAGE_COMPUTE,
-        pipelineCreateInfo->format,
         pipelineCreateInfo->code,
         pipelineCreateInfo->codeSize,
         pipelineCreateInfo->entryPointName,
@@ -1809,7 +1802,6 @@ SDL_GpuShader *D3D11_CreateShader(
     handle = D3D11_INTERNAL_CreateID3D11Shader(
         renderer,
         shaderCreateInfo->stage,
-        shaderCreateInfo->format,
         shaderCreateInfo->code,
         shaderCreateInfo->codeSize,
         shaderCreateInfo->entryPointName,

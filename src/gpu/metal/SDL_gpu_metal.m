@@ -755,7 +755,7 @@ static MetalLibraryFunction METAL_INTERNAL_CompileShader(
             ^{ /* do nothing */ });
         library = [renderer->device newLibraryWithData:data error:&error];
     } else {
-        SDL_LogError(SDL_LOG_CATEGORY_GPU, "Incompatible shader format for Metal");
+        SDL_assert(!"SDL_gpu.c should have already validated this!");
         return libraryFunction;
     }
 
