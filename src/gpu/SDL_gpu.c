@@ -445,7 +445,7 @@ SDL_GpuTexture *SDL_GpuCreateTexture(
             failed = SDL_TRUE;
         }
 
-        if (textureCreateInfo->isCube) {
+        if (textureCreateInfo->type == SDL_GPU_TEXTURETYPE_CUBE) {
             /* Cubemap validation */
             if (textureCreateInfo->width != textureCreateInfo->height) {
                 SDL_assert_release(!"For cube textures: width and height must be identical");
@@ -471,14 +471,14 @@ SDL_GpuTexture *SDL_GpuCreateTexture(
                 SDL_assert_release(!"For cube textures: the format is unsupported for the given usageFlags");
                 failed = SDL_TRUE;
             }
-        } else if (textureCreateInfo->depth > 1) {
+        } else if (textureCreateInfo->type == SDL_GPU_TEXTURETYPE_3D) {
             /* 3D Texture Validation*/
             if (textureCreateInfo->width > MAX_3D_DIMENSION || textureCreateInfo->height > MAX_3D_DIMENSION || textureCreateInfo->depth > MAX_3D_DIMENSION) {
                 SDL_assert_release(!"For 3D textures: width, height, and depth must be <= 2048");
                 failed = SDL_TRUE;
             }
-            if (textureCreateInfo->usageFlags & (SDL_GPU_TEXTUREUSAGE_COLOR_TARGET_BIT | SDL_GPU_TEXTUREUSAGE_DEPTH_STENCIL_TARGET_BIT)) {
-                SDL_assert_release(!"For 3D textures: usageFlags must not contain COLOR_TARGET_BIT or DEPTH_STENCIL_TARGET_BIT");
+            if (textureCreateInfo->usageFlags & SDL_GPU_TEXTUREUSAGE_DEPTH_STENCIL_TARGET_BIT) {
+                SDL_assert_release(!"For 3D textures: usageFlags must not contain DEPTH_STENCIL_TARGET_BIT");
                 failed = SDL_TRUE;
             }
             if (textureCreateInfo->layerCount > 1) {
@@ -494,10 +494,10 @@ SDL_GpuTexture *SDL_GpuCreateTexture(
                 failed = SDL_TRUE;
             }
         } else {
-            if (textureCreateInfo->layerCount > 1) {
+            if (textureCreateInfo->type == SDL_GPU_TEXTURETYPE_2D_ARRAY) {
                 /* Array Texture Validation */
-                if (textureCreateInfo->usageFlags & (SDL_GPU_TEXTUREUSAGE_COLOR_TARGET_BIT | SDL_GPU_TEXTUREUSAGE_DEPTH_STENCIL_TARGET_BIT)) {
-                    SDL_assert_release(!"For array textures: usageFlags must not contain COLOR_TARGET_BIT or DEPTH_STENCIL_TARGET_BIT");
+                if (textureCreateInfo->usageFlags & SDL_GPU_TEXTUREUSAGE_DEPTH_STENCIL_TARGET_BIT) {
+                    SDL_assert_release(!"For array textures: usageFlags must not contain DEPTH_STENCIL_TARGET_BIT");
                     failed = SDL_TRUE;
                 }
                 if (textureCreateInfo->sampleCount > SDL_GPU_SAMPLECOUNT_1) {
@@ -1059,15 +1059,15 @@ void SDL_GpuBindVertexSamplers(
 void SDL_GpuBindVertexStorageTextures(
     SDL_GpuRenderPass *renderPass,
     Uint32 firstSlot,
-    SDL_GpuTextureSlice *storageTextureSlices,
+    SDL_GpuTexture **storageTextures,
     Uint32 bindingCount)
 {
     if (renderPass == NULL) {
         SDL_InvalidParamError("renderPass");
         return;
     }
-    if (storageTextureSlices == NULL && bindingCount > 0) {
-        SDL_InvalidParamError("storageTextureSlices");
+    if (storageTextures == NULL && bindingCount > 0) {
+        SDL_InvalidParamError("storageTextures");
         return;
     }
 
@@ -1078,7 +1078,7 @@ void SDL_GpuBindVertexStorageTextures(
     RENDERPASS_DEVICE->BindVertexStorageTextures(
         RENDERPASS_COMMAND_BUFFER,
         firstSlot,
-        storageTextureSlices,
+        storageTextures,
         bindingCount);
 }
 
@@ -1137,15 +1137,15 @@ void SDL_GpuBindFragmentSamplers(
 void SDL_GpuBindFragmentStorageTextures(
     SDL_GpuRenderPass *renderPass,
     Uint32 firstSlot,
-    SDL_GpuTextureSlice *storageTextureSlices,
+    SDL_GpuTexture **storageTextures,
     Uint32 bindingCount)
 {
     if (renderPass == NULL) {
         SDL_InvalidParamError("renderPass");
         return;
     }
-    if (storageTextureSlices == NULL && bindingCount > 0) {
-        SDL_InvalidParamError("storageTextureSlices");
+    if (storageTextures == NULL && bindingCount > 0) {
+        SDL_InvalidParamError("storageTextures");
         return;
     }
 
@@ -1156,7 +1156,7 @@ void SDL_GpuBindFragmentStorageTextures(
     RENDERPASS_DEVICE->BindFragmentStorageTextures(
         RENDERPASS_COMMAND_BUFFER,
         firstSlot,
-        storageTextureSlices,
+        storageTextures,
         bindingCount);
 }
 
@@ -1390,15 +1390,15 @@ void SDL_GpuBindComputePipeline(
 void SDL_GpuBindComputeStorageTextures(
     SDL_GpuComputePass *computePass,
     Uint32 firstSlot,
-    SDL_GpuTextureSlice *storageTextureSlices,
+    SDL_GpuTexture **storageTextures,
     Uint32 bindingCount)
 {
     if (computePass == NULL) {
         SDL_InvalidParamError("computePass");
         return;
     }
-    if (storageTextureSlices == NULL && bindingCount > 0) {
-        SDL_InvalidParamError("storageTextureSlices");
+    if (storageTextures == NULL && bindingCount > 0) {
+        SDL_InvalidParamError("storageTextures");
         return;
     }
 
@@ -1409,7 +1409,7 @@ void SDL_GpuBindComputeStorageTextures(
     COMPUTEPASS_DEVICE->BindComputeStorageTextures(
         COMPUTEPASS_COMMAND_BUFFER,
         firstSlot,
-        storageTextureSlices,
+        storageTextures,
         bindingCount);
 }
 
@@ -1795,8 +1795,8 @@ void SDL_GpuBlit(
 
         /* Validation */
         SDL_bool failed = SDL_FALSE;
-        TextureCommonHeader *srcHeader = (TextureCommonHeader *)source->textureSlice.texture;
-        TextureCommonHeader *dstHeader = (TextureCommonHeader *)destination->textureSlice.texture;
+        TextureCommonHeader *srcHeader = (TextureCommonHeader *)source->texture;
+        TextureCommonHeader *dstHeader = (TextureCommonHeader *)destination->texture;
 
         if ((srcHeader->info.usageFlags & SDL_GPU_TEXTUREUSAGE_SAMPLER_BIT) == 0) {
             SDL_assert_release(!"Blit source texture must be created with the SAMPLER_BIT usage flag");

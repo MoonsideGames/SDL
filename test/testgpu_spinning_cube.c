@@ -252,11 +252,11 @@ CreateDepthTexture(Uint32 drawablew, Uint32 drawableh)
     SDL_GpuTextureCreateInfo depthtex_createinfo;
     SDL_GpuTexture *result;
 
+    depthtex_createinfo.type = SDL_GPU_TEXTURETYPE_2D;
+    depthtex_createinfo.format = SDL_GPU_TEXTUREFORMAT_D16_UNORM;
     depthtex_createinfo.width = drawablew;
     depthtex_createinfo.height = drawableh;
     depthtex_createinfo.depth = 1;
-    depthtex_createinfo.format = SDL_GPU_TEXTUREFORMAT_D16_UNORM;
-    depthtex_createinfo.isCube = 0;
     depthtex_createinfo.layerCount = 1;
     depthtex_createinfo.levelCount = 1;
     depthtex_createinfo.sampleCount = render_state.sample_count;
@@ -279,11 +279,11 @@ CreateMSAATexture(Uint32 drawablew, Uint32 drawableh)
         return NULL;
     }
 
+    msaatex_createinfo.type = SDL_GPU_TEXTURETYPE_2D;
+    msaatex_createinfo.format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8;
     msaatex_createinfo.width = drawablew;
     msaatex_createinfo.height = drawableh;
     msaatex_createinfo.depth = 1;
-    msaatex_createinfo.format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8;
-    msaatex_createinfo.isCube = 0;
     msaatex_createinfo.layerCount = 1;
     msaatex_createinfo.levelCount = 1;
     msaatex_createinfo.sampleCount = SDL_GPU_SAMPLECOUNT_4;
@@ -369,13 +369,13 @@ Render(SDL_Window *window, const int windownum)
     color_attachment.clearColor.a = 1.0f;
     color_attachment.loadOp = SDL_GPU_LOADOP_CLEAR;
     color_attachment.storeOp = SDL_GPU_STOREOP_STORE;
-    color_attachment.textureSlice.texture = winstate->tex_msaa ? winstate->tex_msaa : swapchain;
+    color_attachment.texture = winstate->tex_msaa ? winstate->tex_msaa : swapchain;
 
     SDL_zero(depth_attachment);
     depth_attachment.depthStencilClearValue.depth = 1.0f;
     depth_attachment.loadOp = SDL_GPU_LOADOP_CLEAR;
     depth_attachment.storeOp = SDL_GPU_STOREOP_DONT_CARE;
-    depth_attachment.textureSlice.texture = winstate->tex_depth;
+    depth_attachment.texture = winstate->tex_depth;
     depth_attachment.cycle = SDL_TRUE;
 
     /* Set up the bindings */
@@ -396,13 +396,13 @@ Render(SDL_Window *window, const int windownum)
     /* Blit MSAA to swapchain, if needed */
     if (render_state.sample_count > SDL_GPU_SAMPLECOUNT_1) {
         SDL_zero(src_region);
-        src_region.textureSlice.texture = winstate->tex_msaa;
+        src_region.texture = winstate->tex_msaa;
         src_region.w = drawablew;
         src_region.h = drawableh;
         src_region.d = 1;
 
         dst_region = src_region;
-        dst_region.textureSlice.texture = swapchain;
+        dst_region.texture = swapchain;
 
         SDL_GpuBlit(cmd, &src_region, &dst_region, SDL_GPU_FILTER_LINEAR, SDL_FALSE);
     }
