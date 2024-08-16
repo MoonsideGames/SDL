@@ -3407,6 +3407,20 @@ static void D3D11_BeginRenderPass(
             rtvs[i] = subresource->colorTargetViews[rtvIndex];
         }
 
+        if (colorAttachmentInfos[i].loadOp = SDL_GPU_LOADOP_CLEAR) {
+            float clearColor[] = {
+                colorAttachmentInfos[i].clearColor.r,
+                colorAttachmentInfos[i].clearColor.g,
+                colorAttachmentInfos[i].clearColor.b,
+                colorAttachmentInfos[i].clearColor.a
+            };
+            ID3D11DeviceContext_ClearRenderTargetView(
+                d3d11CommandBuffer->context,
+                rtvs[i],
+                clearColor
+            );
+        }
+
         D3D11_INTERNAL_TrackTexture(
             d3d11CommandBuffer,
             subresource->parent);
@@ -3435,22 +3449,6 @@ static void D3D11_BeginRenderPass(
         colorAttachmentCount,
         colorAttachmentCount > 0 ? rtvs : NULL,
         dsv);
-
-    /* Perform load ops on the RTs */
-    for (Uint32 i = 0; i < colorAttachmentCount; i += 1) {
-        if (colorAttachmentInfos[i].loadOp == SDL_GPU_LOADOP_CLEAR) {
-            float clearColors[] = {
-                colorAttachmentInfos[i].clearColor.r,
-                colorAttachmentInfos[i].clearColor.g,
-                colorAttachmentInfos[i].clearColor.b,
-                colorAttachmentInfos[i].clearColor.a
-            };
-            ID3D11DeviceContext_ClearRenderTargetView(
-                d3d11CommandBuffer->context,
-                rtvs[i],
-                clearColors);
-        }
-    }
 
     if (depthStencilAttachmentInfo != NULL) {
         D3D11_CLEAR_FLAG dsClearFlags = 0;
