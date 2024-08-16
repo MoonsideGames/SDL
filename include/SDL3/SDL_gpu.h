@@ -563,12 +563,12 @@ typedef struct SDL_GpuTextureCreateInfo
     SDL_PropertiesID props;
 } SDL_GpuTextureCreateInfo;
 
-#define SDL_PROP_GPU_CREATETEXTURE_D3D12_CLEAR_R "SDL.gpu.createtexture.d3d12.clear.r"
-#define SDL_PROP_GPU_CREATETEXTURE_D3D12_CLEAR_G "SDL.gpu.createtexture.d3d12.clear.g"
-#define SDL_PROP_GPU_CREATETEXTURE_D3D12_CLEAR_B "SDL.gpu.createtexture.d3d12.clear.b"
-#define SDL_PROP_GPU_CREATETEXTURE_D3D12_CLEAR_A "SDL.gpu.createtexture.d3d12.clear.a"
-#define SDL_PROP_GPU_CREATETEXTURE_D3D12_CLEAR_DEPTH "SDL.gpu.createtexture.d3d12.clear.depth"
-#define SDL_PROP_GPU_CREATETEXTURE_D3D12_CLEAR_STENCIL "SDL.gpu.createtexture.d3d12.clear.stencil"
+#define SDL_PROP_GPU_CREATETEXTURE_D3D12_CLEAR_R_FLOAT "SDL.gpu.createtexture.d3d12.clear.r"
+#define SDL_PROP_GPU_CREATETEXTURE_D3D12_CLEAR_G_FLOAT "SDL.gpu.createtexture.d3d12.clear.g"
+#define SDL_PROP_GPU_CREATETEXTURE_D3D12_CLEAR_B_FLOAT "SDL.gpu.createtexture.d3d12.clear.b"
+#define SDL_PROP_GPU_CREATETEXTURE_D3D12_CLEAR_A_FLOAT "SDL.gpu.createtexture.d3d12.clear.a"
+#define SDL_PROP_GPU_CREATETEXTURE_D3D12_CLEAR_DEPTH_FLOAT "SDL.gpu.createtexture.d3d12.clear.depth"
+#define SDL_PROP_GPU_CREATETEXTURE_D3D12_CLEAR_STENCIL_UINT8 "SDL.gpu.createtexture.d3d12.clear.stencil"
 
 typedef struct SDL_GpuBufferCreateInfo
 {
