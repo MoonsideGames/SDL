@@ -596,6 +596,7 @@ struct SDL_GpuDevice
 
     /* Store this for SDL_gpu.c's debug layer */
     SDL_bool debugMode;
+    SDL_GpuShaderFormat shaderFormats;
 };
 
 #define ASSIGN_DRIVER_FUNC(func, name) \
