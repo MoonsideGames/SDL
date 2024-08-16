@@ -2629,7 +2629,7 @@ static D3D12Texture *D3D12_INTERNAL_CreateTexture(
         resourceFlags |= D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
         useClearValue = SDL_TRUE;
         clearValue.DepthStencil.Depth = SDL_GetFloatProperty(textureCreateInfo->props, SDL_PROP_GPU_CREATETEXTURE_D3D12_CLEAR_DEPTH_FLOAT, 0);
-        clearValue.DepthStencil.Stencil = SDL_GetNumberProperty(textureCreateInfo->props, SDL_PROP_GPU_CREATETEXTURE_D3D12_CLEAR_STENCIL_UINT8, 0);
+        clearValue.DepthStencil.Stencil = (UINT8) SDL_GetNumberProperty(textureCreateInfo->props, SDL_PROP_GPU_CREATETEXTURE_D3D12_CLEAR_STENCIL_UINT8, 0);
     }
 
     if (textureCreateInfo->usageFlags & SDL_GPU_TEXTUREUSAGE_COMPUTE_STORAGE_WRITE_BIT) {
