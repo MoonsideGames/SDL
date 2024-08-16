@@ -2607,6 +2607,8 @@ static D3D12Texture *D3D12_INTERNAL_CreateTexture(
     D3D12_RESOURCE_DESC desc;
     D3D12_RESOURCE_FLAGS resourceFlags = (D3D12_RESOURCE_FLAGS)0;
     D3D12_RESOURCE_STATES initialState = (D3D12_RESOURCE_STATES)0;
+    D3D12_CLEAR_VALUE clearValue;
+    SDL_bool useClearValue = SDL_FALSE;
     HRESULT res;
 
     texture = (D3D12Texture *)SDL_calloc(1, sizeof(D3D12Texture));
@@ -2616,10 +2618,18 @@ static D3D12Texture *D3D12_INTERNAL_CreateTexture(
 
     if (textureCreateInfo->usageFlags & SDL_GPU_TEXTUREUSAGE_COLOR_TARGET_BIT) {
         resourceFlags |= D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+        useClearValue = SDL_TRUE;
+        clearValue.Color[0] = SDL_GetNumberProperty(textureCreateInfo->props, SDL_PROP_GPU_CREATETEXTURE_D3D12_CLEAR_R, 0);
+        clearValue.Color[1] = SDL_GetNumberProperty(textureCreateInfo->props, SDL_PROP_GPU_CREATETEXTURE_D3D12_CLEAR_G, 0);
+        clearValue.Color[2] = SDL_GetNumberProperty(textureCreateInfo->props, SDL_PROP_GPU_CREATETEXTURE_D3D12_CLEAR_B, 0);
+        clearValue.Color[3] = SDL_GetNumberProperty(textureCreateInfo->props, SDL_PROP_GPU_CREATETEXTURE_D3D12_CLEAR_A, 0);
     }
 
     if (textureCreateInfo->usageFlags & SDL_GPU_TEXTUREUSAGE_DEPTH_STENCIL_TARGET_BIT) {
         resourceFlags |= D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
+        useClearValue = SDL_TRUE;
+        clearValue.DepthStencil.Depth = SDL_GetNumberProperty(textureCreateInfo->props, SDL_PROP_GPU_CREATETEXTURE_D3D12_CLEAR_DEPTH, 0);
+        clearValue.DepthStencil.Stencil = SDL_GetNumberProperty(textureCreateInfo->props, SDL_PROP_GPU_CREATETEXTURE_D3D12_CLEAR_STENCIL, 0);
     }
 
     if (textureCreateInfo->usageFlags & SDL_GPU_TEXTUREUSAGE_COMPUTE_STORAGE_WRITE_BIT) {
@@ -2661,6 +2671,7 @@ static D3D12Texture *D3D12_INTERNAL_CreateTexture(
     }
 
     initialState = D3D12_INTERNAL_DefaultTextureResourceState(textureCreateInfo->usageFlags);
+    clearValue.Format = desc.Format;
 
     res = ID3D12Device_CreateCommittedResource(
         renderer->device,
@@ -2668,7 +2679,7 @@ static D3D12Texture *D3D12_INTERNAL_CreateTexture(
         heapFlags,
         &desc,
         initialState,
-        NULL,
+        useClearValue ? &clearValue : NULL,
         D3D_GUID(D3D_IID_ID3D12Resource),
         (void **)&handle);
     if (FAILED(res)) {
