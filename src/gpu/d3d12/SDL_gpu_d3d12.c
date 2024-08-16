@@ -4730,6 +4730,7 @@ static void D3D12_BeginComputePass(
                 storageTextureBindings[i].textureSlice.layer,
                 storageTextureBindings[i].textureSlice.mipLevel);
 
+            /* FIXME: Does this do anything anymore...? -flibit
             SDL_bool subresourceMatch = SDL_FALSE;
             for (Uint32 j = 0; j < d3d12CommandBuffer->computeReadWriteStorageTextureSubresourceCount; j += 1) {
                 if (d3d12CommandBuffer->computeReadWriteStorageTextureSubresources[j] == subresource) {
@@ -4737,6 +4738,7 @@ static void D3D12_BeginComputePass(
                     break;
                 }
             }
+            */
 
             subresource = D3D12_INTERNAL_PrepareTextureSubresourceForWrite(
                 d3d12CommandBuffer,
