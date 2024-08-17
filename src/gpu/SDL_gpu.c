@@ -697,6 +697,10 @@ SDL_GpuTexture *SDL_GpuCreateTexture(
             SDL_assert_release(!"For any texture: usageFlags cannot contain both GRAPHICS_STORAGE_READ_BIT and SAMPLER_BIT");
             failed = SDL_TRUE;
         }
+        if (IsDepthFormat(textureCreateInfo->format) && (textureCreateInfo->usageFlags & ~(SDL_GPU_TEXTUREUSAGE_DEPTH_STENCIL_TARGET_BIT | SDL_GPU_TEXTUREUSAGE_SAMPLER_BIT))) {
+            SDL_assert_release(!"For depth textures: usageFlags cannot contain any flags except for DEPTH_STENCIL_TARGET_BIT and SAMPLER_BIT");
+            failed = SDL_TRUE;
+        }
         if (IsIntegerFormat(textureCreateInfo->format) && (textureCreateInfo->usageFlags & SDL_GPU_TEXTUREUSAGE_SAMPLER_BIT)) {
             SDL_assert_release(!"For any texture: usageFlags cannot contain SAMPLER_BIT for textures with an integer format");
             failed = SDL_TRUE;
@@ -2067,8 +2071,8 @@ void SDL_GpuBlit(
             SDL_assert_release(!"Blit destination texture must be created with the COLOR_TARGET_BIT usage flag");
             failed = SDL_TRUE;
         }
-        if (srcHeader->info.format != dstHeader->info.format) {
-            SDL_assert_release(!"Blit source and destination textures must be have the same format");
+        if (IsDepthFormat(srcHeader->info.format)) {
+            SDL_assert_release(!"Blit source texture cannot have a depth format");
             failed = SDL_TRUE;
         }
         if (source->w == 0 || source->h == 0 || source->d == 0 || destination->w == 0 || destination->h == 0 || destination->d == 0) {
