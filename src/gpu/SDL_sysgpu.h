@@ -62,7 +62,7 @@ typedef struct BlitFragmentUniforms
 
 typedef struct BlitPipelineCacheEntry
 {
-    int type;
+    SDL_GpuTextureType type;
     SDL_GpuTextureFormat format;
     SDL_GpuGraphicsPipeline *pipeline;
 } BlitPipelineCacheEntry;
@@ -227,7 +227,7 @@ static inline Sint32 BytesPerImage(
 
 SDL_GpuGraphicsPipeline *SDL_Gpu_FetchBlitPipeline(
     SDL_GpuDevice *device,
-    int sourceTextureType,
+    SDL_GpuTextureType sourceTextureType,
     SDL_GpuTextureFormat destinationFormat,
     SDL_GpuShader *blitVertexShader,
     SDL_GpuShader *blitFrom2DShader,

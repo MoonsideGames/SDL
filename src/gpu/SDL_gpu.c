@@ -122,7 +122,7 @@ static const SDL_GpuBootstrap *backends[] = {
 
 SDL_GpuGraphicsPipeline *SDL_Gpu_FetchBlitPipeline(
     SDL_GpuDevice *device,
-    int sourceTextureType, /* FIXME: Replace with an actual texture type! */
+    SDL_GpuTextureType sourceTextureType,
     SDL_GpuTextureFormat destinationFormat,
     SDL_GpuShader *blitVertexShader,
     SDL_GpuShader *blitFrom2DShader,
@@ -160,10 +160,12 @@ SDL_GpuGraphicsPipeline *SDL_Gpu_FetchBlitPipeline(
     blitPipelineCreateInfo.attachmentInfo.hasDepthStencilAttachment = SDL_FALSE;
 
     blitPipelineCreateInfo.vertexShader = blitVertexShader;
-    if (sourceTextureType == 1) {
+    if (sourceTextureType == SDL_GPU_TEXTURETYPE_CUBE) {
         blitPipelineCreateInfo.fragmentShader = blitFromCubeShader;
-    } else if (sourceTextureType == 2) {
+    } else if (sourceTextureType == SDL_GPU_TEXTURETYPE_2D_ARRAY) {
         blitPipelineCreateInfo.fragmentShader = blitFrom2DArrayShader;
+    } else if (sourceTextureType == SDL_GPU_TEXTURETYPE_3D) {
+        SDL_assert_release(!"3D blit not implemented yet!");
     } else {
         blitPipelineCreateInfo.fragmentShader = blitFrom2DShader;
     }
@@ -221,24 +223,17 @@ void SDL_Gpu_BlitCommon(
 {
     CommandBufferCommonHeader *cmdbufHeader = (CommandBufferCommonHeader *)commandBuffer;
     SDL_GpuRenderPass *renderPass;
-    int type = 0; /* FIXME: Remove this! */
-    TextureCommonHeader *srcHeader = (TextureCommonHeader *)source->textureSlice.texture;
-    TextureCommonHeader *dstHeader = (TextureCommonHeader *)destination->textureSlice.texture;
+    TextureCommonHeader *srcHeader = (TextureCommonHeader *)source->texture;
+    TextureCommonHeader *dstHeader = (TextureCommonHeader *)destination->texture;
     SDL_GpuGraphicsPipeline *blitPipeline;
     SDL_GpuColorAttachmentInfo colorAttachmentInfo;
     SDL_GpuViewport viewport;
     SDL_GpuTextureSamplerBinding textureSamplerBinding;
     BlitFragmentUniforms blitFragmentUniforms;
 
-    if (srcHeader->info.isCube) {
-        type = 1;
-    } else if (srcHeader->info.layerCount > 1) {
-        type = 2;
-    }
-
     blitPipeline = SDL_Gpu_FetchBlitPipeline(
         cmdbufHeader->device,
-        type,
+        srcHeader->info.type,
         dstHeader->info.format,
         blitVertexShader,
         blitFrom2DShader,
@@ -266,7 +261,9 @@ void SDL_Gpu_BlitCommon(
 
     colorAttachmentInfo.storeOp = SDL_GPU_STOREOP_STORE;
 
-    colorAttachmentInfo.textureSlice = destination->textureSlice;
+    colorAttachmentInfo.texture = destination->texture;
+    colorAttachmentInfo.mipLevel = destination->mipLevel;
+    colorAttachmentInfo.layerOrDepthPlane = (dstHeader->info.type == SDL_GPU_TEXTURETYPE_3D) ? destination->z : destination->layer; /* FIXME */
     colorAttachmentInfo.cycle = cycle;
 
     renderPass = SDL_GpuBeginRenderPass(
@@ -290,7 +287,7 @@ void SDL_Gpu_BlitCommon(
         renderPass,
         blitPipeline);
 
-    textureSamplerBinding.texture = source->textureSlice.texture;
+    textureSamplerBinding.texture = source->texture;
     textureSamplerBinding.sampler =
         filterMode == SDL_GPU_FILTER_NEAREST ? blitNearestSampler : blitLinearSampler;
 
@@ -304,8 +301,8 @@ void SDL_Gpu_BlitCommon(
     blitFragmentUniforms.top = (float)source->y / srcHeader->info.height;
     blitFragmentUniforms.width = (float)source->w / srcHeader->info.width;
     blitFragmentUniforms.height = (float)source->h / srcHeader->info.height;
-    blitFragmentUniforms.mipLevel = source->textureSlice.mipLevel;
-    blitFragmentUniforms.layer = source->textureSlice.layer;
+    blitFragmentUniforms.mipLevel = source->mipLevel;
+    blitFragmentUniforms.layer = source->layer;
 
     SDL_GpuPushFragmentUniformData(
         commandBuffer,
