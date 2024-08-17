@@ -10123,6 +10123,9 @@ static SDL_bool VULKAN_SetSwapchainParameters(
         return SDL_FALSE;
     }
 
+    windowData->presentMode = presentMode;
+    windowData->swapchainComposition = swapchainComposition;
+
     return VULKAN_INTERNAL_RecreateSwapchain(
         (VulkanRenderer *)driverData,
         windowData);
