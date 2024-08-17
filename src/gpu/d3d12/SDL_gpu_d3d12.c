@@ -702,7 +702,7 @@ struct D3D12GraphicsPipeline
     Uint32 vertexStrides[MAX_BUFFER_BINDINGS];
 
     float blendConstants[4];
-    Uint32 stencilRef;
+    Uint8 stencilRef;
 
     Uint32 vertexSamplerCount;
     Uint32 vertexUniformBufferCount;
@@ -2335,8 +2335,7 @@ static SDL_bool D3D12_INTERNAL_ConvertBlendState(SDL_GpuGraphicsPipelineCreateIn
             rtBlendDesc.SrcBlendAlpha = SDLToD3D12_BlendFactorAlpha[sdlBlendState.srcAlphaBlendFactor];
             rtBlendDesc.DestBlendAlpha = SDLToD3D12_BlendFactorAlpha[sdlBlendState.dstAlphaBlendFactor];
             rtBlendDesc.BlendOpAlpha = SDLToD3D12_BlendOp[sdlBlendState.alphaBlendOp];
-            SDL_assert(sdlBlendState.colorWriteMask <= SDL_MAX_UINT8);
-            rtBlendDesc.RenderTargetWriteMask = (UINT8)sdlBlendState.colorWriteMask;
+            rtBlendDesc.RenderTargetWriteMask = sdlBlendState.colorWriteMask;
 
             if (i > 0) {
                 blendDesc->IndependentBlendEnable = TRUE;
@@ -2359,8 +2358,8 @@ static SDL_bool D3D12_INTERNAL_ConvertDepthStencilState(SDL_GpuDepthStencilState
     desc->DepthWriteMask = depthStencilState.depthWriteEnable == SDL_TRUE ? D3D12_DEPTH_WRITE_MASK_ALL : D3D12_DEPTH_WRITE_MASK_ZERO;
     desc->DepthFunc = SDLToD3D12_CompareOp[depthStencilState.compareOp];
     desc->StencilEnable = depthStencilState.stencilTestEnable == SDL_TRUE ? TRUE : FALSE;
-    desc->StencilReadMask = (UINT8)depthStencilState.compareMask;
-    desc->StencilWriteMask = (UINT8)depthStencilState.writeMask;
+    desc->StencilReadMask = depthStencilState.compareMask;
+    desc->StencilWriteMask = depthStencilState.writeMask;
 
     desc->FrontFace.StencilFailOp = SDLToD3D12_StencilOp[depthStencilState.frontStencilState.failOp];
     desc->FrontFace.StencilDepthFailOp = SDLToD3D12_StencilOp[depthStencilState.frontStencilState.depthFailOp];

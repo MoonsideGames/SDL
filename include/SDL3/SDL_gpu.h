@@ -304,7 +304,7 @@ typedef enum SDL_GpuColorComponentFlagBits
     SDL_GPU_COLORCOMPONENT_A_BIT = 0x00000008
 } SDL_GpuColorComponentFlagBits;
 
-typedef Uint32 SDL_GpuColorComponentFlags;
+typedef Uint8 SDL_GpuColorComponentFlags;
 
 typedef enum SDL_GpuFilter
 {
@@ -381,7 +381,7 @@ typedef enum SDL_GpuDriver
 typedef struct SDL_GpuDepthStencilValue
 {
     float depth;
-    Uint32 stencil;
+    Uint8 stencil;
 } SDL_GpuDepthStencilValue;
 
 typedef struct SDL_GpuViewport
@@ -613,9 +613,9 @@ typedef struct SDL_GpuDepthStencilState
     SDL_bool stencilTestEnable;
     SDL_GpuStencilOpState backStencilState;
     SDL_GpuStencilOpState frontStencilState;
-    Uint32 compareMask;
-    Uint32 writeMask;
-    Uint32 reference;
+    Uint8 compareMask;
+    Uint8 writeMask;
+    Uint8 reference;
 } SDL_GpuDepthStencilState;
 
 typedef struct SDL_GpuColorAttachmentDescription

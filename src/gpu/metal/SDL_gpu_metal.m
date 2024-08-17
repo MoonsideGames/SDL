@@ -393,7 +393,7 @@ typedef struct MetalGraphicsPipeline
     SDL_GpuPrimitiveType primitiveType;
 
     id<MTLDepthStencilState> depthStencilState;
-    Uint32 stencilReference;
+    Uint8 stencilReference;
 
     Uint32 vertexSamplerCount;
     Uint32 vertexUniformBufferCount;

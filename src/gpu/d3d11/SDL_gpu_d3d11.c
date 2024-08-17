@@ -457,7 +457,7 @@ typedef struct D3D11GraphicsPipeline
     Uint8 hasDepthStencilAttachment;
     DXGI_FORMAT depthStencilAttachmentFormat;
     ID3D11DepthStencilState *depthStencilState;
-    Uint32 stencilRef;
+    Uint8 stencilRef;
 
     SDL_GpuPrimitiveType primitiveType;
     ID3D11RasterizerState *rasterizerState;
@@ -3456,7 +3456,7 @@ static void D3D11_BeginRenderPass(
                 dsv,
                 dsClearFlags,
                 depthStencilAttachmentInfo->depthStencilClearValue.depth,
-                (Uint8)depthStencilAttachmentInfo->depthStencilClearValue.stencil);
+                depthStencilAttachmentInfo->depthStencilClearValue.stencil);
         }
     }
 
