@@ -306,7 +306,7 @@ void SDL_Gpu_BlitCommon(
     blitFragmentUniforms.width = (float)source->w / srcHeader->info.width;
     blitFragmentUniforms.height = (float)source->h / srcHeader->info.height;
     blitFragmentUniforms.mipLevel = source->mipLevel;
-    blitFragmentUniforms.layer = (dstHeader->info.type == SDL_GPU_TEXTURETYPE_3D) ? source->z : source->layer;
+    blitFragmentUniforms.layerOrDepth = (srcHeader->info.type == SDL_GPU_TEXTURETYPE_3D) ? (source->z / (float)srcHeader->info.depth) : source->layer;
 
     SDL_GpuPushFragmentUniformData(
         commandBuffer,
@@ -2067,16 +2067,12 @@ void SDL_GpuBlit(
             SDL_assert_release(!"Blit destination texture must be created with the COLOR_TARGET_BIT usage flag");
             failed = SDL_TRUE;
         }
-        if (srcHeader->info.depth > 1 || dstHeader->info.depth > 1) {
-            SDL_assert_release(!"Blit source and destination textures must have a depth of 1");
-            failed = SDL_TRUE;
-        }
         if (srcHeader->info.format != dstHeader->info.format) {
             SDL_assert_release(!"Blit source and destination textures must be have the same format");
             failed = SDL_TRUE;
         }
-        if (source->w == 0 || source->h == 0 || destination->w == 0 || destination->h == 0) {
-            SDL_assert_release(!"Blit source/destination regions must have non-zero width and height");
+        if (source->w == 0 || source->h == 0 || source->d == 0 || destination->w == 0 || destination->h == 0 || destination->d == 0) {
+            SDL_assert_release(!"Blit source/destination regions must have non-zero width, height, and depth");
             failed = SDL_TRUE;
         }
 

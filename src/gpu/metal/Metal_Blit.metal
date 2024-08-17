@@ -10,7 +10,7 @@ struct SourceRegion {
     float2 UVLeftTop;
     float2 UVDimensions;
     uint MipLevel;
-    uint Layer;
+    float LayerOrDepth;
 };
 
 #if COMPILE_FullscreenVert
@@ -43,7 +43,7 @@ fragment float4 BlitFrom2DArray(
     sampler sourceSampler [[sampler(0)]])
 {
     float2 newCoord = sourceRegion.UVLeftTop + sourceRegion.UVDimensions * input.tex;
-    return sourceTexture.sample(sourceSampler, newCoord, sourceRegion.Layer, level(sourceRegion.MipLevel));
+    return sourceTexture.sample(sourceSampler, newCoord, (uint)sourceRegion.LayerOrDepth, level(sourceRegion.MipLevel));
 }
 #endif
 
@@ -55,7 +55,7 @@ fragment float4 BlitFrom3D(
     sampler sourceSampler [[sampler(0)]])
 {
     float2 newCoord = sourceRegion.UVLeftTop + sourceRegion.UVDimensions * input.tex;
-    return sourceTexture.sample(sourceSampler, float3(newCoord, sourceRegion.Layer), level(sourceRegion.MipLevel));
+    return sourceTexture.sample(sourceSampler, float3(newCoord, sourceRegion.LayerOrDepth), level(sourceRegion.MipLevel));
 }
 #endif
 
@@ -71,7 +71,7 @@ fragment float4 BlitFromCube(
     float u = 2.0 * scaledUV.x - 1.0;
     float v = 2.0 * scaledUV.y - 1.0;
     float3 newCoord;
-    switch (sourceRegion.Layer) {
+    switch ((uint)sourceRegion.LayerOrDepth) {
         case 0: newCoord = float3(1.0, -v, -u); break; // POSITIVE X
         case 1: newCoord = float3(-1.0, -v, u); break; // NEGATIVE X
         case 2: newCoord = float3(u, -1.0, -v); break; // POSITIVE Y

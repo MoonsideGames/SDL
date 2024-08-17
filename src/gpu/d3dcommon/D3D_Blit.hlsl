@@ -15,7 +15,7 @@ cbuffer SourceRegionBuffer : REG(b0, space3)
     float2 UVLeftTop;
     float2 UVDimensions;
     uint MipLevel;
-    uint Layer;
+    float LayerOrDepth;
 };
 
 Texture2D SourceTexture2D : REG(t0, space2);
@@ -42,13 +42,13 @@ float4 BlitFrom2D(VertexToPixel input) : SV_Target0
 
 float4 BlitFrom2DArray(VertexToPixel input) : SV_Target0
 {
-    float3 newCoord = float3(UVLeftTop + UVDimensions * input.tex, Layer);
+    float3 newCoord = float3(UVLeftTop + UVDimensions * input.tex, (uint)LayerOrDepth);
     return SourceTexture2DArray.SampleLevel(SourceSampler, newCoord, MipLevel);
 }
 
 float4 BlitFrom3D(VertexToPixel input) : SV_Target0
 {
-    float3 newCoord = float3(UVLeftTop + UVDimensions * input.tex, Layer);
+    float3 newCoord = float3(UVLeftTop + UVDimensions * input.tex, LayerOrDepth);
     return SourceTexture3D.SampleLevel(SourceSampler, newCoord, MipLevel);
 }
 
@@ -59,7 +59,7 @@ float4 BlitFromCube(VertexToPixel input) : SV_Target0
     float2 scaledUV = UVLeftTop + UVDimensions * input.tex;
     float u = 2.0 * scaledUV.x - 1.0;
     float v = 2.0 * scaledUV.y - 1.0;
-    switch (Layer) {
+    switch ((uint)LayerOrDepth) {
         case 0: newCoord = float3(1.0, -v, -u); break; // POSITIVE X
         case 1: newCoord = float3(-1.0, -v, u); break; // NEGATIVE X
         case 2: newCoord = float3(u, -1.0, -v); break; // POSITIVE Y

@@ -57,7 +57,7 @@ typedef struct BlitFragmentUniforms
     float height;
 
     Uint32 mipLevel;
-    Uint32 layer;
+    float layerOrDepth;
 } BlitFragmentUniforms;
 
 typedef struct BlitPipelineCacheEntry
