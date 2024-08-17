@@ -4,6 +4,8 @@ set -x
 set -e
 cd `dirname "$0"`
 
+shadernames=(FullscreenVert BlitFrom2D BlitFrom2DArray BlitFrom3D BlitFromCube)
+
 generate_shaders()
 {
         fileplatform=$1
@@ -11,7 +13,6 @@ generate_shaders()
         sdkplatform=$3
         minversion=$4
 
-        shadernames=(FullscreenVert BlitFrom2D BlitFrom2DArray BlitFromCube)
         for shadername in "${shadernames[@]}"; do
             xcrun -sdk $sdkplatform metal -c -std=$compileplatform-metal1.1 -m$sdkplatform-version-min=$minversion -Wall -O3 -D COMPILE_$shadername -o ./$shadername.air ./Metal_Blit.metal || exit $?
             xcrun -sdk $sdkplatform metallib -o $shadername.metallib $shadername.air || exit $?
@@ -30,10 +31,9 @@ generate_shaders tvsimulator ios appletvsimulator 9.0
 catShaders()
 {
     target=$1
-    cat FullscreenVert_$target.h >> Metal_Blit.h
-    cat BlitFrom2D_$target.h >> Metal_Blit.h
-    cat BlitFrom2DArray_$target.h >> Metal_Blit.h
-    cat BlitFromCube_$target.h >> Metal_Blit.h
+    for shadername in "${shadernames[@]}"; do
+        cat ${shadername}_$target.h >> Metal_Blit.h
+    done
 }
 
 rm -f Metal_Blit.h
@@ -57,7 +57,9 @@ echo "#endif" >> Metal_Blit.h
 cleanupShaders()
 {
     target=$1
-    rm -f FullscreenVert_$target.h BlitFrom2D_$target.h BlitFrom2DArray_$target.h BlitFromCube_$target.h
+    for shadername in "${shadernames[@]}"; do
+        rm -f ${shadername}_$target.h
+    done
 }
 cleanupShaders iphonesimulator
 cleanupShaders ios

@@ -127,6 +127,7 @@ SDL_GpuGraphicsPipeline *SDL_Gpu_FetchBlitPipeline(
     SDL_GpuShader *blitVertexShader,
     SDL_GpuShader *blitFrom2DShader,
     SDL_GpuShader *blitFrom2DArrayShader,
+    SDL_GpuShader *blitFrom3DShader,
     SDL_GpuShader *blitFromCubeShader,
     BlitPipelineCacheEntry **blitPipelines,
     Uint32 *blitPipelineCount,
@@ -165,7 +166,7 @@ SDL_GpuGraphicsPipeline *SDL_Gpu_FetchBlitPipeline(
     } else if (sourceTextureType == SDL_GPU_TEXTURETYPE_2D_ARRAY) {
         blitPipelineCreateInfo.fragmentShader = blitFrom2DArrayShader;
     } else if (sourceTextureType == SDL_GPU_TEXTURETYPE_3D) {
-        SDL_assert_release(!"3D blit not implemented yet!");
+        blitPipelineCreateInfo.fragmentShader = blitFrom3DShader;
     } else {
         blitPipelineCreateInfo.fragmentShader = blitFrom2DShader;
     }
@@ -216,6 +217,7 @@ void SDL_Gpu_BlitCommon(
     SDL_GpuShader *blitVertexShader,
     SDL_GpuShader *blitFrom2DShader,
     SDL_GpuShader *blitFrom2DArrayShader,
+    SDL_GpuShader *blitFrom3DShader,
     SDL_GpuShader *blitFromCubeShader,
     BlitPipelineCacheEntry **blitPipelines,
     Uint32 *blitPipelineCount,
@@ -238,6 +240,7 @@ void SDL_Gpu_BlitCommon(
         blitVertexShader,
         blitFrom2DShader,
         blitFrom2DArrayShader,
+        blitFrom3DShader,
         blitFromCubeShader,
         blitPipelines,
         blitPipelineCount,
@@ -252,6 +255,7 @@ void SDL_Gpu_BlitCommon(
     if (
         dstHeader->info.layerCount == 1 &&
         dstHeader->info.levelCount == 1 &&
+        dstHeader->info.type != SDL_GPU_TEXTURETYPE_3D &&
         destination->w == dstHeader->info.width &&
         destination->h == dstHeader->info.height) {
         colorAttachmentInfo.loadOp = SDL_GPU_LOADOP_DONT_CARE;
@@ -263,7 +267,7 @@ void SDL_Gpu_BlitCommon(
 
     colorAttachmentInfo.texture = destination->texture;
     colorAttachmentInfo.mipLevel = destination->mipLevel;
-    colorAttachmentInfo.layerOrDepthPlane = (dstHeader->info.type == SDL_GPU_TEXTURETYPE_3D) ? destination->z : destination->layer; /* FIXME */
+    colorAttachmentInfo.layerOrDepthPlane = (dstHeader->info.type == SDL_GPU_TEXTURETYPE_3D) ? destination->z : destination->layer;
     colorAttachmentInfo.cycle = cycle;
 
     renderPass = SDL_GpuBeginRenderPass(
@@ -302,7 +306,7 @@ void SDL_Gpu_BlitCommon(
     blitFragmentUniforms.width = (float)source->w / srcHeader->info.width;
     blitFragmentUniforms.height = (float)source->h / srcHeader->info.height;
     blitFragmentUniforms.mipLevel = source->mipLevel;
-    blitFragmentUniforms.layer = source->layer;
+    blitFragmentUniforms.layer = (dstHeader->info.type == SDL_GPU_TEXTURETYPE_3D) ? source->z : source->layer;
 
     SDL_GpuPushFragmentUniformData(
         commandBuffer,

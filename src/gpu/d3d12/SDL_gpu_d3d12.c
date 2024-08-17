@@ -7070,7 +7070,7 @@ static void D3D12_INTERNAL_InitBlitResources(
     renderer->blitPipelineCapacity = 2;
     renderer->blitPipelineCount = 0;
     renderer->blitPipelines = (BlitPipelineCacheEntry *)SDL_malloc(
-        renderer->blitPipelineCapacity, sizeof(BlitPipelineCacheEntry));
+        renderer->blitPipelineCapacity * sizeof(BlitPipelineCacheEntry));
 
     /* Fullscreen vertex shader */
     SDL_zero(shaderCreateInfo);

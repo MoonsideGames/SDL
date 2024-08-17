@@ -47,6 +47,18 @@ fragment float4 BlitFrom2DArray(
 }
 #endif
 
+#if COMPILE_BlitFrom3D
+fragment float4 BlitFrom3D(
+    VertexToFragment input [[stage_in]],
+    constant SourceRegion &sourceRegion [[buffer(0)]],
+    texture3d<float> sourceTexture [[texture(0)]],
+    sampler sourceSampler [[sampler(0)]])
+{
+    float2 newCoord = sourceRegion.UVLeftTop + sourceRegion.UVDimensions * input.tex;
+    return sourceTexture.sample(sourceSampler, float3(newCoord, sourceRegion.Layer), level(sourceRegion.MipLevel));
+}
+#endif
+
 #if COMPILE_BlitFromCube
 fragment float4 BlitFromCube(
     VertexToFragment input [[stage_in]],

@@ -561,6 +561,7 @@ struct MetalRenderer
     SDL_GpuShader *blitVertexShader;
     SDL_GpuShader *blitFrom2DShader;
     SDL_GpuShader *blitFrom2DArrayShader;
+    SDL_GpuShader *blitFrom3DShader;
     SDL_GpuShader *blitFromCubeShader;
 
     SDL_GpuSampler *blitNearestSampler;
@@ -2886,6 +2887,7 @@ static void METAL_Blit(
         renderer->blitVertexShader,
         renderer->blitFrom2DShader,
         renderer->blitFrom2DArrayShader,
+        renderer->blitFrom3DShader,
         renderer->blitFromCubeShader,
         &renderer->blitPipelines,
         &renderer->blitPipelineCount,
@@ -3367,6 +3369,7 @@ static Uint8 METAL_INTERNAL_CreateSwapchain(
             renderer->blitVertexShader,
             renderer->blitFrom2DShader,
             renderer->blitFrom2DArrayShader,
+            renderer->blitFrom3DShader,
             renderer->blitFromCubeShader,
             &renderer->blitPipelines,
             &renderer->blitPipelineCount,
@@ -3804,6 +3807,19 @@ static void METAL_INTERNAL_InitBlitResources(
         SDL_LogError(SDL_LOG_CATEGORY_GPU, "Failed to compile BlitFrom2DArray fragment shader!");
     }
 
+    /* BlitFrom3D fragment shader */
+    shaderModuleCreateInfo.code = BlitFrom3D_metallib;
+    shaderModuleCreateInfo.codeSize = BlitFrom3D_metallib_len;
+    shaderModuleCreateInfo.entryPointName = "BlitFrom3D";
+
+    renderer->blitFrom3DShader = METAL_CreateShader(
+        (SDL_GpuRenderer *)renderer,
+        &shaderModuleCreateInfo);
+
+    if (renderer->blitFrom3DShader == NULL) {
+        SDL_LogError(SDL_LOG_CATEGORY_GPU, "Failed to compile BlitFrom3D fragment shader!");
+    }
+
     /* BlitFromCube fragment shader */
     shaderModuleCreateInfo.code = BlitFromCube_metallib;
     shaderModuleCreateInfo.codeSize = BlitFromCube_metallib_len;
@@ -3862,6 +3878,7 @@ static void METAL_INTERNAL_DestroyBlitResources(
     METAL_ReleaseShader(driverData, renderer->blitVertexShader);
     METAL_ReleaseShader(driverData, renderer->blitFrom2DShader);
     METAL_ReleaseShader(driverData, renderer->blitFrom2DArrayShader);
+    METAL_ReleaseShader(driverData, renderer->blitFrom3DShader);
     METAL_ReleaseShader(driverData, renderer->blitFromCubeShader);
 
     for (Uint32 i = 0; i < renderer->blitPipelineCount; i += 1) {
