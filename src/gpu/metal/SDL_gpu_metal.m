@@ -67,6 +67,13 @@ static void METAL_INTERNAL_DestroyBlitResources(SDL_GpuRenderer *driverData);
 
 /* Conversions */
 
+static SDL_GpuTextureFormat SwapchainCompositionToSDLTextureFormat[] = {
+    SDL_GPU_TEXTUREFORMAT_B8G8R8A8,            /* SDR */
+    SDL_GPU_TEXTUREFORMAT_B8G8R8A8_SRGB,       /* SDR_SRGB */
+    SDL_GPU_TEXTUREFORMAT_R16G16B16A16_SFLOAT, /* HDR */
+    SDL_GPU_TEXTUREFORMAT_R10G10B10A2,         /* HDR_ADVANCED */
+};
+
 static MTLPixelFormat SDLToMetal_SurfaceFormat[] = {
     MTLPixelFormatRGBA8Unorm,   /* R8G8B8A8 */
     MTLPixelFormatBGRA8Unorm,   /* B8G8R8A8 */
@@ -514,6 +521,9 @@ typedef struct BlitPipeline
 
 struct MetalRenderer
 {
+    /* Reference to the parent device */
+    SDL_GpuDevice *sdlGpuDevice;
+
     id<MTLDevice> device;
     id<MTLCommandQueue> queue;
 
@@ -3348,6 +3358,21 @@ static Uint8 METAL_INTERNAL_CreateSwapchain(
 
     windowData->texture.handle = nil; /* This will be set in AcquireSwapchainTexture. */
 
+    /* Precache blit pipelines for the swapchain format */
+    for (Uint32 i = 0; i < 4; i += 1) {
+        SDL_Gpu_FetchBlitPipeline(
+            renderer->sdlGpuDevice,
+            (SDL_GpuTextureType)i,
+            SwapchainCompositionToSDLTextureFormat[swapchainComposition],
+            renderer->blitVertexShader,
+            renderer->blitFrom2DShader,
+            renderer->blitFrom2DArrayShader,
+            renderer->blitFromCubeShader,
+            &renderer->blitPipelines,
+            &renderer->blitPipelineCount,
+            &renderer->blitPipelineCapacity);
+    }
+
     /* Set up the texture container */
     SDL_zero(windowData->textureContainer);
     windowData->textureContainer.canBeCycled = 0;
@@ -3940,6 +3965,8 @@ static SDL_GpuDevice *METAL_CreateDevice(SDL_bool debugMode, SDL_bool preferLowP
         SDL_GpuDevice *result = SDL_malloc(sizeof(SDL_GpuDevice));
         ASSIGN_DRIVER(METAL)
         result->driverData = (SDL_GpuRenderer *)renderer;
+        renderer->sdlGpuDevice = result;
+
         return result;
     }
 }

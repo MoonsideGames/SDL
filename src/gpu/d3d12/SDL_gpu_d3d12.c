@@ -6007,10 +6007,10 @@ static SDL_bool D3D12_INTERNAL_CreateSwapchain(
     windowData->frameCounter = 0;
 
     /* Precache blit pipelines for the swapchain format */
-    for (Uint32 i = 0; i < 3; i += 1) {
+    for (Uint32 i = 0; i < 4; i += 1) {
         SDL_Gpu_FetchBlitPipeline(
             renderer->sdlGpuDevice,
-            i, /* FIXME */
+            (SDL_GpuTextureType)i,
             SwapchainCompositionToSDLTextureFormat[swapchainComposition],
             renderer->blitVertexShader,
             renderer->blitFrom2DShader,
