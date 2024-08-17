@@ -18,15 +18,11 @@ cbuffer SourceRegionBuffer : REG(b0, space3)
     uint Layer;
 };
 
-#if ARRAY
-Texture2DArray SourceTexture : REG(t0, space2);
-#elif THREED
-Texture3D SourceTexture : REG(t0, space2);
-#elif CUBE
-TextureCube SourceTexture : REG(t0, space2);
-#else
-Texture2D SourceTexture : REG(t0, space2);
-#endif
+Texture2D SourceTexture2D : REG(t0, space2);
+Texture2DArray SourceTexture2DArray : REG(t0, space2);
+Texture3D SourceTexture3D : REG(t0, space2);
+TextureCube SourceTextureCube : REG(t0, space2);
+
 sampler SourceSampler : REG(s0, space2);
 
 VertexToPixel FullscreenVert(uint vI : SV_VERTEXID)
@@ -38,16 +34,28 @@ VertexToPixel FullscreenVert(uint vI : SV_VERTEXID)
     return Out;
 }
 
-float4 Blit(VertexToPixel input) : SV_Target0
+float4 BlitFrom2D(VertexToPixel input) : SV_Target0
 {
-#if ARRAY || CUBE || THREED
-    float3 newCoord;
-#else
-    float2 newCoord;
-#endif
+    float2 newCoord = UVLeftTop + UVDimensions * input.tex;
+    return SourceTexture2D.SampleLevel(SourceSampler, newCoord, MipLevel);
+}
 
-#if CUBE
+float4 BlitFrom2DArray(VertexToPixel input) : SV_Target0
+{
+    float3 newCoord = float3(UVLeftTop + UVDimensions * input.tex, Layer);
+    return SourceTexture2DArray.SampleLevel(SourceSampler, newCoord, MipLevel);
+}
+
+float4 BlitFrom3D(VertexToPixel input) : SV_Target0
+{
+    float3 newCoord = float3(UVLeftTop + UVDimensions * input.tex, Layer);
+    return SourceTexture3D.SampleLevel(SourceSampler, newCoord, MipLevel);
+}
+
+float4 BlitFromCube(VertexToPixel input) : SV_Target0
+{
     // Thanks, Wikipedia! https://en.wikipedia.org/wiki/Cube_mapping
+    float3 newCoord;
     float2 scaledUV = UVLeftTop + UVDimensions * input.tex;
     float u = 2.0 * scaledUV.x - 1.0;
     float v = 2.0 * scaledUV.y - 1.0;
@@ -60,12 +68,5 @@ float4 Blit(VertexToPixel input) : SV_Target0
         case 5: newCoord = float3(-u, -v, -1.0); break; // NEGATIVE Z
         default: newCoord = float3(0, 0, 0); break; // silences warning
     }
-#else
-    newCoord.xy = UVLeftTop + UVDimensions * input.tex;
-    #if ARRAY || THREED
-    newCoord.z = Layer;
-    #endif
-#endif
-
-    return SourceTexture.SampleLevel(SourceSampler, newCoord, MipLevel);
+    return SourceTextureCube.SampleLevel(SourceSampler, newCoord, MipLevel);
 }

@@ -29,25 +29,17 @@
 
 /* Built-in shaders, compiled with compile_shaders.bat */
 
-#define g_FullscreenVert D3D12_FullscreenVert
-#include "D3D12_FullscreenVert.h"
+#define g_FullscreenVert  D3D12_FullscreenVert
+#define g_BlitFrom2D      D3D12_BlitFrom2D
+#define g_BlitFrom2DArray D3D12_BlitFrom2DArray
+#define g_BlitFrom3D      D3D12_BlitFrom3D
+#define g_BlitFromCube    D3D12_BlitFromCube
+#include "D3D12_Blit.h"
 #undef g_FullscreenVert
-
-#define g_Blit D3D12_BlitFrom2D
-#include "D3D12_BlitFrom2D.h"
-#undef g_Blit
-
-#define g_Blit D3D12_BlitFrom2DArray
-#include "D3D12_BlitFrom2DArray.h"
-#undef g_Blit
-
-#define g_Blit D3D12_BlitFrom3D
-#include "D3D12_BlitFrom3D.h"
-#undef g_Blit
-
-#define g_Blit D3D12_BlitFromCube
-#include "D3D12_BlitFromCube.h"
-#undef g_Blit
+#undef g_BlitFrom2D
+#undef g_BlitFrom2DArray
+#undef g_BlitFrom3D
+#undef g_BlitFromCube
 
 /* Macros */
 
