@@ -41,6 +41,10 @@
 #include "D3D12_BlitFrom2DArray.h"
 #undef g_Blit
 
+#define g_Blit D3D12_BlitFrom3D
+#include "D3D12_BlitFrom3D.h"
+#undef g_Blit
+
 #define g_Blit D3D12_BlitFromCube
 #include "D3D12_BlitFromCube.h"
 #undef g_Blit
@@ -510,6 +514,7 @@ struct D3D12Renderer
     SDL_GpuShader *blitVertexShader;
     SDL_GpuShader *blitFrom2DShader;
     SDL_GpuShader *blitFrom2DArrayShader;
+    SDL_GpuShader *blitFrom3DShader;
     SDL_GpuShader *blitFromCubeShader;
 
     SDL_GpuSampler *blitNearestSampler;
@@ -3482,6 +3487,7 @@ static void D3D12_INTERNAL_ReleaseBlitPipelines(SDL_GpuRenderer *driverData)
     D3D12_ReleaseShader(driverData, renderer->blitVertexShader);
     D3D12_ReleaseShader(driverData, renderer->blitFrom2DShader);
     D3D12_ReleaseShader(driverData, renderer->blitFrom2DArrayShader);
+    D3D12_ReleaseShader(driverData, renderer->blitFrom3DShader);
     D3D12_ReleaseShader(driverData, renderer->blitFromCubeShader);
 
     for (Uint32 i = 0; i < renderer->blitPipelineCount; i += 1) {
@@ -5618,6 +5624,7 @@ static void D3D12_Blit(
         renderer->blitVertexShader,
         renderer->blitFrom2DShader,
         renderer->blitFrom2DArrayShader,
+        renderer->blitFrom3DShader,
         renderer->blitFromCubeShader,
         &renderer->blitPipelines,
         &renderer->blitPipelineCount,
@@ -6015,6 +6022,7 @@ static SDL_bool D3D12_INTERNAL_CreateSwapchain(
             renderer->blitVertexShader,
             renderer->blitFrom2DShader,
             renderer->blitFrom2DArrayShader,
+            renderer->blitFrom3DShader,
             renderer->blitFromCubeShader,
             &renderer->blitPipelines,
             &renderer->blitPipelineCount,
@@ -7113,6 +7121,18 @@ static void D3D12_INTERNAL_InitBlitResources(
 
     if (renderer->blitFrom2DArrayShader == NULL) {
         SDL_LogError(SDL_LOG_CATEGORY_GPU, "Failed to compile BlitFrom2DArray pixel shader!");
+    }
+
+    /* BlitFrom3D pixel shader */
+    shaderCreateInfo.code = (Uint8 *)D3D12_BlitFrom3D;
+    shaderCreateInfo.codeSize = sizeof(D3D12_BlitFrom3D);
+
+    renderer->blitFrom3DShader = D3D12_CreateShader(
+        (SDL_GpuRenderer *)renderer,
+        &shaderCreateInfo);
+
+    if (renderer->blitFrom3DShader == NULL) {
+        SDL_LogError(SDL_LOG_CATEGORY_GPU, "Failed to compile BlitFrom3D pixel shader!");
     }
 
     /* BlitFromCube pixel shader */

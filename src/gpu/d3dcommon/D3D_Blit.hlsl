@@ -20,6 +20,8 @@ cbuffer SourceRegionBuffer : REG(b0, space3)
 
 #if ARRAY
 Texture2DArray SourceTexture : REG(t0, space2);
+#elif THREED
+Texture3D SourceTexture : REG(t0, space2);
 #elif CUBE
 TextureCube SourceTexture : REG(t0, space2);
 #else
@@ -38,7 +40,7 @@ VertexToPixel FullscreenVert(uint vI : SV_VERTEXID)
 
 float4 Blit(VertexToPixel input) : SV_Target0
 {
-#if ARRAY || CUBE
+#if ARRAY || CUBE || THREED
     float3 newCoord;
 #else
     float2 newCoord;
@@ -60,7 +62,7 @@ float4 Blit(VertexToPixel input) : SV_Target0
     }
 #else
     newCoord.xy = UVLeftTop + UVDimensions * input.tex;
-    #if ARRAY
+    #if ARRAY || THREED
     newCoord.z = Layer;
     #endif
 #endif
