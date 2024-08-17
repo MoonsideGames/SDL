@@ -55,26 +55,7 @@
 
 /* Blit Shaders */
 
-static const char *FullscreenVertexShader =
-    "using namespace metal;\n"
-    "struct VertexToPixel { float4 position [[position]]; float2 texcoord; };\n"
-    "vertex VertexToPixel vs_main(uint vI [[vertex_id]]) {\n"
-    "   float2 inTexcoord = float2((vI << 1) & 2, vI & 2);\n"
-    "   VertexToPixel out;\n"
-    "   out.position = float4(inTexcoord * float2(2.0f, -2.0f) + float2(-1.0f, 1.0f), 0.0f, 1.0f);\n"
-    "   out.texcoord = inTexcoord;\n"
-    "   return out;\n"
-    "}";
-
-static const char *BlitFrom2DFragmentShader =
-    "using namespace metal;\n"
-    "struct VertexToPixel { float4 position [[position]]; float2 texcoord; };\n"
-    "fragment float4 fs_main(\n"
-    "   VertexToPixel input [[stage_in]],\n"
-    "   texture2d<float> srcTexture [[texture(0)]],\n"
-    "   sampler srcSampler [[sampler(0)]]) {\n"
-    "   return srcTexture.sample(srcSampler, input.texcoord);\n"
-    "}";
+#include "Metal_Blit.h"
 
 /* Forward Declarations */
 
@@ -567,9 +548,11 @@ struct MetalRenderer
     Uint32 textureContainersToDestroyCapacity;
 
     /* Blit */
-    SDL_GpuShader *fullscreenVertexShader;
-    SDL_GpuShader *blitFrom2DPixelShader;
-    SDL_GpuGraphicsPipeline *blitFrom2DPipeline;
+    SDL_GpuShader *blitVertexShader;
+    SDL_GpuShader *blitFrom2DShader;
+    SDL_GpuShader *blitFrom2DArrayShader;
+    SDL_GpuShader *blitFromCubeShader;
+
     SDL_GpuSampler *blitNearestSampler;
     SDL_GpuSampler *blitLinearSampler;
 
@@ -2890,10 +2873,10 @@ static void METAL_Blit(
         cycle,
         renderer->blitLinearSampler,
         renderer->blitNearestSampler,
-        NULL, /* FIXME */
-        NULL, /* FIXME */
-        NULL, /* FIXME */
-        NULL, /* FIXME */
+        renderer->blitVertexShader,
+        renderer->blitFrom2DShader,
+        renderer->blitFrom2DArrayShader,
+        renderer->blitFromCubeShader,
         &renderer->blitPipelines,
         &renderer->blitPipelineCount,
         &renderer->blitPipelineCapacity);
@@ -3749,37 +3732,64 @@ static void METAL_INTERNAL_InitBlitResources(
     renderer->blitPipelineCapacity = 2;
     renderer->blitPipelineCount = 0;
     renderer->blitPipelines = SDL_malloc(
-        sizeof(BlitPipelineCacheEntry) * renderer->blitPipelineCapacity);
+        renderer->blitPipelineCapacity * sizeof(BlitPipelineCacheEntry));
 
     /* Fullscreen vertex shader */
     SDL_zero(shaderModuleCreateInfo);
-    shaderModuleCreateInfo.code = (Uint8 *)FullscreenVertexShader;
-    shaderModuleCreateInfo.codeSize = sizeof(FullscreenVertexShader);
+    shaderModuleCreateInfo.code = FullscreenVert_metallib;
+    shaderModuleCreateInfo.codeSize = FullscreenVert_metallib_len;
     shaderModuleCreateInfo.stage = SDL_GPU_SHADERSTAGE_VERTEX;
-    shaderModuleCreateInfo.format = SDL_GPU_SHADERFORMAT_MSL;
-    shaderModuleCreateInfo.entryPointName = "vs_main";
+    shaderModuleCreateInfo.format = SDL_GPU_SHADERFORMAT_METALLIB;
+    shaderModuleCreateInfo.entryPointName = "FullscreenVert";
 
-    renderer->fullscreenVertexShader = METAL_CreateShader(
+    renderer->blitVertexShader = METAL_CreateShader(
         (SDL_GpuRenderer *)renderer,
         &shaderModuleCreateInfo);
 
-    if (renderer->fullscreenVertexShader == NULL) {
-        SDL_LogError(SDL_LOG_CATEGORY_GPU, "Failed to compile fullscreen vertex shader!");
+    if (renderer->blitVertexShader == NULL) {
+        SDL_LogError(SDL_LOG_CATEGORY_GPU, "Failed to compile vertex shader for blit!");
     }
 
-    /* Blit from 2D pixel shader */
-    shaderModuleCreateInfo.code = (Uint8 *)BlitFrom2DFragmentShader;
-    shaderModuleCreateInfo.codeSize = sizeof(BlitFrom2DFragmentShader);
+    /* BlitFrom2D fragment shader */
+    shaderModuleCreateInfo.code = BlitFrom2D_metallib;
+    shaderModuleCreateInfo.codeSize = BlitFrom2D_metallib_len;
     shaderModuleCreateInfo.stage = SDL_GPU_SHADERSTAGE_FRAGMENT;
-    shaderModuleCreateInfo.entryPointName = "fs_main";
+    shaderModuleCreateInfo.entryPointName = "BlitFrom2D";
     shaderModuleCreateInfo.samplerCount = 1;
+    shaderModuleCreateInfo.uniformBufferCount = 1;
 
-    renderer->blitFrom2DPixelShader = METAL_CreateShader(
+    renderer->blitFrom2DShader = METAL_CreateShader(
         (SDL_GpuRenderer *)renderer,
         &shaderModuleCreateInfo);
 
-    if (renderer->blitFrom2DPixelShader == NULL) {
-        SDL_LogError(SDL_LOG_CATEGORY_GPU, "Failed to compile blit from 2D fragment shader!");
+    if (renderer->blitFrom2DShader == NULL) {
+        SDL_LogError(SDL_LOG_CATEGORY_GPU, "Failed to compile BlitFrom2D fragment shader!");
+    }
+
+    /* BlitFrom2DArray fragment shader */
+    shaderModuleCreateInfo.code = BlitFrom2DArray_metallib;
+    shaderModuleCreateInfo.codeSize = BlitFrom2DArray_metallib_len;
+    shaderModuleCreateInfo.entryPointName = "BlitFrom2DArray";
+
+    renderer->blitFrom2DArrayShader = METAL_CreateShader(
+        (SDL_GpuRenderer *)renderer,
+        &shaderModuleCreateInfo);
+
+    if (renderer->blitFrom2DArrayShader == NULL) {
+        SDL_LogError(SDL_LOG_CATEGORY_GPU, "Failed to compile BlitFrom2DArray fragment shader!");
+    }
+
+    /* BlitFromCube fragment shader */
+    shaderModuleCreateInfo.code = BlitFromCube_metallib;
+    shaderModuleCreateInfo.codeSize = BlitFromCube_metallib_len;
+    shaderModuleCreateInfo.entryPointName = "BlitFromCube";
+
+    renderer->blitFromCubeShader = METAL_CreateShader(
+        (SDL_GpuRenderer *)renderer,
+        &shaderModuleCreateInfo);
+
+    if (renderer->blitFromCubeShader == NULL) {
+        SDL_LogError(SDL_LOG_CATEGORY_GPU, "Failed to compile BlitFromCube fragment shader!");
     }
 
     /* Create samplers */
@@ -3794,6 +3804,8 @@ static void METAL_INTERNAL_InitBlitResources(
     samplerCreateInfo.mipLodBias = 0.0f;
     samplerCreateInfo.minLod = 0;
     samplerCreateInfo.maxLod = 1000;
+    samplerCreateInfo.maxAnisotropy = 1.0f;
+    samplerCreateInfo.compareOp = SDL_GPU_COMPAREOP_ALWAYS;
 
     renderer->blitNearestSampler = METAL_CreateSampler(
         (SDL_GpuRenderer *)renderer,
@@ -3820,17 +3832,15 @@ static void METAL_INTERNAL_DestroyBlitResources(
     SDL_GpuRenderer *driverData)
 {
     MetalRenderer *renderer = (MetalRenderer *)driverData;
-
-    METAL_ReleaseShader(driverData, renderer->fullscreenVertexShader);
-    METAL_ReleaseShader(driverData, renderer->blitFrom2DPixelShader);
-
     METAL_ReleaseSampler(driverData, renderer->blitLinearSampler);
     METAL_ReleaseSampler(driverData, renderer->blitNearestSampler);
+    METAL_ReleaseShader(driverData, renderer->blitVertexShader);
+    METAL_ReleaseShader(driverData, renderer->blitFrom2DShader);
+    METAL_ReleaseShader(driverData, renderer->blitFrom2DArrayShader);
+    METAL_ReleaseShader(driverData, renderer->blitFromCubeShader);
 
     for (Uint32 i = 0; i < renderer->blitPipelineCount; i += 1) {
-        METAL_ReleaseGraphicsPipeline(
-            driverData,
-            renderer->blitPipelines[i].pipeline);
+        METAL_ReleaseGraphicsPipeline(driverData, renderer->blitPipelines[i].pipeline);
     }
     SDL_free(renderer->blitPipelines);
 }

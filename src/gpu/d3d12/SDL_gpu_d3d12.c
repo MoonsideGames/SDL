@@ -7067,6 +7067,11 @@ static void D3D12_INTERNAL_InitBlitResources(
     SDL_GpuShaderCreateInfo shaderCreateInfo;
     SDL_GpuSamplerCreateInfo samplerCreateInfo;
 
+    renderer->blitPipelineCapacity = 2;
+    renderer->blitPipelineCount = 0;
+    renderer->blitPipelines = (BlitPipelineCacheEntry *)SDL_malloc(
+        renderer->blitPipelineCapacity, sizeof(BlitPipelineCacheEntry));
+
     /* Fullscreen vertex shader */
     SDL_zero(shaderCreateInfo);
     shaderCreateInfo.code = (Uint8 *)D3D12_FullscreenVert;
@@ -7752,14 +7757,6 @@ static SDL_GpuDevice *D3D12_CreateDevice(SDL_bool debugMode, SDL_bool preferLowP
 
     /* Blit resources */
     D3D12_INTERNAL_InitBlitResources(renderer);
-    renderer->blitPipelineCapacity = 2;
-    renderer->blitPipelineCount = 0;
-    renderer->blitPipelines = (BlitPipelineCacheEntry *)SDL_calloc(
-        renderer->blitPipelineCapacity, sizeof(BlitPipelineCacheEntry));
-    if (!renderer->blitPipelines) {
-        D3D12_INTERNAL_DestroyRenderer(renderer);
-        return NULL;
-    }
 
     /* Create the SDL_Gpu Device */
     result = (SDL_GpuDevice *)SDL_calloc(1, sizeof(SDL_GpuDevice));
