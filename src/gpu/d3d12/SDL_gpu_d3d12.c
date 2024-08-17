@@ -5796,9 +5796,7 @@ static SDL_bool D3D12_INTERNAL_InitializeSwapchainTexture(
     pTextureContainer->header.info.layerCount = 1;
     pTextureContainer->header.info.levelCount = 1;
     pTextureContainer->header.info.type = SDL_GPU_TEXTURETYPE_2D;
-    pTextureContainer->header.info.usageFlags =
-        SDL_GPU_TEXTUREUSAGE_COLOR_TARGET_BIT |
-        SDL_GPU_TEXTUREUSAGE_SAMPLER_BIT;
+    pTextureContainer->header.info.usageFlags = SDL_GPU_TEXTUREUSAGE_COLOR_TARGET_BIT;
     pTextureContainer->header.info.sampleCount = SDL_GPU_SAMPLECOUNT_1;
     pTextureContainer->header.info.format = SDL_GPU_TEXTUREFORMAT_INVALID; /* FIXME: Set this to the actual format! */
 
@@ -5970,7 +5968,7 @@ static SDL_bool D3D12_INTERNAL_CreateSwapchain(
     swapchainDesc.Format = swapchainFormat;
     swapchainDesc.SampleDesc.Count = 1;
     swapchainDesc.SampleDesc.Quality = 0;
-    swapchainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT; // | DXGI_USAGE_UNORDERED_ACCESS | DXGI_USAGE_SHADER_INPUT;
+    swapchainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
     swapchainDesc.BufferCount = MAX_FRAMES_IN_FLIGHT;
     swapchainDesc.Scaling = DXGI_SCALING_STRETCH;
     swapchainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
