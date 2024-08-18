@@ -1729,27 +1729,21 @@ void SDL_GpuEndComputePass(
 
 /* TransferBuffer Data */
 
-void SDL_GpuMapTransferBuffer(
+void *SDL_GpuMapTransferBuffer(
     SDL_GpuDevice *device,
     SDL_GpuTransferBuffer *transferBuffer,
-    SDL_bool cycle,
-    void **ppData)
+    SDL_bool cycle)
 {
-    CHECK_DEVICE_MAGIC(device, );
+    CHECK_DEVICE_MAGIC(device, NULL);
     if (transferBuffer == NULL) {
         SDL_InvalidParamError("transferBuffer");
-        return;
-    }
-    if (ppData == NULL) {
-        SDL_InvalidParamError("ppData");
-        return;
+        return NULL;
     }
 
-    device->MapTransferBuffer(
+    return device->MapTransferBuffer(
         device->driverData,
         transferBuffer,
-        cycle,
-        ppData);
+        cycle);
 }
 
 void SDL_GpuUnmapTransferBuffer(

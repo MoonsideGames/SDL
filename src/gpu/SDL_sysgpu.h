@@ -505,11 +505,10 @@ struct SDL_GpuDevice
 
     /* TransferBuffer Data */
 
-    void (*MapTransferBuffer)(
+    void *(*MapTransferBuffer)(
         SDL_GpuRenderer *device,
         SDL_GpuTransferBuffer *transferBuffer,
-        SDL_bool cycle,
-        void **ppData);
+        SDL_bool cycle);
 
     void (*UnmapTransferBuffer)(
         SDL_GpuRenderer *device,

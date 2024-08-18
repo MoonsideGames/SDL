@@ -2563,11 +2563,10 @@ static void D3D11_INTERNAL_CycleActiveTransferBuffer(
     container->activeBuffer = container->buffers[container->bufferCount - 1];
 }
 
-static void D3D11_MapTransferBuffer(
+static void *D3D11_MapTransferBuffer(
     SDL_GpuRenderer *driverData,
     SDL_GpuTransferBuffer *transferBuffer,
-    SDL_bool cycle,
-    void **ppData)
+    SDL_bool cycle)
 {
     D3D11Renderer *renderer = (D3D11Renderer *)driverData;
     D3D11TransferBufferContainer *container = (D3D11TransferBufferContainer *)transferBuffer;
@@ -2583,7 +2582,7 @@ static void D3D11_MapTransferBuffer(
         buffer = container->activeBuffer;
     }
 
-    *ppData = buffer->data;
+    return buffer->data;
 }
 
 static void D3D11_UnmapTransferBuffer(

@@ -1835,15 +1835,14 @@ extern SDL_DECLSPEC void SDLCALL SDL_GpuEndComputePass(
  * \param device a GPU context
  * \param transferBuffer a transfer buffer
  * \param cycle if SDL_TRUE, cycles the transfer buffer if it is bound
- * \param ppData where to store the address of the mapped transfer buffer memory
+ * \returns the address of the mapped transfer buffer memory
  *
  * \since This function is available since SDL 3.x.x
  */
-extern SDL_DECLSPEC void SDLCALL SDL_GpuMapTransferBuffer(
+extern SDL_DECLSPEC void *SDLCALL SDL_GpuMapTransferBuffer(
     SDL_GpuDevice *device,
     SDL_GpuTransferBuffer *transferBuffer,
-    SDL_bool cycle,
-    void **ppData);
+    SDL_bool cycle);
 
 /**
  * Unmaps a previously mapped transfer buffer.
