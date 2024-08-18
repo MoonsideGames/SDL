@@ -5732,9 +5732,7 @@ static SDL_bool D3D12_INTERNAL_InitializeSwapchainTexture(
     pTextureContainer->header.info.layerCount = 1;
     pTextureContainer->header.info.levelCount = 1;
     pTextureContainer->header.info.type = SDL_GPU_TEXTURETYPE_2D;
-    pTextureContainer->header.info.usageFlags =
-        SDL_GPU_TEXTUREUSAGE_COLOR_TARGET_BIT |
-        SDL_GPU_TEXTUREUSAGE_SAMPLER_BIT;
+    pTextureContainer->header.info.usageFlags = SDL_GPU_TEXTUREUSAGE_COLOR_TARGET_BIT;
     pTextureContainer->header.info.sampleCount = SDL_GPU_SAMPLECOUNT_1;
     pTextureContainer->header.info.format = SwapchainCompositionToSDLTextureFormat[composition];
 
@@ -5905,7 +5903,7 @@ static SDL_bool D3D12_INTERNAL_CreateSwapchain(
     swapchainDesc.Format = swapchainFormat;
     swapchainDesc.SampleDesc.Count = 1;
     swapchainDesc.SampleDesc.Quality = 0;
-    swapchainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT; // | DXGI_USAGE_UNORDERED_ACCESS | DXGI_USAGE_SHADER_INPUT;
+    swapchainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
     swapchainDesc.BufferCount = MAX_FRAMES_IN_FLIGHT;
     swapchainDesc.Scaling = DXGI_SCALING_STRETCH;
     swapchainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
@@ -6515,6 +6513,20 @@ static SDL_GpuTexture *D3D12_AcquireSwapchainTexture(
     d3d12CommandBuffer->presentDatas[d3d12CommandBuffer->presentDataCount].windowData = windowData;
     d3d12CommandBuffer->presentDatas[d3d12CommandBuffer->presentDataCount].swapchainImageIndex = swapchainIndex;
     d3d12CommandBuffer->presentDataCount += 1;
+
+    /* Set up resource barrier */
+    D3D12_RESOURCE_BARRIER barrierDesc;
+    barrierDesc.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    barrierDesc.Flags = 0;
+    barrierDesc.Transition.StateBefore = D3D12_RESOURCE_STATE_PRESENT;
+    barrierDesc.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
+    barrierDesc.Transition.pResource = windowData->textureContainers[swapchainIndex].activeTexture->resource;
+    barrierDesc.Transition.Subresource = 0;
+
+    ID3D12GraphicsCommandList_ResourceBarrier(
+        d3d12CommandBuffer->graphicsCommandList,
+        1,
+        &barrierDesc);
 
     return (SDL_GpuTexture *)&windowData->textureContainers[swapchainIndex];
 }

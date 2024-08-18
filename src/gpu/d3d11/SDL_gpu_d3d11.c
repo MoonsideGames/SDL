@@ -4836,7 +4836,7 @@ static SDL_bool D3D11_INTERNAL_CreateSwapchain(
     /* Initialize the rest of the swapchain descriptor */
     swapchainDesc.SampleDesc.Count = 1;
     swapchainDesc.SampleDesc.Quality = 0;
-    swapchainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT | DXGI_USAGE_UNORDERED_ACCESS | DXGI_USAGE_SHADER_INPUT;
+    swapchainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
     swapchainDesc.BufferCount = 2;
     swapchainDesc.OutputWindow = dxgiHandle;
     swapchainDesc.Windowed = 1;
