@@ -520,7 +520,7 @@ init_render_state(int msaa)
     CHECK_CREATE(buf_transfer, "Vertex transfer buffer")
 
     /* We just need to upload the static data once. */
-    SDL_GpuMapTransferBuffer(gpu_device, buf_transfer, SDL_FALSE, &map);
+    map = SDL_GpuMapTransferBuffer(gpu_device, buf_transfer, SDL_FALSE);
     SDL_memcpy(map, vertex_data, sizeof(vertex_data));
     SDL_GpuUnmapTransferBuffer(gpu_device, buf_transfer);
 
