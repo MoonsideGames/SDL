@@ -5037,14 +5037,14 @@ static void D3D12_EndComputePass(
 
 /* TransferBuffer Data */
 
-static void D3D12_MapTransferBuffer(
+static void *D3D12_MapTransferBuffer(
     SDL_GpuRenderer *driverData,
     SDL_GpuTransferBuffer *transferBuffer,
-    SDL_bool cycle,
-    void **ppData)
+    SDL_bool cycle)
 {
     D3D12Renderer *renderer = (D3D12Renderer *)driverData;
     D3D12BufferContainer *container = (D3D12BufferContainer *)transferBuffer;
+    void *dataPointer;
 
     if (
         cycle &&
@@ -5056,14 +5056,16 @@ static void D3D12_MapTransferBuffer(
 
     /* Upload buffers are persistently mapped, download buffers are not */
     if (container->type == D3D12_BUFFER_TYPE_UPLOAD) {
-        *ppData = container->activeBuffer->mapPointer;
+        dataPointer = container->activeBuffer->mapPointer;
     } else {
         ID3D12Resource_Map(
             container->activeBuffer->handle,
             0,
             NULL,
-            (void **)ppData);
+            (void **)&dataPointer);
     }
+
+    return dataPointer;
 }
 
 static void D3D12_UnmapTransferBuffer(

@@ -1610,18 +1610,16 @@ static MetalBuffer *METAL_INTERNAL_PrepareBufferForWrite(
 
 /* TransferBuffer Data */
 
-static void METAL_MapTransferBuffer(
+static void *METAL_MapTransferBuffer(
     SDL_GpuRenderer *driverData,
     SDL_GpuTransferBuffer *transferBuffer,
-    SDL_bool cycle,
-    void **ppData)
+    SDL_bool cycle)
 {
     @autoreleasepool {
         MetalRenderer *renderer = (MetalRenderer *)driverData;
         MetalBufferContainer *container = (MetalBufferContainer *)transferBuffer;
         MetalBuffer *buffer = METAL_INTERNAL_PrepareBufferForWrite(renderer, container, cycle);
-
-        *ppData = [buffer->handle contents];
+        return [buffer->handle contents];
     }
 }
 

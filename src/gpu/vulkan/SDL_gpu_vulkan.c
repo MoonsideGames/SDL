@@ -8734,11 +8734,10 @@ static void VULKAN_EndComputePass(
     vulkanCommandBuffer->computeUniformDescriptorSet = VK_NULL_HANDLE;
 }
 
-static void VULKAN_MapTransferBuffer(
+static void *VULKAN_MapTransferBuffer(
     SDL_GpuRenderer *driverData,
     SDL_GpuTransferBuffer *transferBuffer,
-    SDL_bool cycle,
-    void **ppData)
+    SDL_bool cycle)
 {
     VulkanRenderer *renderer = (VulkanRenderer *)driverData;
     VulkanBufferContainer *transferBufferContainer = (VulkanBufferContainer *)transferBuffer;
@@ -8755,7 +8754,7 @@ static void VULKAN_MapTransferBuffer(
         transferBufferContainer->activeBufferHandle->vulkanBuffer->usedRegion->allocation->mapPointer +
         transferBufferContainer->activeBufferHandle->vulkanBuffer->usedRegion->resourceOffset;
 
-    *ppData = bufferPointer;
+    return bufferPointer;
 }
 
 static void VULKAN_UnmapTransferBuffer(
