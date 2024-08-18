@@ -24,7 +24,7 @@
 #ifndef SDL_GPU_DRIVER_H
 #define SDL_GPU_DRIVER_H
 
-/* Common Struct */
+/* Common Structs */
 
 typedef struct Pass
 {
@@ -47,6 +47,25 @@ typedef struct TextureCommonHeader
 {
     SDL_GpuTextureCreateInfo info;
 } TextureCommonHeader;
+
+typedef struct BlitFragmentUniforms
+{
+    /* texcoord space */
+    float left;
+    float top;
+    float width;
+    float height;
+
+    Uint32 mipLevel;
+    float layerOrDepth;
+} BlitFragmentUniforms;
+
+typedef struct BlitPipelineCacheEntry
+{
+    SDL_GpuTextureType type;
+    SDL_GpuTextureFormat format;
+    SDL_GpuGraphicsPipeline *pipeline;
+} BlitPipelineCacheEntry;
 
 /* Internal Helper Utilities */
 
@@ -193,6 +212,48 @@ static inline Sint32 BytesPerImage(
 #define MAX_COLOR_TARGET_BINDINGS      4
 #define MAX_PRESENT_COUNT              16
 #define MAX_FRAMES_IN_FLIGHT           3
+
+/* Internal Macros */
+
+#define EXPAND_ARRAY_IF_NEEDED(arr, elementType, newCount, capacity, newCapacity) \
+    if (newCount >= capacity) {                                                   \
+        capacity = newCapacity;                                                   \
+        arr = (elementType *)SDL_realloc(                                         \
+            arr,                                                                  \
+            sizeof(elementType) * capacity);                                      \
+    }
+
+/* Internal Declarations */
+
+SDL_GpuGraphicsPipeline *SDL_Gpu_FetchBlitPipeline(
+    SDL_GpuDevice *device,
+    SDL_GpuTextureType sourceTextureType,
+    SDL_GpuTextureFormat destinationFormat,
+    SDL_GpuShader *blitVertexShader,
+    SDL_GpuShader *blitFrom2DShader,
+    SDL_GpuShader *blitFrom2DArrayShader,
+    SDL_GpuShader *blitFrom3DShader,
+    SDL_GpuShader *blitFromCubeShader,
+    BlitPipelineCacheEntry **blitPipelines,
+    Uint32 *blitPipelineCount,
+    Uint32 *blitPipelineCapacity);
+
+void SDL_Gpu_BlitCommon(
+    SDL_GpuCommandBuffer *commandBuffer,
+    SDL_GpuTextureRegion *source,
+    SDL_GpuTextureRegion *destination,
+    SDL_GpuFilter filterMode,
+    SDL_bool cycle,
+    SDL_GpuSampler *blitLinearSampler,
+    SDL_GpuSampler *blitNearestSampler,
+    SDL_GpuShader *blitVertexShader,
+    SDL_GpuShader *blitFrom2DShader,
+    SDL_GpuShader *blitFrom2DArrayShader,
+    SDL_GpuShader *blitFrom3DShader,
+    SDL_GpuShader *blitFromCubeShader,
+    BlitPipelineCacheEntry **blitPipelines,
+    Uint32 *blitPipelineCount,
+    Uint32 *blitPipelineCapacity);
 
 /* SDL_GpuDevice Definition */
 
