@@ -6580,6 +6580,20 @@ static SDL_GpuTexture *D3D12_AcquireSwapchainTexture(
     d3d12CommandBuffer->presentDatas[d3d12CommandBuffer->presentDataCount].swapchainImageIndex = swapchainIndex;
     d3d12CommandBuffer->presentDataCount += 1;
 
+    /* Set up resource barrier */
+    D3D12_RESOURCE_BARRIER barrierDesc;
+    barrierDesc.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    barrierDesc.Flags = 0;
+    barrierDesc.Transition.StateBefore = D3D12_RESOURCE_STATE_PRESENT;
+    barrierDesc.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
+    barrierDesc.Transition.pResource = windowData->textureContainers[swapchainIndex].activeTexture->resource;
+    barrierDesc.Transition.Subresource = 0;
+
+    ID3D12GraphicsCommandList_ResourceBarrier(
+        d3d12CommandBuffer->graphicsCommandList,
+        1,
+        &barrierDesc);
+
     return (SDL_GpuTexture *)&windowData->textureContainers[swapchainIndex];
 }
 
