@@ -330,12 +330,18 @@ static SDL_GpuDriver SDL_GpuSelectBackend(
     /* Environment/Properties override... */
     if (gpudriver != NULL) {
         for (i = 0; backends[i]; i += 1) {
-            if (SDL_strcasecmp(gpudriver, backends[i]->Name) == 0 && (backends[i]->shaderFormats & formatFlags) && backends[i]->PrepareDriver(_this)) {
-                return backends[i]->backendflag;
+            if (SDL_strcasecmp(gpudriver, backends[i]->Name) == 0) {
+                if (!(backends[i]->shaderFormats & formatFlags)) {
+                    SDL_LogError(SDL_LOG_CATEGORY_GPU, "Required shader format for backend %s not provided!", gpudriver);
+                    return SDL_GPU_DRIVER_INVALID;
+                }
+                if (backends[i]->PrepareDriver(_this)) {
+                    return backends[i]->backendflag;
+                }
             }
         }
 
-        SDL_LogError(SDL_LOG_CATEGORY_GPU, "SDL_HINT_GPU_BACKEND %s unsupported!", gpudriver);
+        SDL_LogError(SDL_LOG_CATEGORY_GPU, "SDL_HINT_GPU_DRIVER %s unsupported!", gpudriver);
         return SDL_GPU_DRIVER_INVALID;
     }
 
