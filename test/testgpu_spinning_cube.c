@@ -20,16 +20,15 @@
 #include <SDL3/SDL_gpu.h>
 #include <SDL3/SDL_main.h>
 
-/* Regenerate these with testgpu/build-shaders.sh */
+/* Regenerate the shaders with testgpu/build-shaders.sh */
 #include "testgpu/testgpu_spirv.h"
 #include "testgpu/testgpu_dxbc.h"
+#include "testgpu/testgpu_dxil.h"
 #include "testgpu/testgpu_metallib.h"
-#define TESTGPU_SUPPORTED_FORMATS (SDL_GPU_SHADERFORMAT_SPIRV | SDL_GPU_SHADERFORMAT_DXBC | SDL_GPU_SHADERFORMAT_METALLIB)
+
+#define TESTGPU_SUPPORTED_FORMATS (SDL_GPU_SHADERFORMAT_SPIRV | SDL_GPU_SHADERFORMAT_DXBC | SDL_GPU_SHADERFORMAT_DXIL | SDL_GPU_SHADERFORMAT_METALLIB)
 
 #define CHECK_CREATE(var, thing) { if (!(var)) { SDL_Log("Failed to create %s: %s\n", thing, SDL_GetError()); quit(2); } }
-
-/* Toggle this to test spirv-cross translation instead of using precompiled shaders */
-#define FORCE_SPIRV_CROSS 0
 
 static Uint32 frames = 0;
 
@@ -424,23 +423,23 @@ load_shader(SDL_bool is_vertex)
     createinfo.uniformBufferCount = is_vertex ? 1 : 0;
     createinfo.props = 0;
 
-#if !FORCE_SPIRV_CROSS
     SDL_GpuDriver backend = SDL_GpuGetDriver(gpu_device);
     if (backend == SDL_GPU_DRIVER_D3D11) {
         createinfo.format = SDL_GPU_SHADERFORMAT_DXBC;
-        createinfo.code = is_vertex ? g_vert_main : g_frag_main;
-        createinfo.codeSize = is_vertex ? SDL_arraysize(g_vert_main) : SDL_arraysize(g_frag_main);
-        createinfo.entryPointName = "main";
-    }
-    else if (backend == SDL_GPU_DRIVER_METAL) {
+        createinfo.code = is_vertex ? D3D11_CubeVert : D3D11_CubeFrag;
+        createinfo.codeSize = is_vertex ? SDL_arraysize(D3D11_CubeVert) : SDL_arraysize(D3D11_CubeFrag);
+        createinfo.entryPointName = is_vertex ? "VSMain" : "PSMain";
+    } else if (backend == SDL_GPU_DRIVER_D3D12) {
+        createinfo.format = SDL_GPU_SHADERFORMAT_DXIL;
+        createinfo.code = is_vertex ? D3D12_CubeVert : D3D12_CubeFrag;
+        createinfo.codeSize = is_vertex ? SDL_arraysize(D3D12_CubeVert) : SDL_arraysize(D3D12_CubeFrag);
+        createinfo.entryPointName = is_vertex ? "VSMain" : "PSMain";
+    } else if (backend == SDL_GPU_DRIVER_METAL) {
         createinfo.format = SDL_GPU_SHADERFORMAT_METALLIB;
         createinfo.code = is_vertex ? cube_vert_metallib : cube_frag_metallib;
         createinfo.codeSize = is_vertex ? cube_vert_metallib_len : cube_frag_metallib_len;
-        createinfo.entryPointName = is_vertex ? "main0" : "main0";
-    }
-    else
-#endif
-    {
+        createinfo.entryPointName = is_vertex ? "vs_main" : "fs_main";
+    } else {
         createinfo.format = SDL_GPU_SHADERFORMAT_SPIRV;
         createinfo.code = is_vertex ? cube_vert_spv : cube_frag_spv;
         createinfo.codeSize = is_vertex ? cube_vert_spv_len : cube_frag_spv_len;

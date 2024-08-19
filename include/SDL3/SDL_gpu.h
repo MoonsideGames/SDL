@@ -196,7 +196,7 @@ typedef enum SDL_GpuShaderFormatFlagBits
     SDL_GPU_SHADERFORMAT_INVALID = 0x00000000,
     SDL_GPU_SHADERFORMAT_SECRET = 0x00000001,   /* NDA'd platforms */
     SDL_GPU_SHADERFORMAT_SPIRV = 0x00000002,    /* Vulkan */
-    SDL_GPU_SHADERFORMAT_DXBC = 0x00000004,     /* D3D11, D3D12 */
+    SDL_GPU_SHADERFORMAT_DXBC = 0x00000004,     /* D3D11 (Shader Model 5_0) */
     SDL_GPU_SHADERFORMAT_DXIL = 0x00000008,     /* D3D12 */
     SDL_GPU_SHADERFORMAT_MSL = 0x00000010,      /* Metal */
     SDL_GPU_SHADERFORMAT_METALLIB = 0x00000020, /* Metal */
@@ -897,13 +897,18 @@ extern SDL_DECLSPEC SDL_GpuDriver SDLCALL SDL_GpuGetDriver(SDL_GpuDevice *device
  *  1: Read-write storage textures, followed by read-write storage buffers
  *  2: Uniform buffers
  *
- * For HLSL/DXBC/DXIL, use the following order:
+ * For DXBC Shader Model 5_0 shaders, use the following register order:
  *  For t registers:
  *   Read-only storage textures, followed by read-only storage buffers
- *  For b registers:
- *   Uniform buffers
  *  For u registers:
  *   Read-write storage textures, followed by read-write storage buffers
+ *  For b registers:
+ *   Uniform buffers
+ *
+ * For DXIL shaders, use the following register order:
+ *  (t[n], space0): Read-only storage textures, followed by read-only storage buffers
+ *  (u[n], space1): Read-write storage textures, followed by read-write storage buffers
+ *  (b[n], space2): Uniform buffers
  *
  * For MSL/metallib, use the following order:
  *  For [[buffer]]:
@@ -972,7 +977,7 @@ extern SDL_DECLSPEC SDL_GpuSampler *SDLCALL SDL_GpuCreateSampler(
  *   2: Sampled textures, followed by storage textures, followed by storage buffers
  *   3: Uniform buffers
  *
- * For DXBC Shader Model 5.0 shaders, use the following register order:
+ * For DXBC Shader Model 5_0 shaders, use the following register order:
  *  For t registers:
  *   Sampled textures, followed by storage textures, followed by storage buffers
  *  For s registers:
@@ -980,7 +985,7 @@ extern SDL_DECLSPEC SDL_GpuSampler *SDLCALL SDL_GpuCreateSampler(
  *  For b registers:
  *   Uniform buffers
  *
- * For DXBC/DXIL Shader Model 5.1+ shaders, use the following register order:
+ * For DXIL shaders, use the following register order:
  *  For vertex shaders:
  *   (t[n], space0): Sampled textures, followed by storage textures, followed by storage buffers
  *   (s[n], space0): Samplers with indices corresponding to the sampled textures

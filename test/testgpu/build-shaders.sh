@@ -1,23 +1,27 @@
 # Rebuilds the shaders needed for the GPU cube test.
-# Requires glslangValidator and spirv-cross, which can be obtained from the LunarG Vulkan SDK.
+# For SPIR-V: requires glslangValidator and spirv-cross, which can be obtained from the LunarG Vulkan SDK.
+# For DXBC compilation: requires FXC, which is part of the Windows SDK.
+# For DXIL compilation, requires DXC, which can be obtained via the Windows SDK or via here: https://github.com/microsoft/DirectXShaderCompiler/releases
+# For Metal compilation: requires Xcode
 
 # On Windows, run this via Git Bash.
+# To add the Windows SDK (FXC/DXC) to your path, run the command:
+#   `export PATH=$PATH:/c/Program\ Files\ \(x86\)/Windows\ Kits/10/bin/x.x.x.x/x64/`
 
 export MSYS_NO_PATHCONV=1
 
 # SPIR-V
-glslangValidator cube.vert -V -o cube.vert.spv --quiet
-glslangValidator cube.frag -V -o cube.frag.spv --quiet
-xxd -i cube.vert.spv | perl -w -p -e 's/\Aunsigned /const unsigned /;' > cube_vert.h
-xxd -i cube.frag.spv | perl -w -p -e 's/\Aunsigned /const unsigned /;' > cube_frag.h
-cat cube_vert.h cube_frag.h > testgpu_spirv.h
+glslangValidator cube.glsl -V -S vert -o cube.vert.spv --quiet -DVERTEX
+glslangValidator cube.glsl -V -S frag -o cube.frag.spv --quiet
+xxd -i cube.vert.spv | perl -w -p -e 's/\Aunsigned /const unsigned /;' > cube.vert.h
+xxd -i cube.frag.spv | perl -w -p -e 's/\Aunsigned /const unsigned /;' > cube.frag.h
+cat cube.vert.h cube.frag.h > testgpu_spirv.h
+rm -f cube.vert.h cube.frag.h cube.vert.spv cube.frag.spv
 
 # Platform-specific compilation
 if [[ "$OSTYPE" == "darwin"* ]]; then
 
-    # MSL
-    spirv-cross cube.vert.spv --msl --output cube.vert.metal
-    spirv-cross cube.frag.spv --msl --output cube.frag.metal
+    # FIXME: Needs to be updated!
 
     # Xcode
     generate_shaders()
@@ -27,20 +31,17 @@ if [[ "$OSTYPE" == "darwin"* ]]; then
         sdkplatform=$3
         minversion=$4
 
-        xcrun -sdk $sdkplatform metal -c -std=$compileplatform-metal1.1 -m$sdkplatform-version-min=$minversion -Wall -O3 -o ./cube.vert.air ./cube.vert.metal || exit $?
-        xcrun -sdk $sdkplatform metal -c -std=$compileplatform-metal1.1 -m$sdkplatform-version-min=$minversion -Wall -O3 -o ./cube.frag.air ./cube.frag.metal || exit $?
+        xcrun -sdk $sdkplatform metal -c -std=$compileplatform-metal1.1 -m$sdkplatform-version-min=$minversion -Wall -O3 -DVERTEX=1 -o ./cube.vert.air ./cube.metal || exit $?
+        xcrun -sdk $sdkplatform metal -c -std=$compileplatform-metal1.1 -m$sdkplatform-version-min=$minversion -Wall -O3 -o ./cube.frag.air ./cube.metal || exit $?
 
-        xcrun -sdk $sdkplatform metal-ar rc cube.vert.metalar cube.vert.air || exit $?
-        xcrun -sdk $sdkplatform metal-ar rc cube.frag.metalar cube.frag.air || exit $?
-
-        xcrun -sdk $sdkplatform metallib -o cube.vert.metallib cube.vert.metalar || exit $?
-        xcrun -sdk $sdkplatform metallib -o cube.frag.metallib cube.frag.metalar || exit $?
+        xcrun -sdk $sdkplatform metallib -o cube.vert.metallib cube.vert.air || exit $?
+        xcrun -sdk $sdkplatform metallib -o cube.frag.metallib cube.frag.air || exit $?
 
         xxd -i cube.vert.metallib | perl -w -p -e 's/\Aunsigned /const unsigned /;' >./cube.vert_$fileplatform.h
         xxd -i cube.frag.metallib | perl -w -p -e 's/\Aunsigned /const unsigned /;' >./cube.frag_$fileplatform.h
 
-        rm -f cube.vert.air cube.vert.metalar cube.vert.metallib
-        rm -f cube.frag.air cube.frag.metalar cube.frag.metallib
+        rm -f cube.vert.air cube.vert.metallib
+        rm -f cube.frag.air cube.frag.metallib
     }
 
     generate_shaders macos macos macosx 10.11
@@ -73,7 +74,6 @@ if [[ "$OSTYPE" == "darwin"* ]]; then
     echo "#endif" >> testgpu_metallib.h
 
     # Clean up
-    rm -f cube.vert.metal cube.frag.metal
     rm -f cube.vert_macos.h cube.frag_macos.h
     rm -f cube.vert_iphonesimulator.h cube.frag_iphonesimulator.h
     rm -f cube.vert_tvsimulator.h cube.frag_tvsimulator.h
@@ -82,24 +82,22 @@ if [[ "$OSTYPE" == "darwin"* ]]; then
 
 elif [[ "$OSTYPE" == "cygwin"* ]] || [[ "$OSTYPE" == "msys"* ]]; then
 
-    # HLSL
-    spirv-cross cube.vert.spv --hlsl --shader-model 50 --output cube.vert.hlsl
-    spirv-cross cube.frag.spv --hlsl --shader-model 50 --output cube.frag.hlsl
-
     # FXC
-    # Assumes fxc is in the path.
-    # If not, you can run `export PATH=$PATH:/c/Program\ Files\ \(x86\)/Windows\ Kits/10/bin/x.x.x.x/x64/`
-    fxc cube.vert.hlsl /T vs_5_0 /Fh cube.vert.h
-    fxc cube.frag.hlsl /T ps_5_0 /Fh cube.frag.h
+    fxc cube.hlsl /E VSMain /T vs_5_0 /Fh cube.vert.h
+    fxc cube.hlsl /E PSMain /T ps_5_0 /Fh cube.frag.h
 
-    cat cube.vert.h | perl -w -p -e 's/BYTE/unsigned char/;s/main/vert_main/;' > cube_vert.h
-    cat cube.frag.h | perl -w -p -e 's/BYTE/unsigned char/;s/main/frag_main/;' > cube_frag.h
-    cat cube_vert.h cube_frag.h > testgpu_dxbc.h
+    cat cube.vert.h | perl -w -p -e 's/BYTE/unsigned char/;s/g_VSMain/D3D11_CubeVert/;' > cube.vert.temp.h
+    cat cube.frag.h | perl -w -p -e 's/BYTE/unsigned char/;s/g_PSMain/D3D11_CubeFrag/;' > cube.frag.temp.h
+    cat cube.vert.temp.h cube.frag.temp.h > testgpu_dxbc.h
+    rm -f cube.vert.h cube.frag.h cube.vert.temp.h cube.frag.temp.h
+
+    # DXC
+    dxc cube.hlsl /E VSMain /T vs_6_0 /Fh cube.vert.h /D D3D12=1
+    dxc cube.hlsl /E PSMain /T ps_6_0 /Fh cube.frag.h /D D3D12=1
+
+    cat cube.vert.h | perl -w -p -e 's/BYTE/unsigned char/;s/g_VSMain/D3D12_CubeVert/;' > cube.vert.temp.h
+    cat cube.frag.h | perl -w -p -e 's/BYTE/unsigned char/;s/g_PSMain/D3D12_CubeFrag/;' > cube.frag.temp.h
+    cat cube.vert.temp.h cube.frag.temp.h > testgpu_dxil.h
+    rm -f cube.vert.h cube.frag.h cube.vert.temp.h cube.frag.temp.h
 
 fi
-
-# cleanup
-rm -f cube.vert.spv cube.frag.spv
-rm -f cube.vert.h cube.frag.h
-rm -f cube_vert.h cube_frag.h
-rm -f cube.vert.hlsl cube.frag.hlsl
