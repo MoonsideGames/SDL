@@ -16,7 +16,7 @@ glslangValidator cube.glsl -V -S frag -o cube.frag.spv --quiet
 xxd -i cube.vert.spv | perl -w -p -e 's/\Aunsigned /const unsigned /;' > cube.vert.h
 xxd -i cube.frag.spv | perl -w -p -e 's/\Aunsigned /const unsigned /;' > cube.frag.h
 cat cube.vert.h cube.frag.h > testgpu_spirv.h
-rm -f cube.vert.spv cube.frag.spv
+rm -f cube.vert.h cube.frag.h cube.vert.spv cube.frag.spv
 
 # Platform-specific compilation
 if [[ "$OSTYPE" == "darwin"* ]]; then
@@ -31,8 +31,8 @@ if [[ "$OSTYPE" == "darwin"* ]]; then
         sdkplatform=$3
         minversion=$4
 
-        xcrun -sdk $sdkplatform metal -c -std=$compileplatform-metal1.1 -m$sdkplatform-version-min=$minversion -Wall -O3 -o ./cube.vert.air ./cube.vert.metal || exit $?
-        xcrun -sdk $sdkplatform metal -c -std=$compileplatform-metal1.1 -m$sdkplatform-version-min=$minversion -Wall -O3 -o ./cube.frag.air ./cube.frag.metal || exit $?
+        xcrun -sdk $sdkplatform metal -c -std=$compileplatform-metal1.1 -m$sdkplatform-version-min=$minversion -Wall -O3 -DVERTEX=1 -o ./cube.vert.air ./cube.metal || exit $?
+        xcrun -sdk $sdkplatform metal -c -std=$compileplatform-metal1.1 -m$sdkplatform-version-min=$minversion -Wall -O3 -o ./cube.frag.air ./cube.metal || exit $?
 
         xcrun -sdk $sdkplatform metallib -o cube.vert.metallib cube.vert.air || exit $?
         xcrun -sdk $sdkplatform metallib -o cube.frag.metallib cube.frag.air || exit $?

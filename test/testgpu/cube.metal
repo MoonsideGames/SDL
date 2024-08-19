@@ -1,4 +1,4 @@
-#include <metal_stdlib.h>
+#include <metal_stdlib>
 using namespace metal;
 
 struct VSOutput
