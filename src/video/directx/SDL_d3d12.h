@@ -71,9 +71,15 @@
         X = NULL;           \
     }
 
-/* Older versions of the Xbox GDK may not have this defined */
+/* Older versions of the Xbox GDK may not have these defined */
 #ifndef D3D12_TEXTURE_DATA_PITCH_ALIGNMENT
 #define D3D12_TEXTURE_DATA_PITCH_ALIGNMENT 256
+#endif
+#ifndef D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE
+#define D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE ((D3D12_RESOURCE_STATES) (0x40 | 0x80))
+#endif
+#ifndef D3D12_HEAP_TYPE_GPU_UPLOAD
+#define D3D12_HEAP_TYPE_GPU_UPLOAD ((D3D12_HEAP_TYPE) 5)
 #endif
 
 /* DXGI_PRESENT flags are removed on Xbox */
@@ -81,6 +87,11 @@
 
 /* Xbox D3D12 does not define the COBJMACROS, so we need to define them ourselves */
 #include "SDL_d3d12_xbox_cmacros.h"
+
+/* They don't even define the CMACROS for ID3DBlob, come on man */
+#define ID3D10Blob_GetBufferPointer(blob) blob->GetBufferPointer()
+#define ID3D10Blob_GetBufferSize(blob) blob->GetBufferSize()
+#define ID3D10Blob_Release(blob) blob->Release()
 
 /* Xbox's D3D12 ABI actually varies from Windows, if a function does not exist
  * in the above header then you need to use this instead :(

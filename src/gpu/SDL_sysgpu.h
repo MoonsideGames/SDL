@@ -225,6 +225,10 @@ static inline Sint32 BytesPerImage(
 
 /* Internal Declarations */
 
+#ifdef __cplusplus
+extern "C" {
+#endif /* __cplusplus */
+
 SDL_GpuGraphicsPipeline *SDL_Gpu_FetchBlitPipeline(
     SDL_GpuDevice *device,
     SDL_GpuTextureType sourceTextureType,
@@ -254,6 +258,10 @@ void SDL_Gpu_BlitCommon(
     BlitPipelineCacheEntry **blitPipelines,
     Uint32 *blitPipelineCount,
     Uint32 *blitPipelineCapacity);
+
+#ifdef __cplusplus
+}
+#endif /* __cplusplus */
 
 /* SDL_GpuDevice Definition */
 
