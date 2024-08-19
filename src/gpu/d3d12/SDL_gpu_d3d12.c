@@ -2589,10 +2589,6 @@ static SDL_GpuShader *D3D12_CreateShader(
     size_t bytecodeSize;
     D3D12Shader *shader;
 
-    if ((shaderCreateInfo->stage != SDL_GPU_SHADERSTAGE_VERTEX) && (shaderCreateInfo->stage != SDL_GPU_SHADERSTAGE_FRAGMENT)) {
-        SDL_assert(SDL_FALSE);
-    }
-
     if (!D3D12_INTERNAL_CreateShaderBytecode(
             renderer,
             shaderCreateInfo->stage,
@@ -7802,7 +7798,7 @@ static SDL_GpuDevice *D3D12_CreateDevice(SDL_bool debugMode, SDL_bool preferLowP
 SDL_GpuBootstrap D3D12Driver = {
     "D3D12",
     SDL_GPU_DRIVER_D3D12,
-    SDL_GPU_SHADERFORMAT_DXBC /* TODO: | SDL_GPU_SHADERFORMAT_DXIL */,
+    SDL_GPU_SHADERFORMAT_DXIL,
     D3D12_PrepareDriver,
     D3D12_CreateDevice
 };
