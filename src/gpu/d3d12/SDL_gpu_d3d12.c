@@ -3801,13 +3801,13 @@ static void D3D12_BeginRenderPass(
             D3D12_RESOURCE_STATE_DEPTH_WRITE);
 
         if (
-            depthStencilAttachmentInfo->loadOp == SDL_GPU_LOADOP_LOAD ||
-            depthStencilAttachmentInfo->stencilLoadOp == SDL_GPU_LOADOP_LOAD) {
+            depthStencilAttachmentInfo->loadOp == SDL_GPU_LOADOP_CLEAR ||
+            depthStencilAttachmentInfo->stencilLoadOp == SDL_GPU_LOADOP_CLEAR) {
             D3D12_CLEAR_FLAGS clearFlags = (D3D12_CLEAR_FLAGS)0;
-            if (depthStencilAttachmentInfo->loadOp == SDL_GPU_LOADOP_LOAD) {
+            if (depthStencilAttachmentInfo->loadOp == SDL_GPU_LOADOP_CLEAR) {
                 clearFlags |= D3D12_CLEAR_FLAG_DEPTH;
             }
-            if (depthStencilAttachmentInfo->stencilLoadOp == SDL_GPU_LOADOP_LOAD) {
+            if (depthStencilAttachmentInfo->stencilLoadOp == SDL_GPU_LOADOP_CLEAR) {
                 clearFlags |= D3D12_CLEAR_FLAG_STENCIL;
             }
 
