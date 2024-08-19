@@ -253,7 +253,7 @@ void SDL_Gpu_BlitCommon(
 
     /* If the entire destination is blitted, we don't have to load */
     if (
-        dstHeader->info.layerCount == 1 &&
+        dstHeader->info.layerCountOrDepth == 1 &&
         dstHeader->info.levelCount == 1 &&
         dstHeader->info.type != SDL_GPU_TEXTURETYPE_3D &&
         destination->w == dstHeader->info.width &&
@@ -306,7 +306,7 @@ void SDL_Gpu_BlitCommon(
     blitFragmentUniforms.width = (float)source->w / srcHeader->info.width;
     blitFragmentUniforms.height = (float)source->h / srcHeader->info.height;
     blitFragmentUniforms.mipLevel = source->mipLevel;
-    blitFragmentUniforms.layerOrDepth = (srcHeader->info.type == SDL_GPU_TEXTURETYPE_3D) ? (source->z / (float)srcHeader->info.depth) : source->layer;
+    blitFragmentUniforms.layerOrDepth = (srcHeader->info.type == SDL_GPU_TEXTURETYPE_3D) ? (source->z / (float)srcHeader->info.layerCountOrDepth) : source->layer;
 
     SDL_GpuPushFragmentUniformData(
         commandBuffer,
@@ -652,12 +652,8 @@ SDL_GpuTexture *SDL_GpuCreateTexture(
         const Uint32 MAX_3D_DIMENSION = 2048;
 
         /* Common checks for all texture types */
-        if (textureCreateInfo->width <= 0 || textureCreateInfo->height <= 0 || textureCreateInfo->depth <= 0) {
-            SDL_assert_release(!"For any texture: width, height, and depth must be >= 1");
-            failed = SDL_TRUE;
-        }
-        if (textureCreateInfo->layerCount <= 0) {
-            SDL_assert_release(!"For any texture: layerCount must be >= 1");
+        if (textureCreateInfo->width <= 0 || textureCreateInfo->height <= 0 || textureCreateInfo->layerCountOrDepth <= 0) {
+            SDL_assert_release(!"For any texture: width, height, and layerCountOrDepth must be >= 1");
             failed = SDL_TRUE;
         }
         if (textureCreateInfo->levelCount <= 0) {
@@ -687,12 +683,8 @@ SDL_GpuTexture *SDL_GpuCreateTexture(
                 SDL_assert_release(!"For cube textures: width and height must be <= 16384");
                 failed = SDL_TRUE;
             }
-            if (textureCreateInfo->depth > 1) {
-                SDL_assert_release(!"For cube textures: depth must be 1");
-                failed = SDL_TRUE;
-            }
-            if (textureCreateInfo->layerCount != 6) {
-                SDL_assert_release(!"For cube textures: layerCount must be 6");
+            if (textureCreateInfo->layerCountOrDepth != 6) {
+                SDL_assert_release(!"For cube textures: layerCountOrDepth must be 6");
                 failed = SDL_TRUE;
             }
             if (textureCreateInfo->sampleCount > SDL_GPU_SAMPLECOUNT_1) {
@@ -705,16 +697,12 @@ SDL_GpuTexture *SDL_GpuCreateTexture(
             }
         } else if (textureCreateInfo->type == SDL_GPU_TEXTURETYPE_3D) {
             /* 3D Texture Validation*/
-            if (textureCreateInfo->width > MAX_3D_DIMENSION || textureCreateInfo->height > MAX_3D_DIMENSION || textureCreateInfo->depth > MAX_3D_DIMENSION) {
-                SDL_assert_release(!"For 3D textures: width, height, and depth must be <= 2048");
+            if (textureCreateInfo->width > MAX_3D_DIMENSION || textureCreateInfo->height > MAX_3D_DIMENSION || textureCreateInfo->layerCountOrDepth > MAX_3D_DIMENSION) {
+                SDL_assert_release(!"For 3D textures: width, height, and layerCountOrDepth must be <= 2048");
                 failed = SDL_TRUE;
             }
             if (textureCreateInfo->usageFlags & SDL_GPU_TEXTUREUSAGE_DEPTH_STENCIL_TARGET_BIT) {
                 SDL_assert_release(!"For 3D textures: usageFlags must not contain DEPTH_STENCIL_TARGET_BIT");
-                failed = SDL_TRUE;
-            }
-            if (textureCreateInfo->layerCount > 1) {
-                SDL_assert_release(!"For 3D textures: layerCount must be 1");
                 failed = SDL_TRUE;
             }
             if (textureCreateInfo->sampleCount > SDL_GPU_SAMPLECOUNT_1) {

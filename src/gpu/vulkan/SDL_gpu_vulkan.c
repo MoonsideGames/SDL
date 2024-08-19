@@ -4695,12 +4695,11 @@ static SDL_bool VULKAN_INTERNAL_CreateSwapchain(
         swapchainData->textureContainers[i].canBeCycled = SDL_FALSE;
         swapchainData->textureContainers[i].header.info.width = drawableWidth;
         swapchainData->textureContainers[i].header.info.height = drawableHeight;
-        swapchainData->textureContainers[i].header.info.depth = 1;
+        swapchainData->textureContainers[i].header.info.layerCountOrDepth = 1;
         swapchainData->textureContainers[i].header.info.format = SwapchainCompositionToSDLFormat(
             windowData->swapchainComposition,
             swapchainData->usingFallbackFormat);
         swapchainData->textureContainers[i].header.info.type = SDL_GPU_TEXTURETYPE_2D;
-        swapchainData->textureContainers[i].header.info.layerCount = 1;
         swapchainData->textureContainers[i].header.info.levelCount = 1;
         swapchainData->textureContainers[i].header.info.sampleCount = SDL_GPU_SAMPLECOUNT_1;
         swapchainData->textureContainers[i].header.info.usageFlags = SDL_GPU_TEXTUREUSAGE_COLOR_TARGET_BIT;
@@ -6980,9 +6979,9 @@ static SDL_GpuTexture *VULKAN_CreateTexture(
         renderer,
         textureCreateInfo->width,
         textureCreateInfo->height,
-        textureCreateInfo->depth,
+        textureCreateInfo->type == SDL_GPU_TEXTURETYPE_3D ? textureCreateInfo->layerCountOrDepth : 1,
         textureCreateInfo->type,
-        textureCreateInfo->layerCount,
+        textureCreateInfo->type == SDL_GPU_TEXTURETYPE_3D ? 1 : textureCreateInfo->layerCountOrDepth,
         textureCreateInfo->levelCount,
         SDLToVK_SampleCount[actualSampleCount],
         format,
