@@ -346,6 +346,10 @@ static SDL_GpuDriver SDL_GpuSelectBackend(
     }
 
     for (i = 0; backends[i]; i += 1) {
+        if ((backends[i]->shaderFormats & formatFlags) == 0) {
+            /* Don't select a backend which doesn't support the app's shaders. */
+            continue;
+        }
         if (backends[i]->PrepareDriver(_this)) {
             return backends[i]->backendflag;
         }
