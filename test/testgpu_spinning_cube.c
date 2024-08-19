@@ -256,8 +256,7 @@ CreateDepthTexture(Uint32 drawablew, Uint32 drawableh)
     depthtex_createinfo.format = SDL_GPU_TEXTUREFORMAT_D16_UNORM;
     depthtex_createinfo.width = drawablew;
     depthtex_createinfo.height = drawableh;
-    depthtex_createinfo.depth = 1;
-    depthtex_createinfo.layerCount = 1;
+    depthtex_createinfo.layerCountOrDepth = 1;
     depthtex_createinfo.levelCount = 1;
     depthtex_createinfo.sampleCount = render_state.sample_count;
     depthtex_createinfo.usageFlags = SDL_GPU_TEXTUREUSAGE_DEPTH_STENCIL_TARGET_BIT;
@@ -283,8 +282,7 @@ CreateMSAATexture(Uint32 drawablew, Uint32 drawableh)
     msaatex_createinfo.format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8;
     msaatex_createinfo.width = drawablew;
     msaatex_createinfo.height = drawableh;
-    msaatex_createinfo.depth = 1;
-    msaatex_createinfo.layerCount = 1;
+    msaatex_createinfo.layerCountOrDepth = 1;
     msaatex_createinfo.levelCount = 1;
     msaatex_createinfo.sampleCount = SDL_GPU_SAMPLECOUNT_4;
     msaatex_createinfo.usageFlags = SDL_GPU_TEXTUREUSAGE_COLOR_TARGET_BIT | SDL_GPU_TEXTUREUSAGE_SAMPLER_BIT;

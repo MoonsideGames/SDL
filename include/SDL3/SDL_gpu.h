@@ -550,15 +550,14 @@ typedef struct SDL_GpuShaderCreateInfo
 
 typedef struct SDL_GpuTextureCreateInfo
 {
-    Uint32 width;
-    Uint32 height;
-    Uint32 depth;
     SDL_GpuTextureType type;
-    Uint32 layerCount;
-    Uint32 levelCount;
-    SDL_GpuSampleCount sampleCount;
     SDL_GpuTextureFormat format;
     SDL_GpuTextureUsageFlags usageFlags;
+    Uint32 width;
+    Uint32 height;
+    Uint32 layerCountOrDepth;
+    Uint32 levelCount;
+    SDL_GpuSampleCount sampleCount;
 
     SDL_PropertiesID props;
 } SDL_GpuTextureCreateInfo;

@@ -379,6 +379,7 @@ typedef struct D3D11TextureSubresource
     D3D11Texture *parent;
     Uint32 layer;
     Uint32 level;
+    Uint32 depth; /* total depth */
     Uint32 index;
 
     /* One RTV per depth slice */
@@ -1038,7 +1039,7 @@ static void D3D11_INTERNAL_DestroyTexture(D3D11Texture *d3d11Texture)
         }
 
         if (d3d11Texture->subresources[subresourceIndex].colorTargetViews != NULL) {
-            for (Uint32 depthIndex = 0; depthIndex < d3d11Texture->container->header.info.depth; depthIndex += 1) {
+            for (Uint32 depthIndex = 0; depthIndex < d3d11Texture->subresources[subresourceIndex].depth; depthIndex += 1) {
                 ID3D11RenderTargetView_Release(d3d11Texture->subresources[subresourceIndex].colorTargetViews[depthIndex]);
             }
             SDL_free(d3d11Texture->subresources[subresourceIndex].colorTargetViews);
@@ -1845,6 +1846,9 @@ static D3D11Texture *D3D11_INTERNAL_CreateTexture(
         format = D3D11_INTERNAL_GetTypelessFormat(format);
     }
 
+    Uint32 layerCount = createInfo->type == SDL_GPU_TEXTURETYPE_3D ? 1 : createInfo->layerCountOrDepth;
+    Uint32 depth = createInfo->type == SDL_GPU_TEXTURETYPE_3D ? createInfo->layerCountOrDepth : 1;
+
     if (createInfo->type != SDL_GPU_TEXTURETYPE_3D) {
         D3D11_TEXTURE2D_DESC desc2D;
 
@@ -1864,7 +1868,7 @@ static D3D11Texture *D3D11_INTERNAL_CreateTexture(
 
         desc2D.Width = createInfo->width;
         desc2D.Height = createInfo->height;
-        desc2D.ArraySize = createInfo->layerCount;
+        desc2D.ArraySize = layerCount;
         desc2D.CPUAccessFlags = isStaging ? D3D11_CPU_ACCESS_WRITE : 0;
         desc2D.Format = format;
         desc2D.MipLevels = createInfo->levelCount;
@@ -1894,7 +1898,7 @@ static D3D11Texture *D3D11_INTERNAL_CreateTexture(
                 srvDesc.Texture2DArray.MipLevels = desc2D.MipLevels;
                 srvDesc.Texture2DArray.MostDetailedMip = 0;
                 srvDesc.Texture2DArray.FirstArraySlice = 0;
-                srvDesc.Texture2DArray.ArraySize = createInfo->layerCount;
+                srvDesc.Texture2DArray.ArraySize = layerCount;
             } else {
                 srvDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
                 srvDesc.Texture2D.MipLevels = desc2D.MipLevels;
@@ -1928,7 +1932,7 @@ static D3D11Texture *D3D11_INTERNAL_CreateTexture(
 
         desc3D.Width = createInfo->width;
         desc3D.Height = createInfo->height;
-        desc3D.Depth = createInfo->depth;
+        desc3D.Depth = depth;
         desc3D.CPUAccessFlags = isStaging ? D3D11_CPU_ACCESS_WRITE : 0;
         desc3D.Format = format;
         desc3D.MipLevels = createInfo->levelCount;
@@ -1970,11 +1974,11 @@ static D3D11Texture *D3D11_INTERNAL_CreateTexture(
     d3d11Texture->container = NULL;
     d3d11Texture->containerIndex = 0;
 
-    d3d11Texture->subresourceCount = createInfo->levelCount * createInfo->layerCount;
+    d3d11Texture->subresourceCount = createInfo->levelCount * layerCount;
     d3d11Texture->subresources = SDL_malloc(
         d3d11Texture->subresourceCount * sizeof(D3D11TextureSubresource));
 
-    for (Uint32 layerIndex = 0; layerIndex < createInfo->layerCount; layerIndex += 1) {
+    for (Uint32 layerIndex = 0; layerIndex < layerCount; layerIndex += 1) {
         for (Uint32 levelIndex = 0; levelIndex < createInfo->levelCount; levelIndex += 1) {
             Uint32 subresourceIndex = D3D11_INTERNAL_CalcSubresource(
                 levelIndex,
@@ -1984,6 +1988,7 @@ static D3D11Texture *D3D11_INTERNAL_CreateTexture(
             d3d11Texture->subresources[subresourceIndex].parent = d3d11Texture;
             d3d11Texture->subresources[subresourceIndex].layer = layerIndex;
             d3d11Texture->subresources[subresourceIndex].level = levelIndex;
+            d3d11Texture->subresources[subresourceIndex].depth = depth;
             d3d11Texture->subresources[subresourceIndex].index = subresourceIndex;
 
             d3d11Texture->subresources[subresourceIndex].colorTargetViews = NULL;
@@ -2054,9 +2059,9 @@ static D3D11Texture *D3D11_INTERNAL_CreateTexture(
                     &d3d11Texture->subresources[subresourceIndex].depthStencilTargetView);
                 ERROR_CHECK_RETURN("Could not create DSV!", NULL);
             } else if (isColorTarget) {
-                d3d11Texture->subresources[subresourceIndex].colorTargetViews = SDL_calloc(createInfo->depth, sizeof(ID3D11RenderTargetView *));
+                d3d11Texture->subresources[subresourceIndex].colorTargetViews = SDL_calloc(depth, sizeof(ID3D11RenderTargetView *));
 
-                for (Uint32 depthIndex = 0; depthIndex < createInfo->depth; depthIndex += 1) {
+                for (Uint32 depthIndex = 0; depthIndex < depth; depthIndex += 1) {
                     D3D11_RENDER_TARGET_VIEW_DESC rtvDesc;
 
                     rtvDesc.Format = SDLToD3D11_TextureFormat[createInfo->format];
@@ -2098,7 +2103,7 @@ static D3D11Texture *D3D11_INTERNAL_CreateTexture(
                     uavDesc.ViewDimension = D3D11_UAV_DIMENSION_TEXTURE3D;
                     uavDesc.Texture3D.MipSlice = levelIndex;
                     uavDesc.Texture3D.FirstWSlice = 0;
-                    uavDesc.Texture3D.WSize = createInfo->depth;
+                    uavDesc.Texture3D.WSize = depth;
                 } else {
                     uavDesc.ViewDimension = D3D11_UAV_DIMENSION_TEXTURE2D;
                     uavDesc.Texture2D.MipSlice = levelIndex;
@@ -2647,8 +2652,7 @@ static void D3D11_UploadToTexture(
 
     stagingTextureCreateInfo.width = w;
     stagingTextureCreateInfo.height = h;
-    stagingTextureCreateInfo.depth = destination->d;
-    stagingTextureCreateInfo.layerCount = 1;
+    stagingTextureCreateInfo.layerCountOrDepth = 1;
     stagingTextureCreateInfo.levelCount = 1;
     stagingTextureCreateInfo.type = SDL_GPU_TEXTURETYPE_2D;
     stagingTextureCreateInfo.usageFlags = 0;
@@ -4785,6 +4789,7 @@ static SDL_bool D3D11_INTERNAL_InitializeSwapchainTexture(
     pTexture->subresources[0].msaaTargetView = NULL;
     pTexture->subresources[0].layer = 0;
     pTexture->subresources[0].level = 0;
+    pTexture->subresources[0].depth = 1;
     pTexture->subresources[0].index = 0;
     pTexture->subresources[0].parent = pTexture;
 
@@ -4947,10 +4952,9 @@ static SDL_bool D3D11_INTERNAL_CreateSwapchain(
     windowData->textureContainer.textureCount = 1;
     windowData->textureContainer.textureCapacity = 1;
 
-    windowData->textureContainer.header.info.depth = 1;
+    windowData->textureContainer.header.info.layerCountOrDepth = 1;
     windowData->textureContainer.header.info.format = SwapchainCompositionToSDLTextureFormat[windowData->swapchainComposition];
     windowData->textureContainer.header.info.type = SDL_GPU_TEXTURETYPE_2D;
-    windowData->textureContainer.header.info.layerCount = 1;
     windowData->textureContainer.header.info.levelCount = 1;
     windowData->textureContainer.header.info.sampleCount = SDL_GPU_SAMPLECOUNT_1;
     windowData->textureContainer.header.info.usageFlags = SDL_GPU_TEXTUREUSAGE_COLOR_TARGET_BIT;

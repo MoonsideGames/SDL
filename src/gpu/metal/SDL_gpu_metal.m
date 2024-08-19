@@ -1288,10 +1288,10 @@ static MetalTexture *METAL_INTERNAL_CreateTexture(
 
     textureDescriptor.width = textureCreateInfo->width;
     textureDescriptor.height = textureCreateInfo->height;
-    textureDescriptor.depth = textureCreateInfo->depth;
+    textureDescriptor.depth = (textureCreateInfo->type == SDL_GPU_TEXTURETYPE_3D) ? textureCreateInfo->layerCountOrDepth : 1;
     textureDescriptor.mipmapLevelCount = textureCreateInfo->levelCount;
     textureDescriptor.sampleCount = 1;
-    textureDescriptor.arrayLength = (textureCreateInfo->type == SDL_GPU_TEXTURETYPE_2D_ARRAY) ? textureCreateInfo->layerCount : 1;
+    textureDescriptor.arrayLength = (textureCreateInfo->type == SDL_GPU_TEXTURETYPE_2D_ARRAY) ? textureCreateInfo->layerCountOrDepth : 1;
     textureDescriptor.storageMode = MTLStorageModePrivate;
 
     textureDescriptor.usage = 0;
@@ -3381,7 +3381,7 @@ static Uint8 METAL_INTERNAL_CreateSwapchain(
     windowData->textureContainer.textureCount = 1;
     windowData->textureContainer.header.info.format = SwapchainCompositionToFormat[swapchainComposition];
     windowData->textureContainer.header.info.levelCount = 1;
-    windowData->textureContainer.header.info.depth = 1;
+    windowData->textureContainer.header.info.layerCountOrDepth = 1;
     windowData->textureContainer.header.info.type = SDL_GPU_TEXTURETYPE_2D;
     windowData->textureContainer.header.info.usageFlags = SDL_GPU_TEXTUREUSAGE_COLOR_TARGET_BIT;
 
