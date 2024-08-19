@@ -454,7 +454,11 @@ typedef struct D3D12Sampler
 typedef struct D3D12WindowData
 {
     SDL_Window *window;
+#if defined(SDL_PLATFORM_XBOXONE) || defined(SDL_PLATFORM_XBOXSERIES)
+    // FIXME XBOX
+#else
     IDXGISwapChain3 *swapchain;
+#endif
     SDL_GpuPresentMode presentMode;
     SDL_GpuSwapchainComposition swapchainComposition;
     DXGI_COLOR_SPACE_TYPE swapchainColorSpace;
@@ -475,12 +479,16 @@ struct D3D12Renderer
     /* Reference to the parent device */
     SDL_GpuDevice *sdlGpuDevice;
 
-    void *dxgidebug_dll;
+#if defined(SDL_PLATFORM_XBOXONE) || defined(SDL_PLATFORM_XBOXSERIES)
+    // FIXME XBOX
+#else
     IDXGIDebug *dxgiDebug;
-    IDXGIInfoQueue *dxgiInfoQueue;
-    ID3D12Debug *d3d12Debug;
-    void *dxgi_dll;
     IDXGIFactory4 *factory;
+    IDXGIInfoQueue *dxgiInfoQueue;
+    void *dxgi_dll;
+    void *dxgidebug_dll;
+#endif
+    ID3D12Debug *d3d12Debug;
     SDL_bool supportsTearing;
     IDXGIAdapter1 *adapter;
     void *d3d12_dll;
@@ -1295,6 +1303,7 @@ static void D3D12_INTERNAL_DestroyRenderer(D3D12Renderer *renderer)
         ID3D12Device_Release(renderer->device);
         renderer->device = NULL;
     }
+#if !(defined(SDL_PLATFORM_XBOXONE) || defined(SDL_PLATFORM_XBOXSERIES))
     if (renderer->adapter) {
         IDXGIAdapter1_Release(renderer->adapter);
         renderer->adapter = NULL;
@@ -1311,10 +1320,12 @@ static void D3D12_INTERNAL_DestroyRenderer(D3D12Renderer *renderer)
         IDXGIDebug_Release(renderer->dxgiDebug);
         renderer->dxgiDebug = NULL;
     }
+#endif
     if (renderer->d3d12_dll) {
         SDL_UnloadObject(renderer->d3d12_dll);
         renderer->d3d12_dll = NULL;
     }
+#if !(defined(SDL_PLATFORM_XBOXONE) || defined(SDL_PLATFORM_XBOXSERIES))
     if (renderer->dxgi_dll) {
         SDL_UnloadObject(renderer->dxgi_dll);
         renderer->dxgi_dll = NULL;
@@ -1323,6 +1334,7 @@ static void D3D12_INTERNAL_DestroyRenderer(D3D12Renderer *renderer)
         SDL_UnloadObject(renderer->dxgidebug_dll);
         renderer->dxgidebug_dll = NULL;
     }
+#endif
     renderer->D3D12SerializeRootSignature_func = NULL;
 
     if (renderer->iconv) {
@@ -1679,9 +1691,9 @@ static D3D12DescriptorHeap *D3D12_INTERNAL_CreateDescriptorHeap(
     heap->maxDescriptors = descriptorCount;
     heap->staging = staging;
     heap->descriptorSize = ID3D12Device_GetDescriptorHandleIncrementSize(renderer->device, type);
-    ID3D12DescriptorHeap_GetCPUDescriptorHandleForHeapStart(handle, &heap->descriptorHeapCPUStart);
+    D3D_CALL_RET(handle, GetCPUDescriptorHandleForHeapStart, &heap->descriptorHeapCPUStart);
     if (!staging) {
-        ID3D12DescriptorHeap_GetGPUDescriptorHandleForHeapStart(handle, &heap->descriptorHeapGPUStart);
+        D3D_CALL_RET(handle, GetGPUDescriptorHandleForHeapStart, &heap->descriptorHeapGPUStart);
     }
 
     return heap;
@@ -2785,7 +2797,7 @@ static D3D12Texture *D3D12_INTERNAL_CreateTexture(
 
             /* Create RTV if needed */
             if (textureCreateInfo->usageFlags & SDL_GPU_TEXTUREUSAGE_COLOR_TARGET_BIT) {
-                texture->subresources[subresourceIndex].rtvHandles = SDL_calloc(textureCreateInfo->depth, sizeof(D3D12CPUDescriptor));
+                texture->subresources[subresourceIndex].rtvHandles = (D3D12CPUDescriptor*) SDL_calloc(textureCreateInfo->depth, sizeof(D3D12CPUDescriptor));
 
                 for (Uint32 depthIndex = 0; depthIndex < textureCreateInfo->depth; depthIndex += 1) {
                     D3D12_RENDER_TARGET_VIEW_DESC rtvDesc;
@@ -5473,7 +5485,7 @@ static void D3D12_DownloadFromTexture(
     destinationLocation.PlacedFootprint.Footprint.RowPitch = alignedRowPitch;
 
     if (needsRealignment || needsPlacementCopy) {
-        textureDownload = SDL_malloc(sizeof(D3D12TextureDownload));
+        textureDownload = (D3D12TextureDownload*) SDL_malloc(sizeof(D3D12TextureDownload));
 
         if (!textureDownload) {
             SDL_LogError(SDL_LOG_CATEGORY_GPU, "Failed to create texture download structure!");
@@ -5535,7 +5547,7 @@ static void D3D12_DownloadFromTexture(
 
         if (d3d12CommandBuffer->textureDownloadCount >= d3d12CommandBuffer->textureDownloadCapacity) {
             d3d12CommandBuffer->textureDownloadCapacity *= 2;
-            d3d12CommandBuffer->textureDownloads = SDL_realloc(
+            d3d12CommandBuffer->textureDownloads = (D3D12TextureDownload**) SDL_realloc(
                 d3d12CommandBuffer->textureDownloads,
                 d3d12CommandBuffer->textureDownloadCapacity * sizeof(D3D12TextureDownload *));
         }
@@ -5678,6 +5690,23 @@ static D3D12WindowData *D3D12_INTERNAL_FetchWindowData(
     return (D3D12WindowData *)SDL_GetPointerProperty(properties, WINDOW_PROPERTY_DATA, NULL);
 }
 
+#if defined(SDL_PLATFORM_XBOXONE) || defined(SDL_PLATFORM_XBOXSERIES)
+// FIXME XBOX
+static SDL_bool D3D12_INTERNAL_CreateSwapchain(
+    D3D12Renderer *renderer,
+    D3D12WindowData *windowData,
+    SDL_GpuSwapchainComposition swapchainComposition,
+    SDL_GpuPresentMode presentMode)
+{
+    return SDL_FALSE;
+}
+
+static void D3D12_INTERNAL_DestroySwapchain(
+    D3D12Renderer *renderer,
+    D3D12WindowData *windowData)
+{
+}
+#else
 static SDL_bool D3D12_INTERNAL_InitializeSwapchainTexture(
     D3D12Renderer *renderer,
     IDXGISwapChain3 *swapchain,
@@ -6033,6 +6062,7 @@ static SDL_bool D3D12_INTERNAL_CreateSwapchain(
 
     return SDL_TRUE;
 }
+#endif
 
 static SDL_bool D3D12_ClaimWindow(
     SDL_GpuRenderer *driverData,
@@ -6300,7 +6330,7 @@ static void D3D12_INTERNAL_AllocateCommandBuffer(
 
     commandBuffer->textureDownloadCapacity = 4;
     commandBuffer->textureDownloadCount = 0;
-    commandBuffer->textureDownloads = SDL_calloc(
+    commandBuffer->textureDownloads = (D3D12TextureDownload**) SDL_calloc(
         commandBuffer->textureDownloadCapacity, sizeof(D3D12TextureDownload *));
 
     if (
@@ -6437,6 +6467,7 @@ static SDL_GpuTexture *D3D12_AcquireSwapchainTexture(
     D3D12Renderer *renderer = d3d12CommandBuffer->renderer;
     D3D12WindowData *windowData;
     DXGI_SWAP_CHAIN_DESC swapchainDesc;
+    Uint32 swapchainIndex;
     int w, h;
     HRESULT res;
 
@@ -6445,6 +6476,9 @@ static SDL_GpuTexture *D3D12_AcquireSwapchainTexture(
         return NULL;
     }
 
+#if defined(SDL_PLATFORM_XBOXONE) || defined(SDL_PLATFORM_XBOXSERIES)
+    // FIXME XBOX
+#else
     /* Check for window size changes and resize the swapchain if needed. */
     IDXGISwapChain_GetDesc(windowData->swapchain, &swapchainDesc);
     SDL_GetWindowSize(window, &w, &h);
@@ -6485,7 +6519,7 @@ static SDL_GpuTexture *D3D12_AcquireSwapchainTexture(
         windowData->inFlightFences[windowData->frameCounter] = NULL;
     }
 
-    Uint32 swapchainIndex = IDXGISwapChain3_GetCurrentBackBufferIndex(windowData->swapchain);
+    swapchainIndex = IDXGISwapChain3_GetCurrentBackBufferIndex(windowData->swapchain);
 
     /* Set the handle on the windowData texture data. */
     res = IDXGISwapChain_GetBuffer(
@@ -6525,6 +6559,7 @@ static SDL_GpuTexture *D3D12_AcquireSwapchainTexture(
         d3d12CommandBuffer->graphicsCommandList,
         1,
         &barrierDesc);
+#endif
 
     return (SDL_GpuTexture *)&windowData->textureContainers[swapchainIndex];
 }
@@ -6853,10 +6888,14 @@ static void D3D12_Submit(
             presentFlags = DXGI_PRESENT_ALLOW_TEARING;
         }
 
+#if defined(SDL_PLATFORM_XBOXONE) || defined(SDL_PLATFORM_XBOXSERIES)
+        // FIXME XBOX
+#else
         IDXGISwapChain_Present(
             windowData->swapchain,
             syncInterval,
             presentFlags);
+#endif
 
         ID3D12Resource_Release(windowData->textureContainers[presentData->swapchainImageIndex].activeTexture->resource);
 
@@ -7051,7 +7090,11 @@ static SDL_GpuSampleCount D3D12_GetBestSampleCount(
     D3D12_FEATURE_DATA_MULTISAMPLE_QUALITY_LEVELS featureData;
     HRESULT res;
 
+#if defined(SDL_PLATFORM_XBOXONE) || defined(SDL_PLATFORM_XBOXSERIES)
+    featureData.Flags = (D3D12_MULTISAMPLE_QUALITY_LEVELS_FLAG)0;
+#else
     featureData.Flags = (D3D12_MULTISAMPLE_QUALITY_LEVEL_FLAGS)0;
+#endif
     while (maxSupported >= SDL_GPU_SAMPLECOUNT_1) {
         featureData.Format = SDLToD3D12_TextureFormat[format];
         featureData.SampleCount = (UINT)maxSupported;
@@ -7186,6 +7229,9 @@ static void D3D12_INTERNAL_InitBlitResources(
 
 static SDL_bool D3D12_PrepareDriver(SDL_VideoDevice *_this)
 {
+#if defined(SDL_PLATFORM_XBOXONE) || defined(SDL_PLATFORM_XBOXSERIES)
+    return SDL_TRUE;
+#else
     void *d3d12_dll;
     void *dxgi_dll;
     PFN_D3D12_CREATE_DEVICE D3D12CreateDeviceFunc;
@@ -7305,8 +7351,10 @@ static SDL_bool D3D12_PrepareDriver(SDL_VideoDevice *_this)
     }
 
     return SDL_TRUE;
+#endif
 }
 
+#if !(defined(SDL_PLATFORM_XBOXONE) || defined(SDL_PLATFORM_XBOXSERIES))
 static void D3D12_INTERNAL_TryInitializeDXGIDebug(D3D12Renderer *renderer)
 {
     PFN_DXGI_GET_DEBUG_INTERFACE DXGIGetDebugInterfaceFunc;
@@ -7336,6 +7384,7 @@ static void D3D12_INTERNAL_TryInitializeDXGIDebug(D3D12Renderer *renderer)
         SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Could not get IDXGIInfoQueue interface");
     }
 }
+#endif
 
 static void D3D12_INTERNAL_TryInitializeD3D12Debug(D3D12Renderer *renderer)
 {
@@ -7359,6 +7408,9 @@ static void D3D12_INTERNAL_TryInitializeD3D12Debug(D3D12Renderer *renderer)
     ID3D12Debug_EnableDebugLayer(renderer->d3d12Debug);
 }
 
+#if defined(SDL_PLATFORM_XBOXONE) || defined(SDL_PLATFORM_XBOXSERIES)
+// FIXME XBOX
+#else
 static void D3D12_INTERNAL_TryInitializeD3D12DebugInfoQueue(D3D12Renderer *renderer)
 {
     ID3D12InfoQueue *infoQueue = NULL;
@@ -7393,23 +7445,31 @@ static void D3D12_INTERNAL_TryInitializeD3D12DebugInfoQueue(D3D12Renderer *rende
 
     ID3D12InfoQueue_Release(infoQueue);
 }
+#endif
 
 static SDL_GpuDevice *D3D12_CreateDevice(SDL_bool debugMode, SDL_bool preferLowPower, SDL_PropertiesID props)
 {
     SDL_GpuDevice *result;
     D3D12Renderer *renderer;
-    PFN_CREATE_DXGI_FACTORY1 CreateDXGIFactoryFunc;
     HRESULT res;
+#if defined(SDL_PLATFORM_XBOXONE) || defined(SDL_PLATFORM_XBOXSERIES)
+    // FIXME XBOX
+#else
+    PFN_CREATE_DXGI_FACTORY1 CreateDXGIFactoryFunc;
     IDXGIFactory1 *factory1;
     IDXGIFactory5 *factory5;
     IDXGIFactory6 *factory6;
     DXGI_ADAPTER_DESC1 adapterDesc;
+#endif
     PFN_D3D12_CREATE_DEVICE D3D12CreateDeviceFunc;
     D3D12_FEATURE_DATA_ARCHITECTURE architecture;
     D3D12_COMMAND_QUEUE_DESC queueDesc;
 
     renderer = (D3D12Renderer *)SDL_calloc(1, sizeof(D3D12Renderer));
 
+#if defined(SDL_PLATFORM_XBOXONE) || defined(SDL_PLATFORM_XBOXSERIES)
+    // FIXME XBOX
+#else
     /* Load the DXGI library */
     renderer->dxgi_dll = SDL_LoadObject(DXGI_DLL);
     if (renderer->dxgi_dll == NULL) {
@@ -7504,6 +7564,7 @@ static SDL_GpuDevice *D3D12_CreateDevice(SDL_bool debugMode, SDL_bool preferLowP
 
     SDL_LogInfo(SDL_LOG_CATEGORY_GPU, "SDL_Gpu Driver: D3D12");
     SDL_LogInfo(SDL_LOG_CATEGORY_GPU, "D3D12 Adapter: %S", adapterDesc.Description);
+#endif
 
     /* Load the D3D library */
     renderer->d3d12_dll = SDL_LoadObject(D3D12_DLL);
@@ -7538,6 +7599,9 @@ static SDL_GpuDevice *D3D12_CreateDevice(SDL_bool debugMode, SDL_bool preferLowP
     }
 
     /* Create the D3D12Device */
+#if defined(SDL_PLATFORM_XBOXONE) || defined(SDL_PLATFORM_XBOXSERIES)
+    // FIXME XBOX
+#else
     res = D3D12CreateDeviceFunc(
         (IUnknown *)renderer->adapter,
         D3D_FEATURE_LEVEL_CHOICE,
@@ -7553,6 +7617,7 @@ static SDL_GpuDevice *D3D12_CreateDevice(SDL_bool debugMode, SDL_bool preferLowP
     if (debugMode) {
         D3D12_INTERNAL_TryInitializeD3D12DebugInfoQueue(renderer);
     }
+#endif
 
     /* Check UMA */
     architecture.NodeIndex = 0;
@@ -7569,6 +7634,9 @@ static SDL_GpuDevice *D3D12_CreateDevice(SDL_bool debugMode, SDL_bool preferLowP
     renderer->UMA = (SDL_bool)architecture.UMA;
     renderer->UMACacheCoherent = (SDL_bool)architecture.CacheCoherentUMA;
 
+#if defined(SDL_PLATFORM_XBOXONE) || defined(SDL_PLATFORM_XBOXSERIES)
+    renderer->GPUUploadHeapSupported = SDL_FALSE;
+#else
     /* Check "GPU Upload Heap" support (for fast uniform buffers) */
     D3D12_FEATURE_DATA_D3D12_OPTIONS16 options16; /* 15 wasn't enough, huh? */
     renderer->GPUUploadHeapSupported = SDL_FALSE;
@@ -7581,6 +7649,7 @@ static SDL_GpuDevice *D3D12_CreateDevice(SDL_bool debugMode, SDL_bool preferLowP
     if (SUCCEEDED(res)) {
         renderer->GPUUploadHeapSupported = options16.GPUUploadHeapSupported;
     }
+#endif
 
     /* Create command queue */
     queueDesc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
