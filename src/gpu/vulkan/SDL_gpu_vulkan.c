@@ -4617,7 +4617,7 @@ static SDL_bool VULKAN_INTERNAL_CreateSwapchain(
         }
     }
 
-    swapchainData->imageCount = swapchainSupportDetails.capabilities.minImageCount + 1;
+    swapchainData->imageCount = MAX_FRAMES_IN_FLIGHT;
 
     if (swapchainSupportDetails.capabilities.maxImageCount > 0 &&
         swapchainData->imageCount > swapchainSupportDetails.capabilities.maxImageCount) {
