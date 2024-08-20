@@ -1240,75 +1240,6 @@ struct VulkanCommandPool
     Uint32 inactiveCommandBufferCount;
 };
 
-#define NUM_COMMAND_POOL_BUCKETS 1031
-
-typedef struct CommandPoolHash
-{
-    SDL_ThreadID threadID;
-} CommandPoolHash;
-
-typedef struct CommandPoolHashMap
-{
-    CommandPoolHash key;
-    VulkanCommandPool *value;
-} CommandPoolHashMap;
-
-typedef struct CommandPoolHashArray
-{
-    CommandPoolHashMap *elements;
-    Uint32 count;
-    Uint32 capacity;
-} CommandPoolHashArray;
-
-typedef struct CommandPoolHashTable
-{
-    CommandPoolHashArray buckets[NUM_COMMAND_POOL_BUCKETS];
-} CommandPoolHashTable;
-
-static inline uint64_t CommandPoolHashTable_GetHashCode(CommandPoolHash key)
-{
-    const uint64_t HASH_FACTOR = 97;
-    uint64_t result = 1;
-    result = result * HASH_FACTOR + (uint64_t)key.threadID;
-    return result;
-}
-
-static inline VulkanCommandPool *CommandPoolHashTable_Fetch(
-    CommandPoolHashTable *table,
-    CommandPoolHash key)
-{
-    Uint32 i;
-    uint64_t hashcode = CommandPoolHashTable_GetHashCode(key);
-    CommandPoolHashArray *arr = &table->buckets[hashcode % NUM_COMMAND_POOL_BUCKETS];
-
-    for (i = 0; i < arr->count; i += 1) {
-        const CommandPoolHash *e = &arr->elements[i].key;
-        if (key.threadID == e->threadID) {
-            return arr->elements[i].value;
-        }
-    }
-
-    return NULL;
-}
-
-static inline void CommandPoolHashTable_Insert(
-    CommandPoolHashTable *table,
-    CommandPoolHash key,
-    VulkanCommandPool *value)
-{
-    uint64_t hashcode = CommandPoolHashTable_GetHashCode(key);
-    CommandPoolHashArray *arr = &table->buckets[hashcode % NUM_COMMAND_POOL_BUCKETS];
-
-    CommandPoolHashMap map;
-    map.key = key;
-    map.value = value;
-
-    EXPAND_ELEMENTS_IF_NEEDED(arr, 4, CommandPoolHashMap)
-
-    arr->elements[arr->count] = map;
-    arr->count += 1;
-}
-
 /* Context */
 
 struct VulkanRenderer
@@ -1347,7 +1278,7 @@ struct VulkanRenderer
 
     VulkanFencePool fencePool;
 
-    CommandPoolHashTable commandPoolHashTable;
+    SDL_HashTable *commandPoolHashTable;
     RenderPassHashArray renderPassHashArray;
     FramebufferHashArray framebufferHashArray;
 
@@ -3459,6 +3390,25 @@ static void VULKAN_INTERNAL_DestroySwapchain(
     SDL_free(swapchainData);
 }
 
+/* Hashtable functions */
+
+static Uint32 VULKAN_INTERNAL_CommandPoolHashFunction(const void *key, void *data)
+{
+    return (Uint32)(SDL_ThreadID)key;
+}
+
+static SDL_bool VULKAN_INTERNAL_CommandPoolKeyMatch(const void *a, const void *b, void *data)
+{
+    return a == b;
+}
+
+static void VULKAN_INTERNAL_CommandPoolNuke(const void *key, const void *value, void *data)
+{
+    VulkanRenderer *renderer = (VulkanRenderer *)data;
+    VulkanCommandPool *pool = (VulkanCommandPool *)value;
+    VULKAN_INTERNAL_DestroyCommandPool(renderer, pool);
+}
+
 /* Descriptor pool stuff */
 
 static SDL_bool VULKAN_INTERNAL_CreateDescriptorPool(
@@ -4833,7 +4783,6 @@ static void VULKAN_DestroyDevice(
     SDL_GpuDevice *device)
 {
     VulkanRenderer *renderer = (VulkanRenderer *)device->driverData;
-    CommandPoolHashArray commandPoolHashArray;
     VulkanMemorySubAllocator *allocator;
 
     VULKAN_Wait(device->driverData);
@@ -4869,18 +4818,7 @@ static void VULKAN_DestroyDevice(
     SDL_free(renderer->fencePool.availableFences);
     SDL_DestroyMutex(renderer->fencePool.lock);
 
-    for (Uint32 i = 0; i < NUM_COMMAND_POOL_BUCKETS; i += 1) {
-        commandPoolHashArray = renderer->commandPoolHashTable.buckets[i];
-        for (Uint32 j = 0; j < commandPoolHashArray.count; j += 1) {
-            VULKAN_INTERNAL_DestroyCommandPool(
-                renderer,
-                commandPoolHashArray.elements[j].value);
-        }
-
-        if (commandPoolHashArray.elements != NULL) {
-            SDL_free(commandPoolHashArray.elements);
-        }
-    }
+    SDL_DestroyHashTable(renderer->commandPoolHashTable);
 
     for (Sint32 i = 0; i < renderer->framebufferHashArray.count; i += 1) {
         VULKAN_INTERNAL_DestroyFramebuffer(
@@ -9458,18 +9396,16 @@ static VulkanCommandPool *VULKAN_INTERNAL_FetchCommandPool(
     VulkanRenderer *renderer,
     SDL_ThreadID threadID)
 {
-    VulkanCommandPool *vulkanCommandPool;
+    VulkanCommandPool *vulkanCommandPool = NULL;
     VkCommandPoolCreateInfo commandPoolCreateInfo;
     VkResult vulkanResult;
-    CommandPoolHash commandPoolHash;
 
-    commandPoolHash.threadID = threadID;
+    SDL_bool result = SDL_FindInHashTable(
+        renderer->commandPoolHashTable,
+        (void *)threadID,
+        (void**) &vulkanCommandPool);
 
-    vulkanCommandPool = CommandPoolHashTable_Fetch(
-        &renderer->commandPoolHashTable,
-        commandPoolHash);
-
-    if (vulkanCommandPool != NULL) {
+    if (result) {
         return vulkanCommandPool;
     }
 
@@ -9503,10 +9439,10 @@ static VulkanCommandPool *VULKAN_INTERNAL_FetchCommandPool(
         vulkanCommandPool,
         2);
 
-    CommandPoolHashTable_Insert(
-        &renderer->commandPoolHashTable,
-        commandPoolHash,
-        vulkanCommandPool);
+    SDL_InsertIntoHashTable(
+        renderer->commandPoolHashTable,
+        (void *)threadID,
+        (void *)vulkanCommandPool);
 
     return vulkanCommandPool;
 }
@@ -11781,11 +11717,13 @@ static SDL_GpuDevice *VULKAN_CreateDevice(SDL_bool debugMode, SDL_bool preferLow
 
     /* Initialize caches */
 
-    for (i = 0; i < NUM_COMMAND_POOL_BUCKETS; i += 1) {
-        renderer->commandPoolHashTable.buckets[i].elements = NULL;
-        renderer->commandPoolHashTable.buckets[i].count = 0;
-        renderer->commandPoolHashTable.buckets[i].capacity = 0;
-    }
+    renderer->commandPoolHashTable = SDL_CreateHashTable(
+        (void*) renderer,
+        64,
+        VULKAN_INTERNAL_CommandPoolHashFunction,
+        VULKAN_INTERNAL_CommandPoolKeyMatch,
+        VULKAN_INTERNAL_CommandPoolNuke,
+        SDL_FALSE);
 
     renderer->renderPassHashArray.elements = NULL;
     renderer->renderPassHashArray.count = 0;
