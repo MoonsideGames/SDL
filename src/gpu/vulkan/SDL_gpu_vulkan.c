@@ -9135,11 +9135,11 @@ static void VULKAN_GenerateMipmaps(
 
             Uint32 srcSubresourceIndex = VULKAN_INTERNAL_GetTextureSubresourceIndex(
                 level - 1,
-                layerOrDepthIndex,
+                layer,
                 vulkanTexture->levelCount);
             Uint32 dstSubresourceIndex = VULKAN_INTERNAL_GetTextureSubresourceIndex(
                 level,
-                layerOrDepthIndex,
+                layer,
                 vulkanTexture->levelCount);
 
             srcTextureSubresource = &vulkanTexture->subresources[srcSubresourceIndex];
