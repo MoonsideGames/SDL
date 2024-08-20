@@ -5662,6 +5662,7 @@ static void D3D12_GenerateMipmaps(
                     .texture = texture,
                     .layer = layer,
                     .mipLevel = levelIndex - 1,
+                    .z = depthSlice,
                     .w = container->header.info.width >> (levelIndex - 1),
                     .h = container->header.info.height >> (levelIndex - 1),
                     .d = 1,
@@ -5670,6 +5671,7 @@ static void D3D12_GenerateMipmaps(
                     .texture = texture,
                     .layer = layer,
                     .mipLevel = levelIndex,
+                    .z = depthSlice,
                     .w = container->header.info.width >> levelIndex,
                     .h = container->header.info.height >> levelIndex,
                     .d = 1
