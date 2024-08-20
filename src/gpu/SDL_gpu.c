@@ -1,4 +1,4 @@
-/*
+﻿/*
   Simple DirectMedia Layer
   Copyright (C) 1997-2024 Sam Lantinga <slouken@libsdl.org>
 
@@ -1915,11 +1915,11 @@ void SDL_GpuCopyBufferToBuffer(
 }
 
 void SDL_GpuGenerateMipmaps(
-    SDL_GpuCopyPass *copyPass,
+    SDL_GpuCommandBuffer *commandBuffer,
     SDL_GpuTexture *texture)
 {
-    if (copyPass == NULL) {
-        SDL_InvalidParamError("copyPass");
+    if (commandBuffer == NULL) {
+        SDL_InvalidParamError("commandBuffer");
         return;
     }
     if (texture == NULL) {
@@ -1933,8 +1933,8 @@ void SDL_GpuGenerateMipmaps(
         return;
     }
 
-    COPYPASS_DEVICE->GenerateMipmaps(
-        COPYPASS_COMMAND_BUFFER,
+    COMMAND_BUFFER_DEVICE->GenerateMipmaps(
+        commandBuffer,
         texture);
 }
 
