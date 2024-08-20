@@ -5650,147 +5650,32 @@ static void D3D12_GenerateMipmaps(
         return;
     }
 
-    /* We have to do this the hard way, one subresource at a time */
+    /* We have to do this one subresource at a time */
     for (Uint32 layerOrDepthIndex = 0; layerOrDepthIndex < container->header.info.layerCountOrDepth; layerOrDepthIndex += 1) {
         for (Uint32 levelIndex = 1; levelIndex < container->header.info.levelCount; levelIndex += 1) {
             Uint32 layer = container->header.info.type == SDL_GPU_TEXTURETYPE_3D ? 0 : layerOrDepthIndex;
             Uint32 depthSlice = container->header.info.type == SDL_GPU_TEXTURETYPE_3D ? layerOrDepthIndex : 0;
 
-            D3D12TextureSubresource *srcSubresource = D3D12_INTERNAL_FetchTextureSubresource(
-                container,
-                layer,
-                levelIndex - 1);
-            D3D12TextureSubresource *dstSubresource = D3D12_INTERNAL_FetchTextureSubresource(
-                container,
-                layer,
-                levelIndex);
-
-            /* destination barrier */
-            D3D12_RESOURCE_BARRIER barrierDesc;
-            barrierDesc.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-            barrierDesc.Flags = 0;
-            barrierDesc.Transition.StateBefore = D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE;
-            barrierDesc.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
-            barrierDesc.Transition.pResource = dstSubresource->parent->resource;
-            barrierDesc.Transition.Subresource = dstSubresource->index;
-            ID3D12GraphicsCommandList_ResourceBarrier(
-                d3d12CommandBuffer->graphicsCommandList,
-                1,
-                &barrierDesc);
-
-            D3D12_CPU_DESCRIPTOR_HANDLE rtv = dstSubresource->rtvHandles[depthSlice].cpuHandle;
-
-            ID3D12GraphicsCommandList_OMSetRenderTargets(
-                d3d12CommandBuffer->graphicsCommandList,
-                1,
-                &rtv,
-                SDL_FALSE,
-                NULL);
-
-            Uint32 w = container->header.info.width >> dstSubresource->level;
-            Uint32 h = container->header.info.height >> dstSubresource->level;
-
-            D3D12_VIEWPORT d3d12Viewport;
-            d3d12Viewport.TopLeftX = 0;
-            d3d12Viewport.TopLeftY = 0;
-            d3d12Viewport.Width = (float)w;
-            d3d12Viewport.Height = (float)h;
-            d3d12Viewport.MinDepth = 0.0f;
-            d3d12Viewport.MaxDepth = 1.0f;
-            ID3D12GraphicsCommandList_RSSetViewports(d3d12CommandBuffer->graphicsCommandList, 1, &d3d12Viewport);
-
-            D3D12_RECT scissorRect;
-            scissorRect.left = 0;
-            scissorRect.top = 0;
-            scissorRect.right = w;
-            scissorRect.bottom = h;
-            ID3D12GraphicsCommandList_RSSetScissorRects(d3d12CommandBuffer->graphicsCommandList, 1, &scissorRect);
-
-            D3D12GraphicsPipeline *pipeline = (D3D12GraphicsPipeline *)blitPipeline;
-
-            ID3D12GraphicsCommandList_SetPipelineState(d3d12CommandBuffer->graphicsCommandList, pipeline->pipelineState);
-            ID3D12GraphicsCommandList_SetGraphicsRootSignature(d3d12CommandBuffer->graphicsCommandList, pipeline->rootSignature->handle);
-            ID3D12GraphicsCommandList_IASetPrimitiveTopology(d3d12CommandBuffer->graphicsCommandList, SDLToD3D12_PrimitiveType[pipeline->primitiveType]);
-
-            float blendFactor[4] = {
-                pipeline->blendConstants[0],
-                pipeline->blendConstants[1],
-                pipeline->blendConstants[2],
-                pipeline->blendConstants[3]
-            };
-            ID3D12GraphicsCommandList_OMSetBlendFactor(d3d12CommandBuffer->graphicsCommandList, blendFactor);
-            ID3D12GraphicsCommandList_OMSetStencilRef(d3d12CommandBuffer->graphicsCommandList, pipeline->stencilRef);
-
-            BlitFragmentUniforms blitFragmentUniforms;
-            blitFragmentUniforms.left = 0;
-            blitFragmentUniforms.top = 0;
-            blitFragmentUniforms.width = 1.0f;
-            blitFragmentUniforms.height = 1.0f;
-            blitFragmentUniforms.mipLevel = levelIndex - 1;
-            blitFragmentUniforms.layerOrDepth = (container->header.info.type == SDL_GPU_TEXTURETYPE_3D) ? (layerOrDepthIndex / (float)container->header.info.layerCountOrDepth) : layer;
-
-            D3D12_INTERNAL_PushUniformData(
-                d3d12CommandBuffer,
-                SDL_GPU_SHADERSTAGE_FRAGMENT,
-                0,
-                &blitFragmentUniforms,
-                sizeof(BlitFragmentUniforms));
-
-            D3D12_GPU_DESCRIPTOR_HANDLE gpuDescriptorHandle;
-
-            D3D12_INTERNAL_WriteGPUDescriptors(
-                d3d12CommandBuffer,
-                D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER,
-                &((D3D12Sampler *)renderer->blitLinearSampler)->handle.cpuHandle,
-                1,
-                &gpuDescriptorHandle);
-
-            ID3D12GraphicsCommandList_SetGraphicsRootDescriptorTable(
-                d3d12CommandBuffer->graphicsCommandList,
-                pipeline->rootSignature->fragmentSamplerRootIndex,
-                gpuDescriptorHandle);
-
-            D3D12_INTERNAL_WriteGPUDescriptors(
-                d3d12CommandBuffer,
-                D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
-                &srcSubresource->parent->srvHandle.cpuHandle,
-                1,
-                &gpuDescriptorHandle);
-
-            ID3D12GraphicsCommandList_SetGraphicsRootDescriptorTable(
-                d3d12CommandBuffer->graphicsCommandList,
-                pipeline->rootSignature->fragmentSamplerTextureRootIndex,
-                gpuDescriptorHandle);
-
-            ID3D12GraphicsCommandList_SetGraphicsRootConstantBufferView(
-                d3d12CommandBuffer->graphicsCommandList,
-                pipeline->rootSignature->fragmentUniformBufferRootIndex[0],
-                d3d12CommandBuffer->fragmentUniformBuffers[0]->buffer->virtualAddress + d3d12CommandBuffer->fragmentUniformBuffers[0]->drawOffset);
-
-            ID3D12GraphicsCommandList_DrawInstanced(
-                d3d12CommandBuffer->graphicsCommandList,
-                3,
-                1,
-                0,
-                0);
-
-            /* End render pass */
-            ID3D12GraphicsCommandList_OMSetRenderTargets(
-                d3d12CommandBuffer->graphicsCommandList,
-                0,
-                NULL,
-                SDL_FALSE,
-                NULL);
-
-            barrierDesc.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
-            barrierDesc.Transition.StateAfter = D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE;
-            barrierDesc.Transition.pResource = dstSubresource->parent->resource;
-            barrierDesc.Transition.Subresource = dstSubresource->index;
-
-            ID3D12GraphicsCommandList_ResourceBarrier(
-                d3d12CommandBuffer->graphicsCommandList,
-                1,
-                &barrierDesc);
+            SDL_GpuBlit(
+                commandBuffer,
+                &(SDL_GpuTextureRegion){
+                    .texture = texture,
+                    .layer = layer,
+                    .mipLevel = levelIndex - 1,
+                    .w = container->header.info.width >> (levelIndex - 1),
+                    .h = container->header.info.height >> (levelIndex - 1),
+                    .d = 1,
+                },
+                &(SDL_GpuTextureRegion){
+                    .texture = texture,
+                    .layer = layer,
+                    .mipLevel = levelIndex,
+                    .w = container->header.info.width >> levelIndex,
+                    .h = container->header.info.height >> levelIndex,
+                    .d = 1
+                },
+                SDL_GPU_FILTER_LINEAR,
+                SDL_FALSE);
         }
     }
 
