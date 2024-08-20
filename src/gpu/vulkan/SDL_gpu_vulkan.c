@@ -174,6 +174,7 @@ static VkFormat SDLToVK_SurfaceFormat[] = {
     VK_FORMAT_D24_UNORM_S8_UINT,        /* D24_UNORM_S8_UINT */
     VK_FORMAT_D32_SFLOAT_S8_UINT,       /* D32_SFLOAT_S8_UINT */
 };
+SDL_COMPILE_TIME_ASSERT(SDLToVK_SurfaceFormat, SDL_arraysize(SDLToVK_SurfaceFormat) == SDL_GPU_TEXTUREFORMAT_MAX);
 
 static VkComponentMapping SDLToVK_SurfaceSwizzle[] = {
     IDENTITY_SWIZZLE, /* R8G8B8A8 */

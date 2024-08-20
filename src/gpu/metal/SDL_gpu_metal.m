@@ -133,6 +133,7 @@ static MTLPixelFormat SDLToMetal_SurfaceFormat[] = {
 #endif
     MTLPixelFormatDepth32Float_Stencil8, /* D32_SFLOAT_S8_UINT */
 };
+SDL_COMPILE_TIME_ASSERT(SDLToMetal_SurfaceFormat, SDL_arraysize(SDLToMetal_SurfaceFormat) == SDL_GPU_TEXTUREFORMAT_MAX);
 
 static MTLVertexFormat SDLToMetal_VertexFormat[] = {
     MTLVertexFormatInt,                 /* INT */

@@ -554,7 +554,7 @@ SDL_bool SDL_GpuSupportsTextureFormat(
     CHECK_DEVICE_MAGIC(device, SDL_FALSE);
 
     if (device->debugMode) {
-        CHECK_TEXTUREFORMAT_ENUM_INVALID(format, NULL)
+        CHECK_TEXTUREFORMAT_ENUM_INVALID(format, SDL_FALSE)
     }
 
     return device->SupportsTextureFormat(
@@ -572,7 +572,7 @@ SDL_GpuSampleCount SDL_GpuGetBestSampleCount(
     CHECK_DEVICE_MAGIC(device, 0);
 
     if (device->debugMode) {
-        CHECK_TEXTUREFORMAT_ENUM_INVALID(format, NULL)
+        CHECK_TEXTUREFORMAT_ENUM_INVALID(format, 0)
     }
 
     return device->GetBestSampleCount(
