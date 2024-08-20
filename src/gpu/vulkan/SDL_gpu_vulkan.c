@@ -7322,8 +7322,8 @@ static VulkanFramebuffer *VULKAN_INTERNAL_FetchFramebuffer(
 
     SDL_bool findResult = SDL_FindInHashTable(
         renderer->framebufferHashTable,
-        (void *)&key,
-        (void **)&vulkanFramebuffer);
+        (const void *)&key,
+        (const void **)&vulkanFramebuffer);
 
     SDL_UnlockMutex(renderer->framebufferFetchLock);
 
