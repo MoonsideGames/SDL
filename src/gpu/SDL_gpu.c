@@ -303,8 +303,8 @@ void SDL_Gpu_BlitCommon(
         &textureSamplerBinding,
         1);
 
-    blitFragmentUniforms.left = (float)source->x / srcHeader->info.width;
-    blitFragmentUniforms.top = (float)source->y / srcHeader->info.height;
+    blitFragmentUniforms.left = (float)source->x / (srcHeader->info.width >> source->mipLevel);
+    blitFragmentUniforms.top = (float)source->y / (srcHeader->info.height >> source->mipLevel);
     blitFragmentUniforms.width = (float)source->w / (srcHeader->info.width >> source->mipLevel);
     blitFragmentUniforms.height = (float)source->h / (srcHeader->info.height >> source->mipLevel);
     blitFragmentUniforms.mipLevel = source->mipLevel;
