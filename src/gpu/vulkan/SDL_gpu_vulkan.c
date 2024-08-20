@@ -2897,7 +2897,7 @@ static void VULKAN_INTERNAL_RemoveFramebuffersContainingView(
 
     SDL_LockMutex(renderer->framebufferFetchLock);
 
-    while (SDL_IterateHashTable(renderer->framebufferHashTable, (void **)&key, (void **)&value, &iter)) {
+    while (SDL_IterateHashTable(renderer->framebufferHashTable, (const void **)&key, (const void **)&value, &iter)) {
         for (Uint32 i = 0; i < key->colorAttachmentCount; i += 1) {
             if (key->colorAttachmentViews[i] == view) {
                 VULKAN_INTERNAL_ReleaseFramebuffer(
@@ -7229,8 +7229,8 @@ static VkRenderPass VULKAN_INTERNAL_FetchRenderPass(
 
     SDL_bool result = SDL_FindInHashTable(
         renderer->renderPassHashTable,
-        (void *)&key,
-        (void **)&renderPass);
+        (const void *)&key,
+        (const void **)&renderPass);
 
     SDL_UnlockMutex(renderer->renderPassFetchLock);
 
@@ -9384,8 +9384,8 @@ static VulkanCommandPool *VULKAN_INTERNAL_FetchCommandPool(
 
     SDL_bool result = SDL_FindInHashTable(
         renderer->commandPoolHashTable,
-        (void *)threadID,
-        (void**) &vulkanCommandPool);
+        (const void *)threadID,
+        (const void**) &vulkanCommandPool);
 
     if (result) {
         return vulkanCommandPool;
