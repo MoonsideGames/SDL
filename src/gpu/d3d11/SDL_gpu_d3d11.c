@@ -2667,10 +2667,16 @@ static void D3D11_UploadToTexture(
         h = (h + blockSize - 1) & ~(blockSize - 1);
     }
 
-    if (bufferStride == 0 || bufferImageHeight == 0) {
-        bufferStride = BytesPerRow(w, dstFormat);
-        bufferImageHeight = h * SDL_GpuTextureFormatTexelBlockSize(dstFormat);
+    if (bufferStride == 0) {
+        bufferStride = w;
     }
+
+    if (bufferImageHeight == 0) {
+        bufferImageHeight = h;
+    }
+
+    Uint32 bytesPerRow = BytesPerRow(bufferStride, dstFormat);
+    Uint32 bytesPerDepthSlice = bytesPerRow * bufferImageHeight;
 
     /* UpdateSubresource1 is completely busted on AMD, it truncates after X bytes.
      * So we get to do this Fun (Tm) workaround where we create a staging texture
@@ -2687,8 +2693,8 @@ static void D3D11_UploadToTexture(
     stagingTextureCreateInfo.format = dstFormat;
 
     initialData.pSysMem = srcTransferBuffer->data + source->offset;
-    initialData.SysMemPitch = bufferStride;
-    initialData.SysMemSlicePitch = bufferStride * bufferImageHeight;
+    initialData.SysMemPitch = bytesPerRow;
+    initialData.SysMemSlicePitch = bytesPerDepthSlice;
 
     stagingTexture = D3D11_INTERNAL_CreateTexture(
         renderer,
@@ -2809,8 +2815,11 @@ static void D3D11_DownloadFromTexture(
     textureDownload = &d3d11TransferBuffer->textureDownloads[d3d11TransferBuffer->textureDownloadCount];
     d3d11TransferBuffer->textureDownloadCount += 1;
 
-    if (bufferStride == 0 || bufferImageHeight == 0) {
+    if (bufferStride == 0) {
         bufferStride = source->w;
+    }
+
+    if (bufferImageHeight == 0) {
         bufferImageHeight = source->h;
     }
 
