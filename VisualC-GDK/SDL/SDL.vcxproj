@@ -166,6 +166,7 @@
     </Link>
     <PreBuildEvent>
       <Command>$(SolutionDir)..\src\render\direct3d12\compile_shaders_xbox.bat $(SolutionDir)</Command>
+      <Command>$(SolutionDir)..\src\gpu\d3d12\compile_shaders_xbox.bat $(SolutionDir)</Command>
     </PreBuildEvent>
     <PreBuildEvent>
       <Message>Building shader blobs (Xbox Series)</Message>
@@ -200,6 +201,7 @@
     </Link>
     <PreBuildEvent>
       <Command>$(SolutionDir)..\src\render\direct3d12\compile_shaders_xbox.bat $(SolutionDir) one</Command>
+      <Command>$(SolutionDir)..\src\gpu\d3d12\compile_shaders_xbox.bat $(SolutionDir) one</Command>
     </PreBuildEvent>
     <PreBuildEvent>
       <Message>Building shader blobs (Xbox One)</Message>
@@ -266,6 +268,7 @@
     </Link>
     <PreBuildEvent>
       <Command>$(SolutionDir)..\src\render\direct3d12\compile_shaders_xbox.bat $(SolutionDir)</Command>
+      <Command>$(SolutionDir)..\src\gpu\d3d12\compile_shaders_xbox.bat $(SolutionDir)</Command>
     </PreBuildEvent>
     <PreBuildEvent>
       <Message>Building shader blobs (Xbox Series)</Message>
@@ -301,6 +304,7 @@
     </Link>
     <PreBuildEvent>
       <Command>$(SolutionDir)..\src\render\direct3d12\compile_shaders_xbox.bat $(SolutionDir) one</Command>
+      <Command>$(SolutionDir)..\src\gpu\d3d12\compile_shaders_xbox.bat $(SolutionDir) one</Command>
     </PreBuildEvent>
     <PreBuildEvent>
       <Message>Building shader blobs (Xbox One)</Message>

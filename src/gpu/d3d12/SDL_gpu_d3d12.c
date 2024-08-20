@@ -34,7 +34,13 @@
 #define g_BlitFrom2DArray D3D12_BlitFrom2DArray
 #define g_BlitFrom3D      D3D12_BlitFrom3D
 #define g_BlitFromCube    D3D12_BlitFromCube
+#if defined(SDL_PLATFORM_XBOXSERIES)
+#include "D3D12_Blit_Series.h"
+#elif defined(SDL_PLATFORM_XBOXONE)
+#include "D3D12_Blit_One.h"
+#else
 #include "D3D12_Blit.h"
+#endif
 #undef g_FullscreenVert
 #undef g_BlitFrom2D
 #undef g_BlitFrom2DArray
