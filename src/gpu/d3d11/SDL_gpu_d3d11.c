@@ -1840,7 +1840,7 @@ static D3D11Texture *D3D11_INTERNAL_CreateTexture(
     SDL_GpuTextureCreateInfo *createInfo,
     D3D11_SUBRESOURCE_DATA *initialData)
 {
-    Uint8 needsSRV, isColorTarget, isDepthStencil, isMultisample, isStaging, needSubresourceUAV;
+    Uint8 needsSRV, isColorTarget, isDepthStencil, isMultisample, isStaging, needSubresourceUAV, isMippable;
     DXGI_FORMAT format;
     ID3D11Resource *textureHandle;
     ID3D11ShaderResourceView *srv = NULL;
@@ -1857,7 +1857,10 @@ static D3D11Texture *D3D11_INTERNAL_CreateTexture(
         (createInfo->usageFlags & SDL_GPU_TEXTUREUSAGE_COMPUTE_STORAGE_WRITE_BIT);
     isMultisample = createInfo->sampleCount > SDL_GPU_SAMPLECOUNT_1;
     isStaging = createInfo->usageFlags == 0;
-
+    isMippable =
+        createInfo->levelCount > 1 &&
+        (createInfo->usageFlags & SDL_GPU_TEXTUREUSAGE_SAMPLER_BIT) &&
+        (createInfo->usageFlags & SDL_GPU_TEXTUREUSAGE_COLOR_TARGET_BIT);
     format = SDLToD3D11_TextureFormat[createInfo->format];
     if (isDepthStencil) {
         format = D3D11_INTERNAL_GetTypelessFormat(format);
@@ -1889,10 +1892,17 @@ static D3D11Texture *D3D11_INTERNAL_CreateTexture(
         desc2D.CPUAccessFlags = isStaging ? D3D11_CPU_ACCESS_WRITE : 0;
         desc2D.Format = format;
         desc2D.MipLevels = createInfo->levelCount;
-        desc2D.MiscFlags = createInfo->type == SDL_GPU_TEXTURETYPE_CUBE ? D3D11_RESOURCE_MISC_TEXTURECUBE : 0;
+        desc2D.MiscFlags = 0;
         desc2D.SampleDesc.Count = 1;
         desc2D.SampleDesc.Quality = 0;
         desc2D.Usage = isStaging ? D3D11_USAGE_STAGING : D3D11_USAGE_DEFAULT;
+
+        if (createInfo->type == SDL_GPU_TEXTURETYPE_CUBE) {
+            desc2D.MiscFlags |= D3D11_RESOURCE_MISC_TEXTURECUBE;
+        }
+        if (isMippable) {
+            desc2D.MiscFlags |= D3D11_RESOURCE_MISC_GENERATE_MIPS;
+        }
 
         res = ID3D11Device_CreateTexture2D(
             renderer->device,
@@ -1953,7 +1963,7 @@ static D3D11Texture *D3D11_INTERNAL_CreateTexture(
         desc3D.CPUAccessFlags = isStaging ? D3D11_CPU_ACCESS_WRITE : 0;
         desc3D.Format = format;
         desc3D.MipLevels = createInfo->levelCount;
-        desc3D.MiscFlags = 0;
+        desc3D.MiscFlags = isMippable ? D3D11_RESOURCE_MISC_GENERATE_MIPS : 0;
         desc3D.Usage = isStaging ? D3D11_USAGE_STAGING : D3D11_USAGE_DEFAULT;
 
         res = ID3D11Device_CreateTexture3D(
