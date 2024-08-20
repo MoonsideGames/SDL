@@ -579,12 +579,12 @@ init_render_state(int msaa)
     vertex_binding.stride = sizeof(VertexData);
 
     vertex_attributes[0].binding = 0;
-    vertex_attributes[0].format = SDL_GPU_VERTEXELEMENTFORMAT_VECTOR3;
+    vertex_attributes[0].format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3;
     vertex_attributes[0].location = 0;
     vertex_attributes[0].offset = 0;
 
     vertex_attributes[1].binding = 0;
-    vertex_attributes[1].format = SDL_GPU_VERTEXELEMENTFORMAT_VECTOR3;
+    vertex_attributes[1].format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3;
     vertex_attributes[1].location = 1;
     vertex_attributes[1].offset = sizeof(float) * 3;
 

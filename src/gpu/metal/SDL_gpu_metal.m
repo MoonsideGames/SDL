@@ -135,19 +135,36 @@ static MTLPixelFormat SDLToMetal_SurfaceFormat[] = {
 };
 
 static MTLVertexFormat SDLToMetal_VertexFormat[] = {
-    MTLVertexFormatUInt,             /* UINT */
-    MTLVertexFormatFloat,            /* FLOAT */
-    MTLVertexFormatFloat2,           /* VECTOR2 */
-    MTLVertexFormatFloat3,           /* VECTOR3 */
-    MTLVertexFormatFloat4,           /* VECTOR4 */
-    MTLVertexFormatUChar4Normalized, /* COLOR */
-    MTLVertexFormatUChar4,           /* BYTE4 */
-    MTLVertexFormatShort2,           /* SHORT2 */
-    MTLVertexFormatShort4,           /* SHORT4 */
-    MTLVertexFormatShort2Normalized, /* NORMALIZEDSHORT2 */
-    MTLVertexFormatShort4Normalized, /* NORMALIZEDSHORT4 */
-    MTLVertexFormatHalf2,            /* HALFVECTOR2 */
-    MTLVertexFormatHalf4,            /* HALFVECTOR4 */
+    MTLVertexFormatInt,                 /* INT */
+    MTLVertexFormatInt2,                /* INT2 */
+    MTLVertexFormatInt3,                /* INT3 */
+    MTLVertexFormatInt4,                /* INT4 */
+    MTLVertexFormatUInt,                /* UINT */
+    MTLVertexFormatUInt2,               /* UINT2 */
+    MTLVertexFormatUInt3,               /* UINT3 */
+    MTLVertexFormatUInt4,               /* UINT4 */
+    MTLVertexFormatFloat,               /* FLOAT */
+    MTLVertexFormatFloat2,              /* FLOAT2 */
+    MTLVertexFormatFloat3,              /* FLOAT3 */
+    MTLVertexFormatFloat4,              /* FLOAT4 */
+    MTLVertexFormatChar2,               /* BYTE2 */
+    MTLVertexFormatChar4,               /* BYTE4 */
+    MTLVertexFormatUChar2,              /* UBYTE2 */
+    MTLVertexFormatUChar4,              /* UBYTE4 */
+    MTLVertexFormatChar2Normalized,     /* BYTE2_NORM */
+    MTLVertexFormatChar4Normalized,     /* BYTE4_NORM */
+    MTLVertexFormatUChar2Normalized,    /* UBYTE2_NORM */
+    MTLVertexFormatUChar4Normalized,    /* UBYTE4_NORM */
+    MTLVertexFormatShort2,              /* SHORT2 */
+    MTLVertexFormatShort4,              /* SHORT4 */
+    MTLVertexFormatUShort2,             /* USHORT2 */
+    MTLVertexFormatUShort4,             /* USHORT4 */
+    MTLVertexFormatShort2Normalized,    /* SHORT2_NORM */
+    MTLVertexFormatShort4Normalized,    /* SHORT4_NORM */
+    MTLVertexFormatUShort2Normalized,   /* USHORT2_NORM */
+    MTLVertexFormatUShort4Normalized,   /* USHORT4_NORM */
+    MTLVertexFormatHalf2,               /* HALF2 */
+    MTLVertexFormatHalf4                /* HALF4 */
 };
 
 static MTLIndexType SDLToMetal_IndexType[] = {
