@@ -1927,10 +1927,17 @@ void SDL_GpuGenerateMipmaps(
         return;
     }
 
-    TextureCommonHeader *header = (TextureCommonHeader *)texture;
-    if (header->info.levelCount <= 1) {
-        SDL_LogError(SDL_LOG_CATEGORY_GPU, "Cannot generate mipmaps for texture with levelCount <= 1!");
-        return;
+    if (COMMAND_BUFFER_DEVICE->debugMode) {
+        TextureCommonHeader *header = (TextureCommonHeader *)texture;
+        if (header->info.levelCount <= 1) {
+            SDL_assert_release(!"Cannot generate mipmaps for texture with levelCount <= 1!");
+            return;
+        }
+
+        if (!(header->info.usageFlags & SDL_GPU_TEXTUREUSAGE_SAMPLER_BIT) || !(header->info.usageFlags & SDL_GPU_TEXTUREUSAGE_COLOR_TARGET_BIT)) {
+            SDL_assert_release(!"GenerateMipmaps texture must be created with SAMPLER_BIT and COLOR_TARGET_BIT usage flags!");
+            return;
+        }
     }
 
     COMMAND_BUFFER_DEVICE->GenerateMipmaps(
