@@ -9174,12 +9174,12 @@ static void VULKAN_GenerateMipmaps(
             blit.dstOffsets[1].z = depth + 1;
 
             blit.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-            blit.srcSubresource.baseArrayLayer = layerOrDepthIndex;
+            blit.srcSubresource.baseArrayLayer = layer;
             blit.srcSubresource.layerCount = 1;
             blit.srcSubresource.mipLevel = level - 1;
 
             blit.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-            blit.dstSubresource.baseArrayLayer = layerOrDepthIndex;
+            blit.dstSubresource.baseArrayLayer = layer;
             blit.dstSubresource.layerCount = 1;
             blit.dstSubresource.mipLevel = level;
 
