@@ -3911,9 +3911,6 @@ static void D3D12_INTERNAL_TrackUniformBuffer(
         commandBuffer->usedUniformBuffers = (D3D12UniformBuffer **)SDL_realloc(
             commandBuffer->usedUniformBuffers,
             commandBuffer->usedUniformBufferCapacity * sizeof(D3D12UniformBuffer *));
-        for (i = commandBuffer->usedUniformBufferCount; i < commandBuffer->usedUniformBufferCapacity; i += 1) {
-            SDL_zerop(commandBuffer->usedUniformBuffers[i]);
-        }
     }
 
     commandBuffer->usedUniformBuffers[commandBuffer->usedUniformBufferCount] = uniformBuffer;
@@ -5628,7 +5625,58 @@ static void D3D12_EndCopyPass(
 
 static void D3D12_GenerateMipmaps(
     SDL_GpuCommandBuffer *commandBuffer,
-    SDL_GpuTexture *texture) { SDL_assert(SDL_FALSE); }
+    SDL_GpuTexture *texture)
+{
+    D3D12CommandBuffer *d3d12CommandBuffer = (D3D12CommandBuffer *)commandBuffer;
+    D3D12Renderer *renderer = d3d12CommandBuffer->renderer;
+    D3D12TextureContainer *container = (D3D12TextureContainer *)texture;
+    SDL_GpuGraphicsPipeline *blitPipeline;
+
+    blitPipeline = SDL_Gpu_FetchBlitPipeline(
+        renderer->sdlGpuDevice,
+        container->header.info.type,
+        container->header.info.format,
+        renderer->blitVertexShader,
+        renderer->blitFrom2DShader,
+        renderer->blitFrom2DArrayShader,
+        renderer->blitFrom3DShader,
+        renderer->blitFromCubeShader,
+        &renderer->blitPipelines,
+        &renderer->blitPipelineCount,
+        &renderer->blitPipelineCapacity);
+
+    if (blitPipeline == NULL) {
+        SDL_LogWarn(SDL_LOG_CATEGORY_GPU, "Could not fetch blit pipeline");
+        return;
+    }
+
+    /* We have to do this one subresource at a time */
+    for (Uint32 layerOrDepthIndex = 0; layerOrDepthIndex < container->header.info.layerCountOrDepth; layerOrDepthIndex += 1) {
+        for (Uint32 levelIndex = 1; levelIndex < container->header.info.levelCount; levelIndex += 1) {
+            SDL_GpuBlit(
+                commandBuffer,
+                &(SDL_GpuBlitRegion){
+                    .texture = texture,
+                    .layerOrDepthPlane = layerOrDepthIndex,
+                    .mipLevel = levelIndex - 1,
+                    .w = container->header.info.width >> (levelIndex - 1),
+                    .h = container->header.info.height >> (levelIndex - 1),
+                },
+                &(SDL_GpuBlitRegion){
+                    .texture = texture,
+                    .layerOrDepthPlane = layerOrDepthIndex,
+                    .mipLevel = levelIndex,
+                    .w = container->header.info.width >> levelIndex,
+                    .h = container->header.info.height >> levelIndex,
+                },
+                SDL_FLIP_NONE,
+                SDL_GPU_FILTER_LINEAR,
+                SDL_FALSE);
+        }
+    }
+
+    D3D12_INTERNAL_TrackTexture(d3d12CommandBuffer, container->activeTexture);
+}
 
 static void D3D12_Blit(
     SDL_GpuCommandBuffer *commandBuffer,

@@ -2015,18 +2015,6 @@ extern SDL_DECLSPEC void SDLCALL SDL_GpuCopyBufferToBuffer(
     SDL_bool cycle);
 
 /**
- * Generates mipmaps for the given texture.
- *
- * \param copyPass a copy pass handle
- * \param texture a texture with more than 1 mip level
- *
- * \since This function is available since SDL 3.x.x
- */
-extern SDL_DECLSPEC void SDLCALL SDL_GpuGenerateMipmaps(
-    SDL_GpuCopyPass *copyPass,
-    SDL_GpuTexture *texture);
-
-/**
  * Copies data from a texture to a transfer buffer on the GPU timeline.
  * This data is not guaranteed to be copied until the command buffer fence is signaled.
  *
@@ -2067,8 +2055,21 @@ extern SDL_DECLSPEC void SDLCALL SDL_GpuEndCopyPass(
     SDL_GpuCopyPass *copyPass);
 
 /**
+ * Generates mipmaps for the given texture.
+ * This function must not be called inside of any pass.
+ *
+ * \param commandBuffer a commandBuffer
+ * \param texture a texture with more than 1 mip level
+ *
+ * \since This function is available since SDL 3.x.x
+ */
+extern SDL_DECLSPEC void SDLCALL SDL_GpuGenerateMipmaps(
+    SDL_GpuCommandBuffer *commandBuffer,
+    SDL_GpuTexture *texture);
+
+/**
  * Blits from a source texture region to a destination texture region.
- * This function must not be called inside of any render, compute, or copy pass.
+ * This function must not be called inside of any pass.
  *
  * \param commandBuffer a command buffer
  * \param source the texture region to copy from

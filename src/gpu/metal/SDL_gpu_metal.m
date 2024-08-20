@@ -1794,27 +1794,6 @@ static void METAL_CopyBufferToBuffer(
     }
 }
 
-static void METAL_GenerateMipmaps(
-    SDL_GpuCommandBuffer *commandBuffer,
-    SDL_GpuTexture *texture)
-{
-    @autoreleasepool {
-        MetalCommandBuffer *metalCommandBuffer = (MetalCommandBuffer *)commandBuffer;
-        MetalTextureContainer *container = (MetalTextureContainer *)texture;
-        MetalTexture *metalTexture = container->activeTexture;
-
-        if (container->header.info.levelCount <= 1) {
-            SDL_LogError(SDL_LOG_CATEGORY_GPU, "Cannot generate mipmaps for texture with levelCount <= 1!");
-            return;
-        }
-
-        [metalCommandBuffer->blitEncoder
-            generateMipmapsForTexture:metalTexture->handle];
-
-        METAL_INTERNAL_TrackTexture(metalCommandBuffer, metalTexture);
-    }
-}
-
 static void METAL_DownloadFromTexture(
     SDL_GpuCommandBuffer *commandBuffer,
     SDL_GpuTextureRegion *source,
@@ -1893,6 +1872,24 @@ static void METAL_EndCopyPass(
         MetalCommandBuffer *metalCommandBuffer = (MetalCommandBuffer *)commandBuffer;
         [metalCommandBuffer->blitEncoder endEncoding];
         metalCommandBuffer->blitEncoder = nil;
+    }
+}
+
+static void METAL_GenerateMipmaps(
+    SDL_GpuCommandBuffer *commandBuffer,
+    SDL_GpuTexture *texture)
+{
+    @autoreleasepool {
+        MetalCommandBuffer *metalCommandBuffer = (MetalCommandBuffer *)commandBuffer;
+        MetalTextureContainer *container = (MetalTextureContainer *)texture;
+        MetalTexture *metalTexture = container->activeTexture;
+
+        METAL_BeginCopyPass(commandBuffer);
+        [metalCommandBuffer->blitEncoder
+            generateMipmapsForTexture:metalTexture->handle];
+        METAL_EndCopyPass(commandBuffer);
+
+        METAL_INTERNAL_TrackTexture(metalCommandBuffer, metalTexture);
     }
 }
 

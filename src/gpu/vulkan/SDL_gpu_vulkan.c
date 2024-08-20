@@ -9126,15 +9126,13 @@ static void VULKAN_GenerateMipmaps(
     VulkanTextureSubresource *srcTextureSubresource;
     VulkanTextureSubresource *dstTextureSubresource;
     VkImageBlit blit;
-    Uint32 layer, level;
-
-    if (vulkanTexture->levelCount <= 1) {
-        return;
-    }
 
     /* Blit each slice sequentially. Barriers, barriers everywhere! */
-    for (layer = 0; layer < vulkanTexture->layerCount; layer += 1)
-        for (level = 1; level < vulkanTexture->levelCount; level += 1) {
+    for (Uint32 layerOrDepthIndex = 0; layerOrDepthIndex < vulkanTexture->layerCount; layerOrDepthIndex += 1)
+        for (Uint32 level = 1; level < vulkanTexture->levelCount; level += 1) {
+            Uint32 layer = vulkanTexture->type == SDL_GPU_TEXTURETYPE_3D ? 0 : layerOrDepthIndex;
+            Uint32 depth = vulkanTexture->type == SDL_GPU_TEXTURETYPE_3D ? layerOrDepthIndex : 0;
+
             Uint32 srcSubresourceIndex = VULKAN_INTERNAL_GetTextureSubresourceIndex(
                 level - 1,
                 layer,
@@ -9161,19 +9159,19 @@ static void VULKAN_GenerateMipmaps(
 
             blit.srcOffsets[0].x = 0;
             blit.srcOffsets[0].y = 0;
-            blit.srcOffsets[0].z = 0;
+            blit.srcOffsets[0].z = depth;
 
             blit.srcOffsets[1].x = vulkanTexture->dimensions.width >> (level - 1);
             blit.srcOffsets[1].y = vulkanTexture->dimensions.height >> (level - 1);
-            blit.srcOffsets[1].z = 1;
+            blit.srcOffsets[1].z = depth + 1;
 
             blit.dstOffsets[0].x = 0;
             blit.dstOffsets[0].y = 0;
-            blit.dstOffsets[0].z = 0;
+            blit.dstOffsets[0].z = depth;
 
             blit.dstOffsets[1].x = vulkanTexture->dimensions.width >> level;
             blit.dstOffsets[1].y = vulkanTexture->dimensions.height >> level;
-            blit.dstOffsets[1].z = 1;
+            blit.dstOffsets[1].z = depth + 1;
 
             blit.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
             blit.srcSubresource.baseArrayLayer = layer;

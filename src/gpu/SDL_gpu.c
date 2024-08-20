@@ -46,6 +46,15 @@
         ((CommandBufferCommonHeader *)commandBuffer)->computePass.inProgress || \
         ((CommandBufferCommonHeader *)commandBuffer)->copyPass.inProgress) {    \
         SDL_assert_release(!"Pass already in progress!");                       \
+        return;                                                            \
+    }
+
+#define CHECK_ANY_PASS_IN_PROGRESS_RETURN_NULL                                              \
+    if (                                                                        \
+        ((CommandBufferCommonHeader *)commandBuffer)->renderPass.inProgress ||  \
+        ((CommandBufferCommonHeader *)commandBuffer)->computePass.inProgress || \
+        ((CommandBufferCommonHeader *)commandBuffer)->copyPass.inProgress) {    \
+        SDL_assert_release(!"Pass already in progress!");                       \
         return NULL;                                                            \
     }
 
@@ -303,10 +312,10 @@ void SDL_Gpu_BlitCommon(
         &textureSamplerBinding,
         1);
 
-    blitFragmentUniforms.left = (float)source->x / srcHeader->info.width;
-    blitFragmentUniforms.top = (float)source->y / srcHeader->info.height;
-    blitFragmentUniforms.width = (float)source->w / srcHeader->info.width;
-    blitFragmentUniforms.height = (float)source->h / srcHeader->info.height;
+    blitFragmentUniforms.left = (float)source->x / (srcHeader->info.width >> source->mipLevel);
+    blitFragmentUniforms.top = (float)source->y / (srcHeader->info.height >> source->mipLevel);
+    blitFragmentUniforms.width = (float)source->w / (srcHeader->info.width >> source->mipLevel);
+    blitFragmentUniforms.height = (float)source->h / (srcHeader->info.height >> source->mipLevel);
     blitFragmentUniforms.mipLevel = source->mipLevel;
 
     layerDivisor = (srcHeader->info.type == SDL_GPU_TEXTURETYPE_3D) ? srcHeader->info.layerCountOrDepth : 1;
@@ -1133,7 +1142,7 @@ SDL_GpuRenderPass *SDL_GpuBeginRenderPass(
 
     if (COMMAND_BUFFER_DEVICE->debugMode) {
         CHECK_COMMAND_BUFFER_RETURN_NULL
-        CHECK_ANY_PASS_IN_PROGRESS
+        CHECK_ANY_PASS_IN_PROGRESS_RETURN_NULL
     }
 
     COMMAND_BUFFER_DEVICE->BeginRenderPass(
@@ -1579,7 +1588,7 @@ SDL_GpuComputePass *SDL_GpuBeginComputePass(
     }
     if (COMMAND_BUFFER_DEVICE->debugMode) {
         CHECK_COMMAND_BUFFER_RETURN_NULL
-        CHECK_ANY_PASS_IN_PROGRESS
+        CHECK_ANY_PASS_IN_PROGRESS_RETURN_NULL
     }
 
     COMMAND_BUFFER_DEVICE->BeginComputePass(
@@ -1787,7 +1796,7 @@ SDL_GpuCopyPass *SDL_GpuBeginCopyPass(
 
     if (COMMAND_BUFFER_DEVICE->debugMode) {
         CHECK_COMMAND_BUFFER_RETURN_NULL
-        CHECK_ANY_PASS_IN_PROGRESS
+        CHECK_ANY_PASS_IN_PROGRESS_RETURN_NULL
     }
 
     COMMAND_BUFFER_DEVICE->BeginCopyPass(
@@ -1914,24 +1923,6 @@ void SDL_GpuCopyBufferToBuffer(
         cycle);
 }
 
-void SDL_GpuGenerateMipmaps(
-    SDL_GpuCopyPass *copyPass,
-    SDL_GpuTexture *texture)
-{
-    if (copyPass == NULL) {
-        SDL_InvalidParamError("copyPass");
-        return;
-    }
-    if (texture == NULL) {
-        SDL_InvalidParamError("texture");
-        return;
-    }
-
-    COPYPASS_DEVICE->GenerateMipmaps(
-        COPYPASS_COMMAND_BUFFER,
-        texture);
-}
-
 void SDL_GpuDownloadFromTexture(
     SDL_GpuCopyPass *copyPass,
     SDL_GpuTextureRegion *source,
@@ -1998,6 +1989,40 @@ void SDL_GpuEndCopyPass(
     ((CommandBufferCommonHeader *)COPYPASS_COMMAND_BUFFER)->copyPass.inProgress = SDL_FALSE;
 }
 
+void SDL_GpuGenerateMipmaps(
+    SDL_GpuCommandBuffer *commandBuffer,
+    SDL_GpuTexture *texture)
+{
+    if (commandBuffer == NULL) {
+        SDL_InvalidParamError("commandBuffer");
+        return;
+    }
+    if (texture == NULL) {
+        SDL_InvalidParamError("texture");
+        return;
+    }
+
+    if (COMMAND_BUFFER_DEVICE->debugMode) {
+        CHECK_COMMAND_BUFFER
+        CHECK_ANY_PASS_IN_PROGRESS
+
+        TextureCommonHeader *header = (TextureCommonHeader *)texture;
+        if (header->info.levelCount <= 1) {
+            SDL_assert_release(!"Cannot generate mipmaps for texture with levelCount <= 1!");
+            return;
+        }
+
+        if (!(header->info.usageFlags & SDL_GPU_TEXTUREUSAGE_SAMPLER_BIT) || !(header->info.usageFlags & SDL_GPU_TEXTUREUSAGE_COLOR_TARGET_BIT)) {
+            SDL_assert_release(!"GenerateMipmaps texture must be created with SAMPLER_BIT and COLOR_TARGET_BIT usage flags!");
+            return;
+        }
+    }
+
+    COMMAND_BUFFER_DEVICE->GenerateMipmaps(
+        commandBuffer,
+        texture);
+}
+
 void SDL_GpuBlit(
     SDL_GpuCommandBuffer *commandBuffer,
     SDL_GpuBlitRegion *source,
@@ -2021,6 +2046,7 @@ void SDL_GpuBlit(
 
     if (COMMAND_BUFFER_DEVICE->debugMode) {
         CHECK_COMMAND_BUFFER
+        CHECK_ANY_PASS_IN_PROGRESS
 
         /* Validation */
         SDL_bool failed = SDL_FALSE;
