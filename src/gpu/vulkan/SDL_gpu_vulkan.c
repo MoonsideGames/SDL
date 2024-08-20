@@ -875,6 +875,11 @@ typedef struct RenderPassDepthStencilTargetDescription
     SDL_GpuStoreOp stencilStoreOp;
 } RenderPassDepthStencilTargetDescription;
 
+typedef struct CommandPoolHashTableKey
+{
+    SDL_ThreadID threadID;
+} CommandPoolHashTableKey;
+
 typedef struct RenderPassHashTableKey
 {
     RenderPassColorTargetDescription colorTargetDescriptions[MAX_COLOR_TARGET_BINDINGS];
@@ -882,6 +887,11 @@ typedef struct RenderPassHashTableKey
     RenderPassDepthStencilTargetDescription depthStencilTargetDescription;
     VkSampleCountFlagBits colorAttachmentSampleCount;
 } RenderPassHashTableKey;
+
+typedef struct VulkanRenderPassHashTableValue
+{
+    VkRenderPass handle;
+} VulkanRenderPassHashTableValue;
 
 typedef struct FramebufferHashTableKey
 {
@@ -3212,12 +3222,14 @@ static void VULKAN_INTERNAL_DestroySwapchain(
 
 static Uint32 VULKAN_INTERNAL_CommandPoolHashFunction(const void *key, void *data)
 {
-    return (Uint32)(SDL_ThreadID)key;
+    return (Uint32)((CommandPoolHashTableKey *)key)->threadID;
 }
 
-static SDL_bool VULKAN_INTERNAL_CommandPoolHashKeyMatch(const void *a, const void *b, void *data)
+static SDL_bool VULKAN_INTERNAL_CommandPoolHashKeyMatch(const void *aKey, const void *bKey, void *data)
 {
-    return a == b;
+    CommandPoolHashTableKey *a = (CommandPoolHashTableKey *)aKey;
+    CommandPoolHashTableKey *b = (CommandPoolHashTableKey *)bKey;
+    return a->threadID == b->threadID;
 }
 
 static void VULKAN_INTERNAL_CommandPoolHashNuke(const void *key, const void *value, void *data)
@@ -3225,6 +3237,7 @@ static void VULKAN_INTERNAL_CommandPoolHashNuke(const void *key, const void *val
     VulkanRenderer *renderer = (VulkanRenderer *)data;
     VulkanCommandPool *pool = (VulkanCommandPool *)value;
     VULKAN_INTERNAL_DestroyCommandPool(renderer, pool);
+    SDL_free((void *)key);
 }
 
 static Uint32 VULKAN_INTERNAL_RenderPassHashFunction(
@@ -3313,11 +3326,12 @@ static SDL_bool VULKAN_INTERNAL_RenderPassHashKeyMatch(
 static void VULKAN_INTERNAL_RenderPassHashNuke(const void *key, const void *value, void *data)
 {
     VulkanRenderer *renderer = (VulkanRenderer *)data;
-    VkRenderPass renderPass = (VkRenderPass)value;
+    VulkanRenderPassHashTableValue *renderPassWrapper = (VulkanRenderPassHashTableValue *)value;
     renderer->vkDestroyRenderPass(
         renderer->logicalDevice,
-        renderPass,
+        renderPassWrapper->handle,
         NULL);
+    SDL_free(renderPassWrapper);
     SDL_free((void *)key);
 }
 
@@ -7194,7 +7208,8 @@ static VkRenderPass VULKAN_INTERNAL_FetchRenderPass(
     Uint32 colorAttachmentCount,
     SDL_GpuDepthStencilAttachmentInfo *depthStencilAttachmentInfo)
 {
-    VkRenderPass renderPass;
+    VulkanRenderPassHashTableValue *renderPassWrapper = NULL;
+    VkRenderPass renderPassHandle;
     RenderPassHashTableKey key;
     Uint32 i;
 
@@ -7230,22 +7245,22 @@ static VkRenderPass VULKAN_INTERNAL_FetchRenderPass(
     SDL_bool result = SDL_FindInHashTable(
         renderer->renderPassHashTable,
         (const void *)&key,
-        (const void **)&renderPass);
+        (const void **)&renderPassWrapper);
 
     SDL_UnlockMutex(renderer->renderPassFetchLock);
 
     if (result) {
-        return renderPass;
+        return renderPassWrapper->handle;
     }
 
-    renderPass = VULKAN_INTERNAL_CreateRenderPass(
+    renderPassHandle = VULKAN_INTERNAL_CreateRenderPass(
         renderer,
         commandBuffer,
         colorAttachmentInfos,
         colorAttachmentCount,
         depthStencilAttachmentInfo);
 
-    if (renderPass == VK_NULL_HANDLE) {
+    if (renderPassHandle == VK_NULL_HANDLE) {
         SDL_LogError(SDL_LOG_CATEGORY_GPU, "Failed to create VkRenderPass!");
         return VK_NULL_HANDLE;
     }
@@ -7254,15 +7269,18 @@ static VkRenderPass VULKAN_INTERNAL_FetchRenderPass(
     RenderPassHashTableKey *allocedKey = SDL_malloc(sizeof(RenderPassHashTableKey));
     SDL_memcpy(allocedKey, &key, sizeof(RenderPassHashTableKey));
 
+    renderPassWrapper = SDL_malloc(sizeof(VulkanRenderPassHashTableValue));
+    renderPassWrapper->handle = renderPassHandle;
+
     SDL_LockMutex(renderer->renderPassFetchLock);
 
     SDL_InsertIntoHashTable(
         renderer->renderPassHashTable,
-        (void *)allocedKey,
-        (void *)renderPass);
+        (const void *)allocedKey,
+        (const void *)renderPassWrapper);
 
     SDL_UnlockMutex(renderer->renderPassFetchLock);
-    return renderPass;
+    return renderPassHandle;
 }
 
 static VulkanFramebuffer *VULKAN_INTERNAL_FetchFramebuffer(
@@ -7395,8 +7413,8 @@ static VulkanFramebuffer *VULKAN_INTERNAL_FetchFramebuffer(
 
         SDL_InsertIntoHashTable(
             renderer->framebufferHashTable,
-            (void *)allocedKey,
-            (void *)vulkanFramebuffer);
+            (const void *)allocedKey,
+            (const void *)vulkanFramebuffer);
 
         SDL_UnlockMutex(renderer->framebufferFetchLock);
     } else {
@@ -9381,11 +9399,13 @@ static VulkanCommandPool *VULKAN_INTERNAL_FetchCommandPool(
     VulkanCommandPool *vulkanCommandPool = NULL;
     VkCommandPoolCreateInfo commandPoolCreateInfo;
     VkResult vulkanResult;
+    CommandPoolHashTableKey key;
+    key.threadID = threadID;
 
     SDL_bool result = SDL_FindInHashTable(
         renderer->commandPoolHashTable,
-        (const void *)threadID,
-        (const void**) &vulkanCommandPool);
+        (const void *)&key,
+        (const void**)&vulkanCommandPool);
 
     if (result) {
         return vulkanCommandPool;
@@ -9421,10 +9441,13 @@ static VulkanCommandPool *VULKAN_INTERNAL_FetchCommandPool(
         vulkanCommandPool,
         2);
 
+    CommandPoolHashTableKey *allocedKey = SDL_malloc(sizeof(CommandPoolHashTableKey));
+    allocedKey->threadID = threadID;
+
     SDL_InsertIntoHashTable(
         renderer->commandPoolHashTable,
-        (void *)threadID,
-        (void *)vulkanCommandPool);
+        (const void *)allocedKey,
+        (const void *)vulkanCommandPool);
 
     return vulkanCommandPool;
 }
