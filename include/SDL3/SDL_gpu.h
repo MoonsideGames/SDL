@@ -890,6 +890,9 @@ extern SDL_DECLSPEC SDL_GpuDevice *SDLCALL SDL_GpuCreateDevice(
  * `SDL_PROP_GPU_CREATEDEVICE_SHADERS_MSL_BOOL`: The app is able to provide MSL shaders if applicable
  * `SDL_PROP_GPU_CREATEDEVICE_SHADERS_METALLIB_BOOL`: The app is able to provide Metal shader libraries if applicable
  *
+ * With the Vulkan renderer:
+ * - `SDL_PROP_GPU_CREATEDEVICE_VULKAN_SCALEVERTEXELEMENTS`: convert byte/short vertex elements to float, eases porting for SPIR-V shaders generated exclusively with float vertex attrib types. This is common for GLSL, old D3D bytecode, and Metal shaders that depend on the driver to automatically scale vertex attributes for the application.
+ *
  * With the D3D12 renderer:
  * - `SDL_PROP_GPU_CREATEDEVICE_D3D12_SEMANTIC_NAME_STRING`: the prefix to use for all vertex semantics, default is "TEXCOORD"
  *
@@ -913,6 +916,7 @@ extern SDL_DECLSPEC SDL_GpuDevice *SDLCALL SDL_GpuCreateDeviceWithProperties(
 #define SDL_PROP_GPU_CREATEDEVICE_SHADERS_DXIL_BOOL          "SDL.gpu.createdevice.shaders.dxil"
 #define SDL_PROP_GPU_CREATEDEVICE_SHADERS_MSL_BOOL           "SDL.gpu.createdevice.shaders.msl"
 #define SDL_PROP_GPU_CREATEDEVICE_SHADERS_METALLIB_BOOL      "SDL.gpu.createdevice.shaders.metallib"
+#define SDL_PROP_GPU_CREATEDEVICE_VULKAN_SCALEVERTEXELEMENTS "SDL.gpu.createdevice.vulkan.scalevertexelements"
 #define SDL_PROP_GPU_CREATEDEVICE_D3D12_SEMANTIC_NAME_STRING "SDL.gpu.createdevice.d3d12.semantic"
 
 /**

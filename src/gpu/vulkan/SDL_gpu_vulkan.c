@@ -293,6 +293,39 @@ static VkComponentMapping SwapchainCompositionSwizzle[] = {
 };
 
 static VkFormat SDLToVK_VertexFormat[] = {
+    VK_FORMAT_R32_SINT,            /* INT */
+    VK_FORMAT_R32G32_SINT,         /* INT2 */
+    VK_FORMAT_R32G32B32_SINT,      /* INT3 */
+    VK_FORMAT_R32G32B32A32_SINT,   /* INT4 */
+    VK_FORMAT_R32_UINT,            /* UINT */
+    VK_FORMAT_R32G32_UINT,         /* UINT2 */
+    VK_FORMAT_R32G32B32_UINT,      /* UINT3 */
+    VK_FORMAT_R32G32B32A32_UINT,   /* UINT4 */
+    VK_FORMAT_R32_SFLOAT,          /* FLOAT */
+    VK_FORMAT_R32G32_SFLOAT,       /* FLOAT2 */
+    VK_FORMAT_R32G32B32_SFLOAT,    /* FLOAT3 */
+    VK_FORMAT_R32G32B32A32_SFLOAT, /* FLOAT4 */
+    VK_FORMAT_R8G8_SINT,           /* BYTE2 */
+    VK_FORMAT_R8G8B8A8_SINT,       /* BYTE4 */
+    VK_FORMAT_R8G8_UINT,           /* UBYTE2 */
+    VK_FORMAT_R8G8B8A8_UINT,       /* UBYTE4 */
+    VK_FORMAT_R8G8_SNORM,          /* BYTE2_NORM */
+    VK_FORMAT_R8G8B8A8_SNORM,      /* BYTE4_NORM */
+    VK_FORMAT_R8G8_UNORM,          /* UBYTE2_NORM */
+    VK_FORMAT_R8G8B8A8_UNORM,      /* UBYTE4_NORM */
+    VK_FORMAT_R16G16_SINT,         /* SHORT2 */
+    VK_FORMAT_R16G16B16A16_SINT,   /* SHORT4 */
+    VK_FORMAT_R16G16_UINT,         /* USHORT2 */
+    VK_FORMAT_R16G16B16A16_UINT,   /* USHORT4 */
+    VK_FORMAT_R16G16_SNORM,        /* SHORT2_NORM */
+    VK_FORMAT_R16G16B16A16_SNORM,  /* SHORT4_NORM */
+    VK_FORMAT_R16G16_UNORM,        /* USHORT2_NORM */
+    VK_FORMAT_R16G16B16A16_UNORM,  /* USHORT4_NORM */
+    VK_FORMAT_R16G16_SFLOAT,       /* HALF2 */
+    VK_FORMAT_R16G16B16A16_SFLOAT  /* HALF4 */
+};
+
+static VkFormat SDLToVK_VertexFormatScaled[] = {
     VK_FORMAT_R32_SINT,             /* INT */
     VK_FORMAT_R32G32_SINT,          /* INT2 */
     VK_FORMAT_R32G32B32_SINT,       /* INT3 */
@@ -305,18 +338,18 @@ static VkFormat SDLToVK_VertexFormat[] = {
     VK_FORMAT_R32G32_SFLOAT,        /* FLOAT2 */
     VK_FORMAT_R32G32B32_SFLOAT,     /* FLOAT3 */
     VK_FORMAT_R32G32B32A32_SFLOAT,  /* FLOAT4 */
-    VK_FORMAT_R8G8_SINT,            /* BYTE2 */
-    VK_FORMAT_R8G8B8A8_SINT,        /* BYTE4 */
-    VK_FORMAT_R8G8_UINT,            /* UBYTE2 */
-    VK_FORMAT_R8G8B8A8_UINT,        /* UBYTE4 */
+    VK_FORMAT_R8G8_SSCALED,         /* BYTE2 */
+    VK_FORMAT_R8G8B8A8_SSCALED,     /* BYTE4 */
+    VK_FORMAT_R8G8_USCALED,         /* UBYTE2 */
+    VK_FORMAT_R8G8B8A8_USCALED,     /* UBYTE4 */
     VK_FORMAT_R8G8_SNORM,           /* BYTE2_NORM */
     VK_FORMAT_R8G8B8A8_SNORM,       /* BYTE4_NORM */
     VK_FORMAT_R8G8_UNORM,           /* UBYTE2_NORM */
     VK_FORMAT_R8G8B8A8_UNORM,       /* UBYTE4_NORM */
-    VK_FORMAT_R16G16_SINT,          /* SHORT2 */
-    VK_FORMAT_R16G16B16A16_SINT,    /* SHORT4 */
-    VK_FORMAT_R16G16_UINT,          /* USHORT2 */
-    VK_FORMAT_R16G16B16A16_UINT,    /* USHORT4 */
+    VK_FORMAT_R16G16_SSCALED,       /* SHORT2 */
+    VK_FORMAT_R16G16B16A16_SSCALED, /* SHORT4 */
+    VK_FORMAT_R16G16_USCALED,       /* USHORT2 */
+    VK_FORMAT_R16G16B16A16_USCALED, /* USHORT4 */
     VK_FORMAT_R16G16_SNORM,         /* SHORT2_NORM */
     VK_FORMAT_R16G16B16A16_SNORM,   /* SHORT4_NORM */
     VK_FORMAT_R16G16_UNORM,         /* USHORT2_NORM */
@@ -1072,6 +1105,7 @@ struct VulkanRenderer
 
     SDL_bool debugMode;
     SDL_bool preferLowPower;
+    SDL_bool scaleVertexElements;
     VulkanExtensions supports;
     SDL_bool supportsDebugUtils;
     SDL_bool supportsColorspace;
@@ -6344,6 +6378,7 @@ static SDL_GpuGraphicsPipeline *VULKAN_CreateGraphicsPipeline(
     VkResult vulkanResult;
     Uint32 i;
     VkSampleCountFlagBits actualSampleCount;
+    VkFormat *sdlToVK_VertexFormat;
 
     VulkanGraphicsPipeline *graphicsPipeline = (VulkanGraphicsPipeline *)SDL_malloc(sizeof(VulkanGraphicsPipeline));
     VkGraphicsPipelineCreateInfo vkPipelineCreateInfo;
@@ -6439,9 +6474,10 @@ static SDL_GpuGraphicsPipeline *VULKAN_CreateGraphicsPipeline(
         }
     }
 
+    sdlToVK_VertexFormat = renderer->scaleVertexElements ? SDLToVK_VertexFormatScaled : SDLToVK_VertexFormat;
     for (i = 0; i < pipelineCreateInfo->vertexInputState.vertexAttributeCount; i += 1) {
         vertexInputAttributeDescriptions[i].binding = pipelineCreateInfo->vertexInputState.vertexAttributes[i].binding;
-        vertexInputAttributeDescriptions[i].format = SDLToVK_VertexFormat[pipelineCreateInfo->vertexInputState.vertexAttributes[i].format];
+        vertexInputAttributeDescriptions[i].format = sdlToVK_VertexFormat[pipelineCreateInfo->vertexInputState.vertexAttributes[i].format];
         vertexInputAttributeDescriptions[i].location = pipelineCreateInfo->vertexInputState.vertexAttributes[i].location;
         vertexInputAttributeDescriptions[i].offset = pipelineCreateInfo->vertexInputState.vertexAttributes[i].offset;
     }
@@ -11587,6 +11623,7 @@ static SDL_GpuDevice *VULKAN_CreateDevice(SDL_bool debugMode, SDL_bool preferLow
     SDL_memset(renderer, '\0', sizeof(VulkanRenderer));
     renderer->debugMode = debugMode;
     renderer->preferLowPower = preferLowPower;
+    renderer->scaleVertexElements = SDL_GetBooleanProperty(props, SDL_PROP_GPU_CREATEDEVICE_VULKAN_SCALEVERTEXELEMENTS, SDL_FALSE);
 
     if (!VULKAN_INTERNAL_PrepareVulkan(renderer)) {
         SDL_LogError(SDL_LOG_CATEGORY_GPU, "Failed to initialize Vulkan!");
