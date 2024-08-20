@@ -1153,7 +1153,7 @@ SDL_DYNAPI_PROC(void,SDL_GpuGenerateMipmaps,(SDL_GpuCopyPass *a, SDL_GpuTexture 
 SDL_DYNAPI_PROC(void,SDL_GpuDownloadFromTexture,(SDL_GpuCopyPass *a, SDL_GpuTextureRegion *b, SDL_GpuTextureTransferInfo *c),(a,b,c),)
 SDL_DYNAPI_PROC(void,SDL_GpuDownloadFromBuffer,(SDL_GpuCopyPass *a, SDL_GpuBufferRegion *b, SDL_GpuTransferBufferLocation *c),(a,b,c),)
 SDL_DYNAPI_PROC(void,SDL_GpuEndCopyPass,(SDL_GpuCopyPass *a),(a),)
-SDL_DYNAPI_PROC(void,SDL_GpuBlit,(SDL_GpuCommandBuffer *a, SDL_GpuTextureRegion *b, SDL_GpuTextureRegion *c, SDL_GpuFilter d, SDL_bool e),(a,b,c,d,e),)
+SDL_DYNAPI_PROC(void,SDL_GpuBlit,(SDL_GpuCommandBuffer *a, SDL_GpuBlitRegion *b, SDL_GpuBlitRegion *c, SDL_FlipMode d, SDL_GpuFilter e, SDL_bool f),(a,b,c,d,e,f),)
 SDL_DYNAPI_PROC(SDL_bool,SDL_GpuSupportsSwapchainComposition,(SDL_GpuDevice *a, SDL_Window *b, SDL_GpuSwapchainComposition c),(a,b,c),return)
 SDL_DYNAPI_PROC(SDL_bool,SDL_GpuSupportsPresentMode,(SDL_GpuDevice *a, SDL_Window *b, SDL_GpuPresentMode c),(a,b,c),return)
 SDL_DYNAPI_PROC(SDL_bool,SDL_GpuClaimWindow,(SDL_GpuDevice *a, SDL_Window *b, SDL_GpuSwapchainComposition c, SDL_GpuPresentMode d),(a,b,c,d),return)

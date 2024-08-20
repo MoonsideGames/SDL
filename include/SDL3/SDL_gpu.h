@@ -471,6 +471,17 @@ typedef struct SDL_GpuTextureRegion
     Uint32 d;
 } SDL_GpuTextureRegion;
 
+typedef struct SDL_GpuBlitRegion
+{
+    SDL_GpuTexture *texture;
+    Uint32 mipLevel;
+    Uint32 layerOrDepthPlane;
+    Uint32 x;
+    Uint32 y;
+    Uint32 w;
+    Uint32 h;
+} SDL_GpuBlitRegion;
+
 typedef struct SDL_GpuBufferLocation
 {
     SDL_GpuBuffer *buffer;
@@ -2062,6 +2073,7 @@ extern SDL_DECLSPEC void SDLCALL SDL_GpuEndCopyPass(
  * \param commandBuffer a command buffer
  * \param source the texture region to copy from
  * \param destination the texture region to copy to
+ * \param flipMode the flip mode for the source texture region
  * \param filterMode the filter mode that will be used when blitting
  * \param cycle if SDL_TRUE, cycles the destination texture if the destination texture is bound, otherwise overwrites the data.
  *
@@ -2070,8 +2082,9 @@ extern SDL_DECLSPEC void SDLCALL SDL_GpuEndCopyPass(
  */
 extern SDL_DECLSPEC void SDLCALL SDL_GpuBlit(
     SDL_GpuCommandBuffer *commandBuffer,
-    SDL_GpuTextureRegion *source,
-    SDL_GpuTextureRegion *destination,
+    SDL_GpuBlitRegion *source,
+    SDL_GpuBlitRegion *destination,
+    SDL_FlipMode flipMode,
     SDL_GpuFilter filterMode,
     SDL_bool cycle);
 

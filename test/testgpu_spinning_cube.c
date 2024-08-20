@@ -306,8 +306,8 @@ Render(SDL_Window *window, const int windownum)
     SDL_GpuCommandBuffer *cmd;
     SDL_GpuRenderPass *pass;
     SDL_GpuBufferBinding vertex_binding;
-    SDL_GpuTextureRegion src_region;
-    SDL_GpuTextureRegion dst_region;
+    SDL_GpuBlitRegion src_region;
+    SDL_GpuBlitRegion dst_region;
 
     /* Acquire the swapchain texture */
 
@@ -397,12 +397,11 @@ Render(SDL_Window *window, const int windownum)
         src_region.texture = winstate->tex_msaa;
         src_region.w = drawablew;
         src_region.h = drawableh;
-        src_region.d = 1;
 
         dst_region = src_region;
         dst_region.texture = swapchain;
 
-        SDL_GpuBlit(cmd, &src_region, &dst_region, SDL_GPU_FILTER_LINEAR, SDL_FALSE);
+        SDL_GpuBlit(cmd, &src_region, &dst_region, SDL_FLIP_NONE, SDL_GPU_FILTER_LINEAR, SDL_FALSE);
     }
 
     /* Submit the command buffer! */
