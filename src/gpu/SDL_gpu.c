@@ -1,4 +1,4 @@
-﻿/*
+/*
   Simple DirectMedia Layer
   Copyright (C) 1997-2024 Sam Lantinga <slouken@libsdl.org>
 
@@ -305,8 +305,8 @@ void SDL_Gpu_BlitCommon(
 
     blitFragmentUniforms.left = (float)source->x / srcHeader->info.width;
     blitFragmentUniforms.top = (float)source->y / srcHeader->info.height;
-    blitFragmentUniforms.width = (float)source->w / srcHeader->info.width;
-    blitFragmentUniforms.height = (float)source->h / srcHeader->info.height;
+    blitFragmentUniforms.width = (float)source->w / (srcHeader->info.width >> source->mipLevel);
+    blitFragmentUniforms.height = (float)source->h / (srcHeader->info.height >> source->mipLevel);
     blitFragmentUniforms.mipLevel = source->mipLevel;
 
     layerDivisor = (srcHeader->info.type == SDL_GPU_TEXTURETYPE_3D) ? srcHeader->info.layerCountOrDepth : 1;
