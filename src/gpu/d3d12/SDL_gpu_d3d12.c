@@ -5204,12 +5204,18 @@ static void D3D12_UploadToTexture(
         sourceLocation.pResource = temporaryBuffer->handle;
 
         for (Uint32 sliceIndex = 0; sliceIndex < destination->d; sliceIndex += 1) {
-            for (Uint32 rowIndex = 0; rowIndex < rowsPerSlice; rowIndex += 1) {
+            /* copy row count minus one to avoid overread */
+            for (Uint32 rowIndex = 0; rowIndex < rowsPerSlice - 1; rowIndex += 1) {
                 SDL_memcpy(
                     temporaryBuffer->mapPointer + (sliceIndex * rowsPerSlice) + (rowIndex * alignedRowPitch),
                     transferBufferContainer->activeBuffer->mapPointer + source->offset + (sliceIndex * bytesPerSlice) + (rowIndex * rowPitch),
                     alignedRowPitch);
             }
+            Uint32 offset = source->offset + (sliceIndex * bytesPerSlice) + ((rowsPerSlice - 1) * rowPitch);
+            SDL_memcpy(
+                temporaryBuffer->mapPointer + (sliceIndex * rowsPerSlice) + ((rowsPerSlice - 1) * alignedRowPitch),
+                transferBufferContainer->activeBuffer->mapPointer + offset,
+                SDL_min(alignedRowPitch, transferBufferContainer->size - offset));
 
             sourceLocation.PlacedFootprint.Footprint.Width = destination->w;
             sourceLocation.PlacedFootprint.Footprint.Height = rowsPerSlice;
