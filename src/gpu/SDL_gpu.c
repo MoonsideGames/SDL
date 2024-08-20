@@ -1927,6 +1927,12 @@ void SDL_GpuGenerateMipmaps(
         return;
     }
 
+    TextureCommonHeader *header = (TextureCommonHeader *)texture;
+    if (header->info.levelCount <= 1) {
+        SDL_LogError(SDL_LOG_CATEGORY_GPU, "Cannot generate mipmaps for texture with levelCount <= 1!");
+        return;
+    }
+
     COPYPASS_DEVICE->GenerateMipmaps(
         COPYPASS_COMMAND_BUFFER,
         texture);

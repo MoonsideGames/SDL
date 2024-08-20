@@ -9128,10 +9128,6 @@ static void VULKAN_GenerateMipmaps(
     VkImageBlit blit;
     Uint32 layer, level;
 
-    if (vulkanTexture->levelCount <= 1) {
-        return;
-    }
-
     /* Blit each slice sequentially. Barriers, barriers everywhere! */
     for (layer = 0; layer < vulkanTexture->layerCount; layer += 1)
         for (level = 1; level < vulkanTexture->levelCount; level += 1) {

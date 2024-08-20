@@ -1803,11 +1803,6 @@ static void METAL_GenerateMipmaps(
         MetalTextureContainer *container = (MetalTextureContainer *)texture;
         MetalTexture *metalTexture = container->activeTexture;
 
-        if (container->header.info.levelCount <= 1) {
-            SDL_LogError(SDL_LOG_CATEGORY_GPU, "Cannot generate mipmaps for texture with levelCount <= 1!");
-            return;
-        }
-
         [metalCommandBuffer->blitEncoder
             generateMipmapsForTexture:metalTexture->handle];
 
