@@ -862,7 +862,6 @@ typedef struct VulkanComputePipeline
 typedef struct RenderPassColorTargetDescription
 {
     VkFormat format;
-    SDL_FColor clearColor;
     SDL_GpuLoadOp loadOp;
     SDL_GpuStoreOp storeOp;
 } RenderPassColorTargetDescription;
@@ -876,119 +875,15 @@ typedef struct RenderPassDepthStencilTargetDescription
     SDL_GpuStoreOp stencilStoreOp;
 } RenderPassDepthStencilTargetDescription;
 
-typedef struct RenderPassHash
+typedef struct RenderPassHashTableKey
 {
     RenderPassColorTargetDescription colorTargetDescriptions[MAX_COLOR_TARGET_BINDINGS];
     Uint32 colorAttachmentCount;
     RenderPassDepthStencilTargetDescription depthStencilTargetDescription;
     VkSampleCountFlagBits colorAttachmentSampleCount;
-} RenderPassHash;
+} RenderPassHashTableKey;
 
-typedef struct RenderPassHashMap
-{
-    RenderPassHash key;
-    VkRenderPass value;
-} RenderPassHashMap;
-
-typedef struct RenderPassHashArray
-{
-    RenderPassHashMap *elements;
-    Sint32 count;
-    Sint32 capacity;
-} RenderPassHashArray;
-
-static inline Uint8 RenderPassHash_Compare(
-    RenderPassHash *a,
-    RenderPassHash *b)
-{
-    Uint32 i;
-
-    if (a->colorAttachmentCount != b->colorAttachmentCount) {
-        return 0;
-    }
-
-    if (a->colorAttachmentSampleCount != b->colorAttachmentSampleCount) {
-        return 0;
-    }
-
-    for (i = 0; i < a->colorAttachmentCount; i += 1) {
-        if (a->colorTargetDescriptions[i].format != b->colorTargetDescriptions[i].format) {
-            return 0;
-        }
-
-        if (a->colorTargetDescriptions[i].clearColor.r != b->colorTargetDescriptions[i].clearColor.r ||
-            a->colorTargetDescriptions[i].clearColor.g != b->colorTargetDescriptions[i].clearColor.g ||
-            a->colorTargetDescriptions[i].clearColor.b != b->colorTargetDescriptions[i].clearColor.b ||
-            a->colorTargetDescriptions[i].clearColor.a != b->colorTargetDescriptions[i].clearColor.a) {
-            return 0;
-        }
-
-        if (a->colorTargetDescriptions[i].loadOp != b->colorTargetDescriptions[i].loadOp) {
-            return 0;
-        }
-
-        if (a->colorTargetDescriptions[i].storeOp != b->colorTargetDescriptions[i].storeOp) {
-            return 0;
-        }
-    }
-
-    if (a->depthStencilTargetDescription.format != b->depthStencilTargetDescription.format) {
-        return 0;
-    }
-
-    if (a->depthStencilTargetDescription.loadOp != b->depthStencilTargetDescription.loadOp) {
-        return 0;
-    }
-
-    if (a->depthStencilTargetDescription.storeOp != b->depthStencilTargetDescription.storeOp) {
-        return 0;
-    }
-
-    if (a->depthStencilTargetDescription.stencilLoadOp != b->depthStencilTargetDescription.stencilLoadOp) {
-        return 0;
-    }
-
-    if (a->depthStencilTargetDescription.stencilStoreOp != b->depthStencilTargetDescription.stencilStoreOp) {
-        return 0;
-    }
-
-    return 1;
-}
-
-static inline VkRenderPass RenderPassHashArray_Fetch(
-    RenderPassHashArray *arr,
-    RenderPassHash *key)
-{
-    Sint32 i;
-
-    for (i = 0; i < arr->count; i += 1) {
-        RenderPassHash *e = &arr->elements[i].key;
-
-        if (RenderPassHash_Compare(e, key)) {
-            return arr->elements[i].value;
-        }
-    }
-
-    return VK_NULL_HANDLE;
-}
-
-static inline void RenderPassHashArray_Insert(
-    RenderPassHashArray *arr,
-    RenderPassHash key,
-    VkRenderPass value)
-{
-    RenderPassHashMap map;
-
-    map.key = key;
-    map.value = value;
-
-    EXPAND_ELEMENTS_IF_NEEDED(arr, 4, RenderPassHashMap)
-
-    arr->elements[arr->count] = map;
-    arr->count += 1;
-}
-
-typedef struct FramebufferHash
+typedef struct FramebufferHashTableKey
 {
     VkImageView colorAttachmentViews[MAX_COLOR_TARGET_BINDINGS];
     VkImageView colorMultiSampleAttachmentViews[MAX_COLOR_TARGET_BINDINGS];
@@ -996,97 +891,7 @@ typedef struct FramebufferHash
     VkImageView depthStencilAttachmentView;
     Uint32 width;
     Uint32 height;
-} FramebufferHash;
-
-typedef struct FramebufferHashMap
-{
-    FramebufferHash key;
-    VulkanFramebuffer *value;
-} FramebufferHashMap;
-
-typedef struct FramebufferHashArray
-{
-    FramebufferHashMap *elements;
-    Sint32 count;
-    Sint32 capacity;
-} FramebufferHashArray;
-
-static inline Uint8 FramebufferHash_Compare(
-    FramebufferHash *a,
-    FramebufferHash *b)
-{
-    Uint32 i;
-
-    if (a->colorAttachmentCount != b->colorAttachmentCount) {
-        return 0;
-    }
-
-    for (i = 0; i < a->colorAttachmentCount; i += 1) {
-        if (a->colorAttachmentViews[i] != b->colorAttachmentViews[i]) {
-            return 0;
-        }
-
-        if (a->colorMultiSampleAttachmentViews[i] != b->colorMultiSampleAttachmentViews[i]) {
-            return 0;
-        }
-    }
-
-    if (a->depthStencilAttachmentView != b->depthStencilAttachmentView) {
-        return 0;
-    }
-
-    if (a->width != b->width) {
-        return 0;
-    }
-
-    if (a->height != b->height) {
-        return 0;
-    }
-
-    return 1;
-}
-
-static inline VulkanFramebuffer *FramebufferHashArray_Fetch(
-    FramebufferHashArray *arr,
-    FramebufferHash *key)
-{
-    Sint32 i;
-
-    for (i = 0; i < arr->count; i += 1) {
-        FramebufferHash *e = &arr->elements[i].key;
-        if (FramebufferHash_Compare(e, key)) {
-            return arr->elements[i].value;
-        }
-    }
-
-    return VK_NULL_HANDLE;
-}
-
-static inline void FramebufferHashArray_Insert(
-    FramebufferHashArray *arr,
-    FramebufferHash key,
-    VulkanFramebuffer *value)
-{
-    FramebufferHashMap map;
-    map.key = key;
-    map.value = value;
-
-    EXPAND_ELEMENTS_IF_NEEDED(arr, 4, FramebufferHashMap)
-
-    arr->elements[arr->count] = map;
-    arr->count += 1;
-}
-
-static inline void FramebufferHashArray_Remove(
-    FramebufferHashArray *arr,
-    Uint32 index)
-{
-    if (index != arr->count - 1) {
-        arr->elements[index] = arr->elements[arr->count - 1];
-    }
-
-    arr->count -= 1;
-}
+} FramebufferHashTableKey;
 
 /* Command structures */
 
@@ -1279,8 +1084,8 @@ struct VulkanRenderer
     VulkanFencePool fencePool;
 
     SDL_HashTable *commandPoolHashTable;
-    RenderPassHashArray renderPassHashArray;
-    FramebufferHashArray framebufferHashArray;
+    SDL_HashTable *renderPassHashTable;
+    SDL_HashTable *framebufferHashTable;
 
     VulkanUniformBuffer **uniformBufferPool;
     Uint32 uniformBufferPoolCount;
@@ -3081,29 +2886,39 @@ static void VULKAN_INTERNAL_RemoveFramebuffersContainingView(
     VulkanRenderer *renderer,
     VkImageView view)
 {
-    FramebufferHash *hash;
+    FramebufferHashTableKey *key;
+    VulkanFramebuffer *value;
+    void *iter = NULL;
+
+    /* Can't remove while iterating! */
+    Uint32 keysToRemoveCapacity = 8;
+    Uint32 keysToRemoveCount = 0;
+    FramebufferHashTableKey **keysToRemove = SDL_malloc(keysToRemoveCapacity * sizeof(FramebufferHashTableKey *));
 
     SDL_LockMutex(renderer->framebufferFetchLock);
 
-    for (Sint32 i = renderer->framebufferHashArray.count - 1; i >= 0; i -= 1) {
-        hash = &renderer->framebufferHashArray.elements[i].key;
-
-        for (Uint32 j = 0; j < hash->colorAttachmentCount; j += 1) {
-            if (hash->colorAttachmentViews[j] == view) {
-                /* FIXME: do we actually need to queue this?
-                 * The framebuffer should not be in use once the associated texture is being destroyed
-                 */
+    while (SDL_IterateHashTable(renderer->framebufferHashTable, (void **)&key, (void **)&value, &iter)) {
+        for (Uint32 i = 0; i < key->colorAttachmentCount; i += 1) {
+            if (key->colorAttachmentViews[i] == view) {
                 VULKAN_INTERNAL_ReleaseFramebuffer(
                     renderer,
-                    renderer->framebufferHashArray.elements[i].value);
+                    value);
 
-                FramebufferHashArray_Remove(
-                    &renderer->framebufferHashArray,
-                    i);
+                if (keysToRemoveCount == keysToRemoveCapacity) {
+                    keysToRemoveCapacity *= 2;
+                    keysToRemove = SDL_realloc(
+                        keysToRemove,
+                        keysToRemoveCapacity * sizeof(FramebufferHashTableKey *));
+                }
 
-                break;
+                keysToRemove[keysToRemoveCount] = key;
+                keysToRemoveCount += 1;
             }
         }
+    }
+
+    for (Uint32 i = 0; i < keysToRemoveCount; i += 1) {
+        SDL_RemoveFromHashTable(renderer->framebufferHashTable, (void *)keysToRemove[i]);
     }
 
     SDL_UnlockMutex(renderer->framebufferFetchLock);
@@ -3351,6 +3166,9 @@ static void VULKAN_INTERNAL_DestroySwapchain(
     }
 
     for (i = 0; i < swapchainData->imageCount; i += 1) {
+        VULKAN_INTERNAL_RemoveFramebuffersContainingView(
+            renderer,
+            swapchainData->textureContainers[i].activeTextureHandle->vulkanTexture->subresources[0].renderTargetViews[0]);
         renderer->vkDestroyImageView(
             renderer->logicalDevice,
             swapchainData->textureContainers[i].activeTextureHandle->vulkanTexture->subresources[0].renderTargetViews[0],
@@ -3397,16 +3215,180 @@ static Uint32 VULKAN_INTERNAL_CommandPoolHashFunction(const void *key, void *dat
     return (Uint32)(SDL_ThreadID)key;
 }
 
-static SDL_bool VULKAN_INTERNAL_CommandPoolKeyMatch(const void *a, const void *b, void *data)
+static SDL_bool VULKAN_INTERNAL_CommandPoolHashKeyMatch(const void *a, const void *b, void *data)
 {
     return a == b;
 }
 
-static void VULKAN_INTERNAL_CommandPoolNuke(const void *key, const void *value, void *data)
+static void VULKAN_INTERNAL_CommandPoolHashNuke(const void *key, const void *value, void *data)
 {
     VulkanRenderer *renderer = (VulkanRenderer *)data;
     VulkanCommandPool *pool = (VulkanCommandPool *)value;
     VULKAN_INTERNAL_DestroyCommandPool(renderer, pool);
+}
+
+static Uint32 VULKAN_INTERNAL_RenderPassHashFunction(
+    const void *key,
+    void *data)
+{
+    RenderPassHashTableKey *hashTableKey = (RenderPassHashTableKey *)key;
+
+    /* The algorithm for this hashing function
+	 * is taken from Josh Bloch's "Effective Java".
+	 * (https://stackoverflow.com/a/113600/12492383)
+	 */
+    const Uint32 HASH_FACTOR = 31;
+    Uint32 result = 1;
+
+    for (Uint32 i = 0; i < hashTableKey->colorAttachmentCount; i += 1) {
+    	result = result * HASH_FACTOR + hashTableKey->colorTargetDescriptions[i].loadOp;
+        result = result * HASH_FACTOR + hashTableKey->colorTargetDescriptions[i].storeOp;
+        result = result * HASH_FACTOR + hashTableKey->colorTargetDescriptions[i].format;
+    }
+
+    result = result * HASH_FACTOR + hashTableKey->depthStencilTargetDescription.loadOp;
+    result = result * HASH_FACTOR + hashTableKey->depthStencilTargetDescription.storeOp;
+    result = result * HASH_FACTOR + hashTableKey->depthStencilTargetDescription.stencilLoadOp;
+    result = result * HASH_FACTOR + hashTableKey->depthStencilTargetDescription.stencilStoreOp;
+    result = result * HASH_FACTOR + hashTableKey->depthStencilTargetDescription.format;
+
+    result = result * HASH_FACTOR + hashTableKey->colorAttachmentSampleCount;
+
+    return result;
+}
+
+static SDL_bool VULKAN_INTERNAL_RenderPassHashKeyMatch(
+    const void *aKey,
+    const void *bKey,
+    void *data)
+{
+    RenderPassHashTableKey *a = (RenderPassHashTableKey *)aKey;
+    RenderPassHashTableKey *b = (RenderPassHashTableKey *)bKey;
+
+    if (a->colorAttachmentCount != b->colorAttachmentCount) {
+        return 0;
+    }
+
+    if (a->colorAttachmentSampleCount != b->colorAttachmentSampleCount) {
+        return 0;
+    }
+
+    for (Uint32 i = 0; i < a->colorAttachmentCount; i += 1) {
+        if (a->colorTargetDescriptions[i].format != b->colorTargetDescriptions[i].format) {
+            return 0;
+        }
+
+        if (a->colorTargetDescriptions[i].loadOp != b->colorTargetDescriptions[i].loadOp) {
+            return 0;
+        }
+
+        if (a->colorTargetDescriptions[i].storeOp != b->colorTargetDescriptions[i].storeOp) {
+            return 0;
+        }
+    }
+
+    if (a->depthStencilTargetDescription.format != b->depthStencilTargetDescription.format) {
+        return 0;
+    }
+
+    if (a->depthStencilTargetDescription.loadOp != b->depthStencilTargetDescription.loadOp) {
+        return 0;
+    }
+
+    if (a->depthStencilTargetDescription.storeOp != b->depthStencilTargetDescription.storeOp) {
+        return 0;
+    }
+
+    if (a->depthStencilTargetDescription.stencilLoadOp != b->depthStencilTargetDescription.stencilLoadOp) {
+        return 0;
+    }
+
+    if (a->depthStencilTargetDescription.stencilStoreOp != b->depthStencilTargetDescription.stencilStoreOp) {
+        return 0;
+    }
+
+    return 1;
+}
+
+static void VULKAN_INTERNAL_RenderPassHashNuke(const void *key, const void *value, void *data)
+{
+    VulkanRenderer *renderer = (VulkanRenderer *)data;
+    VkRenderPass renderPass = (VkRenderPass)value;
+    renderer->vkDestroyRenderPass(
+        renderer->logicalDevice,
+        renderPass,
+        NULL);
+    SDL_free((void *)key);
+}
+
+static Uint32 VULKAN_INTERNAL_FramebufferHashFunction(
+    const void *key,
+    void *data)
+{
+    FramebufferHashTableKey *hashTableKey = (FramebufferHashTableKey *)key;
+
+    /* The algorithm for this hashing function
+	 * is taken from Josh Bloch's "Effective Java".
+	 * (https://stackoverflow.com/a/113600/12492383)
+	 */
+    const Uint32 HASH_FACTOR = 31;
+    Uint32 result = 1;
+
+    for (Uint32 i = 0; i < hashTableKey->colorAttachmentCount; i += 1) {
+    	result = result * HASH_FACTOR + (Uint32)(uintptr_t)hashTableKey->colorAttachmentViews[i];
+        result = result * HASH_FACTOR + (Uint32)(uintptr_t)hashTableKey->colorMultiSampleAttachmentViews[i];
+    }
+
+    result = result * HASH_FACTOR + (Uint32)(uintptr_t)hashTableKey->depthStencilAttachmentView;
+    result = result * HASH_FACTOR + hashTableKey->width;
+    result = result * HASH_FACTOR + hashTableKey->height;
+
+    return result;
+}
+
+static SDL_bool VULKAN_INTERNAL_FramebufferHashKeyMatch(
+    const void *aKey,
+    const void *bKey,
+    void *data)
+{
+    FramebufferHashTableKey *a = (FramebufferHashTableKey *)aKey;
+    FramebufferHashTableKey *b = (FramebufferHashTableKey *)bKey;
+
+    if (a->colorAttachmentCount != b->colorAttachmentCount) {
+        return 0;
+    }
+
+    for (Uint32 i = 0; i < a->colorAttachmentCount; i += 1) {
+        if (a->colorAttachmentViews[i] != b->colorAttachmentViews[i]) {
+            return 0;
+        }
+
+        if (a->colorMultiSampleAttachmentViews[i] != b->colorMultiSampleAttachmentViews[i]) {
+            return 0;
+        }
+    }
+
+    if (a->depthStencilAttachmentView != b->depthStencilAttachmentView) {
+        return 0;
+    }
+
+    if (a->width != b->width) {
+        return 0;
+    }
+
+    if (a->height != b->height) {
+        return 0;
+    }
+
+    return 1;
+}
+
+static void VULKAN_INTERNAL_FramebufferHashNuke(const void *key, const void *value, void *data)
+{
+    VulkanRenderer *renderer = (VulkanRenderer *)data;
+    VulkanFramebuffer *framebuffer = (VulkanFramebuffer *)value;
+    VULKAN_INTERNAL_ReleaseFramebuffer(renderer, framebuffer);
+    SDL_free((void *)key);
 }
 
 /* Descriptor pool stuff */
@@ -4819,23 +4801,8 @@ static void VULKAN_DestroyDevice(
     SDL_DestroyMutex(renderer->fencePool.lock);
 
     SDL_DestroyHashTable(renderer->commandPoolHashTable);
-
-    for (Sint32 i = 0; i < renderer->framebufferHashArray.count; i += 1) {
-        VULKAN_INTERNAL_DestroyFramebuffer(
-            renderer,
-            renderer->framebufferHashArray.elements[i].value);
-    }
-
-    SDL_free(renderer->framebufferHashArray.elements);
-
-    for (Sint32 i = 0; i < renderer->renderPassHashArray.count; i += 1) {
-        renderer->vkDestroyRenderPass(
-            renderer->logicalDevice,
-            renderer->renderPassHashArray.elements[i].value,
-            NULL);
-    }
-
-    SDL_free(renderer->renderPassHashArray.elements);
+    SDL_DestroyHashTable(renderer->renderPassHashTable);
+    SDL_DestroyHashTable(renderer->framebufferHashTable);
 
     for (Uint32 i = 0; i < VK_MAX_MEMORY_TYPES; i += 1) {
         allocator = &renderer->memoryAllocator->subAllocators[i];
@@ -7228,45 +7195,46 @@ static VkRenderPass VULKAN_INTERNAL_FetchRenderPass(
     SDL_GpuDepthStencilAttachmentInfo *depthStencilAttachmentInfo)
 {
     VkRenderPass renderPass;
-    RenderPassHash hash;
+    RenderPassHashTableKey key;
     Uint32 i;
+
+    for (i = 0; i < colorAttachmentCount; i += 1) {
+        key.colorTargetDescriptions[i].format = ((VulkanTextureContainer *)colorAttachmentInfos[i].texture)->activeTextureHandle->vulkanTexture->format;
+        key.colorTargetDescriptions[i].loadOp = colorAttachmentInfos[i].loadOp;
+        key.colorTargetDescriptions[i].storeOp = colorAttachmentInfos[i].storeOp;
+    }
+
+    key.colorAttachmentSampleCount = VK_SAMPLE_COUNT_1_BIT;
+    if (colorAttachmentCount > 0) {
+        key.colorAttachmentSampleCount = ((VulkanTextureContainer *)colorAttachmentInfos[0].texture)->activeTextureHandle->vulkanTexture->sampleCount;
+    }
+
+    key.colorAttachmentCount = colorAttachmentCount;
+
+    if (depthStencilAttachmentInfo == NULL) {
+        key.depthStencilTargetDescription.format = 0;
+        key.depthStencilTargetDescription.loadOp = SDL_GPU_LOADOP_DONT_CARE;
+        key.depthStencilTargetDescription.storeOp = SDL_GPU_STOREOP_DONT_CARE;
+        key.depthStencilTargetDescription.stencilLoadOp = SDL_GPU_LOADOP_DONT_CARE;
+        key.depthStencilTargetDescription.stencilStoreOp = SDL_GPU_STOREOP_DONT_CARE;
+    } else {
+        key.depthStencilTargetDescription.format = ((VulkanTextureContainer *)depthStencilAttachmentInfo->texture)->activeTextureHandle->vulkanTexture->format;
+        key.depthStencilTargetDescription.loadOp = depthStencilAttachmentInfo->loadOp;
+        key.depthStencilTargetDescription.storeOp = depthStencilAttachmentInfo->storeOp;
+        key.depthStencilTargetDescription.stencilLoadOp = depthStencilAttachmentInfo->stencilLoadOp;
+        key.depthStencilTargetDescription.stencilStoreOp = depthStencilAttachmentInfo->stencilStoreOp;
+    }
 
     SDL_LockMutex(renderer->renderPassFetchLock);
 
-    for (i = 0; i < colorAttachmentCount; i += 1) {
-        hash.colorTargetDescriptions[i].format = ((VulkanTextureContainer *)colorAttachmentInfos[i].texture)->activeTextureHandle->vulkanTexture->format;
-        hash.colorTargetDescriptions[i].clearColor = colorAttachmentInfos[i].clearColor;
-        hash.colorTargetDescriptions[i].loadOp = colorAttachmentInfos[i].loadOp;
-        hash.colorTargetDescriptions[i].storeOp = colorAttachmentInfos[i].storeOp;
-    }
+    SDL_bool result = SDL_FindInHashTable(
+        renderer->renderPassHashTable,
+        (void *)&key,
+        (void **)&renderPass);
 
-    hash.colorAttachmentSampleCount = VK_SAMPLE_COUNT_1_BIT;
-    if (colorAttachmentCount > 0) {
-        hash.colorAttachmentSampleCount = ((VulkanTextureContainer *)colorAttachmentInfos[0].texture)->activeTextureHandle->vulkanTexture->sampleCount;
-    }
+    SDL_UnlockMutex(renderer->renderPassFetchLock);
 
-    hash.colorAttachmentCount = colorAttachmentCount;
-
-    if (depthStencilAttachmentInfo == NULL) {
-        hash.depthStencilTargetDescription.format = 0;
-        hash.depthStencilTargetDescription.loadOp = SDL_GPU_LOADOP_DONT_CARE;
-        hash.depthStencilTargetDescription.storeOp = SDL_GPU_STOREOP_DONT_CARE;
-        hash.depthStencilTargetDescription.stencilLoadOp = SDL_GPU_LOADOP_DONT_CARE;
-        hash.depthStencilTargetDescription.stencilStoreOp = SDL_GPU_STOREOP_DONT_CARE;
-    } else {
-        hash.depthStencilTargetDescription.format = ((VulkanTextureContainer *)depthStencilAttachmentInfo->texture)->activeTextureHandle->vulkanTexture->format;
-        hash.depthStencilTargetDescription.loadOp = depthStencilAttachmentInfo->loadOp;
-        hash.depthStencilTargetDescription.storeOp = depthStencilAttachmentInfo->storeOp;
-        hash.depthStencilTargetDescription.stencilLoadOp = depthStencilAttachmentInfo->stencilLoadOp;
-        hash.depthStencilTargetDescription.stencilStoreOp = depthStencilAttachmentInfo->stencilStoreOp;
-    }
-
-    renderPass = RenderPassHashArray_Fetch(
-        &renderer->renderPassHashArray,
-        &hash);
-
-    if (renderPass != VK_NULL_HANDLE) {
-        SDL_UnlockMutex(renderer->renderPassFetchLock);
+    if (result) {
         return renderPass;
     }
 
@@ -7277,12 +7245,21 @@ static VkRenderPass VULKAN_INTERNAL_FetchRenderPass(
         colorAttachmentCount,
         depthStencilAttachmentInfo);
 
-    if (renderPass != VK_NULL_HANDLE) {
-        RenderPassHashArray_Insert(
-            &renderer->renderPassHashArray,
-            hash,
-            renderPass);
+    if (renderPass == VK_NULL_HANDLE) {
+        SDL_LogError(SDL_LOG_CATEGORY_GPU, "Failed to create VkRenderPass!");
+        return VK_NULL_HANDLE;
     }
+
+    /* Have to malloc the key to store it in the hashtable */
+    RenderPassHashTableKey *allocedKey = SDL_malloc(sizeof(RenderPassHashTableKey));
+    SDL_memcpy(allocedKey, &key, sizeof(RenderPassHashTableKey));
+
+    SDL_LockMutex(renderer->renderPassFetchLock);
+
+    SDL_InsertIntoHashTable(
+        renderer->renderPassHashTable,
+        (void *)allocedKey,
+        (void *)renderPass);
 
     SDL_UnlockMutex(renderer->renderPassFetchLock);
     return renderPass;
@@ -7297,20 +7274,20 @@ static VulkanFramebuffer *VULKAN_INTERNAL_FetchFramebuffer(
     Uint32 width,
     Uint32 height)
 {
-    VulkanFramebuffer *vulkanFramebuffer;
+    VulkanFramebuffer *vulkanFramebuffer = NULL;
     VkFramebufferCreateInfo framebufferInfo;
     VkResult result;
     VkImageView imageViewAttachments[2 * MAX_COLOR_TARGET_BINDINGS + 1];
-    FramebufferHash hash;
+    FramebufferHashTableKey key;
     Uint32 attachmentCount = 0;
     Uint32 i;
 
     for (i = 0; i < MAX_COLOR_TARGET_BINDINGS; i += 1) {
-        hash.colorAttachmentViews[i] = VK_NULL_HANDLE;
-        hash.colorMultiSampleAttachmentViews[i] = VK_NULL_HANDLE;
+        key.colorAttachmentViews[i] = VK_NULL_HANDLE;
+        key.colorMultiSampleAttachmentViews[i] = VK_NULL_HANDLE;
     }
 
-    hash.colorAttachmentCount = colorAttachmentCount;
+    key.colorAttachmentCount = colorAttachmentCount;
 
     for (i = 0; i < colorAttachmentCount; i += 1) {
         VulkanTextureContainer *container = (VulkanTextureContainer *)colorAttachmentInfos[i].texture;
@@ -7321,35 +7298,36 @@ static VulkanFramebuffer *VULKAN_INTERNAL_FetchFramebuffer(
 
         Uint32 rtvIndex =
             container->header.info.type == SDL_GPU_TEXTURETYPE_3D ? colorAttachmentInfos[i].layerOrDepthPlane : 0;
-        hash.colorAttachmentViews[i] = subresource->renderTargetViews[rtvIndex];
+        key.colorAttachmentViews[i] = subresource->renderTargetViews[rtvIndex];
 
         if (subresource->msaaTexHandle != NULL) {
-            hash.colorMultiSampleAttachmentViews[i] = subresource->msaaTexHandle->vulkanTexture->subresources[0].renderTargetViews[0];
+            key.colorMultiSampleAttachmentViews[i] = subresource->msaaTexHandle->vulkanTexture->subresources[0].renderTargetViews[0];
         }
     }
 
     if (depthStencilAttachmentInfo == NULL) {
-        hash.depthStencilAttachmentView = VK_NULL_HANDLE;
+        key.depthStencilAttachmentView = VK_NULL_HANDLE;
     } else {
         VulkanTextureSubresource *subresource = VULKAN_INTERNAL_FetchTextureSubresource(
             (VulkanTextureContainer *)depthStencilAttachmentInfo->texture,
             0,
             0);
-        hash.depthStencilAttachmentView = subresource->depthStencilView;
+        key.depthStencilAttachmentView = subresource->depthStencilView;
     }
 
-    hash.width = width;
-    hash.height = height;
+    key.width = width;
+    key.height = height;
 
     SDL_LockMutex(renderer->framebufferFetchLock);
 
-    vulkanFramebuffer = FramebufferHashArray_Fetch(
-        &renderer->framebufferHashArray,
-        &hash);
+    SDL_bool findResult = SDL_FindInHashTable(
+        renderer->framebufferHashTable,
+        (void *)&key,
+        (void **)&vulkanFramebuffer);
 
     SDL_UnlockMutex(renderer->framebufferFetchLock);
 
-    if (vulkanFramebuffer != NULL) {
+    if (findResult) {
         return vulkanFramebuffer;
     }
 
@@ -7398,8 +7376,8 @@ static VulkanFramebuffer *VULKAN_INTERNAL_FetchFramebuffer(
     framebufferInfo.renderPass = renderPass;
     framebufferInfo.attachmentCount = attachmentCount;
     framebufferInfo.pAttachments = imageViewAttachments;
-    framebufferInfo.width = hash.width;
-    framebufferInfo.height = hash.height;
+    framebufferInfo.width = key.width;
+    framebufferInfo.height = key.height;
     framebufferInfo.layers = 1;
 
     result = renderer->vkCreateFramebuffer(
@@ -7409,12 +7387,16 @@ static VulkanFramebuffer *VULKAN_INTERNAL_FetchFramebuffer(
         &vulkanFramebuffer->framebuffer);
 
     if (result == VK_SUCCESS) {
+        /* Have to malloc the key to store it in the hashtable */
+        FramebufferHashTableKey *allocedKey = SDL_malloc(sizeof(FramebufferHashTableKey));
+        SDL_memcpy(allocedKey, &key, sizeof(FramebufferHashTableKey));
+
         SDL_LockMutex(renderer->framebufferFetchLock);
 
-        FramebufferHashArray_Insert(
-            &renderer->framebufferHashArray,
-            hash,
-            vulkanFramebuffer);
+        SDL_InsertIntoHashTable(
+            renderer->framebufferHashTable,
+            (void *)allocedKey,
+            (void *)vulkanFramebuffer);
 
         SDL_UnlockMutex(renderer->framebufferFetchLock);
     } else {
@@ -11718,20 +11700,28 @@ static SDL_GpuDevice *VULKAN_CreateDevice(SDL_bool debugMode, SDL_bool preferLow
     /* Initialize caches */
 
     renderer->commandPoolHashTable = SDL_CreateHashTable(
-        (void*) renderer,
+        (void *)renderer,
         64,
         VULKAN_INTERNAL_CommandPoolHashFunction,
-        VULKAN_INTERNAL_CommandPoolKeyMatch,
-        VULKAN_INTERNAL_CommandPoolNuke,
+        VULKAN_INTERNAL_CommandPoolHashKeyMatch,
+        VULKAN_INTERNAL_CommandPoolHashNuke,
         SDL_FALSE);
 
-    renderer->renderPassHashArray.elements = NULL;
-    renderer->renderPassHashArray.count = 0;
-    renderer->renderPassHashArray.capacity = 0;
+    renderer->renderPassHashTable = SDL_CreateHashTable(
+        (void *)renderer,
+        64,
+        VULKAN_INTERNAL_RenderPassHashFunction,
+        VULKAN_INTERNAL_RenderPassHashKeyMatch,
+        VULKAN_INTERNAL_RenderPassHashNuke,
+        SDL_FALSE);
 
-    renderer->framebufferHashArray.elements = NULL;
-    renderer->framebufferHashArray.count = 0;
-    renderer->framebufferHashArray.capacity = 0;
+    renderer->framebufferHashTable = SDL_CreateHashTable(
+        (void *)renderer,
+        64,
+        VULKAN_INTERNAL_FramebufferHashFunction,
+        VULKAN_INTERNAL_FramebufferHashKeyMatch,
+        VULKAN_INTERNAL_FramebufferHashNuke,
+        SDL_FALSE);
 
     /* Initialize fence pool */
 
