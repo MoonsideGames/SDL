@@ -5653,9 +5653,6 @@ static void D3D12_GenerateMipmaps(
     /* We have to do this one subresource at a time */
     for (Uint32 layerOrDepthIndex = 0; layerOrDepthIndex < container->header.info.layerCountOrDepth; layerOrDepthIndex += 1) {
         for (Uint32 levelIndex = 1; levelIndex < container->header.info.levelCount; levelIndex += 1) {
-            Uint32 layer = container->header.info.type == SDL_GPU_TEXTURETYPE_3D ? 0 : layerOrDepthIndex;
-            Uint32 depthSlice = container->header.info.type == SDL_GPU_TEXTURETYPE_3D ? layerOrDepthIndex : 0;
-
             SDL_GpuBlit(
                 commandBuffer,
                 &(SDL_GpuBlitRegion){
