@@ -208,8 +208,9 @@ SDL_GpuGraphicsPipeline *SDL_Gpu_FetchBlitPipeline(
 
 void SDL_Gpu_BlitCommon(
     SDL_GpuCommandBuffer *commandBuffer,
-    SDL_GpuTextureRegion *source,
-    SDL_GpuTextureRegion *destination,
+    SDL_GpuBlitRegion *source,
+    SDL_GpuBlitRegion *destination,
+    SDL_FlipMode flipMode,
     SDL_GpuFilter filterMode,
     SDL_bool cycle,
     SDL_GpuSampler *blitLinearSampler,
@@ -232,6 +233,7 @@ void SDL_Gpu_BlitCommon(
     SDL_GpuViewport viewport;
     SDL_GpuTextureSamplerBinding textureSamplerBinding;
     BlitFragmentUniforms blitFragmentUniforms;
+    Uint32 layerDivisor;
 
     blitPipeline = SDL_Gpu_FetchBlitPipeline(
         cmdbufHeader->device,
@@ -267,7 +269,7 @@ void SDL_Gpu_BlitCommon(
 
     colorAttachmentInfo.texture = destination->texture;
     colorAttachmentInfo.mipLevel = destination->mipLevel;
-    colorAttachmentInfo.layerOrDepthPlane = (dstHeader->info.type == SDL_GPU_TEXTURETYPE_3D) ? destination->z : destination->layer;
+    colorAttachmentInfo.layerOrDepthPlane = destination->layerOrDepthPlane;
     colorAttachmentInfo.cycle = cycle;
 
     renderPass = SDL_GpuBeginRenderPass(
@@ -306,7 +308,19 @@ void SDL_Gpu_BlitCommon(
     blitFragmentUniforms.width = (float)source->w / srcHeader->info.width;
     blitFragmentUniforms.height = (float)source->h / srcHeader->info.height;
     blitFragmentUniforms.mipLevel = source->mipLevel;
-    blitFragmentUniforms.layerOrDepth = (srcHeader->info.type == SDL_GPU_TEXTURETYPE_3D) ? (source->z / (float)srcHeader->info.layerCountOrDepth) : source->layer;
+
+    layerDivisor = (srcHeader->info.type == SDL_GPU_TEXTURETYPE_3D) ? srcHeader->info.layerCountOrDepth : 1;
+    blitFragmentUniforms.layerOrDepth = (float)source->layerOrDepthPlane / layerDivisor;
+
+    if (flipMode & SDL_FLIP_HORIZONTAL) {
+        blitFragmentUniforms.left += blitFragmentUniforms.width;
+        blitFragmentUniforms.width *= -1;
+    }
+
+    if (flipMode & SDL_FLIP_VERTICAL) {
+        blitFragmentUniforms.top += blitFragmentUniforms.height;
+        blitFragmentUniforms.height *= -1;
+    }
 
     SDL_GpuPushFragmentUniformData(
         commandBuffer,
@@ -1986,8 +2000,9 @@ void SDL_GpuEndCopyPass(
 
 void SDL_GpuBlit(
     SDL_GpuCommandBuffer *commandBuffer,
-    SDL_GpuTextureRegion *source,
-    SDL_GpuTextureRegion *destination,
+    SDL_GpuBlitRegion *source,
+    SDL_GpuBlitRegion *destination,
+    SDL_FlipMode flipMode,
     SDL_GpuFilter filterMode,
     SDL_bool cycle)
 {
@@ -2028,7 +2043,7 @@ void SDL_GpuBlit(
             SDL_assert_release(!"Blit source texture cannot have a depth format");
             failed = SDL_TRUE;
         }
-        if (source->w == 0 || source->h == 0 || source->d == 0 || destination->w == 0 || destination->h == 0 || destination->d == 0) {
+        if (source->w == 0 || source->h == 0 || destination->w == 0 || destination->h == 0) {
             SDL_assert_release(!"Blit source/destination regions must have non-zero width, height, and depth");
             failed = SDL_TRUE;
         }
@@ -2042,6 +2057,7 @@ void SDL_GpuBlit(
         commandBuffer,
         source,
         destination,
+        flipMode,
         filterMode,
         cycle);
 }

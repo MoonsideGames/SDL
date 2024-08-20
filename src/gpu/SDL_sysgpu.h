@@ -244,8 +244,9 @@ SDL_GpuGraphicsPipeline *SDL_Gpu_FetchBlitPipeline(
 
 void SDL_Gpu_BlitCommon(
     SDL_GpuCommandBuffer *commandBuffer,
-    SDL_GpuTextureRegion *source,
-    SDL_GpuTextureRegion *destination,
+    SDL_GpuBlitRegion *source,
+    SDL_GpuBlitRegion *destination,
+    SDL_FlipMode flipMode,
     SDL_GpuFilter filterMode,
     SDL_bool cycle,
     SDL_GpuSampler *blitLinearSampler,
@@ -574,8 +575,9 @@ struct SDL_GpuDevice
 
     void (*Blit)(
         SDL_GpuCommandBuffer *commandBuffer,
-        SDL_GpuTextureRegion *source,
-        SDL_GpuTextureRegion *destination,
+        SDL_GpuBlitRegion *source,
+        SDL_GpuBlitRegion *destination,
+        SDL_FlipMode flipMode,
         SDL_GpuFilter filterMode,
         SDL_bool cycle);
 
