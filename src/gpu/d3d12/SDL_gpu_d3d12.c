@@ -5658,24 +5658,21 @@ static void D3D12_GenerateMipmaps(
 
             SDL_GpuBlit(
                 commandBuffer,
-                &(SDL_GpuTextureRegion){
+                &(SDL_GpuBlitRegion){
                     .texture = texture,
-                    .layer = layer,
+                    .layerOrDepthPlane = layerOrDepthIndex,
                     .mipLevel = levelIndex - 1,
-                    .z = depthSlice,
                     .w = container->header.info.width >> (levelIndex - 1),
                     .h = container->header.info.height >> (levelIndex - 1),
-                    .d = 1,
                 },
-                &(SDL_GpuTextureRegion){
+                &(SDL_GpuBlitRegion){
                     .texture = texture,
-                    .layer = layer,
+                    .layerOrDepthPlane = layerOrDepthIndex,
                     .mipLevel = levelIndex,
-                    .z = depthSlice,
                     .w = container->header.info.width >> levelIndex,
                     .h = container->header.info.height >> levelIndex,
-                    .d = 1
                 },
+                SDL_FLIP_NONE,
                 SDL_GPU_FILTER_LINEAR,
                 SDL_FALSE);
         }
