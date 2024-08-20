@@ -2866,8 +2866,9 @@ static void METAL_PushFragmentUniformData(
 
 static void METAL_Blit(
     SDL_GpuCommandBuffer *commandBuffer,
-    SDL_GpuTextureRegion *source,
-    SDL_GpuTextureRegion *destination,
+    SDL_GpuBlitRegion *source,
+    SDL_GpuBlitRegion *destination,
+    SDL_FlipMode flipMode,
     SDL_GpuFilter filterMode,
     SDL_bool cycle)
 {
@@ -2878,6 +2879,7 @@ static void METAL_Blit(
         commandBuffer,
         source,
         destination,
+        flipMode,
         filterMode,
         cycle,
         renderer->blitLinearSampler,
