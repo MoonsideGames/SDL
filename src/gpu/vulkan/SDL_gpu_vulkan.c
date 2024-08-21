@@ -2932,6 +2932,8 @@ static void VULKAN_INTERNAL_RemoveFramebuffersContainingView(
     }
 
     SDL_UnlockMutex(renderer->framebufferFetchLock);
+
+    SDL_free(keysToRemove);
 }
 
 static void VULKAN_INTERNAL_DestroyTexture(
@@ -3247,9 +3249,9 @@ static Uint32 VULKAN_INTERNAL_RenderPassHashFunction(
     RenderPassHashTableKey *hashTableKey = (RenderPassHashTableKey *)key;
 
     /* The algorithm for this hashing function
-	 * is taken from Josh Bloch's "Effective Java".
-	 * (https://stackoverflow.com/a/113600/12492383)
-	 */
+     * is taken from Josh Bloch's "Effective Java".
+     * (https://stackoverflow.com/a/113600/12492383)
+     */
     const Uint32 HASH_FACTOR = 31;
     Uint32 result = 1;
 
@@ -3342,9 +3344,9 @@ static Uint32 VULKAN_INTERNAL_FramebufferHashFunction(
     FramebufferHashTableKey *hashTableKey = (FramebufferHashTableKey *)key;
 
     /* The algorithm for this hashing function
-	 * is taken from Josh Bloch's "Effective Java".
-	 * (https://stackoverflow.com/a/113600/12492383)
-	 */
+     * is taken from Josh Bloch's "Effective Java".
+     * (https://stackoverflow.com/a/113600/12492383)
+     */
     const Uint32 HASH_FACTOR = 31;
     Uint32 result = 1;
 
