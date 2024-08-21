@@ -3427,9 +3427,7 @@ static SDL_bool METAL_SupportsPresentMode(
 
 static SDL_bool METAL_ClaimWindow(
     SDL_GpuRenderer *driverData,
-    SDL_Window *window,
-    SDL_GpuSwapchainComposition swapchainComposition,
-    SDL_GpuPresentMode presentMode)
+    SDL_Window *window)
 {
     @autoreleasepool {
         MetalRenderer *renderer = (MetalRenderer *)driverData;
@@ -3439,7 +3437,7 @@ static SDL_bool METAL_ClaimWindow(
             windowData = (MetalWindowData *)SDL_malloc(sizeof(MetalWindowData));
             windowData->window = window;
 
-            if (METAL_INTERNAL_CreateSwapchain(renderer, windowData, swapchainComposition, presentMode)) {
+            if (METAL_INTERNAL_CreateSwapchain(renderer, windowData, SDL_GPU_SWAPCHAINCOMPOSITION_SDR, SDL_GPU_PRESENTMODE_VSYNC)) {
                 SDL_SetPointerProperty(SDL_GetWindowProperties(window), WINDOW_PROPERTY_DATA, windowData);
 
                 SDL_LockMutex(renderer->windowLock);

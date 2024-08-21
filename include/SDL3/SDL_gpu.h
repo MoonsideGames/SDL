@@ -2092,7 +2092,8 @@ extern SDL_DECLSPEC void SDLCALL SDL_GpuBlit(
 /* Submission/Presentation */
 
 /**
- * Obtains whether or not a swapchain composition is supported by the GPU backend.
+ * Determines whether a swapchain composition is supported by the window.
+ * The window must be claimed before calling this function.
  *
  * \param device a GPU context
  * \param window an SDL_Window
@@ -2101,6 +2102,8 @@ extern SDL_DECLSPEC void SDLCALL SDL_GpuBlit(
  * \returns SDL_TRUE if supported, SDL_FALSE if unsupported (or on error)
  *
  * \since This function is available since SDL 3.x.x
+ *
+ * \sa SDL_GpuClaimWindow
  */
 extern SDL_DECLSPEC SDL_bool SDLCALL SDL_GpuSupportsSwapchainComposition(
     SDL_GpuDevice *device,
@@ -2108,7 +2111,8 @@ extern SDL_DECLSPEC SDL_bool SDLCALL SDL_GpuSupportsSwapchainComposition(
     SDL_GpuSwapchainComposition swapchainComposition);
 
 /**
- * Obtains whether or not a presentation mode is supported by the GPU backend.
+ * Determines whether a presentation mode is supported by the window.
+ * The window must be claimed before calling this function.
  *
  * \param device a GPU context
  * \param window an SDL_Window
@@ -2117,6 +2121,8 @@ extern SDL_DECLSPEC SDL_bool SDLCALL SDL_GpuSupportsSwapchainComposition(
  * \returns SDL_TRUE if supported, SDL_FALSE if unsupported (or on error)
  *
  * \since This function is available since SDL 3.x.x
+ *
+ * \sa SDL_GpuClaimWindow
  */
 extern SDL_DECLSPEC SDL_bool SDLCALL SDL_GpuSupportsPresentMode(
     SDL_GpuDevice *device,
@@ -2127,18 +2133,12 @@ extern SDL_DECLSPEC SDL_bool SDLCALL SDL_GpuSupportsPresentMode(
  * Claims a window, creating a swapchain structure for it.
  * This must be called before SDL_GpuAcquireSwapchainTexture is called using the window.
  *
- * This function will fail if the requested present mode or swapchain composition
- * are unsupported by the device. Check if the parameters are supported via
- * SDL_GpuSupportsPresentMode / SDL_GpuSupportsSwapchainComposition prior to
- * calling this function.
- *
- * SDL_GPU_PRESENTMODE_VSYNC and SDL_GPU_SWAPCHAINCOMPOSITION_SDR are
- * always supported.
+ * The swapchain will be created with SDL_GPU_SWAPCHAINCOMPOSITION_SDR and SDL_GPU_PRESENTMODE_VSYNC.
+ * If you want to have different swapchain parameters, you must call
+ * SetSwapchainParameters after claiming the window.
  *
  * \param device a GPU context
  * \param window an SDL_Window
- * \param swapchainComposition the desired composition of the swapchain
- * \param presentMode the desired present mode for the swapchain
  *
  * \returns SDL_TRUE on success, otherwise SDL_FALSE.
  *
@@ -2151,9 +2151,7 @@ extern SDL_DECLSPEC SDL_bool SDLCALL SDL_GpuSupportsPresentMode(
  */
 extern SDL_DECLSPEC SDL_bool SDLCALL SDL_GpuClaimWindow(
     SDL_GpuDevice *device,
-    SDL_Window *window,
-    SDL_GpuSwapchainComposition swapchainComposition,
-    SDL_GpuPresentMode presentMode);
+    SDL_Window *window);
 
 /**
  * Unclaims a window, destroying its swapchain structure.

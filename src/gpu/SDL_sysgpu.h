@@ -597,9 +597,7 @@ struct SDL_GpuDevice
 
     SDL_bool (*ClaimWindow)(
         SDL_GpuRenderer *driverData,
-        SDL_Window *window,
-        SDL_GpuSwapchainComposition swapchainComposition,
-        SDL_GpuPresentMode presentMode);
+        SDL_Window *window);
 
     void (*UnclaimWindow)(
         SDL_GpuRenderer *driverData,

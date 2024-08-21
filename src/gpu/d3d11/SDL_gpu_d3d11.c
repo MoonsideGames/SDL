@@ -4852,7 +4852,6 @@ static SDL_bool D3D11_INTERNAL_CreateSwapchain(
     IDXGIFactory1 *pParent;
     IDXGISwapChain *swapchain;
     IDXGISwapChain3 *swapchain3;
-    Uint32 colorSpaceSupport;
     HRESULT res;
 
     /* Get the DXGI handle */
@@ -4933,6 +4932,21 @@ static SDL_bool D3D11_INTERNAL_CreateSwapchain(
         /* We're done with the parent now */
         IDXGIFactory1_Release(pParent);
     }
+
+    if (swapchainComposition != SDL_GPU_SWAPCHAINCOMPOSITION_SDR) {
+        /* Set the color space, support already verified if we hit this block */
+        IDXGISwapChain3_QueryInterface(
+            swapchain,
+            &D3D_IID_IDXGISwapChain3,
+            (void **)&swapchain3);
+
+        IDXGISwapChain3_SetColorSpace1(
+            swapchain3,
+            SwapchainCompositionToColorSpace[swapchainComposition]);
+
+        IDXGISwapChain3_Release(swapchain3);
+    }
+
     /* Initialize the swapchain data */
     windowData->swapchain = swapchain;
     windowData->presentMode = presentMode;
@@ -4943,30 +4957,6 @@ static SDL_bool D3D11_INTERNAL_CreateSwapchain(
 
     for (i = 0; i < MAX_FRAMES_IN_FLIGHT; i += 1) {
         windowData->inFlightFences[i] = NULL;
-    }
-
-    if (SUCCEEDED(IDXGISwapChain3_QueryInterface(
-            swapchain,
-            &D3D_IID_IDXGISwapChain3,
-            (void **)&swapchain3))) {
-        IDXGISwapChain3_CheckColorSpaceSupport(
-            swapchain3,
-            windowData->swapchainColorSpace,
-            &colorSpaceSupport);
-
-        if (!(colorSpaceSupport & DXGI_SWAP_CHAIN_COLOR_SPACE_SUPPORT_FLAG_PRESENT)) {
-            SDL_LogError(SDL_LOG_CATEGORY_GPU, "Requested colorspace is unsupported!");
-            return SDL_FALSE;
-        }
-
-        IDXGISwapChain3_SetColorSpace1(
-            swapchain3,
-            windowData->swapchainColorSpace);
-
-        IDXGISwapChain3_Release(swapchain3);
-    } else {
-        SDL_LogError(SDL_LOG_CATEGORY_GPU, "DXGI 1.4 not supported, cannot use colorspace other than SDL_GPU_COLORSPACE_NONLINEAR_SRGB!");
-        return SDL_FALSE;
     }
 
     /* If a you are using a FLIP model format you can't create the swapchain as DXGI_FORMAT_B8G8R8A8_UNORM_SRGB.
@@ -5042,6 +5032,8 @@ static SDL_bool D3D11_SupportsSwapchainComposition(
     D3D11Renderer *renderer = (D3D11Renderer *)driverData;
     DXGI_FORMAT format;
     Uint32 formatSupport = 0;
+    IDXGISwapChain3 *swapchain3;
+    Uint32 colorSpaceSupport;
     HRESULT res;
 
     format = SwapchainCompositionToTextureFormat[swapchainComposition];
@@ -5055,7 +5047,39 @@ static SDL_bool D3D11_SupportsSwapchainComposition(
         return SDL_FALSE;
     }
 
-    return (formatSupport & D3D11_FORMAT_SUPPORT_DISPLAY);
+    if (!(formatSupport & D3D11_FORMAT_SUPPORT_DISPLAY)) {
+        return SDL_FALSE;
+    }
+
+    D3D11WindowData *windowData = D3D11_INTERNAL_FetchWindowData(window);
+    if (windowData == NULL) {
+        SDL_LogError(SDL_LOG_CATEGORY_GPU, "Must claim window before querying swapchain composition support!");
+        return SDL_FALSE;
+    }
+
+    /* Check the color space support if necessary */
+    if (swapchainComposition != SDL_GPU_SWAPCHAINCOMPOSITION_SDR) {
+        if (SUCCEEDED(IDXGISwapChain3_QueryInterface(
+                windowData->swapchain,
+                &D3D_IID_IDXGISwapChain3,
+                (void **)&swapchain3))) {
+            IDXGISwapChain3_CheckColorSpaceSupport(
+                swapchain3,
+                SwapchainCompositionToColorSpace[swapchainComposition],
+                &colorSpaceSupport);
+
+            IDXGISwapChain3_Release(swapchain3);
+
+            if (!(colorSpaceSupport & DXGI_SWAP_CHAIN_COLOR_SPACE_SUPPORT_FLAG_PRESENT)) {
+                return SDL_FALSE;
+            }
+        } else {
+            SDL_LogError(SDL_LOG_CATEGORY_GPU, "DXGI 1.4 not supported, cannot use composition other than SDL_GPU_SWAPCHAINCOMPOSITION_SDR!");
+            return SDL_FALSE;
+        }
+    }
+
+    return SDL_TRUE;
 }
 
 static SDL_bool D3D11_SupportsPresentMode(
@@ -5078,9 +5102,7 @@ static SDL_bool D3D11_SupportsPresentMode(
 
 static SDL_bool D3D11_ClaimWindow(
     SDL_GpuRenderer *driverData,
-    SDL_Window *window,
-    SDL_GpuSwapchainComposition swapchainComposition,
-    SDL_GpuPresentMode presentMode)
+    SDL_Window *window)
 {
     D3D11Renderer *renderer = (D3D11Renderer *)driverData;
     D3D11WindowData *windowData = D3D11_INTERNAL_FetchWindowData(window);
@@ -5089,7 +5111,7 @@ static SDL_bool D3D11_ClaimWindow(
         windowData = (D3D11WindowData *)SDL_malloc(sizeof(D3D11WindowData));
         windowData->window = window;
 
-        if (D3D11_INTERNAL_CreateSwapchain(renderer, windowData, swapchainComposition, presentMode)) {
+        if (D3D11_INTERNAL_CreateSwapchain(renderer, windowData, SDL_GPU_SWAPCHAINCOMPOSITION_SDR, SDL_GPU_PRESENTMODE_VSYNC)) {
             SDL_SetPointerProperty(SDL_GetWindowProperties(window), WINDOW_PROPERTY_DATA, windowData);
 
             SDL_LockMutex(renderer->windowLock);

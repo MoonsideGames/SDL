@@ -2159,9 +2159,7 @@ SDL_bool SDL_GpuSupportsPresentMode(
 
 SDL_bool SDL_GpuClaimWindow(
     SDL_GpuDevice *device,
-    SDL_Window *window,
-    SDL_GpuSwapchainComposition swapchainFormat,
-    SDL_GpuPresentMode presentMode)
+    SDL_Window *window)
 {
     CHECK_DEVICE_MAGIC(device, SDL_FALSE);
     if (window == NULL) {
@@ -2171,9 +2169,7 @@ SDL_bool SDL_GpuClaimWindow(
 
     return device->ClaimWindow(
         device->driverData,
-        window,
-        swapchainFormat,
-        presentMode);
+        window);
 }
 
 void SDL_GpuUnclaimWindow(
