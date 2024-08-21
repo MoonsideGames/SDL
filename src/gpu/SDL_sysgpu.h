@@ -70,6 +70,8 @@ typedef struct BlitPipelineCacheEntry
 /* Internal Helper Utilities */
 
 #define SDL_GPU_TEXTUREFORMAT_MAX (SDL_GPU_TEXTUREFORMAT_D32_SFLOAT_S8_UINT + 1)
+#define SDL_GPU_SWAPCHAINCOMPOSITION_MAX (SDL_GPU_SWAPCHAINCOMPOSITION_HDR10_ST2048 + 1)
+#define SDL_GPU_PRESENTMODE_MAX (SDL_GPU_PRESENTMODE_MAILBOX + 1)
 
 static inline Sint32 Texture_GetBlockSize(
     SDL_GpuTextureFormat format)
