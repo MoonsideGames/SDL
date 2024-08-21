@@ -88,6 +88,12 @@
         return;                                            \
     }
 
+#define CHECK_TEXTUREFORMAT_ENUM_INVALID(format, retval)     \
+    if(format >= SDL_GPU_TEXTUREFORMAT_MAX) {                \
+        SDL_assert_release(!"Invalid texture format enum!"); \
+        return retval;                                       \
+    }
+
 #define COMMAND_BUFFER_DEVICE \
     ((CommandBufferCommonHeader *)commandBuffer)->device
 
@@ -547,6 +553,10 @@ SDL_bool SDL_GpuSupportsTextureFormat(
 {
     CHECK_DEVICE_MAGIC(device, SDL_FALSE);
 
+    if (device->debugMode) {
+        CHECK_TEXTUREFORMAT_ENUM_INVALID(format, SDL_FALSE)
+    }
+
     return device->SupportsTextureFormat(
         device->driverData,
         format,
@@ -560,6 +570,10 @@ SDL_GpuSampleCount SDL_GpuGetBestSampleCount(
     SDL_GpuSampleCount desiredSampleCount)
 {
     CHECK_DEVICE_MAGIC(device, 0);
+
+    if (device->debugMode) {
+        CHECK_TEXTUREFORMAT_ENUM_INVALID(format, 0)
+    }
 
     return device->GetBestSampleCount(
         device->driverData,
@@ -614,6 +628,23 @@ SDL_GpuGraphicsPipeline *SDL_GpuCreateGraphicsPipeline(
     if (graphicsPipelineCreateInfo == NULL) {
         SDL_InvalidParamError("graphicsPipelineCreateInfo");
         return NULL;
+    }
+
+    if (device->debugMode) {
+        for (Uint32 i = 0; i < graphicsPipelineCreateInfo->attachmentInfo.colorAttachmentCount; i += 1) {
+            CHECK_TEXTUREFORMAT_ENUM_INVALID(graphicsPipelineCreateInfo->attachmentInfo.colorAttachmentDescriptions[i].format, NULL);
+            if (IsDepthFormat(graphicsPipelineCreateInfo->attachmentInfo.colorAttachmentDescriptions[i].format)) {
+                SDL_assert_release(!"Color attachment formats cannot be a depth format!");
+                return NULL;
+            }
+        }
+        if (graphicsPipelineCreateInfo->attachmentInfo.hasDepthStencilAttachment) {
+            CHECK_TEXTUREFORMAT_ENUM_INVALID(graphicsPipelineCreateInfo->attachmentInfo.depthStencilFormat, NULL);
+            if (!IsDepthFormat(graphicsPipelineCreateInfo->attachmentInfo.depthStencilFormat)) {
+                SDL_assert_release(!"Depth-stencil attachment format must be a depth format!");
+                return NULL;
+            }
+        }
     }
 
     return device->CreateGraphicsPipeline(
@@ -675,6 +706,8 @@ SDL_GpuTexture *SDL_GpuCreateTexture(
         const Uint32 MAX_3D_DIMENSION = 2048;
 
         /* Common checks for all texture types */
+        CHECK_TEXTUREFORMAT_ENUM_INVALID(textureCreateInfo->format, NULL)
+
         if (textureCreateInfo->width <= 0 || textureCreateInfo->height <= 0 || textureCreateInfo->layerCountOrDepth <= 0) {
             SDL_assert_release(!"For any texture: width, height, and layerCountOrDepth must be >= 1");
             failed = SDL_TRUE;
