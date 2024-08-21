@@ -4612,14 +4612,32 @@ static void D3D12_DrawPrimitivesIndirect(
 
     D3D12_INTERNAL_BindGraphicsResources(d3d12CommandBuffer);
 
-    ID3D12GraphicsCommandList_ExecuteIndirect(
-        d3d12CommandBuffer->graphicsCommandList,
-        d3d12CommandBuffer->renderer->indirectDrawCommandSignature,
-        drawCount,
-        d3d12Buffer->handle,
-        offsetInBytes,
-        NULL,
-        0);
+    if (stride == sizeof(SDL_GpuIndirectDrawCommand)) {
+        /* Real multi-draw! */
+        ID3D12GraphicsCommandList_ExecuteIndirect(
+            d3d12CommandBuffer->graphicsCommandList,
+            d3d12CommandBuffer->renderer->indirectDrawCommandSignature,
+            drawCount,
+            d3d12Buffer->handle,
+            offsetInBytes,
+            NULL,
+            0);
+    } else {
+        /* Fake multi-draw...
+        /* FIXME: we could make this real multi-draw
+         * if we have a lookup to get command signature per stride value
+         */
+        for (Uint32 i = 0; i < drawCount; i += 1) {
+            ID3D12GraphicsCommandList_ExecuteIndirect(
+                d3d12CommandBuffer->graphicsCommandList,
+                d3d12CommandBuffer->renderer->indirectDrawCommandSignature,
+                1,
+                d3d12Buffer->handle,
+                offsetInBytes + (stride * i),
+                NULL,
+                0);
+        }
+    }
 }
 
 static void D3D12_DrawIndexedPrimitivesIndirect(
@@ -4634,14 +4652,32 @@ static void D3D12_DrawIndexedPrimitivesIndirect(
 
     D3D12_INTERNAL_BindGraphicsResources(d3d12CommandBuffer);
 
-    ID3D12GraphicsCommandList_ExecuteIndirect(
-        d3d12CommandBuffer->graphicsCommandList,
-        d3d12CommandBuffer->renderer->indirectIndexedDrawCommandSignature,
-        drawCount,
-        d3d12Buffer->handle,
-        offsetInBytes,
-        NULL,
-        0);
+    if (stride == sizeof(SDL_GpuIndexedIndirectDrawCommand)) {
+        /* Real multi-draw! */
+        ID3D12GraphicsCommandList_ExecuteIndirect(
+            d3d12CommandBuffer->graphicsCommandList,
+            d3d12CommandBuffer->renderer->indirectIndexedDrawCommandSignature,
+            drawCount,
+            d3d12Buffer->handle,
+            offsetInBytes,
+            NULL,
+            0);
+    } else {
+        /* Fake multi-draw...
+        /* FIXME: we could make this real multi-draw
+         * if we have a lookup to get command signature per stride value
+         */
+        for (Uint32 i = 0; i < drawCount; i += 1) {
+            ID3D12GraphicsCommandList_ExecuteIndirect(
+                d3d12CommandBuffer->graphicsCommandList,
+                d3d12CommandBuffer->renderer->indirectIndexedDrawCommandSignature,
+                1,
+                d3d12Buffer->handle,
+                offsetInBytes + (stride * i),
+                NULL,
+                0);
+        }
+    }
 }
 
 static void D3D12_EndRenderPass(
@@ -7757,7 +7793,7 @@ static SDL_GpuDevice *D3D12_CreateDevice(SDL_bool debugMode, SDL_bool preferLowP
 
     indirectArgumentDesc.Type = D3D12_INDIRECT_ARGUMENT_TYPE_DRAW;
     commandSignatureDesc.NodeMask = 0;
-    commandSignatureDesc.ByteStride = 16;
+    commandSignatureDesc.ByteStride = sizeof(SDL_GpuIndirectDrawCommand);
     commandSignatureDesc.NumArgumentDescs = 1;
     commandSignatureDesc.pArgumentDescs = &indirectArgumentDesc;
 
@@ -7773,7 +7809,7 @@ static SDL_GpuDevice *D3D12_CreateDevice(SDL_bool debugMode, SDL_bool preferLowP
     }
 
     indirectArgumentDesc.Type = D3D12_INDIRECT_ARGUMENT_TYPE_DRAW_INDEXED;
-    commandSignatureDesc.ByteStride = 20;
+    commandSignatureDesc.ByteStride = sizeof(SDL_GpuIndexedIndirectDrawCommand);
     commandSignatureDesc.pArgumentDescs = &indirectArgumentDesc;
 
     res = ID3D12Device_CreateCommandSignature(
@@ -7788,7 +7824,7 @@ static SDL_GpuDevice *D3D12_CreateDevice(SDL_bool debugMode, SDL_bool preferLowP
     }
 
     indirectArgumentDesc.Type = D3D12_INDIRECT_ARGUMENT_TYPE_DISPATCH;
-    commandSignatureDesc.ByteStride = 12;
+    commandSignatureDesc.ByteStride = sizeof(SDL_GpuIndirectDispatchCommand);
     commandSignatureDesc.pArgumentDescs = &indirectArgumentDesc;
 
     res = ID3D12Device_CreateCommandSignature(
