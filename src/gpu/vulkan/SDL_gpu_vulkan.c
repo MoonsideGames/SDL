@@ -2911,10 +2911,6 @@ static void VULKAN_INTERNAL_RemoveFramebuffersContainingView(
     while (SDL_IterateHashTable(renderer->framebufferHashTable, (const void **)&key, (const void **)&value, &iter)) {
         for (Uint32 i = 0; i < key->colorAttachmentCount; i += 1) {
             if (key->colorAttachmentViews[i] == view) {
-                VULKAN_INTERNAL_ReleaseFramebuffer(
-                    renderer,
-                    value);
-
                 if (keysToRemoveCount == keysToRemoveCapacity) {
                     keysToRemoveCapacity *= 2;
                     keysToRemove = SDL_realloc(
