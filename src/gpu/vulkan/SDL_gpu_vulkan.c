@@ -6872,7 +6872,7 @@ static SDL_bool VULKAN_SupportsSampleCount(
     VulkanRenderer *renderer = (VulkanRenderer *)driverData;
     VkSampleCountFlags bits = IsDepthFormat(format) ? renderer->physicalDeviceProperties.properties.limits.framebufferDepthSampleCounts : renderer->physicalDeviceProperties.properties.limits.framebufferColorSampleCounts;
     VkSampleCountFlagBits vkSampleCount = SDLToVK_SampleCount[sampleCount];
-    return bits & vkSampleCount;
+    return !!(bits & vkSampleCount);
 }
 
 static SDL_GpuTexture *VULKAN_CreateTexture(
