@@ -5753,6 +5753,13 @@ static void D3D12_Blit(
 
 /* Submission/Presentation */
 
+static D3D12WindowData *D3D12_INTERNAL_FetchWindowData(
+    SDL_Window *window)
+{
+    SDL_PropertiesID properties = SDL_GetWindowProperties(window);
+    return (D3D12WindowData *)SDL_GetPointerProperty(properties, WINDOW_PROPERTY_DATA, NULL);
+}
+
 static SDL_bool D3D12_SupportsSwapchainComposition(
     SDL_GpuRenderer *driverData,
     SDL_Window *window,
@@ -5761,6 +5768,7 @@ static SDL_bool D3D12_SupportsSwapchainComposition(
     D3D12Renderer *renderer = (D3D12Renderer *)driverData;
     DXGI_FORMAT format;
     D3D12_FEATURE_DATA_FORMAT_SUPPORT formatSupport;
+    Uint32 colorSpaceSupport;
     HRESULT res;
 
     format = SwapchainCompositionToTextureFormat[swapchainComposition];
@@ -5776,7 +5784,29 @@ static SDL_bool D3D12_SupportsSwapchainComposition(
         return SDL_FALSE;
     }
 
-    return (formatSupport.Support1 & D3D12_FORMAT_SUPPORT1_DISPLAY) != 0;
+    if (!(formatSupport.Support1 & D3D12_FORMAT_SUPPORT1_DISPLAY)) {
+        return SDL_FALSE;
+    }
+
+    D3D12WindowData *windowData = D3D12_INTERNAL_FetchWindowData(window);
+    if (windowData == NULL) {
+        SDL_LogError(SDL_LOG_CATEGORY_GPU, "Must claim window before querying swapchain composition support!");
+        return SDL_FALSE;
+    }
+
+    /* Check the color space support if necessary */
+    if (swapchainComposition != SDL_GPU_SWAPCHAINCOMPOSITION_SDR) {
+        IDXGISwapChain3_CheckColorSpaceSupport(
+            windowData->swapchain,
+            SwapchainCompositionToColorSpace[swapchainComposition],
+            &colorSpaceSupport);
+
+        if (!(colorSpaceSupport & DXGI_SWAP_CHAIN_COLOR_SPACE_SUPPORT_FLAG_PRESENT)) {
+            return SDL_FALSE;
+        }
+    }
+
+    return SDL_TRUE;
 }
 
 static SDL_bool D3D12_SupportsPresentMode(
@@ -5800,13 +5830,6 @@ static SDL_bool D3D12_SupportsPresentMode(
         break;
     }
     return result;
-}
-
-static D3D12WindowData *D3D12_INTERNAL_FetchWindowData(
-    SDL_Window *window)
-{
-    SDL_PropertiesID properties = SDL_GetWindowProperties(window);
-    return (D3D12WindowData *)SDL_GetPointerProperty(properties, WINDOW_PROPERTY_DATA, NULL);
 }
 
 #if defined(SDL_PLATFORM_XBOXONE) || defined(SDL_PLATFORM_XBOXSERIES)
@@ -6027,7 +6050,6 @@ static SDL_bool D3D12_INTERNAL_CreateSwapchain(
     IDXGIFactory1 *pParent;
     IDXGISwapChain1 *swapchain;
     IDXGISwapChain3 *swapchain3;
-    Uint32 colorSpaceSupport;
     HRESULT res;
 
     /* Get the DXGI handle */
@@ -6093,19 +6115,12 @@ static SDL_bool D3D12_INTERNAL_CreateSwapchain(
     IDXGISwapChain1_Release(swapchain);
     ERROR_CHECK_RETURN("Could not create IDXGISwapChain3", 0);
 
-    IDXGISwapChain3_CheckColorSpaceSupport(
-        swapchain3,
-        windowData->swapchainColorSpace,
-        &colorSpaceSupport);
-
-    if (!(colorSpaceSupport & DXGI_SWAP_CHAIN_COLOR_SPACE_SUPPORT_FLAG_PRESENT)) {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Requested colorspace is unsupported!");
-        return SDL_FALSE;
+    if (swapchainComposition != SDL_GPU_SWAPCHAINCOMPOSITION_SDR) {
+        /* Support already verified if we hit this block */
+        IDXGISwapChain3_SetColorSpace1(
+            swapchain3,
+            SwapchainCompositionToColorSpace[swapchainComposition]);
     }
-
-    IDXGISwapChain3_SetColorSpace1(
-        swapchain3,
-        windowData->swapchainColorSpace);
 
     /*
      * The swapchain's parent is a separate factory from the factory that
@@ -6184,9 +6199,7 @@ static SDL_bool D3D12_INTERNAL_CreateSwapchain(
 
 static SDL_bool D3D12_ClaimWindow(
     SDL_GpuRenderer *driverData,
-    SDL_Window *window,
-    SDL_GpuSwapchainComposition swapchainComposition,
-    SDL_GpuPresentMode presentMode)
+    SDL_Window *window)
 {
     D3D12Renderer *renderer = (D3D12Renderer *)driverData;
     D3D12WindowData *windowData = D3D12_INTERNAL_FetchWindowData(window);
@@ -6198,7 +6211,7 @@ static SDL_bool D3D12_ClaimWindow(
         }
         windowData->window = window;
 
-        if (D3D12_INTERNAL_CreateSwapchain(renderer, windowData, swapchainComposition, presentMode)) {
+        if (D3D12_INTERNAL_CreateSwapchain(renderer, windowData, SDL_GPU_SWAPCHAINCOMPOSITION_SDR, SDL_GPU_PRESENTMODE_VSYNC)) {
             SDL_SetPointerProperty(SDL_GetWindowProperties(window), WINDOW_PROPERTY_DATA, windowData);
 
             SDL_LockMutex(renderer->windowLock);

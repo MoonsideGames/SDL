@@ -9655,28 +9655,17 @@ static SDL_bool VULKAN_SupportsSwapchainComposition(
     SDL_GpuSwapchainComposition swapchainComposition)
 {
     VulkanRenderer *renderer = (VulkanRenderer *)driverData;
-    SDL_VideoDevice *_this;
     WindowData *windowData = VULKAN_INTERNAL_FetchWindowData(window);
     VkSurfaceKHR surface;
     SwapchainSupportDetails supportDetails;
-    SDL_bool destroySurface = SDL_FALSE;
     SDL_bool result = SDL_FALSE;
 
     if (windowData == NULL || windowData->swapchainData == NULL) {
-        /* Create a dummy surface if the window is not claimed */
-        destroySurface = SDL_TRUE;
-        _this = SDL_GetVideoDevice();
-        if (_this->Vulkan_CreateSurface(
-                _this,
-                window,
-                renderer->instance,
-                NULL,
-                &surface) < 0) {
-            return SDL_FALSE;
-        }
-    } else {
-        surface = windowData->swapchainData->surface;
+        SDL_LogError(SDL_LOG_CATEGORY_GPU, "Must claim window before querying swapchain composition support!");
+        return SDL_FALSE;
     }
+
+    surface = windowData->swapchainData->surface;
 
     if (VULKAN_INTERNAL_QuerySwapchainSupport(
             renderer,
@@ -9703,13 +9692,6 @@ static SDL_bool VULKAN_SupportsSwapchainComposition(
         SDL_free(supportDetails.presentModes);
     }
 
-    if (destroySurface) {
-        SDL_Vulkan_DestroySurface(
-            renderer->instance,
-            surface,
-            NULL);
-    }
-
     return result;
 }
 
@@ -9719,28 +9701,17 @@ static SDL_bool VULKAN_SupportsPresentMode(
     SDL_GpuPresentMode presentMode)
 {
     VulkanRenderer *renderer = (VulkanRenderer *)driverData;
-    SDL_VideoDevice *_this;
     WindowData *windowData = VULKAN_INTERNAL_FetchWindowData(window);
     VkSurfaceKHR surface;
     SwapchainSupportDetails supportDetails;
-    SDL_bool destroySurface = SDL_FALSE;
     SDL_bool result = SDL_FALSE;
 
     if (windowData == NULL || windowData->swapchainData == NULL) {
-        /* Create a dummy surface if the window is not claimed */
-        destroySurface = SDL_TRUE;
-        _this = SDL_GetVideoDevice();
-        if (_this->Vulkan_CreateSurface(
-                _this,
-                window,
-                renderer->instance,
-                NULL,
-                &surface) < 0) {
-            return SDL_FALSE;
-        }
-    } else {
-        surface = windowData->swapchainData->surface;
+        SDL_LogError(SDL_LOG_CATEGORY_GPU, "Must claim window before querying present mode support!");
+        return SDL_FALSE;
     }
+
+    surface = windowData->swapchainData->surface;
 
     if (VULKAN_INTERNAL_QuerySwapchainSupport(
             renderer,
@@ -9757,21 +9728,12 @@ static SDL_bool VULKAN_SupportsPresentMode(
         SDL_free(supportDetails.presentModes);
     }
 
-    if (destroySurface) {
-        SDL_Vulkan_DestroySurface(
-            renderer->instance,
-            surface,
-            NULL);
-    }
-
     return result;
 }
 
 static SDL_bool VULKAN_ClaimWindow(
     SDL_GpuRenderer *driverData,
-    SDL_Window *window,
-    SDL_GpuSwapchainComposition swapchainComposition,
-    SDL_GpuPresentMode presentMode)
+    SDL_Window *window)
 {
     VulkanRenderer *renderer = (VulkanRenderer *)driverData;
     WindowData *windowData = VULKAN_INTERNAL_FetchWindowData(window);
@@ -9779,8 +9741,8 @@ static SDL_bool VULKAN_ClaimWindow(
     if (windowData == NULL) {
         windowData = SDL_malloc(sizeof(WindowData));
         windowData->window = window;
-        windowData->presentMode = presentMode;
-        windowData->swapchainComposition = swapchainComposition;
+        windowData->presentMode = SDL_GPU_PRESENTMODE_VSYNC;
+        windowData->swapchainComposition = SDL_GPU_SWAPCHAINCOMPOSITION_SDR;
 
         if (VULKAN_INTERNAL_CreateSwapchain(renderer, windowData)) {
             SDL_SetPointerProperty(SDL_GetWindowProperties(window), WINDOW_PROPERTY_DATA, windowData);

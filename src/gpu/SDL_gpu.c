@@ -89,9 +89,21 @@
     }
 
 #define CHECK_TEXTUREFORMAT_ENUM_INVALID(format, retval)     \
-    if(format >= SDL_GPU_TEXTUREFORMAT_MAX) {                \
+    if (format >= SDL_GPU_TEXTUREFORMAT_MAX) {               \
         SDL_assert_release(!"Invalid texture format enum!"); \
         return retval;                                       \
+    }
+
+#define CHECK_SWAPCHAINCOMPOSITION_ENUM_INVALID(enumval, retval)    \
+    if (enumval >= SDL_GPU_SWAPCHAINCOMPOSITION_MAX) {              \
+        SDL_assert_release(!"Invalid swapchain composition enum!"); \
+        return retval;                                              \
+    }
+
+#define CHECK_PRESENTMODE_ENUM_INVALID(enumval, retval)    \
+    if (enumval >= SDL_GPU_PRESENTMODE_MAX) {              \
+        SDL_assert_release(!"Invalid present mode enum!"); \
+        return retval;                                     \
     }
 
 #define COMMAND_BUFFER_DEVICE \
@@ -2126,7 +2138,7 @@ void SDL_GpuBlit(
 SDL_bool SDL_GpuSupportsSwapchainComposition(
     SDL_GpuDevice *device,
     SDL_Window *window,
-    SDL_GpuSwapchainComposition swapchainFormat)
+    SDL_GpuSwapchainComposition swapchainComposition)
 {
     CHECK_DEVICE_MAGIC(device, SDL_FALSE);
     if (window == NULL) {
@@ -2134,10 +2146,14 @@ SDL_bool SDL_GpuSupportsSwapchainComposition(
         return SDL_FALSE;
     }
 
+    if (device->debugMode) {
+        CHECK_SWAPCHAINCOMPOSITION_ENUM_INVALID(swapchainComposition, SDL_FALSE)
+    }
+
     return device->SupportsSwapchainComposition(
         device->driverData,
         window,
-        swapchainFormat);
+        swapchainComposition);
 }
 
 SDL_bool SDL_GpuSupportsPresentMode(
@@ -2151,6 +2167,10 @@ SDL_bool SDL_GpuSupportsPresentMode(
         return SDL_FALSE;
     }
 
+    if (device->debugMode) {
+        CHECK_PRESENTMODE_ENUM_INVALID(presentMode, SDL_FALSE)
+    }
+
     return device->SupportsPresentMode(
         device->driverData,
         window,
@@ -2159,9 +2179,7 @@ SDL_bool SDL_GpuSupportsPresentMode(
 
 SDL_bool SDL_GpuClaimWindow(
     SDL_GpuDevice *device,
-    SDL_Window *window,
-    SDL_GpuSwapchainComposition swapchainFormat,
-    SDL_GpuPresentMode presentMode)
+    SDL_Window *window)
 {
     CHECK_DEVICE_MAGIC(device, SDL_FALSE);
     if (window == NULL) {
@@ -2171,9 +2189,7 @@ SDL_bool SDL_GpuClaimWindow(
 
     return device->ClaimWindow(
         device->driverData,
-        window,
-        swapchainFormat,
-        presentMode);
+        window);
 }
 
 void SDL_GpuUnclaimWindow(
@@ -2194,7 +2210,7 @@ void SDL_GpuUnclaimWindow(
 SDL_bool SDL_GpuSetSwapchainParameters(
     SDL_GpuDevice *device,
     SDL_Window *window,
-    SDL_GpuSwapchainComposition swapchainFormat,
+    SDL_GpuSwapchainComposition swapchainComposition,
     SDL_GpuPresentMode presentMode)
 {
     CHECK_DEVICE_MAGIC(device, SDL_FALSE);
@@ -2203,10 +2219,15 @@ SDL_bool SDL_GpuSetSwapchainParameters(
         return SDL_FALSE;
     }
 
+    if (device->debugMode) {
+        CHECK_SWAPCHAINCOMPOSITION_ENUM_INVALID(swapchainComposition, SDL_FALSE)
+        CHECK_PRESENTMODE_ENUM_INVALID(presentMode, SDL_FALSE)
+    }
+
     return device->SetSwapchainParameters(
         device->driverData,
         window,
-        swapchainFormat,
+        swapchainComposition,
         presentMode);
 }
 
