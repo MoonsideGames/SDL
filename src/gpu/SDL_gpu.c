@@ -633,9 +633,17 @@ SDL_GpuGraphicsPipeline *SDL_GpuCreateGraphicsPipeline(
     if (device->debugMode) {
         for (Uint32 i = 0; i < graphicsPipelineCreateInfo->attachmentInfo.colorAttachmentCount; i += 1) {
             CHECK_TEXTUREFORMAT_ENUM_INVALID(graphicsPipelineCreateInfo->attachmentInfo.colorAttachmentDescriptions[i].format, NULL);
+            if (IsDepthFormat(graphicsPipelineCreateInfo->attachmentInfo.colorAttachmentDescriptions[i].format)) {
+                SDL_assert_release(!"Color attachment formats cannot be a depth format!");
+                return NULL;
+            }
         }
         if (graphicsPipelineCreateInfo->attachmentInfo.hasDepthStencilAttachment) {
             CHECK_TEXTUREFORMAT_ENUM_INVALID(graphicsPipelineCreateInfo->attachmentInfo.depthStencilFormat, NULL);
+            if (!IsDepthFormat(graphicsPipelineCreateInfo->attachmentInfo.depthStencilFormat)) {
+                SDL_assert_release(!"Depth-stencil attachment format must be a depth format!");
+                return NULL;
+            }
         }
     }
 
