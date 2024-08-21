@@ -576,10 +576,10 @@ SDL_bool SDL_GpuSupportsTextureFormat(
         usage);
 }
 
-SDL_GpuSampleCount SDL_GpuGetBestSampleCount(
+SDL_bool SDL_GpuSupportsSampleCount(
     SDL_GpuDevice *device,
     SDL_GpuTextureFormat format,
-    SDL_GpuSampleCount desiredSampleCount)
+    SDL_GpuSampleCount sampleCount)
 {
     CHECK_DEVICE_MAGIC(device, 0);
 
@@ -587,10 +587,10 @@ SDL_GpuSampleCount SDL_GpuGetBestSampleCount(
         CHECK_TEXTUREFORMAT_ENUM_INVALID(format, 0)
     }
 
-    return device->GetBestSampleCount(
+    return device->SupportsSampleCount(
         device->driverData,
         format,
-        desiredSampleCount);
+        sampleCount);
 }
 
 /* State Creation */

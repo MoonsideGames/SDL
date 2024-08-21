@@ -987,7 +987,7 @@ SDL3_0.0.0 {
     SDL_powf;
     SDL_qsort;
     SDL_qsort_r;
-    SDL_rand;  
+    SDL_rand;
     SDL_rand_bits;
     SDL_rand_bits_r;
     SDL_rand_r;
@@ -1138,7 +1138,7 @@ SDL3_0.0.0 {
     SDL_GpuReleaseFence;
     SDL_GpuTextureFormatTexelBlockSize;
     SDL_GpuSupportsTextureFormat;
-    SDL_GpuGetBestSampleCount;
+    SDL_GpuSupportsSampleCount;
     # extra symbols go here (don't modify this line)
   local: *;
 };

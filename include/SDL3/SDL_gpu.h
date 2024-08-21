@@ -2363,20 +2363,19 @@ extern SDL_DECLSPEC SDL_bool SDLCALL SDL_GpuSupportsTextureFormat(
     SDL_GpuTextureUsageFlags usage);
 
 /**
- * Determines the "best" sample count for a texture format, i.e.
- * the highest supported sample count that is <= the desired sample count.
+ * Determines if a sample count for a texture format is supported.
  *
  * \param device a GPU context
  * \param format the texture format to check
- * \param desiredSampleCount the sample count you want
+ * \param sampleCount the sample count to check
  * \returns a hardware-specific version of min(preferred, possible)
  *
  * \since This function is available since SDL 3.x.x
  */
-extern SDL_DECLSPEC SDL_GpuSampleCount SDLCALL SDL_GpuGetBestSampleCount(
+extern SDL_DECLSPEC SDL_bool SDLCALL SDL_GpuSupportsSampleCount(
     SDL_GpuDevice *device,
     SDL_GpuTextureFormat format,
-    SDL_GpuSampleCount desiredSampleCount);
+    SDL_GpuSampleCount sampleCount);
 
 #ifdef __cplusplus
 }

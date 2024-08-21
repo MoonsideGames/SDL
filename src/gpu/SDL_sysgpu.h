@@ -655,7 +655,7 @@ struct SDL_GpuDevice
         SDL_GpuTextureType type,
         SDL_GpuTextureUsageFlags usage);
 
-    SDL_GpuSampleCount (*GetBestSampleCount)(
+    SDL_bool (*SupportsSampleCount)(
         SDL_GpuRenderer *driverData,
         SDL_GpuTextureFormat format,
         SDL_GpuSampleCount desiredSampleCount);
@@ -748,7 +748,7 @@ struct SDL_GpuDevice
     ASSIGN_DRIVER_FUNC(QueryFence, name)                    \
     ASSIGN_DRIVER_FUNC(ReleaseFence, name)                  \
     ASSIGN_DRIVER_FUNC(SupportsTextureFormat, name)         \
-    ASSIGN_DRIVER_FUNC(GetBestSampleCount, name)
+    ASSIGN_DRIVER_FUNC(SupportsSampleCount, name)
 
 typedef struct SDL_GpuBootstrap
 {

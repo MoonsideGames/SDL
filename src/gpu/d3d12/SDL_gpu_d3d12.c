@@ -329,7 +329,7 @@ static DXGI_FORMAT SDLToD3D12_VertexFormat[] = {
     DXGI_FORMAT_R16G16B16A16_FLOAT  /* HALF4 */
 };
 
-static int SDLToD3D12_SampleCount[] = {
+static Uint32 SDLToD3D12_SampleCount[] = {
     1, /* SDL_GPU_SAMPLECOUNT_1 */
     2, /* SDL_GPU_SAMPLECOUNT_2 */
     4, /* SDL_GPU_SAMPLECOUNT_4 */
@@ -7211,13 +7211,12 @@ static SDL_bool D3D12_SupportsTextureFormat(
     return SDL_TRUE;
 }
 
-static SDL_GpuSampleCount D3D12_GetBestSampleCount(
+static SDL_bool D3D12_SupportsSampleCount(
     SDL_GpuRenderer *driverData,
     SDL_GpuTextureFormat format,
-    SDL_GpuSampleCount desiredSampleCount)
+    SDL_GpuSampleCount sampleCount)
 {
     D3D12Renderer *renderer = (D3D12Renderer *)driverData;
-    SDL_GpuSampleCount maxSupported = SDL_GPU_SAMPLECOUNT_8;
     D3D12_FEATURE_DATA_MULTISAMPLE_QUALITY_LEVELS featureData;
     HRESULT res;
 
@@ -7226,22 +7225,15 @@ static SDL_GpuSampleCount D3D12_GetBestSampleCount(
 #else
     featureData.Flags = (D3D12_MULTISAMPLE_QUALITY_LEVEL_FLAGS)0;
 #endif
-    while (maxSupported >= SDL_GPU_SAMPLECOUNT_1) {
-        featureData.Format = SDLToD3D12_TextureFormat[format];
-        featureData.SampleCount = (UINT)maxSupported;
-        res = ID3D12Device_CheckFeatureSupport(
-            renderer->device,
-            D3D12_FEATURE_MULTISAMPLE_QUALITY_LEVELS,
-            &featureData,
-            sizeof(featureData));
+    featureData.Format = SDLToD3D12_TextureFormat[format];
+    featureData.SampleCount = SDLToD3D12_SampleCount[sampleCount];
+    res = ID3D12Device_CheckFeatureSupport(
+        renderer->device,
+        D3D12_FEATURE_MULTISAMPLE_QUALITY_LEVELS,
+        &featureData,
+        sizeof(featureData));
 
-        if (SUCCEEDED(res) && featureData.NumQualityLevels > 0) {
-            break;
-        }
-        maxSupported = (SDL_GpuSampleCount)((int)maxSupported - 1);
-    }
-
-    return (SDL_GpuSampleCount)SDL_min(maxSupported, desiredSampleCount);
+    return SUCCEEDED(res) && featureData.NumQualityLevels > 0;
 }
 
 static void D3D12_INTERNAL_InitBlitResources(

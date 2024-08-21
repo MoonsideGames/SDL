@@ -1352,35 +1352,15 @@ static MetalTexture *METAL_INTERNAL_CreateTexture(
     return metalTexture;
 }
 
-static SDL_GpuSampleCount METAL_GetBestSampleCount(
+static SDL_bool METAL_SupportsSampleCount(
     SDL_GpuRenderer *driverData,
     SDL_GpuTextureFormat format,
-    SDL_GpuSampleCount desiredSampleCount)
+    SDL_GpuSampleCount sampleCount)
 {
     @autoreleasepool {
         MetalRenderer *renderer = (MetalRenderer *)driverData;
-        SDL_GpuSampleCount highestSupported = desiredSampleCount;
-
-        if ((format == SDL_GPU_TEXTUREFORMAT_R32_SFLOAT ||
-             format == SDL_GPU_TEXTUREFORMAT_R32G32_SFLOAT ||
-             format == SDL_GPU_TEXTUREFORMAT_R32G32B32A32_SFLOAT)) {
-            if (@available(macOS 11.0, *)) {
-                if (![renderer->device supports32BitMSAA]) {
-                    return SDL_GPU_SAMPLECOUNT_1;
-                }
-            } else {
-                return SDL_GPU_SAMPLECOUNT_1;
-            }
-        }
-
-        while (highestSupported > SDL_GPU_SAMPLECOUNT_1) {
-            if ([renderer->device supportsTextureSampleCount:(1 << highestSupported)]) {
-                break;
-            }
-            highestSupported -= 1;
-        }
-
-        return highestSupported;
+        NSUInteger mtlSampleCount = SDLToMetal_SampleCount[sampleCount];
+        return [renderer->device supportsTextureSampleCount:mtlSampleCount];
     }
 }
 
@@ -1392,16 +1372,10 @@ static SDL_GpuTexture *METAL_CreateTexture(
         MetalRenderer *renderer = (MetalRenderer *)driverData;
         MetalTextureContainer *container;
         MetalTexture *texture;
-        SDL_GpuTextureCreateInfo newTextureCreateInfo = *textureCreateInfo;
-
-        newTextureCreateInfo.sampleCount = METAL_GetBestSampleCount(
-            driverData,
-            textureCreateInfo->format,
-            textureCreateInfo->sampleCount);
 
         texture = METAL_INTERNAL_CreateTexture(
             renderer,
-            &newTextureCreateInfo);
+            textureCreateInfo);
 
         if (texture == NULL) {
             SDL_LogError(SDL_LOG_CATEGORY_GPU, "Failed to create texture!");
