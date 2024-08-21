@@ -4624,7 +4624,7 @@ static void D3D12_DrawPrimitivesIndirect(
             0);
     } else {
         /* Fake multi-draw...
-        /* FIXME: we could make this real multi-draw
+         * FIXME: we could make this real multi-draw
          * if we have a lookup to get command signature per stride value
          */
         for (Uint32 i = 0; i < drawCount; i += 1) {
@@ -4664,7 +4664,7 @@ static void D3D12_DrawIndexedPrimitivesIndirect(
             0);
     } else {
         /* Fake multi-draw...
-        /* FIXME: we could make this real multi-draw
+         * FIXME: we could make this real multi-draw
          * if we have a lookup to get command signature per stride value
          */
         for (Uint32 i = 0; i < drawCount; i += 1) {
