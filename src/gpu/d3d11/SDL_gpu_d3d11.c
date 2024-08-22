@@ -1382,7 +1382,7 @@ static ID3D11InputLayout *D3D11_INTERNAL_FetchInputLayout(
             inputState.vertexBindingCount);
         elementDescs[i].InputSlotClass = SDLToD3D11_VertexInputRate[inputState.vertexBindings[bindingIndex].inputRate];
         /* The spec requires this to be 0 for per-vertex data */
-        elementDescs[i].InstanceDataStepRate = (inputState.vertexBindings[bindingIndex].inputRate == SDL_GPU_VERTEXINPUTRATE_INSTANCE ? inputState.vertexBindings[bindingIndex].stepRate : 0);
+        elementDescs[i].InstanceDataStepRate = (inputState.vertexBindings[bindingIndex].inputRate == SDL_GPU_VERTEXINPUTRATE_INSTANCE) ? inputState.vertexBindings[bindingIndex].instanceStepRate : 0;
 
         elementDescs[i].SemanticIndex = inputState.vertexAttributes[i].location;
         elementDescs[i].SemanticName = "TEXCOORD";

@@ -6457,7 +6457,7 @@ static SDL_GpuGraphicsPipeline *VULKAN_CreateGraphicsPipeline(
         for (i = 0; i < pipelineCreateInfo->vertexInputState.vertexBindingCount; i += 1) {
             if (pipelineCreateInfo->vertexInputState.vertexBindings[i].inputRate == SDL_GPU_VERTEXINPUTRATE_INSTANCE) {
                 divisorDescriptions[divisorDescriptionCount].binding = pipelineCreateInfo->vertexInputState.vertexBindings[i].binding;
-                divisorDescriptions[divisorDescriptionCount].divisor = pipelineCreateInfo->vertexInputState.vertexBindings[i].stepRate;
+                divisorDescriptions[divisorDescriptionCount].divisor = pipelineCreateInfo->vertexInputState.vertexBindings[i].instanceStepRate;
 
                 divisorDescriptionCount += 1;
             }
