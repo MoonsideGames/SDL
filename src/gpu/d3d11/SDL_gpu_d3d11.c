@@ -495,9 +495,9 @@ typedef struct D3D11ComputePipeline
     ID3D11ComputeShader *computeShader;
 
     Uint32 readOnlyStorageTextureCount;
-    Uint32 readWriteStorageTextureCount;
+    Uint32 writeOnlyStorageTextureCount;
     Uint32 readOnlyStorageBufferCount;
-    Uint32 readWriteStorageBufferCount;
+    Uint32 writeOnlyStorageBufferCount;
     Uint32 uniformBufferCount;
 } D3D11ComputePipeline;
 
@@ -1493,9 +1493,9 @@ static SDL_GpuComputePipeline *D3D11_CreateComputePipeline(
     pipeline = SDL_malloc(sizeof(D3D11ComputePipeline));
     pipeline->computeShader = shader;
     pipeline->readOnlyStorageTextureCount = pipelineCreateInfo->readOnlyStorageTextureCount;
-    pipeline->readWriteStorageTextureCount = pipelineCreateInfo->readWriteStorageTextureCount;
+    pipeline->writeOnlyStorageTextureCount = pipelineCreateInfo->writeOnlyStorageTextureCount;
     pipeline->readOnlyStorageBufferCount = pipelineCreateInfo->readOnlyStorageBufferCount;
-    pipeline->readWriteStorageBufferCount = pipelineCreateInfo->readWriteStorageBufferCount;
+    pipeline->writeOnlyStorageBufferCount = pipelineCreateInfo->writeOnlyStorageBufferCount;
     pipeline->uniformBufferCount = pipelineCreateInfo->uniformBufferCount;
     /* thread counts are ignored in d3d11 */
 
@@ -4132,9 +4132,9 @@ static void D3D11_Blit(
 
 static void D3D11_BeginComputePass(
     SDL_GpuCommandBuffer *commandBuffer,
-    SDL_GpuStorageTextureReadWriteBinding *storageTextureBindings,
+    SDL_GpuStorageTextureWriteOnlyBinding *storageTextureBindings,
     Uint32 storageTextureBindingCount,
-    SDL_GpuStorageBufferReadWriteBinding *storageBufferBindings,
+    SDL_GpuStorageBufferWriteOnlyBinding *storageBufferBindings,
     Uint32 storageBufferBindingCount)
 {
     D3D11CommandBuffer *d3d11CommandBuffer = (D3D11CommandBuffer *)commandBuffer;
@@ -4277,9 +4277,9 @@ static void D3D11_INTERNAL_BindComputeResources(
         computePipeline->readOnlyStorageTextureCount +
         computePipeline->readOnlyStorageBufferCount;
 
-    Uint32 readWriteResourceCount =
-        computePipeline->readWriteStorageTextureCount +
-        computePipeline->readWriteStorageBufferCount;
+    Uint32 writeOnlyResourceCount =
+        computePipeline->writeOnlyStorageTextureCount +
+        computePipeline->writeOnlyStorageBufferCount;
 
     ID3D11Buffer *nullBuf = NULL;
     Uint32 offsetInConstants, blockSizeInConstants, i;
@@ -4288,7 +4288,7 @@ static void D3D11_INTERNAL_BindComputeResources(
         ID3D11DeviceContext_CSSetUnorderedAccessViews(
             commandBuffer->context,
             0,
-            readWriteResourceCount,
+            writeOnlyResourceCount,
             commandBuffer->computeUnorderedAccessViews,
             NULL);
 
@@ -5545,7 +5545,11 @@ static SDL_bool D3D11_SupportsTextureFormat(
     if ((usage & SDL_GPU_TEXTUREUSAGE_SAMPLER_BIT) && !(formatSupport & D3D11_FORMAT_SUPPORT_SHADER_SAMPLE)) {
         return SDL_FALSE;
     }
-    if ((usage & (SDL_GPU_TEXTUREUSAGE_GRAPHICS_STORAGE_READ_BIT | SDL_GPU_TEXTUREUSAGE_COMPUTE_STORAGE_READ_BIT | SDL_GPU_TEXTUREUSAGE_COMPUTE_STORAGE_WRITE_BIT)) && !(formatSupport & D3D11_FORMAT_SUPPORT_SHADER_LOAD)) {
+    if ((usage & (SDL_GPU_TEXTUREUSAGE_GRAPHICS_STORAGE_READ_BIT | SDL_GPU_TEXTUREUSAGE_COMPUTE_STORAGE_READ_BIT)) && !(formatSupport & D3D11_FORMAT_SUPPORT_SHADER_LOAD)) {
+        return SDL_FALSE;
+    }
+    if ((usage & (SDL_GPU_TEXTUREUSAGE_COMPUTE_STORAGE_WRITE_BIT) && !(formatSupport & D3D11_FORMAT_SUPPORT_TYPED_UNORDERED_ACCESS_VIEW))) {
+        /* TYPED_UNORDERED_ACCESS_VIEW implies support for typed UAV stores */
         return SDL_FALSE;
     }
     if ((usage & SDL_GPU_TEXTUREUSAGE_COLOR_TARGET_BIT) && !(formatSupport & D3D11_FORMAT_SUPPORT_RENDER_TARGET)) {

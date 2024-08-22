@@ -837,15 +837,15 @@ typedef struct VulkanComputePipelineResourceLayout
     /*
      * Descriptor set layout is as follows:
      * 0: read-only textures, then read-only buffers
-     * 1: read-write textures, then read-write buffers
+     * 1: write-only textures, then write-only buffers
      * 2: uniform buffers
      */
     DescriptorSetPool descriptorSetPools[3];
 
     Uint32 readOnlyStorageTextureCount;
     Uint32 readOnlyStorageBufferCount;
-    Uint32 readWriteStorageTextureCount;
-    Uint32 readWriteStorageBufferCount;
+    Uint32 writeOnlyStorageTextureCount;
+    Uint32 writeOnlyStorageBufferCount;
     Uint32 uniformBufferCount;
 } VulkanComputePipelineResourceLayout;
 
@@ -967,7 +967,7 @@ typedef struct VulkanCommandBuffer
     SDL_bool needNewFragmentUniformOffsets;
 
     SDL_bool needNewComputeReadOnlyDescriptorSet;
-    SDL_bool needNewComputeReadWriteDescriptorSet;
+    SDL_bool needNewComputeWriteOnlyDescriptorSet;
     SDL_bool needNewComputeUniformDescriptorSet;
     SDL_bool needNewComputeUniformOffsets;
 
@@ -977,7 +977,7 @@ typedef struct VulkanCommandBuffer
     VkDescriptorSet fragmentUniformDescriptorSet;
 
     VkDescriptorSet computeReadOnlyDescriptorSet;
-    VkDescriptorSet computeReadWriteDescriptorSet;
+    VkDescriptorSet computeWriteOnlyDescriptorSet;
     VkDescriptorSet computeUniformDescriptorSet;
 
     DescriptorSetData *boundDescriptorSetDatas;
@@ -994,9 +994,9 @@ typedef struct VulkanCommandBuffer
     VulkanTexture *fragmentStorageTextures[MAX_STORAGE_TEXTURES_PER_STAGE];
     VulkanBuffer *fragmentStorageBuffers[MAX_STORAGE_BUFFERS_PER_STAGE];
 
-    VulkanTextureSubresource *readWriteComputeStorageTextureSubresources[MAX_COMPUTE_WRITE_TEXTURES];
-    Uint32 readWriteComputeStorageTextureSubresourceCount;
-    VulkanBuffer *readWriteComputeStorageBuffers[MAX_COMPUTE_WRITE_BUFFERS];
+    VulkanTextureSubresource *writeOnlyComputeStorageTextureSubresources[MAX_COMPUTE_WRITE_TEXTURES];
+    Uint32 writeOnlyComputeStorageTextureSubresourceCount;
+    VulkanBuffer *writeOnlyComputeStorageBuffers[MAX_COMPUTE_WRITE_BUFFERS];
 
     VulkanTexture *readOnlyComputeStorageTextures[MAX_STORAGE_TEXTURES_PER_STAGE];
     VulkanBuffer *readOnlyComputeStorageBuffers[MAX_STORAGE_BUFFERS_PER_STAGE];
@@ -3815,8 +3815,8 @@ static SDL_bool VULKAN_INTERNAL_InitializeComputePipelineResourceLayout(
 
     pipelineResourceLayout->readOnlyStorageTextureCount = pipelineCreateInfo->readOnlyStorageTextureCount;
     pipelineResourceLayout->readOnlyStorageBufferCount = pipelineCreateInfo->readOnlyStorageBufferCount;
-    pipelineResourceLayout->readWriteStorageTextureCount = pipelineCreateInfo->readWriteStorageTextureCount;
-    pipelineResourceLayout->readWriteStorageBufferCount = pipelineCreateInfo->readWriteStorageBufferCount;
+    pipelineResourceLayout->writeOnlyStorageTextureCount = pipelineCreateInfo->writeOnlyStorageTextureCount;
+    pipelineResourceLayout->writeOnlyStorageBufferCount = pipelineCreateInfo->writeOnlyStorageBufferCount;
     pipelineResourceLayout->uniformBufferCount = pipelineCreateInfo->uniformBufferCount;
 
     /* Read-only resources */
@@ -3876,11 +3876,11 @@ static SDL_bool VULKAN_INTERNAL_InitializeComputePipelineResourceLayout(
         return SDL_FALSE;
     }
 
-    /* Read-write resources */
+    /* Write-only resources */
 
     descriptorSetLayoutCreateInfo.bindingCount =
-        pipelineCreateInfo->readWriteStorageTextureCount +
-        pipelineCreateInfo->readWriteStorageBufferCount;
+        pipelineCreateInfo->writeOnlyStorageTextureCount +
+        pipelineCreateInfo->writeOnlyStorageBufferCount;
 
     descriptorSetLayoutCreateInfo.pBindings = NULL;
 
@@ -3893,7 +3893,7 @@ static SDL_bool VULKAN_INTERNAL_InitializeComputePipelineResourceLayout(
         descriptorSetPool->descriptorInfos = SDL_malloc(
             descriptorSetPool->descriptorInfoCount * sizeof(VulkanDescriptorInfo));
 
-        for (i = 0; i < pipelineCreateInfo->readWriteStorageTextureCount; i += 1) {
+        for (i = 0; i < pipelineCreateInfo->writeOnlyStorageTextureCount; i += 1) {
             descriptorSetLayoutBindings[i].binding = i;
             descriptorSetLayoutBindings[i].descriptorCount = 1;
             descriptorSetLayoutBindings[i].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
@@ -3904,7 +3904,7 @@ static SDL_bool VULKAN_INTERNAL_InitializeComputePipelineResourceLayout(
             descriptorSetPool->descriptorInfos[i].stageFlag = VK_SHADER_STAGE_COMPUTE_BIT;
         }
 
-        for (i = pipelineCreateInfo->readWriteStorageTextureCount; i < descriptorSetLayoutCreateInfo.bindingCount; i += 1) {
+        for (i = pipelineCreateInfo->writeOnlyStorageTextureCount; i < descriptorSetLayoutCreateInfo.bindingCount; i += 1) {
             descriptorSetLayoutBindings[i].binding = i;
             descriptorSetLayoutBindings[i].descriptorCount = 1;
             descriptorSetLayoutBindings[i].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
@@ -8160,9 +8160,9 @@ static void VULKAN_EndRenderPass(
 
 static void VULKAN_BeginComputePass(
     SDL_GpuCommandBuffer *commandBuffer,
-    SDL_GpuStorageTextureReadWriteBinding *storageTextureBindings,
+    SDL_GpuStorageTextureWriteOnlyBinding *storageTextureBindings,
     Uint32 storageTextureBindingCount,
-    SDL_GpuStorageBufferReadWriteBinding *storageBufferBindings,
+    SDL_GpuStorageBufferWriteOnlyBinding *storageBufferBindings,
     Uint32 storageBufferBindingCount)
 {
     VulkanCommandBuffer *vulkanCommandBuffer = (VulkanCommandBuffer *)commandBuffer;
@@ -8171,7 +8171,7 @@ static void VULKAN_BeginComputePass(
     VulkanBuffer *buffer;
     Uint32 i;
 
-    vulkanCommandBuffer->readWriteComputeStorageTextureSubresourceCount = storageTextureBindingCount;
+    vulkanCommandBuffer->writeOnlyComputeStorageTextureSubresourceCount = storageTextureBindingCount;
 
     for (i = 0; i < storageTextureBindingCount; i += 1) {
         VulkanTextureContainer *textureContainer = (VulkanTextureContainer *)storageTextureBindings[i].texture;
@@ -8188,7 +8188,7 @@ static void VULKAN_BeginComputePass(
             storageTextureBindings[i].cycle,
             VULKAN_TEXTURE_USAGE_MODE_COMPUTE_STORAGE_READ_WRITE);
 
-        vulkanCommandBuffer->readWriteComputeStorageTextureSubresources[i] = subresource;
+        vulkanCommandBuffer->writeOnlyComputeStorageTextureSubresources[i] = subresource;
 
         VULKAN_INTERNAL_TrackTexture(
             vulkanCommandBuffer,
@@ -8204,7 +8204,7 @@ static void VULKAN_BeginComputePass(
             storageBufferBindings[i].cycle,
             VULKAN_BUFFER_USAGE_MODE_COMPUTE_STORAGE_READ);
 
-        vulkanCommandBuffer->readWriteComputeStorageBuffers[i] = buffer;
+        vulkanCommandBuffer->writeOnlyComputeStorageBuffers[i] = buffer;
 
         VULKAN_INTERNAL_TrackBuffer(
             vulkanCommandBuffer,
@@ -8238,7 +8238,7 @@ static void VULKAN_BindComputePipeline(
     }
 
     /* Mark binding as needed */
-    vulkanCommandBuffer->needNewComputeReadWriteDescriptorSet = SDL_TRUE;
+    vulkanCommandBuffer->needNewComputeWriteOnlyDescriptorSet = SDL_TRUE;
     vulkanCommandBuffer->needNewComputeReadOnlyDescriptorSet = SDL_TRUE;
     vulkanCommandBuffer->needNewComputeUniformDescriptorSet = SDL_TRUE;
     vulkanCommandBuffer->needNewComputeUniformOffsets = SDL_TRUE;
@@ -8343,8 +8343,8 @@ static void VULKAN_INTERNAL_BindComputeDescriptorSets(
     VkWriteDescriptorSet *writeDescriptorSets;
     VkWriteDescriptorSet *currentWriteDescriptorSet;
     DescriptorSetPool *descriptorSetPool;
-    VkDescriptorBufferInfo bufferInfos[MAX_STORAGE_BUFFERS_PER_STAGE]; /* 8 is max for both read and read-write */
-    VkDescriptorImageInfo imageInfos[MAX_STORAGE_TEXTURES_PER_STAGE];  /* 8 is max for both read and read-write */
+    VkDescriptorBufferInfo bufferInfos[MAX_STORAGE_BUFFERS_PER_STAGE]; /* 8 is max for both read and write */
+    VkDescriptorImageInfo imageInfos[MAX_STORAGE_TEXTURES_PER_STAGE];  /* 8 is max for both read and write */
     Uint32 dynamicOffsets[MAX_UNIFORM_BUFFERS_PER_STAGE];
     Uint32 bufferInfoCount = 0;
     Uint32 imageInfoCount = 0;
@@ -8432,20 +8432,20 @@ static void VULKAN_INTERNAL_BindComputeDescriptorSets(
         commandBuffer->needNewComputeReadOnlyDescriptorSet = SDL_FALSE;
     }
 
-    if (commandBuffer->needNewComputeReadWriteDescriptorSet) {
+    if (commandBuffer->needNewComputeWriteOnlyDescriptorSet) {
         descriptorSetPool = &resourceLayout->descriptorSetPools[1];
 
-        commandBuffer->computeReadWriteDescriptorSet = VULKAN_INTERNAL_FetchDescriptorSet(
+        commandBuffer->computeWriteOnlyDescriptorSet = VULKAN_INTERNAL_FetchDescriptorSet(
             renderer,
             commandBuffer,
             descriptorSetPool);
 
         writeDescriptorSets = SDL_stack_alloc(
             VkWriteDescriptorSet,
-            resourceLayout->readWriteStorageTextureCount +
-                resourceLayout->readWriteStorageBufferCount);
+            resourceLayout->writeOnlyStorageTextureCount +
+                resourceLayout->writeOnlyStorageBufferCount);
 
-        for (i = 0; i < resourceLayout->readWriteStorageTextureCount; i += 1) {
+        for (i = 0; i < resourceLayout->writeOnlyStorageTextureCount; i += 1) {
             currentWriteDescriptorSet = &writeDescriptorSets[i];
 
             currentWriteDescriptorSet->sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
@@ -8454,12 +8454,12 @@ static void VULKAN_INTERNAL_BindComputeDescriptorSets(
             currentWriteDescriptorSet->descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
             currentWriteDescriptorSet->dstArrayElement = 0;
             currentWriteDescriptorSet->dstBinding = i;
-            currentWriteDescriptorSet->dstSet = commandBuffer->computeReadWriteDescriptorSet;
+            currentWriteDescriptorSet->dstSet = commandBuffer->computeWriteOnlyDescriptorSet;
             currentWriteDescriptorSet->pTexelBufferView = NULL;
             currentWriteDescriptorSet->pBufferInfo = NULL;
 
             imageInfos[imageInfoCount].sampler = VK_NULL_HANDLE;
-            imageInfos[imageInfoCount].imageView = commandBuffer->readWriteComputeStorageTextureSubresources[i]->computeWriteView;
+            imageInfos[imageInfoCount].imageView = commandBuffer->writeOnlyComputeStorageTextureSubresources[i]->computeWriteView;
             imageInfos[imageInfoCount].imageLayout = VK_IMAGE_LAYOUT_GENERAL;
 
             currentWriteDescriptorSet->pImageInfo = &imageInfos[imageInfoCount];
@@ -8467,20 +8467,20 @@ static void VULKAN_INTERNAL_BindComputeDescriptorSets(
             imageInfoCount += 1;
         }
 
-        for (i = 0; i < resourceLayout->readWriteStorageBufferCount; i += 1) {
-            currentWriteDescriptorSet = &writeDescriptorSets[resourceLayout->readWriteStorageTextureCount + i];
+        for (i = 0; i < resourceLayout->writeOnlyStorageBufferCount; i += 1) {
+            currentWriteDescriptorSet = &writeDescriptorSets[resourceLayout->writeOnlyStorageTextureCount + i];
 
             currentWriteDescriptorSet->sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
             currentWriteDescriptorSet->pNext = NULL;
             currentWriteDescriptorSet->descriptorCount = 1;
             currentWriteDescriptorSet->descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
             currentWriteDescriptorSet->dstArrayElement = 0;
-            currentWriteDescriptorSet->dstBinding = resourceLayout->readWriteStorageTextureCount + i;
-            currentWriteDescriptorSet->dstSet = commandBuffer->computeReadWriteDescriptorSet;
+            currentWriteDescriptorSet->dstBinding = resourceLayout->writeOnlyStorageTextureCount + i;
+            currentWriteDescriptorSet->dstSet = commandBuffer->computeWriteOnlyDescriptorSet;
             currentWriteDescriptorSet->pTexelBufferView = NULL;
             currentWriteDescriptorSet->pImageInfo = NULL;
 
-            bufferInfos[bufferInfoCount].buffer = commandBuffer->readWriteComputeStorageBuffers[i]->buffer;
+            bufferInfos[bufferInfoCount].buffer = commandBuffer->writeOnlyComputeStorageBuffers[i]->buffer;
             bufferInfos[bufferInfoCount].offset = 0;
             bufferInfos[bufferInfoCount].range = VK_WHOLE_SIZE;
 
@@ -8491,7 +8491,7 @@ static void VULKAN_INTERNAL_BindComputeDescriptorSets(
 
         renderer->vkUpdateDescriptorSets(
             renderer->logicalDevice,
-            resourceLayout->readWriteStorageTextureCount + resourceLayout->readWriteStorageBufferCount,
+            resourceLayout->writeOnlyStorageTextureCount + resourceLayout->writeOnlyStorageBufferCount,
             writeDescriptorSets,
             0,
             NULL);
@@ -8502,7 +8502,7 @@ static void VULKAN_INTERNAL_BindComputeDescriptorSets(
             resourceLayout->pipelineLayout,
             1,
             1,
-            &commandBuffer->computeReadWriteDescriptorSet,
+            &commandBuffer->computeWriteOnlyDescriptorSet,
             0,
             NULL);
 
@@ -8510,7 +8510,7 @@ static void VULKAN_INTERNAL_BindComputeDescriptorSets(
         bufferInfoCount = 0;
         imageInfoCount = 0;
 
-        commandBuffer->needNewComputeReadWriteDescriptorSet = SDL_FALSE;
+        commandBuffer->needNewComputeWriteOnlyDescriptorSet = SDL_FALSE;
     }
 
     if (commandBuffer->needNewComputeUniformDescriptorSet) {
@@ -8624,25 +8624,25 @@ static void VULKAN_EndComputePass(
     VulkanCommandBuffer *vulkanCommandBuffer = (VulkanCommandBuffer *)commandBuffer;
     Uint32 i;
 
-    for (i = 0; i < vulkanCommandBuffer->readWriteComputeStorageTextureSubresourceCount; i += 1) {
+    for (i = 0; i < vulkanCommandBuffer->writeOnlyComputeStorageTextureSubresourceCount; i += 1) {
         VULKAN_INTERNAL_TextureSubresourceTransitionToDefaultUsage(
             vulkanCommandBuffer->renderer,
             vulkanCommandBuffer,
             VULKAN_TEXTURE_USAGE_MODE_COMPUTE_STORAGE_READ_WRITE,
-            vulkanCommandBuffer->readWriteComputeStorageTextureSubresources[i]);
-        vulkanCommandBuffer->readWriteComputeStorageTextureSubresources[i] = NULL;
+            vulkanCommandBuffer->writeOnlyComputeStorageTextureSubresources[i]);
+        vulkanCommandBuffer->writeOnlyComputeStorageTextureSubresources[i] = NULL;
     }
-    vulkanCommandBuffer->readWriteComputeStorageTextureSubresourceCount = 0;
+    vulkanCommandBuffer->writeOnlyComputeStorageTextureSubresourceCount = 0;
 
     for (i = 0; i < MAX_COMPUTE_WRITE_BUFFERS; i += 1) {
-        if (vulkanCommandBuffer->readWriteComputeStorageBuffers[i] != NULL) {
+        if (vulkanCommandBuffer->writeOnlyComputeStorageBuffers[i] != NULL) {
             VULKAN_INTERNAL_BufferTransitionToDefaultUsage(
                 vulkanCommandBuffer->renderer,
                 vulkanCommandBuffer,
                 VULKAN_BUFFER_USAGE_MODE_COMPUTE_STORAGE_READ_WRITE,
-                vulkanCommandBuffer->readWriteComputeStorageBuffers[i]);
+                vulkanCommandBuffer->writeOnlyComputeStorageBuffers[i]);
 
-            vulkanCommandBuffer->readWriteComputeStorageBuffers[i] = NULL;
+            vulkanCommandBuffer->writeOnlyComputeStorageBuffers[i] = NULL;
         }
     }
 
@@ -8673,7 +8673,7 @@ static void VULKAN_EndComputePass(
     vulkanCommandBuffer->currentComputePipeline = NULL;
 
     vulkanCommandBuffer->computeReadOnlyDescriptorSet = VK_NULL_HANDLE;
-    vulkanCommandBuffer->computeReadWriteDescriptorSet = VK_NULL_HANDLE;
+    vulkanCommandBuffer->computeWriteOnlyDescriptorSet = VK_NULL_HANDLE;
     vulkanCommandBuffer->computeUniformDescriptorSet = VK_NULL_HANDLE;
 }
 
@@ -9321,7 +9321,7 @@ static void VULKAN_INTERNAL_AllocateCommandBuffers(
         commandBuffer->needNewFragmentUniformDescriptorSet = SDL_TRUE;
         commandBuffer->needNewFragmentUniformOffsets = SDL_TRUE;
 
-        commandBuffer->needNewComputeReadWriteDescriptorSet = SDL_TRUE;
+        commandBuffer->needNewComputeWriteOnlyDescriptorSet = SDL_TRUE;
         commandBuffer->needNewComputeReadOnlyDescriptorSet = SDL_TRUE;
         commandBuffer->needNewComputeUniformDescriptorSet = SDL_TRUE;
         commandBuffer->needNewComputeUniformOffsets = SDL_TRUE;
@@ -9332,7 +9332,7 @@ static void VULKAN_INTERNAL_AllocateCommandBuffers(
         commandBuffer->fragmentUniformDescriptorSet = VK_NULL_HANDLE;
 
         commandBuffer->computeReadOnlyDescriptorSet = VK_NULL_HANDLE;
-        commandBuffer->computeReadWriteDescriptorSet = VK_NULL_HANDLE;
+        commandBuffer->computeWriteOnlyDescriptorSet = VK_NULL_HANDLE;
         commandBuffer->computeUniformDescriptorSet = VK_NULL_HANDLE;
 
         /* Resource tracking */
@@ -9522,7 +9522,7 @@ static SDL_GpuCommandBuffer *VULKAN_AcquireCommandBuffer(
     commandBuffer->fragmentUniformDescriptorSet = VK_NULL_HANDLE;
 
     commandBuffer->computeReadOnlyDescriptorSet = VK_NULL_HANDLE;
-    commandBuffer->computeReadWriteDescriptorSet = VK_NULL_HANDLE;
+    commandBuffer->computeWriteOnlyDescriptorSet = VK_NULL_HANDLE;
     commandBuffer->computeUniformDescriptorSet = VK_NULL_HANDLE;
 
     SDL_zeroa(commandBuffer->vertexSamplerTextures);
@@ -9535,9 +9535,9 @@ static SDL_GpuCommandBuffer *VULKAN_AcquireCommandBuffer(
     SDL_zeroa(commandBuffer->fragmentStorageTextures);
     SDL_zeroa(commandBuffer->fragmentStorageBuffers);
 
-    SDL_zeroa(commandBuffer->readWriteComputeStorageTextureSubresources);
-    commandBuffer->readWriteComputeStorageTextureSubresourceCount = 0;
-    SDL_zeroa(commandBuffer->readWriteComputeStorageBuffers);
+    SDL_zeroa(commandBuffer->writeOnlyComputeStorageTextureSubresources);
+    commandBuffer->writeOnlyComputeStorageTextureSubresourceCount = 0;
+    SDL_zeroa(commandBuffer->writeOnlyComputeStorageBuffers);
     SDL_zeroa(commandBuffer->readOnlyComputeStorageTextures);
     SDL_zeroa(commandBuffer->readOnlyComputeStorageBuffers);
 

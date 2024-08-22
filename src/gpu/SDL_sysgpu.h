@@ -475,9 +475,9 @@ struct SDL_GpuDevice
 
     void (*BeginComputePass)(
         SDL_GpuCommandBuffer *commandBuffer,
-        SDL_GpuStorageTextureReadWriteBinding *storageTextureBindings,
+        SDL_GpuStorageTextureWriteOnlyBinding *storageTextureBindings,
         Uint32 storageTextureBindingCount,
-        SDL_GpuStorageBufferReadWriteBinding *storageBufferBindings,
+        SDL_GpuStorageBufferWriteOnlyBinding *storageBufferBindings,
         Uint32 storageBufferBindingCount);
 
     void (*BindComputePipeline)(

@@ -611,12 +611,12 @@ SDL_GpuComputePipeline *SDL_GpuCreateComputePipeline(
             return NULL;
         }
 
-        if (computePipelineCreateInfo->readWriteStorageTextureCount > MAX_COMPUTE_WRITE_TEXTURES) {
-            SDL_assert_release(!"Compute pipeline read-write texture count cannot be higher than 8!");
+        if (computePipelineCreateInfo->writeOnlyStorageTextureCount > MAX_COMPUTE_WRITE_TEXTURES) {
+            SDL_assert_release(!"Compute pipeline write-only texture count cannot be higher than 8!");
             return NULL;
         }
-        if (computePipelineCreateInfo->readWriteStorageBufferCount > MAX_COMPUTE_WRITE_BUFFERS) {
-            SDL_assert_release(!"Compute pipeline read-write buffer count cannot be higher than 8!");
+        if (computePipelineCreateInfo->writeOnlyStorageBufferCount > MAX_COMPUTE_WRITE_BUFFERS) {
+            SDL_assert_release(!"Compute pipeline write-only buffer count cannot be higher than 8!");
             return NULL;
         }
         if (computePipelineCreateInfo->threadCountX == 0 ||
@@ -1604,9 +1604,9 @@ void SDL_GpuEndRenderPass(
 
 SDL_GpuComputePass *SDL_GpuBeginComputePass(
     SDL_GpuCommandBuffer *commandBuffer,
-    SDL_GpuStorageTextureReadWriteBinding *storageTextureBindings,
+    SDL_GpuStorageTextureWriteOnlyBinding *storageTextureBindings,
     Uint32 storageTextureBindingCount,
-    SDL_GpuStorageBufferReadWriteBinding *storageBufferBindings,
+    SDL_GpuStorageBufferWriteOnlyBinding *storageBufferBindings,
     Uint32 storageBufferBindingCount)
 {
     CommandBufferCommonHeader *commandBufferHeader;

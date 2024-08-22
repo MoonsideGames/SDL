@@ -705,8 +705,8 @@ typedef struct SDL_GpuComputePipelineCreateInfo
     SDL_GpuShaderFormat format;
     Uint32 readOnlyStorageTextureCount;
     Uint32 readOnlyStorageBufferCount;
-    Uint32 readWriteStorageTextureCount;
-    Uint32 readWriteStorageBufferCount;
+    Uint32 writeOnlyStorageTextureCount;
+    Uint32 writeOnlyStorageBufferCount;
     Uint32 uniformBufferCount;
     Uint32 threadCountX;
     Uint32 threadCountY;
@@ -830,15 +830,15 @@ typedef struct SDL_GpuTextureSamplerBinding
     SDL_GpuSampler *sampler;
 } SDL_GpuTextureSamplerBinding;
 
-typedef struct SDL_GpuStorageBufferReadWriteBinding
+typedef struct SDL_GpuStorageBufferWriteOnlyBinding
 {
     SDL_GpuBuffer *buffer;
 
     /* if SDL_TRUE, cycles the buffer if it is bound. */
     SDL_bool cycle;
-} SDL_GpuStorageBufferReadWriteBinding;
+} SDL_GpuStorageBufferWriteOnlyBinding;
 
-typedef struct SDL_GpuStorageTextureReadWriteBinding
+typedef struct SDL_GpuStorageTextureWriteOnlyBinding
 {
     SDL_GpuTexture *texture;
     Uint32 mipLevel;
@@ -846,7 +846,7 @@ typedef struct SDL_GpuStorageTextureReadWriteBinding
 
     /* if SDL_TRUE, cycles the texture if the texture is bound. */
     SDL_bool cycle;
-} SDL_GpuStorageTextureReadWriteBinding;
+} SDL_GpuStorageTextureWriteOnlyBinding;
 
 /* Functions */
 
@@ -944,27 +944,27 @@ extern SDL_DECLSPEC SDL_GpuDriver SDLCALL SDL_GpuGetDriver(SDL_GpuDevice *device
  * Shader resource bindings must be authored to follow a particular order.
  * For SPIR-V shaders, use the following resource sets:
  *  0: Read-only storage textures, followed by read-only storage buffers
- *  1: Read-write storage textures, followed by read-write storage buffers
+ *  1: Write-only storage textures, followed by write-only storage buffers
  *  2: Uniform buffers
  *
  * For DXBC Shader Model 5_0 shaders, use the following register order:
  *  For t registers:
  *   Read-only storage textures, followed by read-only storage buffers
  *  For u registers:
- *   Read-write storage textures, followed by read-write storage buffers
+ *   Write-only storage textures, followed by write-only storage buffers
  *  For b registers:
  *   Uniform buffers
  *
  * For DXIL shaders, use the following register order:
  *  (t[n], space0): Read-only storage textures, followed by read-only storage buffers
- *  (u[n], space1): Read-write storage textures, followed by read-write storage buffers
+ *  (u[n], space1): Write-only storage textures, followed by write-only storage buffers
  *  (b[n], space2): Uniform buffers
  *
  * For MSL/metallib, use the following order:
  *  For [[buffer]]:
- *   Uniform buffers, followed by read-only storage buffers, followed by read-write storage buffers
+ *   Uniform buffers, followed by write-only storage buffers, followed by write-only storage buffers
  *  For [[texture]]:
- *   Read-only storage textures, followed by read-write storage textures
+ *   Read-only storage textures, followed by write-only storage textures
  *
  * \param device a GPU Context
  * \param computePipelineCreateInfo a struct describing the state of the requested compute pipeline
@@ -1754,16 +1754,22 @@ extern SDL_DECLSPEC void SDLCALL SDL_GpuEndRenderPass(
  * A compute pass is defined by a set of texture subresources and buffers that
  * will be written to by compute pipelines.
  * These textures and buffers must have been created with the COMPUTE_STORAGE_WRITE bit.
- * If these resources will also be read during the pass, they must be created with the COMPUTE_STORAGE_READ bit.
  * All operations related to compute pipelines must take place inside of a compute pass.
  * You must not begin another compute pass, or a render pass or copy pass
  * before ending the compute pass.
+ *
+ * A VERY IMPORTANT NOTE
+ * Textures and buffers bound as write-only MUST NOT be read from during
+ * the compute pass. Doing so will result in undefined behavior.
+ * If your compute work requires reading the output from a previous dispatch,
+ * you MUST end the current compute pass and begin a new one before you can
+ * safely access the data.
  *
  * \param commandBuffer a command buffer
  * \param storageTextureBindings an array of writeable storage texture binding structs
  * \param storageTextureBindingCount the number of storage textures to bind from the array
  * \param storageBufferBindings an array of writeable storage buffer binding structs
- * \param storageBufferBindingCount an array of read-write storage buffer binding structs
+ * \param storageBufferBindingCount the number of storage buffers to bind from the array
  *
  * \returns a compute pass handle
  *
@@ -1773,9 +1779,9 @@ extern SDL_DECLSPEC void SDLCALL SDL_GpuEndRenderPass(
  */
 extern SDL_DECLSPEC SDL_GpuComputePass *SDLCALL SDL_GpuBeginComputePass(
     SDL_GpuCommandBuffer *commandBuffer,
-    SDL_GpuStorageTextureReadWriteBinding *storageTextureBindings,
+    SDL_GpuStorageTextureWriteOnlyBinding *storageTextureBindings,
     Uint32 storageTextureBindingCount,
-    SDL_GpuStorageBufferReadWriteBinding *storageBufferBindings,
+    SDL_GpuStorageBufferWriteOnlyBinding *storageBufferBindings,
     Uint32 storageBufferBindingCount);
 
 /**
