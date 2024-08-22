@@ -98,19 +98,46 @@ typedef enum SDL_GpuIndexElementSize
  *  - B8G8R8A8_UNORM_SRGB
  *  - D16_UNORM
  *
- * No formats are universally supported for COLOR_TARGET usage.
- * When in doubt, you can always use the swapchain format via SDL_GpuGetSwapchainTextureFormat.
+ * For COLOR_TARGET usage, the following formats are universally supported:
+ *  - R8G8B8A8_UNORM
+ *  - B8G8R8A8_UNORM
+ *  - R8_UNORM
+ *  - R16_FLOAT
+ *  - R16G16_FLOAT
+ *  - R16G16B16A16_FLOAT
+ *  - R32_FLOAT
+ *  - R32G32_FLOAT
+ *  - R32G32B32A32_FLOAT
+ *  - R8_UINT
+ *  - R8G8_UINT
+ *  - R8G8B8A8_UINT
+ *  - R16_UINT
+ *  - R16G16_UINT
+ *  - R16G16B16A16_UINT
+ *  - R8G8B8A8_UNORM_SRGB
+ *  - B8G8R8A8_UNORM_SRGB
+ *
+ * For STORAGE usages, the following formats are universally supported:
+ *  - R8G8B8A8_UNORM
+ *  - R8G8B8A8_SNORM
+ *  - R16G16B16A16_FLOAT
+ *  - R32_FLOAT
+ *  - R32G32_FLOAT
+ *  - R32G32B32A32_FLOAT
+ *  - R8_UINT
+ *  - R8G8_UINT
+ *  - R8G8B8A8_UINT
+ *  - R16_UINT
+ *  - R16G16_UINT
+ *  - R16G16B16A16_UINT
  *
  * For DEPTH_STENCIL_TARGET usage, the following formats are universally supported:
  *  - D16_UNORM
- *  - Either D24_UNORM or D32_SFLOAT
- *  - Either D24_UNORM_S8_UINT or D32_SFLOAT_S8_UINT
+ *  - Either (but not necessarily both!) D24_UNORM or D32_SFLOAT
+ *  - Either (but not necessarily both!) D24_UNORM_S8_UINT or D32_SFLOAT_S8_UINT
  *
  * Unless D16_UNORM is sufficient for your purposes, always check which
  * of D24/D32 is supported before creating a depth-stencil texture!
- *
- * FIXME: Which formats are supported for storage usage?
- *
  */
 typedef enum SDL_GpuTextureFormat
 {
