@@ -1062,6 +1062,7 @@ static SDL_GpuGraphicsPipeline *METAL_CreateGraphicsPipeline(
             for (Uint32 i = 0; i < pipelineCreateInfo->vertexInputState.vertexBindingCount; i += 1) {
                 binding = METAL_INTERNAL_GetVertexBufferIndex(pipelineCreateInfo->vertexInputState.vertexBindings[i].binding);
                 vertexDescriptor.layouts[binding].stepFunction = SDLToMetal_StepFunction[pipelineCreateInfo->vertexInputState.vertexBindings[i].inputRate];
+                vertexDescriptor.layouts[binding].stepRate = (pipelineCreateInfo->vertexInputState.vertexBindings[i].inputRate == SDL_GPU_VERTEXINPUTRATE_INSTANCE) ? pipelineCreateInfo->vertexInputState.vertexBindings[i].instanceStepRate : 1;
                 vertexDescriptor.layouts[binding].stride = pipelineCreateInfo->vertexInputState.vertexBindings[i].stride;
             }
 

@@ -574,7 +574,7 @@ init_render_state(int msaa)
 
     vertex_binding.binding = 0;
     vertex_binding.inputRate = SDL_GPU_VERTEXINPUTRATE_VERTEX;
-    vertex_binding.stepRate = 0;
+    vertex_binding.instanceStepRate = 0;
     vertex_binding.stride = sizeof(VertexData);
 
     vertex_attributes[0].binding = 0;
