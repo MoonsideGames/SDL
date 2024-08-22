@@ -1138,7 +1138,7 @@ SDL3_0.0.0 {
     SDL_GpuReleaseFence;
     SDL_GpuTextureFormatTexelBlockSize;
     SDL_GpuSupportsTextureFormat;
-    SDL_GpuGetBestSampleCount;
+    SDL_GpuSupportsSampleCount;
     # extra symbols go here (don't modify this line)
   local: *;
 };

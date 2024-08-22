@@ -2150,29 +2150,21 @@ static D3D11Texture *D3D11_INTERNAL_CreateTexture(
     return d3d11Texture;
 }
 
-static SDL_GpuSampleCount D3D11_GetBestSampleCount(
+static SDL_bool D3D11_SupportsSampleCount(
     SDL_GpuRenderer *driverData,
     SDL_GpuTextureFormat format,
-    SDL_GpuSampleCount desiredSampleCount)
+    SDL_GpuSampleCount sampleCount)
 {
     D3D11Renderer *renderer = (D3D11Renderer *)driverData;
-    SDL_GpuSampleCount maxSupported = SDL_GPU_SAMPLECOUNT_8;
     Uint32 levels;
-    HRESULT res;
 
-    while (maxSupported > SDL_GPU_SAMPLECOUNT_1) {
-        res = ID3D11Device_CheckMultisampleQualityLevels(
-            renderer->device,
-            SDLToD3D11_TextureFormat[format],
-            SDLToD3D11_SampleCount[desiredSampleCount],
-            &levels);
-        if (SUCCEEDED(res) && levels > 0) {
-            break;
-        }
-        maxSupported -= 1;
-    }
+    HRESULT res = ID3D11Device_CheckMultisampleQualityLevels(
+        renderer->device,
+        SDLToD3D11_TextureFormat[format],
+        SDLToD3D11_SampleCount[sampleCount],
+        &levels);
 
-    return (SDL_GpuSampleCount)SDL_min(maxSupported, desiredSampleCount);
+    return SUCCEEDED(res) && levels > 0;
 }
 
 static SDL_GpuTexture *D3D11_CreateTexture(
@@ -2182,16 +2174,10 @@ static SDL_GpuTexture *D3D11_CreateTexture(
     D3D11Renderer *renderer = (D3D11Renderer *)driverData;
     D3D11TextureContainer *container;
     D3D11Texture *texture;
-    SDL_GpuTextureCreateInfo newTextureCreateInfo = *textureCreateInfo;
-
-    newTextureCreateInfo.sampleCount = D3D11_GetBestSampleCount(
-        driverData,
-        textureCreateInfo->format,
-        textureCreateInfo->sampleCount);
 
     texture = D3D11_INTERNAL_CreateTexture(
         renderer,
-        &newTextureCreateInfo,
+        textureCreateInfo,
         NULL);
 
     if (texture == NULL) {

@@ -413,10 +413,7 @@ static VkSampleCountFlagBits SDLToVK_SampleCount[] = {
     VK_SAMPLE_COUNT_1_BIT,
     VK_SAMPLE_COUNT_2_BIT,
     VK_SAMPLE_COUNT_4_BIT,
-    VK_SAMPLE_COUNT_8_BIT,
-    VK_SAMPLE_COUNT_16_BIT,
-    VK_SAMPLE_COUNT_32_BIT,
-    VK_SAMPLE_COUNT_64_BIT
+    VK_SAMPLE_COUNT_8_BIT
 };
 
 static VkVertexInputRate SDLToVK_VertexInputRate[] = {
@@ -6867,26 +6864,15 @@ static SDL_GpuShader *VULKAN_CreateShader(
     return (SDL_GpuShader *)vulkanShader;
 }
 
-static SDL_GpuSampleCount VULKAN_GetBestSampleCount(
+static SDL_bool VULKAN_SupportsSampleCount(
     SDL_GpuRenderer *driverData,
     SDL_GpuTextureFormat format,
-    SDL_GpuSampleCount desiredSampleCount)
+    SDL_GpuSampleCount sampleCount)
 {
     VulkanRenderer *renderer = (VulkanRenderer *)driverData;
-    SDL_GpuSampleCount maxSupported;
-    VkSampleCountFlagBits bits = IsDepthFormat(format) ? renderer->physicalDeviceProperties.properties.limits.framebufferDepthSampleCounts : renderer->physicalDeviceProperties.properties.limits.framebufferColorSampleCounts;
-
-    if (bits & VK_SAMPLE_COUNT_8_BIT) {
-        maxSupported = SDL_GPU_SAMPLECOUNT_8;
-    } else if (bits & VK_SAMPLE_COUNT_4_BIT) {
-        maxSupported = SDL_GPU_SAMPLECOUNT_4;
-    } else if (bits & VK_SAMPLE_COUNT_2_BIT) {
-        maxSupported = SDL_GPU_SAMPLECOUNT_2;
-    } else {
-        maxSupported = SDL_GPU_SAMPLECOUNT_1;
-    }
-
-    return SDL_min(maxSupported, desiredSampleCount);
+    VkSampleCountFlags bits = IsDepthFormat(format) ? renderer->physicalDeviceProperties.properties.limits.framebufferDepthSampleCounts : renderer->physicalDeviceProperties.properties.limits.framebufferColorSampleCounts;
+    VkSampleCountFlagBits vkSampleCount = SDLToVK_SampleCount[sampleCount];
+    return !!(bits & vkSampleCount);
 }
 
 static SDL_GpuTexture *VULKAN_CreateTexture(
@@ -6900,10 +6886,6 @@ static SDL_GpuTexture *VULKAN_CreateTexture(
     VkComponentMapping swizzle;
     VulkanTextureContainer *container;
     VulkanTextureHandle *textureHandle;
-    SDL_GpuSampleCount actualSampleCount = VULKAN_GetBestSampleCount(
-        driverData,
-        textureCreateInfo->format,
-        textureCreateInfo->sampleCount);
 
     format = SDLToVK_SurfaceFormat[textureCreateInfo->format];
     swizzle = SDLToVK_SurfaceSwizzle[textureCreateInfo->format];
@@ -6926,7 +6908,7 @@ static SDL_GpuTexture *VULKAN_CreateTexture(
         textureCreateInfo->type,
         textureCreateInfo->type == SDL_GPU_TEXTURETYPE_3D ? 1 : textureCreateInfo->layerCountOrDepth,
         textureCreateInfo->levelCount,
-        SDLToVK_SampleCount[actualSampleCount],
+        SDLToVK_SampleCount[textureCreateInfo->sampleCount],
         format,
         swizzle,
         imageAspectFlags,

@@ -279,12 +279,12 @@ CreateMSAATexture(Uint32 drawablew, Uint32 drawableh)
     }
 
     msaatex_createinfo.type = SDL_GPU_TEXTURETYPE_2D;
-    msaatex_createinfo.format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8;
+    msaatex_createinfo.format = SDL_GpuGetSwapchainTextureFormat(gpu_device, state->windows[0]);
     msaatex_createinfo.width = drawablew;
     msaatex_createinfo.height = drawableh;
     msaatex_createinfo.layerCountOrDepth = 1;
     msaatex_createinfo.levelCount = 1;
-    msaatex_createinfo.sampleCount = SDL_GPU_SAMPLECOUNT_4;
+    msaatex_createinfo.sampleCount = render_state.sample_count;
     msaatex_createinfo.usageFlags = SDL_GPU_TEXTUREUSAGE_COLOR_TARGET_BIT | SDL_GPU_TEXTUREUSAGE_SAMPLER_BIT;
     msaatex_createinfo.props = 0;
 
@@ -532,17 +532,19 @@ init_render_state(int msaa)
     SDL_GpuReleaseTransferBuffer(gpu_device, buf_transfer);
 
     /* Determine which sample count to use */
-    render_state.sample_count = msaa ? SDL_GPU_SAMPLECOUNT_4 : SDL_GPU_SAMPLECOUNT_1;
+    render_state.sample_count = SDL_GPU_SAMPLECOUNT_1;
+    if (msaa && SDL_GpuSupportsSampleCount(
+        gpu_device,
+        SDL_GpuGetSwapchainTextureFormat(gpu_device, state->windows[0]),
+        SDL_GPU_SAMPLECOUNT_4)) {
+        render_state.sample_count = SDL_GPU_SAMPLECOUNT_4;
+    }
 
     /* Set up the graphics pipeline */
 
     SDL_zero(pipelinedesc);
 
-    if (msaa) {
-        color_attachment_desc.format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8;
-    } else {
-        color_attachment_desc.format = SDL_GpuGetSwapchainTextureFormat(gpu_device, state->windows[0]);
-    }
+    color_attachment_desc.format = SDL_GpuGetSwapchainTextureFormat(gpu_device, state->windows[0]);
 
     color_attachment_desc.blendState.blendEnable = 0;
     color_attachment_desc.blendState.alphaBlendOp = SDL_GPU_BLENDOP_ADD;

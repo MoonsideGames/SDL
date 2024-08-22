@@ -1163,4 +1163,4 @@
 #define SDL_GpuReleaseFence SDL_GpuReleaseFence_REAL
 #define SDL_GpuTextureFormatTexelBlockSize SDL_GpuTextureFormatTexelBlockSize_REAL
 #define SDL_GpuSupportsTextureFormat SDL_GpuSupportsTextureFormat_REAL
-#define SDL_GpuGetBestSampleCount SDL_GpuGetBestSampleCount_REAL
+#define SDL_GpuSupportsSampleCount SDL_GpuSupportsSampleCount_REAL
