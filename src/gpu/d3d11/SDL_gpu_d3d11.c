@@ -3967,15 +3967,18 @@ static void D3D11_DrawIndexedPrimitives(
 static void D3D11_DrawPrimitives(
     SDL_GpuCommandBuffer *commandBuffer,
     Uint32 vertexStart,
-    Uint32 vertexCount)
+    Uint32 vertexCount,
+    Uint32 instanceCount)
 {
     D3D11CommandBuffer *d3d11CommandBuffer = (D3D11CommandBuffer *)commandBuffer;
     D3D11_INTERNAL_BindGraphicsResources(d3d11CommandBuffer);
 
-    ID3D11DeviceContext_Draw(
+    ID3D11DeviceContext_DrawInstanced(
         d3d11CommandBuffer->context,
         vertexCount,
-        vertexStart);
+        vertexStart,
+        instanceCount,
+        0);
 }
 
 static void D3D11_DrawPrimitivesIndirect(
