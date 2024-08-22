@@ -2566,7 +2566,7 @@ static void METAL_INTERNAL_BindComputeResources(
     MetalCommandBuffer *commandBuffer)
 {
     MetalComputePipeline *computePipeline = commandBuffer->computePipeline;
-    NSUInteger offsets[MAX_STORAGE_BUFFERS_PER_STAGE] = { 0 }; /* 8 is the max for both read and read-write */
+    NSUInteger offsets[MAX_STORAGE_BUFFERS_PER_STAGE] = { 0 }; /* 8 is the max for both read and write-only */
 
     if (commandBuffer->needComputeTextureBind) {
         /* Bind read-only textures */
@@ -2575,7 +2575,7 @@ static void METAL_INTERNAL_BindComputeResources(
                                              withRange:NSMakeRange(0, computePipeline->readOnlyStorageTextureCount)];
         }
 
-        /* Bind read-write textures */
+        /* Bind write-only textures */
         if (computePipeline->writeOnlyStorageTextureCount > 0) {
             [commandBuffer->computeEncoder setTextures:commandBuffer->computeWriteOnlyTextures
                                              withRange:NSMakeRange(
@@ -2593,7 +2593,7 @@ static void METAL_INTERNAL_BindComputeResources(
                                             withRange:NSMakeRange(computePipeline->uniformBufferCount,
                                                                   computePipeline->readOnlyStorageBufferCount)];
         }
-        /* Bind read-write buffers */
+        /* Bind write-only buffers */
         if (computePipeline->writeOnlyStorageBufferCount > 0) {
             [commandBuffer->computeEncoder setBuffers:commandBuffer->computeWriteOnlyBuffers
                                               offsets:offsets
