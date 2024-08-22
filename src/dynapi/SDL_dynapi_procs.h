@@ -1135,7 +1135,7 @@ SDL_DYNAPI_PROC(void,SDL_GpuDrawPrimitives,(SDL_GpuRenderPass *a, Uint32 b, Uint
 SDL_DYNAPI_PROC(void,SDL_GpuDrawPrimitivesIndirect,(SDL_GpuRenderPass *a, SDL_GpuBuffer *b, Uint32 c, Uint32 d, Uint32 e),(a,b,c,d,e),)
 SDL_DYNAPI_PROC(void,SDL_GpuDrawIndexedPrimitivesIndirect,(SDL_GpuRenderPass *a, SDL_GpuBuffer *b, Uint32 c, Uint32 d, Uint32 e),(a,b,c,d,e),)
 SDL_DYNAPI_PROC(void,SDL_GpuEndRenderPass,(SDL_GpuRenderPass *a),(a),)
-SDL_DYNAPI_PROC(SDL_GpuComputePass*,SDL_GpuBeginComputePass,(SDL_GpuCommandBuffer *a, SDL_GpuStorageTextureReadWriteBinding *b, Uint32 c, SDL_GpuStorageBufferReadWriteBinding *d, Uint32 e),(a,b,c,d,e),return)
+SDL_DYNAPI_PROC(SDL_GpuComputePass*,SDL_GpuBeginComputePass,(SDL_GpuCommandBuffer *a, SDL_GpuStorageTextureWriteOnlyBinding *b, Uint32 c, SDL_GpuStorageBufferWriteOnlyBinding *d, Uint32 e),(a,b,c,d,e),return)
 SDL_DYNAPI_PROC(void,SDL_GpuBindComputePipeline,(SDL_GpuComputePass *a, SDL_GpuComputePipeline *b),(a,b),)
 SDL_DYNAPI_PROC(void,SDL_GpuBindComputeStorageTextures,(SDL_GpuComputePass *a, Uint32 b, SDL_GpuTexture **c, Uint32 d),(a,b,c,d),)
 SDL_DYNAPI_PROC(void,SDL_GpuBindComputeStorageBuffers,(SDL_GpuComputePass *a, Uint32 b, SDL_GpuBuffer **c, Uint32 d),(a,b,c,d),)
