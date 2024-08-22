@@ -1739,13 +1739,15 @@ extern SDL_DECLSPEC void SDLCALL SDL_GpuDrawIndexedPrimitives(
  * \param renderPass a render pass handle
  * \param vertexStart The starting offset to read from the vertex buffer
  * \param vertexCount The number of vertices to draw
+ * \param instanceCount The number of instances that will be drawn
  *
  * \since This function is available since SDL 3.x.x
  */
 extern SDL_DECLSPEC void SDLCALL SDL_GpuDrawPrimitives(
     SDL_GpuRenderPass *renderPass,
     Uint32 vertexStart,
-    Uint32 vertexCount);
+    Uint32 vertexCount,
+    Uint32 instanceCount);
 
 /**
  * Draws data using bound graphics state and with draw parameters set from a buffer.

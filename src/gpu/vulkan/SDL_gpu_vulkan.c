@@ -5322,7 +5322,8 @@ static void VULKAN_DrawIndexedPrimitives(
 static void VULKAN_DrawPrimitives(
     SDL_GpuCommandBuffer *commandBuffer,
     Uint32 vertexStart,
-    Uint32 vertexCount)
+    Uint32 vertexCount,
+    Uint32 instanceCount)
 {
     VulkanCommandBuffer *vulkanCommandBuffer = (VulkanCommandBuffer *)commandBuffer;
     VulkanRenderer *renderer = (VulkanRenderer *)vulkanCommandBuffer->renderer;
@@ -5332,7 +5333,7 @@ static void VULKAN_DrawPrimitives(
     renderer->vkCmdDraw(
         vulkanCommandBuffer->commandBuffer,
         vertexCount,
-        1,
+        instanceCount,
         vertexStart,
         0);
 }

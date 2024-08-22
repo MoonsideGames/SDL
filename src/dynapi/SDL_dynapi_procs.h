@@ -1131,7 +1131,7 @@ SDL_DYNAPI_PROC(void,SDL_GpuBindFragmentSamplers,(SDL_GpuRenderPass *a, Uint32 b
 SDL_DYNAPI_PROC(void,SDL_GpuBindFragmentStorageTextures,(SDL_GpuRenderPass *a, Uint32 b, SDL_GpuTexture **c, Uint32 d),(a,b,c,d),)
 SDL_DYNAPI_PROC(void,SDL_GpuBindFragmentStorageBuffers,(SDL_GpuRenderPass *a, Uint32 b, SDL_GpuBuffer **c, Uint32 d),(a,b,c,d),)
 SDL_DYNAPI_PROC(void,SDL_GpuDrawIndexedPrimitives,(SDL_GpuRenderPass *a, Uint32 b, Uint32 c, Uint32 d, Uint32 e),(a,b,c,d,e),)
-SDL_DYNAPI_PROC(void,SDL_GpuDrawPrimitives,(SDL_GpuRenderPass *a, Uint32 b, Uint32 c),(a,b,c),)
+SDL_DYNAPI_PROC(void,SDL_GpuDrawPrimitives,(SDL_GpuRenderPass *a, Uint32 b, Uint32 c, Uint32 d),(a,b,c,d),)
 SDL_DYNAPI_PROC(void,SDL_GpuDrawPrimitivesIndirect,(SDL_GpuRenderPass *a, SDL_GpuBuffer *b, Uint32 c, Uint32 d, Uint32 e),(a,b,c,d,e),)
 SDL_DYNAPI_PROC(void,SDL_GpuDrawIndexedPrimitivesIndirect,(SDL_GpuRenderPass *a, SDL_GpuBuffer *b, Uint32 c, Uint32 d, Uint32 e),(a,b,c,d,e),)
 SDL_DYNAPI_PROC(void,SDL_GpuEndRenderPass,(SDL_GpuRenderPass *a),(a),)
