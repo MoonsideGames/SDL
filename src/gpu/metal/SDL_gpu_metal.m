@@ -67,71 +67,64 @@ static void METAL_INTERNAL_DestroyBlitResources(SDL_GpuRenderer *driverData);
 
 /* Conversions */
 
-static SDL_GpuTextureFormat SwapchainCompositionToSDLTextureFormat[] = {
-    SDL_GPU_TEXTUREFORMAT_B8G8R8A8,            /* SDR */
-    SDL_GPU_TEXTUREFORMAT_B8G8R8A8_SRGB,       /* SDR_SRGB */
-    SDL_GPU_TEXTUREFORMAT_R16G16B16A16_SFLOAT, /* HDR */
-    SDL_GPU_TEXTUREFORMAT_R10G10B10A2,         /* HDR_ADVANCED */
-};
-
 static MTLPixelFormat SDLToMetal_SurfaceFormat[] = {
-    MTLPixelFormatRGBA8Unorm,   /* R8G8B8A8 */
-    MTLPixelFormatBGRA8Unorm,   /* B8G8R8A8 */
-    MTLPixelFormatB5G6R5Unorm,  /* B5G6R5 */
-    MTLPixelFormatBGR5A1Unorm,  /* B5G5R5A1 */
-    MTLPixelFormatABGR4Unorm,   /* B4G4R4A4 */
-    MTLPixelFormatRGB10A2Unorm, /* A2R10G10B10 */
-    MTLPixelFormatRG16Unorm,    /* R16G16 */
-    MTLPixelFormatRGBA16Unorm,  /* R16G16B16A16 */
-    MTLPixelFormatR8Unorm,      /* R8 */
-    MTLPixelFormatA8Unorm,      /* A8 */
+    MTLPixelFormatRGBA8Unorm,           /* R8G8B8A8_UNORM */
+    MTLPixelFormatBGRA8Unorm,           /* B8G8R8A8_UNORM */
+    MTLPixelFormatB5G6R5Unorm,          /* B5G6R5_UNORM */
+    MTLPixelFormatBGR5A1Unorm,          /* B5G5R5A1_UNORM */
+    MTLPixelFormatABGR4Unorm,           /* B4G4R4A4_UNORM */
+    MTLPixelFormatRGB10A2Unorm,         /* A2R10G10B10_UNORM */
+    MTLPixelFormatRG16Unorm,            /* R16G16_UNORM */
+    MTLPixelFormatRGBA16Unorm,          /* R16G16B16A16_UNORM */
+    MTLPixelFormatR8Unorm,              /* R8_UNORM */
+    MTLPixelFormatA8Unorm,              /* A8_UNORM */
 #ifdef SDL_PLATFORM_MACOS
-    MTLPixelFormatBC1_RGBA,      /* BC1 */
-    MTLPixelFormatBC2_RGBA,      /* BC2 */
-    MTLPixelFormatBC3_RGBA,      /* BC3 */
-    MTLPixelFormatBC7_RGBAUnorm, /* BC7 */
+    MTLPixelFormatBC1_RGBA,             /* BC1_UNORM */
+    MTLPixelFormatBC2_RGBA,             /* BC2_UNORM */
+    MTLPixelFormatBC3_RGBA,             /* BC3_UNORM */
+    MTLPixelFormatBC7_RGBAUnorm,        /* BC7_UNORM */
 #else
-    MTLPixelFormatInvalid, /* BC1 */
-    MTLPixelFormatInvalid, /* BC2 */
-    MTLPixelFormatInvalid, /* BC3 */
-    MTLPixelFormatInvalid, /* BC7 */
+    MTLPixelFormatInvalid,              /* BC1_UNORM */
+    MTLPixelFormatInvalid,              /* BC2_UNORM */
+    MTLPixelFormatInvalid,              /* BC3_UNORM */
+    MTLPixelFormatInvalid,              /* BC7_UNORM */
 #endif
-    MTLPixelFormatRG8Snorm,        /* R8G8_SNORM */
-    MTLPixelFormatRGBA8Snorm,      /* R8G8B8A8_SNORM */
-    MTLPixelFormatR16Float,        /* R16_SFLOAT */
-    MTLPixelFormatRG16Float,       /* R16G16_SFLOAT */
-    MTLPixelFormatRGBA16Float,     /* R16G16B16A16_SFLOAT */
-    MTLPixelFormatR32Float,        /* R32_SFLOAT */
-    MTLPixelFormatRG32Float,       /* R32G32_SFLOAT */
-    MTLPixelFormatRGBA32Float,     /* R32G32B32A32_SFLOAT */
-    MTLPixelFormatR8Uint,          /* R8_UINT */
-    MTLPixelFormatRG8Uint,         /* R8G8_UINT */
-    MTLPixelFormatRGBA8Uint,       /* R8G8B8A8_UINT */
-    MTLPixelFormatR16Uint,         /* R16_UINT */
-    MTLPixelFormatRG16Uint,        /* R16G16_UINT */
-    MTLPixelFormatRGBA16Uint,      /* R16G16B16A16_UINT */
-    MTLPixelFormatRGBA8Unorm_sRGB, /* R8G8B8A8_SRGB*/
-    MTLPixelFormatBGRA8Unorm_sRGB, /* B8G8R8A8_SRGB */
+    MTLPixelFormatRG8Snorm,             /* R8G8_SNORM */
+    MTLPixelFormatRGBA8Snorm,           /* R8G8B8A8_SNORM */
+    MTLPixelFormatR16Float,             /* R16_FLOAT */
+    MTLPixelFormatRG16Float,            /* R16G16_FLOAT */
+    MTLPixelFormatRGBA16Float,          /* R16G16B16A16_FLOAT */
+    MTLPixelFormatR32Float,             /* R32_FLOAT */
+    MTLPixelFormatRG32Float,            /* R32G32_FLOAT */
+    MTLPixelFormatRGBA32Float,          /* R32G32B32A32_FLOAT */
+    MTLPixelFormatR8Uint,               /* R8_UINT */
+    MTLPixelFormatRG8Uint,              /* R8G8_UINT */
+    MTLPixelFormatRGBA8Uint,            /* R8G8B8A8_UINT */
+    MTLPixelFormatR16Uint,              /* R16_UINT */
+    MTLPixelFormatRG16Uint,             /* R16G16_UINT */
+    MTLPixelFormatRGBA16Uint,           /* R16G16B16A16_UINT */
+    MTLPixelFormatRGBA8Unorm_sRGB,      /* R8G8B8A8_UNORM_SRGB*/
+    MTLPixelFormatBGRA8Unorm_sRGB,      /* B8G8R8A8_UNORM_SRGB */
 #ifdef SDL_PLATFORM_MACOS
-    MTLPixelFormatBC3_RGBA_sRGB,      /* BC3_SRGB */
-    MTLPixelFormatBC7_RGBAUnorm_sRGB, /* BC7_SRGB */
+    MTLPixelFormatBC3_RGBA_sRGB,        /* BC3_UNORM_SRGB */
+    MTLPixelFormatBC7_RGBAUnorm_sRGB,   /* BC7_UNORM_SRGB */
 #else
-    MTLPixelFormatInvalid, /* BC3_SRGB */
-    MTLPixelFormatInvalid, /* BC7_SRGB */
+    MTLPixelFormatInvalid,              /* BC3_UNORM_SRGB */
+    MTLPixelFormatInvalid,              /* BC7_UNORM_SRGB */
 #endif
-    MTLPixelFormatDepth16Unorm, /* D16_UNORM */
+    MTLPixelFormatDepth16Unorm,         /* D16_UNORM */
 #ifdef SDL_PLATFORM_MACOS
     MTLPixelFormatDepth24Unorm_Stencil8, /* D24_UNORM */
 #else
-    MTLPixelFormatInvalid, /* D24_UNORM */
+    MTLPixelFormatInvalid,              /* D24_UNORM */
 #endif
-    MTLPixelFormatDepth32Float, /* D32_SFLOAT */
+    MTLPixelFormatDepth32Float,         /* D32_FLOAT */
 #ifdef SDL_PLATFORM_MACOS
     MTLPixelFormatDepth24Unorm_Stencil8, /* D24_UNORM_S8_UINT */
 #else
-    MTLPixelFormatInvalid, /* D24_UNORM_S8_UINT */
+    MTLPixelFormatInvalid,              /* D24_UNORM_S8_UINT */
 #endif
-    MTLPixelFormatDepth32Float_Stencil8, /* D32_SFLOAT_S8_UINT */
+    MTLPixelFormatDepth32Float_Stencil8, /* D32_FLOAT_S8_UINT */
 };
 SDL_COMPILE_TIME_ASSERT(SDLToMetal_SurfaceFormat, SDL_arraysize(SDLToMetal_SurfaceFormat) == SDL_GPU_TEXTUREFORMAT_MAX);
 
@@ -285,10 +278,10 @@ static MTLTextureType SDLToMetal_TextureType[] = {
 };
 
 static SDL_GpuTextureFormat SwapchainCompositionToFormat[] = {
-    SDL_GPU_TEXTUREFORMAT_B8G8R8A8,            /* SDR */
-    SDL_GPU_TEXTUREFORMAT_B8G8R8A8_SRGB,       /* SDR_LINEAR */
-    SDL_GPU_TEXTUREFORMAT_R16G16B16A16_SFLOAT, /* HDR_EXTENDED_LINEAR */
-    SDL_GPU_TEXTUREFORMAT_R10G10B10A2,         /* HDR10_ST2048 */
+    SDL_GPU_TEXTUREFORMAT_B8G8R8A8_UNORM,       /* SDR */
+    SDL_GPU_TEXTUREFORMAT_B8G8R8A8_UNORM_SRGB,  /* SDR_LINEAR */
+    SDL_GPU_TEXTUREFORMAT_R16G16B16A16_FLOAT,   /* HDR_EXTENDED_LINEAR */
+    SDL_GPU_TEXTUREFORMAT_R10G10B10A2_UNORM,    /* HDR10_ST2048 */
 };
 
 static CFStringRef SwapchainCompositionToColorSpace[4]; /* initialized on device creation */
@@ -1297,7 +1290,7 @@ static MetalTexture *METAL_INTERNAL_CreateTexture(
     textureDescriptor.textureType = SDLToMetal_TextureType[textureCreateInfo->type];
     textureDescriptor.pixelFormat = SDLToMetal_SurfaceFormat[textureCreateInfo->format];
     /* This format isn't natively supported so let's swizzle! */
-    if (textureCreateInfo->format == SDL_GPU_TEXTUREFORMAT_B4G4R4A4) {
+    if (textureCreateInfo->format == SDL_GPU_TEXTUREFORMAT_B4G4R4A4_UNORM) {
         textureDescriptor.swizzle = MTLTextureSwizzleChannelsMake(
             MTLTextureSwizzleBlue,
             MTLTextureSwizzleGreen,
@@ -3354,7 +3347,7 @@ static Uint8 METAL_INTERNAL_CreateSwapchain(
         SDL_Gpu_FetchBlitPipeline(
             renderer->sdlGpuDevice,
             (SDL_GpuTextureType)i,
-            SwapchainCompositionToSDLTextureFormat[swapchainComposition],
+            SwapchainCompositionToFormat[swapchainComposition],
             renderer->blitVertexShader,
             renderer->blitFrom2DShader,
             renderer->blitFrom2DArrayShader,
@@ -3689,18 +3682,18 @@ static SDL_bool METAL_SupportsTextureFormat(
 
         switch (format) {
         /* Apple GPU exclusive */
-        case SDL_GPU_TEXTUREFORMAT_B5G6R5:
-        case SDL_GPU_TEXTUREFORMAT_B5G5R5A1:
-        case SDL_GPU_TEXTUREFORMAT_B4G4R4A4:
+        case SDL_GPU_TEXTUREFORMAT_B5G6R5_UNORM:
+        case SDL_GPU_TEXTUREFORMAT_B5G5R5A1_UNORM:
+        case SDL_GPU_TEXTUREFORMAT_B4G4R4A4_UNORM:
             return [renderer->device supportsFamily:MTLGPUFamilyApple1];
 
         /* Requires BC compression support */
-        case SDL_GPU_TEXTUREFORMAT_BC1:
-        case SDL_GPU_TEXTUREFORMAT_BC2:
-        case SDL_GPU_TEXTUREFORMAT_BC3:
-        case SDL_GPU_TEXTUREFORMAT_BC7:
-        case SDL_GPU_TEXTUREFORMAT_BC3_SRGB:
-        case SDL_GPU_TEXTUREFORMAT_BC7_SRGB:
+        case SDL_GPU_TEXTUREFORMAT_BC1_UNORM:
+        case SDL_GPU_TEXTUREFORMAT_BC2_UNORM:
+        case SDL_GPU_TEXTUREFORMAT_BC3_UNORM:
+        case SDL_GPU_TEXTUREFORMAT_BC7_UNORM:
+        case SDL_GPU_TEXTUREFORMAT_BC3_UNORM_SRGB:
+        case SDL_GPU_TEXTUREFORMAT_BC7_UNORM_SRGB:
 #ifdef SDL_PLATFORM_MACOS
             if (@available(macOS 11.0, *)) {
                 return (
