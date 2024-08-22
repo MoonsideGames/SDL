@@ -2424,7 +2424,7 @@ static SDL_bool D3D12_INTERNAL_ConvertVertexInputState(SDL_GpuVertexInputState v
         desc[i].InputSlot = attribute.binding;
         desc[i].AlignedByteOffset = attribute.offset;
         desc[i].InputSlotClass = SDLToD3D12_InputRate[vertexInputState.vertexBindings[attribute.binding].inputRate];
-        desc[i].InstanceDataStepRate = vertexInputState.vertexBindings[attribute.binding].stepRate;
+        desc[i].InstanceDataStepRate = (vertexInputState.vertexBindings[attribute.binding].inputRate == SDL_GPU_VERTEXINPUTRATE_INSTANCE) ? vertexInputState.vertexBindings[attribute.binding].instanceStepRate : 0;
     }
 
     return SDL_TRUE;
