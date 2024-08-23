@@ -2616,7 +2616,8 @@ static void METAL_DrawIndexedPrimitives(
     Uint32 baseVertex,
     Uint32 startIndex,
     Uint32 vertexCount,
-    Uint32 instanceCount)
+    Uint32 instanceCount,
+    Uint32 baseInstance)
 {
     @autoreleasepool {
         MetalCommandBuffer *metalCommandBuffer = (MetalCommandBuffer *)commandBuffer;
@@ -2633,7 +2634,7 @@ static void METAL_DrawIndexedPrimitives(
                 indexBufferOffset:metalCommandBuffer->indexBufferOffset + (startIndex * indexSize)
                     instanceCount:instanceCount
                        baseVertex:baseVertex
-                     baseInstance:0];
+                     baseInstance:baseInstance];
     }
 }
 
@@ -2641,7 +2642,8 @@ static void METAL_DrawPrimitives(
     SDL_GpuCommandBuffer *commandBuffer,
     Uint32 vertexStart,
     Uint32 vertexCount,
-    Uint32 instanceCount)
+    Uint32 instanceCount,
+    Uint32 baseInstance)
 {
     @autoreleasepool {
         MetalCommandBuffer *metalCommandBuffer = (MetalCommandBuffer *)commandBuffer;
@@ -2653,7 +2655,8 @@ static void METAL_DrawPrimitives(
             drawPrimitives:SDLToMetal_PrimitiveType[primitiveType]
                vertexStart:vertexStart
                vertexCount:vertexCount
-             instanceCount:instanceCount];
+             instanceCount:instanceCount
+              baseInstance:baseInstance];
     }
 }
 
