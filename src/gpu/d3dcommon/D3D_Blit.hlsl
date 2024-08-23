@@ -1,4 +1,9 @@
 #if D3D12
+#define BlitRS \
+    "CBV(b0, space=3, visibility = SHADER_VISIBILITY_PIXEL),"\
+    "DescriptorTable ( SRV(t0, space=2), visibility = SHADER_VISIBILITY_PIXEL ),"\
+    "DescriptorTable ( Sampler(s0, space=2), visibility = SHADER_VISIBILITY_PIXEL ),"\
+
 #define REG(reg, space) register(reg, space)
 #else
 #define REG(reg, space) register(reg)
@@ -22,9 +27,11 @@ Texture2D SourceTexture2D : REG(t0, space2);
 Texture2DArray SourceTexture2DArray : REG(t0, space2);
 Texture3D SourceTexture3D : REG(t0, space2);
 TextureCube SourceTextureCube : REG(t0, space2);
-
 sampler SourceSampler : REG(s0, space2);
 
+#if D3D12
+[RootSignature(BlitRS)]
+#endif
 VertexToPixel FullscreenVert(uint vI : SV_VERTEXID)
 {
     float2 inTex = float2((vI << 1) & 2, vI & 2);
@@ -34,24 +41,36 @@ VertexToPixel FullscreenVert(uint vI : SV_VERTEXID)
     return Out;
 }
 
+#if D3D12
+[RootSignature(BlitRS)]
+#endif
 float4 BlitFrom2D(VertexToPixel input) : SV_Target0
 {
     float2 newCoord = UVLeftTop + UVDimensions * input.tex;
     return SourceTexture2D.SampleLevel(SourceSampler, newCoord, MipLevel);
 }
 
+#if D3D12
+[RootSignature(BlitRS)]
+#endif
 float4 BlitFrom2DArray(VertexToPixel input) : SV_Target0
 {
     float3 newCoord = float3(UVLeftTop + UVDimensions * input.tex, (uint)LayerOrDepth);
     return SourceTexture2DArray.SampleLevel(SourceSampler, newCoord, MipLevel);
 }
 
+#if D3D12
+[RootSignature(BlitRS)]
+#endif
 float4 BlitFrom3D(VertexToPixel input) : SV_Target0
 {
     float3 newCoord = float3(UVLeftTop + UVDimensions * input.tex, LayerOrDepth);
     return SourceTexture3D.SampleLevel(SourceSampler, newCoord, MipLevel);
 }
 
+#if D3D12
+[RootSignature(BlitRS)]
+#endif
 float4 BlitFromCube(VertexToPixel input) : SV_Target0
 {
     // Thanks, Wikipedia! https://en.wikipedia.org/wiki/Cube_mapping
