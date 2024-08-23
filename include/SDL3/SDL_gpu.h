@@ -556,6 +556,11 @@ typedef struct SDL_GpuBufferRegion
     Uint32 size;
 } SDL_GpuBufferRegion;
 
+/* Note that the `firstVertex` and `firstInstance` parameters are NOT compatible with
+ * built-in vertex/instance ID variables in shaders (for example, SV_VertexID). If
+ * your shader depends on these variables, the correlating draw call parameter MUST
+ * be 0.
+ */
 typedef struct SDL_GpuIndirectDrawCommand
 {
     Uint32 vertexCount;   /* number of vertices to draw */
@@ -1717,6 +1722,11 @@ extern SDL_DECLSPEC void SDLCALL SDL_GpuBindFragmentStorageBuffers(
  * Draws data using bound graphics state with an index buffer and instancing enabled.
  * You must not call this function before binding a graphics pipeline.
  *
+ * Note that the `baseVertex` and `baseInstance` parameters are NOT compatible with
+ * built-in vertex/instance ID variables in shaders (for example, SV_VertexID). If
+ * your shader depends on these variables, the correlating draw call parameter MUST
+ * be 0.
+ *
  * \param renderPass a render pass handle
  * \param baseVertex the starting offset to read from the vertex buffer
  * \param startIndex the starting offset to read from the index buffer
@@ -1730,11 +1740,17 @@ extern SDL_DECLSPEC void SDLCALL SDL_GpuDrawIndexedPrimitives(
     Uint32 baseVertex,
     Uint32 startIndex,
     Uint32 vertexCount,
-    Uint32 instanceCount);
+    Uint32 instanceCount,
+    Uint32 baseInstance);
 
 /**
  * Draws data using bound graphics state.
  * You must not call this function before binding a graphics pipeline.
+ *
+ * Note that the `vertexStart` and `baseInstance` parameters are NOT compatible with
+ * built-in vertex/instance ID variables in shaders (for example, SV_VertexID). If
+ * your shader depends on these variables, the correlating draw call parameter MUST
+ * be 0.
  *
  * \param renderPass a render pass handle
  * \param vertexStart The starting offset to read from the vertex buffer
@@ -1747,7 +1763,8 @@ extern SDL_DECLSPEC void SDLCALL SDL_GpuDrawPrimitives(
     SDL_GpuRenderPass *renderPass,
     Uint32 vertexStart,
     Uint32 vertexCount,
-    Uint32 instanceCount);
+    Uint32 instanceCount,
+    Uint32 baseInstance);
 
 /**
  * Draws data using bound graphics state and with draw parameters set from a buffer.

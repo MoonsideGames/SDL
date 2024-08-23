@@ -355,7 +355,7 @@ void SDL_Gpu_BlitCommon(
         &blitFragmentUniforms,
         sizeof(blitFragmentUniforms));
 
-    SDL_GpuDrawPrimitives(renderPass, 0, 3, 1);
+    SDL_GpuDrawPrimitives(renderPass, 0, 3, 1, 0);
     SDL_GpuEndRenderPass(renderPass);
 }
 
@@ -1479,7 +1479,8 @@ void SDL_GpuDrawIndexedPrimitives(
     Uint32 baseVertex,
     Uint32 startIndex,
     Uint32 vertexCount,
-    Uint32 instanceCount)
+    Uint32 instanceCount,
+    Uint32 baseInstance)
 {
     if (renderPass == NULL) {
         SDL_InvalidParamError("renderPass");
@@ -1496,14 +1497,16 @@ void SDL_GpuDrawIndexedPrimitives(
         baseVertex,
         startIndex,
         vertexCount,
-        instanceCount);
+        instanceCount,
+        baseInstance);
 }
 
 void SDL_GpuDrawPrimitives(
     SDL_GpuRenderPass *renderPass,
     Uint32 vertexStart,
     Uint32 vertexCount,
-    Uint32 instanceCount)
+    Uint32 instanceCount,
+    Uint32 baseInstance)
 {
     if (renderPass == NULL) {
         SDL_InvalidParamError("renderPass");
@@ -1519,7 +1522,8 @@ void SDL_GpuDrawPrimitives(
         RENDERPASS_COMMAND_BUFFER,
         vertexStart,
         vertexCount,
-        instanceCount);
+        instanceCount,
+        baseInstance);
 }
 
 void SDL_GpuDrawPrimitivesIndirect(

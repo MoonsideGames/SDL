@@ -447,13 +447,15 @@ struct SDL_GpuDevice
         Uint32 baseVertex,
         Uint32 startIndex,
         Uint32 vertexCount,
-        Uint32 instanceCount);
+        Uint32 instanceCount,
+        Uint32 baseInstance);
 
     void (*DrawPrimitives)(
         SDL_GpuCommandBuffer *commandBuffer,
         Uint32 vertexStart,
         Uint32 vertexCount,
-        Uint32 instanceCount);
+        Uint32 instanceCount,
+        Uint32 baseInstance);
 
     void (*DrawPrimitivesIndirect)(
         SDL_GpuCommandBuffer *commandBuffer,
