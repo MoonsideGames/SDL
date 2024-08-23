@@ -3229,7 +3229,7 @@ static Uint32 VULKAN_INTERNAL_CommandPoolHashFunction(const void *key, void *dat
     return (Uint32)((CommandPoolHashTableKey *)key)->threadID;
 }
 
-static SDL_bool VULKAN_INTERNAL_CommandPoolHashKeyMatch(const void *aKey, const void *bKey, void *data)
+static bool VULKAN_INTERNAL_CommandPoolHashKeyMatch(const void *aKey, const void *bKey, void *data)
 {
     CommandPoolHashTableKey *a = (CommandPoolHashTableKey *)aKey;
     CommandPoolHashTableKey *b = (CommandPoolHashTableKey *)bKey;
@@ -3274,7 +3274,7 @@ static Uint32 VULKAN_INTERNAL_RenderPassHashFunction(
     return result;
 }
 
-static SDL_bool VULKAN_INTERNAL_RenderPassHashKeyMatch(
+static bool VULKAN_INTERNAL_RenderPassHashKeyMatch(
     const void *aKey,
     const void *bKey,
     void *data)
@@ -3364,7 +3364,7 @@ static Uint32 VULKAN_INTERNAL_FramebufferHashFunction(
     return result;
 }
 
-static SDL_bool VULKAN_INTERNAL_FramebufferHashKeyMatch(
+static bool VULKAN_INTERNAL_FramebufferHashKeyMatch(
     const void *aKey,
     const void *bKey,
     void *data)
