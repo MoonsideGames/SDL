@@ -1,8 +1,8 @@
 #if D3D12
 #define BlitRS \
-    "CBV(b0, space=3, visibility = SHADER_VISIBILITY_PIXEL),"\
-    "DescriptorTable ( SRV(t0, space=2), visibility = SHADER_VISIBILITY_PIXEL ),"\
     "DescriptorTable ( Sampler(s0, space=2), visibility = SHADER_VISIBILITY_PIXEL ),"\
+    "DescriptorTable ( SRV(t0, space=2), visibility = SHADER_VISIBILITY_PIXEL ),"\
+    "CBV(b0, space=3, visibility = SHADER_VISIBILITY_PIXEL),"\
 
 #define REG(reg, space) register(reg, space)
 #else
