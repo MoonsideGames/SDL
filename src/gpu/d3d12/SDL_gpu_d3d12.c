@@ -5659,6 +5659,7 @@ static void D3D12_GenerateMipmaps(
     D3D12Renderer *renderer = d3d12CommandBuffer->renderer;
     D3D12TextureContainer *container = (D3D12TextureContainer *)texture;
     SDL_GpuGraphicsPipeline *blitPipeline;
+    SDL_GpuBlitRegion srcRegion, dstRegion;
 
     blitPipeline = SDL_Gpu_FetchBlitPipeline(
         renderer->sdlGpuDevice,
@@ -5681,22 +5682,27 @@ static void D3D12_GenerateMipmaps(
     /* We have to do this one subresource at a time */
     for (Uint32 layerOrDepthIndex = 0; layerOrDepthIndex < container->header.info.layerCountOrDepth; layerOrDepthIndex += 1) {
         for (Uint32 levelIndex = 1; levelIndex < container->header.info.levelCount; levelIndex += 1) {
+
+            srcRegion.texture = texture;
+            srcRegion.mipLevel = levelIndex - 1;
+            srcRegion.layerOrDepthPlane = layerOrDepthIndex;
+            srcRegion.x = 0;
+            srcRegion.y = 0;
+            srcRegion.w = container->header.info.width >> (levelIndex - 1);
+            srcRegion.h = container->header.info.height >> (levelIndex - 1);
+
+            dstRegion.texture = texture;
+            dstRegion.mipLevel = levelIndex;
+            dstRegion.layerOrDepthPlane = layerOrDepthIndex;
+            dstRegion.x = 0;
+            dstRegion.y = 0;
+            dstRegion.w = container->header.info.width >> levelIndex;
+            dstRegion.h = container->header.info.height >> levelIndex;
+
             SDL_GpuBlit(
                 commandBuffer,
-                &(SDL_GpuBlitRegion){
-                    .texture = texture,
-                    .layerOrDepthPlane = layerOrDepthIndex,
-                    .mipLevel = levelIndex - 1,
-                    .w = container->header.info.width >> (levelIndex - 1),
-                    .h = container->header.info.height >> (levelIndex - 1),
-                },
-                &(SDL_GpuBlitRegion){
-                    .texture = texture,
-                    .layerOrDepthPlane = layerOrDepthIndex,
-                    .mipLevel = levelIndex,
-                    .w = container->header.info.width >> levelIndex,
-                    .h = container->header.info.height >> levelIndex,
-                },
+                &srcRegion,
+                &dstRegion,
                 SDL_FLIP_NONE,
                 SDL_GPU_FILTER_LINEAR,
                 SDL_FALSE);
@@ -5779,6 +5785,9 @@ static SDL_bool D3D12_SupportsSwapchainComposition(
         return SDL_FALSE;
     }
 
+#if defined(SDL_PLATFORM_XBOXONE) || defined(SDL_PLATFORM_XBOXSERIES)
+    // FIXME XBOX
+#else
     /* Check the color space support if necessary */
     if (swapchainComposition != SDL_GPU_SWAPCHAINCOMPOSITION_SDR) {
         IDXGISwapChain3_CheckColorSpaceSupport(
@@ -5790,6 +5799,7 @@ static SDL_bool D3D12_SupportsSwapchainComposition(
             return SDL_FALSE;
         }
     }
+#endif
 
     return SDL_TRUE;
 }
