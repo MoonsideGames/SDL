@@ -3978,8 +3978,8 @@ static void D3D11_DrawPrimitives(
     ID3D11DeviceContext_DrawInstanced(
         d3d11CommandBuffer->context,
         vertexCount,
-        vertexStart,
         instanceCount,
+        vertexStart,
         baseInstance);
 }
 
