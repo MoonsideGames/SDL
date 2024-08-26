@@ -3396,20 +3396,13 @@ static void D3D11_BeginRenderPass(
 
     /* Set up the new color target bindings */
     for (Uint32 i = 0; i < colorAttachmentCount; i += 1) {
-        SDL_bool cycle;
-        if (colorAttachmentInfos[i].loadOp == SDL_GPU_LOADOP_LOAD) {
-            cycle = SDL_FALSE;
-        } else {
-            cycle = colorAttachmentInfos[i].cycle;
-        }
-
         D3D11TextureContainer *container = (D3D11TextureContainer *)colorAttachmentInfos[i].texture;
         D3D11TextureSubresource *subresource = D3D11_INTERNAL_PrepareTextureSubresourceForWrite(
             renderer,
             container,
             container->header.info.type == SDL_GPU_TEXTURETYPE_3D ? 0 : colorAttachmentInfos[i].layerOrDepthPlane,
             colorAttachmentInfos[i].mipLevel,
-            cycle);
+            colorAttachmentInfos[i].cycle);
 
         if (subresource->msaaHandle != NULL) {
             d3d11CommandBuffer->colorTargetResolveTexture[i] = subresource->parent;
@@ -3443,21 +3436,13 @@ static void D3D11_BeginRenderPass(
 
     /* Get the DSV for the depth stencil attachment, if applicable */
     if (depthStencilAttachmentInfo != NULL) {
-        SDL_bool cycle;
-
-        if (depthStencilAttachmentInfo->loadOp == SDL_GPU_LOADOP_LOAD || depthStencilAttachmentInfo->stencilLoadOp == SDL_GPU_LOADOP_LOAD) {
-            cycle = SDL_FALSE;
-        } else {
-            cycle = depthStencilAttachmentInfo->cycle;
-        }
-
         D3D11TextureContainer *container = (D3D11TextureContainer *)depthStencilAttachmentInfo->texture;
         D3D11TextureSubresource *subresource = D3D11_INTERNAL_PrepareTextureSubresourceForWrite(
             renderer,
             container,
             0,
             0,
-            cycle);
+            depthStencilAttachmentInfo->cycle);
 
         dsv = subresource->depthStencilTargetView;
 

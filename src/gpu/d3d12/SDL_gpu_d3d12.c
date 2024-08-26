@@ -3775,20 +3775,13 @@ static void D3D12_BeginRenderPass(
     D3D12_CPU_DESCRIPTOR_HANDLE rtvs[MAX_COLOR_TARGET_BINDINGS];
 
     for (Uint32 i = 0; i < colorAttachmentCount; i += 1) {
-        SDL_bool cycle;
-        if (colorAttachmentInfos[i].loadOp == SDL_GPU_LOADOP_LOAD) {
-            cycle = SDL_FALSE;
-        } else {
-            cycle = colorAttachmentInfos[i].cycle;
-        }
-
         D3D12TextureContainer *container = (D3D12TextureContainer *)colorAttachmentInfos[i].texture;
         D3D12TextureSubresource *subresource = D3D12_INTERNAL_PrepareTextureSubresourceForWrite(
             d3d12CommandBuffer,
             container,
             container->header.info.type == SDL_GPU_TEXTURETYPE_3D ? 0 : colorAttachmentInfos[i].layerOrDepthPlane,
             colorAttachmentInfos[i].mipLevel,
-            cycle,
+            colorAttachmentInfos[i].cycle,
             D3D12_RESOURCE_STATE_RENDER_TARGET);
 
         Uint32 rtvIndex = container->header.info.type == SDL_GPU_TEXTURETYPE_3D ? colorAttachmentInfos[i].layerOrDepthPlane : 0;
@@ -3820,23 +3813,13 @@ static void D3D12_BeginRenderPass(
 
     D3D12_CPU_DESCRIPTOR_HANDLE dsv;
     if (depthStencilAttachmentInfo != NULL) {
-        SDL_bool cycle;
-
-        if (
-            depthStencilAttachmentInfo->loadOp == SDL_GPU_LOADOP_LOAD ||
-            depthStencilAttachmentInfo->stencilLoadOp == SDL_GPU_LOADOP_LOAD) {
-            cycle = SDL_FALSE;
-        } else {
-            cycle = depthStencilAttachmentInfo->cycle;
-        }
-
         D3D12TextureContainer *container = (D3D12TextureContainer *)depthStencilAttachmentInfo->texture;
         D3D12TextureSubresource *subresource = D3D12_INTERNAL_PrepareTextureSubresourceForWrite(
             d3d12CommandBuffer,
             container,
             0,
             0,
-            cycle,
+            depthStencilAttachmentInfo->cycle,
             D3D12_RESOURCE_STATE_DEPTH_WRITE);
 
         if (
