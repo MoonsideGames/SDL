@@ -128,14 +128,14 @@ static const IID D3D_IID_IDXGIFactory4 = { 0x1bc6ea02, 0xef36, 0x464f, { 0xbf, 0
 static const IID D3D_IID_IDXGIFactory5 = { 0x7632e1f5, 0xee65, 0x4dca, { 0x87, 0xfd, 0x84, 0xcd, 0x75, 0xf8, 0x83, 0x8d } };
 static const IID D3D_IID_IDXGIFactory6 = { 0xc1b6694f, 0xff09, 0x44a9, { 0xb0, 0x3c, 0x77, 0x90, 0x0a, 0x0a, 0x1d, 0x17 } };
 static const IID D3D_IID_IDXGIAdapter1 = { 0x29038f61, 0x3839, 0x4626, { 0x91, 0xfd, 0x08, 0x68, 0x79, 0x01, 0x1a, 0x05 } };
+#if (defined(SDL_PLATFORM_XBOXONE) || defined(SDL_PLATFORM_XBOXSERIES))
 static const IID D3D_IID_IDXGIDevice1 = { 0x77db970f, 0x6276, 0x48ba, { 0xba, 0x28, 0x07, 0x01, 0x43, 0xb4, 0x39, 0x2c } };
+#endif
 static const IID D3D_IID_IDXGISwapChain3 = { 0x94d99bdb, 0xf1f8, 0x4ab0, { 0xb2, 0x36, 0x7d, 0xa0, 0x17, 0x0e, 0xda, 0xb1 } };
 static const IID D3D_IID_IDXGIDebug = { 0x119e7452, 0xde9e, 0x40fe, { 0x88, 0x06, 0x88, 0xf9, 0x0c, 0x12, 0xb4, 0x41 } };
 static const IID D3D_IID_IDXGIInfoQueue = { 0xd67441c7, 0x672a, 0x476f, { 0x9e, 0x82, 0xcd, 0x55, 0xb4, 0x49, 0x49, 0xce } };
 static const GUID D3D_IID_DXGI_DEBUG_ALL = { 0xe48ae283, 0xda80, 0x490b, { 0x87, 0xe6, 0x43, 0xe9, 0xa9, 0xcf, 0xda, 0x08 } };
 static const GUID D3D_IID_D3DDebugObjectName = { 0x429b8c22, 0x9188, 0x4b0c, { 0x87, 0x42, 0xac, 0xb0, 0xbf, 0x85, 0xc2, 0x00 } };
-
-// static const IID D3D_IID_ID3DUserDefinedAnnotation = { 0xb2daad8b, 0x03d4, 0x4dbf, { 0x95, 0xeb, 0x32, 0xab, 0x4b, 0x63, 0xd0, 0xab } };
 
 static const IID D3D_IID_ID3D12Device = { 0x189819f1, 0x1db6, 0x4b57, { 0xbe, 0x54, 0x18, 0x21, 0x33, 0x9b, 0x85, 0xf7 } };
 static const IID D3D_IID_ID3D12CommandQueue = { 0x0ec870a6, 0x5d7e, 0x4c22, { 0x8c, 0xfc, 0x5b, 0xaa, 0xe0, 0x76, 0x16, 0xed } };
@@ -510,9 +510,7 @@ struct D3D12Renderer
     /* Reference to the parent device */
     SDL_GpuDevice *sdlGpuDevice;
 
-#if (defined(SDL_PLATFORM_XBOXONE) || defined(SDL_PLATFORM_XBOXSERIES))
-    IDXGIAdapter *adapter;
-#else
+#if !(defined(SDL_PLATFORM_XBOXONE) || defined(SDL_PLATFORM_XBOXSERIES))
     IDXGIDebug *dxgiDebug;
     IDXGIFactory4 *factory;
     IDXGIInfoQueue *dxgiInfoQueue;
@@ -1334,11 +1332,7 @@ static void D3D12_INTERNAL_DestroyRenderer(D3D12Renderer *renderer)
         ID3D12Device_Release(renderer->device);
         renderer->device = NULL;
     }
-#if (defined(SDL_PLATFORM_XBOXONE) || defined(SDL_PLATFORM_XBOXSERIES))
-    if (renderer->adapter) {
-        renderer->adapter->Release();
-    }
-#else
+#if !(defined(SDL_PLATFORM_XBOXONE) || defined(SDL_PLATFORM_XBOXSERIES))
     if (renderer->adapter) {
         IDXGIAdapter1_Release(renderer->adapter);
         renderer->adapter = NULL;
@@ -5913,6 +5907,7 @@ static void D3D12_INTERNAL_DestroySwapchain(
     D3D12Renderer *renderer,
     D3D12WindowData *windowData)
 {
+    renderer->commandQueue->PresentX(0, NULL, NULL);
     for (Uint32 i = 0; i < MAX_FRAMES_IN_FLIGHT; i += 1) {
         D3D12_INTERNAL_DestroyTexture(
             renderer,
@@ -7667,6 +7662,7 @@ static SDL_GpuDevice *D3D12_CreateDevice(SDL_bool debugMode, SDL_bool preferLowP
     PFN_D3D12_XBOX_CREATE_DEVICE D3D12XboxCreateDeviceFunc;
     D3D12XBOX_CREATE_DEVICE_PARAMETERS createDeviceParams;
     IDXGIDevice1 *dxgiDevice;
+    IDXGIAdapter *dxgiAdapter;
     IDXGIOutput *dxgiOutput;
 #else
     PFN_CREATE_DXGI_FACTORY1 CreateDXGIFactoryFunc;
@@ -7829,7 +7825,12 @@ static SDL_GpuDevice *D3D12_CreateDevice(SDL_bool debugMode, SDL_bool preferLowP
     createDeviceParams.GraphicsCommandQueueRingSizeBytes = D3D12XBOX_DEFAULT_SIZE_BYTES;
     createDeviceParams.GraphicsScratchMemorySizeBytes = D3D12XBOX_DEFAULT_SIZE_BYTES;
     createDeviceParams.ComputeScratchMemorySizeBytes = D3D12XBOX_DEFAULT_SIZE_BYTES;
-    createDeviceParams.ProcessDebugFlags = D3D12XBOX_PROCESS_DEBUG_FLAG_ENABLE_COMMON_STATE_PROMOTION;
+    createDeviceParams.DisableGeometryShaderAllocations = TRUE;
+    createDeviceParams.DisableTessellationShaderAllocations = TRUE;
+#if defined(SDL_PLATFORM_XBOXSERIES)
+    createDeviceParams.DisableDXR = TRUE;
+#endif
+    createDeviceParams.ProcessDebugFlags = D3D12XBOX_PROCESS_DEBUG_FLAG_ENABLE_COMMON_STATE_PROMOTION; /* FIXME: Needed? */
     if (debugMode) {
         createDeviceParams.ProcessDebugFlags |= D3D12XBOX_PROCESS_DEBUG_FLAG_DEBUG;
     }
@@ -7854,14 +7855,15 @@ static SDL_GpuDevice *D3D12_CreateDevice(SDL_bool debugMode, SDL_bool preferLowP
         ERROR_CHECK_RETURN("Could not get IDXGIDevice1 from D3D12Device", NULL);
     }
 
-    res = dxgiDevice->GetAdapter(&renderer->adapter);
+    res = dxgiDevice->GetAdapter(&dxgiAdapter);
     dxgiDevice->Release();
     if (FAILED(res)) {
         D3D12_INTERNAL_DestroyRenderer(renderer);
-        ERROR_CHECK_RETURN("Could not get adapter", NULL);
+        ERROR_CHECK_RETURN("Could not get IDXGIAdapter from IDXGIDevice1", NULL);
     }
 
-    res = renderer->adapter->EnumOutputs(0, &dxgiOutput);
+    res = dxgiAdapter->EnumOutputs(0, &dxgiOutput);
+    dxgiAdapter->Release();
     if (FAILED(res)) {
         D3D12_INTERNAL_DestroyRenderer(renderer);
         ERROR_CHECK_RETURN("Could not get DXGI output", NULL);
