@@ -1195,7 +1195,7 @@ SDL_GpuRenderPass *SDL_GpuBeginRenderPass(
             }
         }
 
-        if (depthStencilAttachmentInfo->cycle && (depthStencilAttachmentInfo->loadOp == SDL_GPU_LOADOP_LOAD || depthStencilAttachmentInfo->loadOp == SDL_GPU_LOADOP_LOAD)) {
+        if (depthStencilAttachmentInfo != NULL && depthStencilAttachmentInfo->cycle && (depthStencilAttachmentInfo->loadOp == SDL_GPU_LOADOP_LOAD || depthStencilAttachmentInfo->loadOp == SDL_GPU_LOADOP_LOAD)) {
             SDL_assert_release(!"Cannot cycle depth attachment when load op or stencil load op is LOAD!");
         }
     }
