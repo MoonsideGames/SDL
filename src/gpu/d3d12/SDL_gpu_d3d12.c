@@ -377,14 +377,6 @@ static D3D12_FILTER SDLToD3D12_Filter(
     return result;
 }
 
-#if (defined(SDL_PLATFORM_XBOXONE) || defined(SDL_PLATFORM_XBOXSERIES))
-static D3D12XBOX_PRESENT_FLAGS SDLToD3D12_PresentMode[] = {
-    D3D12XBOX_PRESENT_FLAG_NONE,        /* VSYNC */
-    D3D12XBOX_PRESENT_FLAG_IMMEDIATE,   /* IMMEDIATE */
-    D3D12XBOX_PRESENT_FLAG_DO_NOT_WAIT  /* MAILBOX */
-};
-#endif
-
 /* Structures */
 typedef struct D3D12Renderer D3D12Renderer;
 typedef struct D3D12CommandBufferPool D3D12CommandBufferPool;
@@ -5788,6 +5780,11 @@ static SDL_bool D3D12_SupportsSwapchainComposition(
     Uint32 colorSpaceSupport;
     HRESULT res;
 
+#if defined(SDL_PLATFORM_XBOXONE) || defined(SDL_PLATFORM_XBOXSERIES)
+    /* FIXME: HDR support would be nice to add, but it seems complicated... */
+    return swapchainComposition == SDL_GPU_SWAPCHAINCOMPOSITION_SDR ||
+           swapchainComposition == SDL_GPU_SWAPCHAINCOMPOSITION_SDR_LINEAR;
+#else
     format = SwapchainCompositionToTextureFormat[swapchainComposition];
 
     formatSupport.Format = format;
@@ -5811,9 +5808,6 @@ static SDL_bool D3D12_SupportsSwapchainComposition(
         return SDL_FALSE;
     }
 
-#if defined(SDL_PLATFORM_XBOXONE) || defined(SDL_PLATFORM_XBOXSERIES)
-    // FIXME XBOX
-#else
     /* Check the color space support if necessary */
     if (swapchainComposition != SDL_GPU_SWAPCHAINCOMPOSITION_SDR) {
         IDXGISwapChain3_CheckColorSpaceSupport(
@@ -5838,19 +5832,20 @@ static SDL_bool D3D12_SupportsPresentMode(
     (void)driverData;
     (void)window;
 
-    SDL_bool result = SDL_FALSE;
     switch (presentMode) {
     case SDL_GPU_PRESENTMODE_IMMEDIATE:
     case SDL_GPU_PRESENTMODE_VSYNC:
+        return SDL_TRUE;
     case SDL_GPU_PRESENTMODE_MAILBOX:
-        result = SDL_TRUE;
-        break;
+#if (defined(SDL_PLATFORM_XBOXONE) || defined(SDL_PLATFORM_XBOXSERIES))
+        return SDL_FALSE;
+#else
+        return SDL_TRUE;
+#endif
     default:
         SDL_assert(!"Unrecognized present mode");
-        result = SDL_FALSE;
-        break;
+        return SDL_FALSE;
     }
-    return result;
 }
 
 #if defined(SDL_PLATFORM_XBOXONE) || defined(SDL_PLATFORM_XBOXSERIES)
@@ -5892,7 +5887,7 @@ static SDL_bool D3D12_INTERNAL_CreateSwapchain(
     /* Initialize the swapchain data */
     windowData->presentMode = presentMode;
     windowData->swapchainComposition = swapchainComposition;
-    windowData->swapchainColorSpace = SwapchainCompositionToColorSpace[swapchainComposition];
+    windowData->swapchainColorSpace = DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709;
     windowData->frameCounter = 0;
 
     /* Precache blit pipelines for the swapchain format */
@@ -5900,7 +5895,7 @@ static SDL_bool D3D12_INTERNAL_CreateSwapchain(
         SDL_Gpu_FetchBlitPipeline(
             renderer->sdlGpuDevice,
             (SDL_GpuTextureType)i,
-            SwapchainCompositionToSDLTextureFormat[swapchainComposition],
+            createInfo.format,
             renderer->blitVertexShader,
             renderer->blitFrom2DShader,
             renderer->blitFrom2DArrayShader,
@@ -7085,6 +7080,21 @@ static void D3D12_Submit(
         D3D12PresentData *presentData = &d3d12CommandBuffer->presentDatas[i];
         D3D12WindowData *windowData = presentData->windowData;
 
+#if defined(SDL_PLATFORM_XBOXONE) || defined(SDL_PLATFORM_XBOXSERIES)
+        D3D12XBOX_PRESENT_PLANE_PARAMETERS planeParams;
+        SDL_zero(planeParams);
+        planeParams.Token = windowData->frameToken;
+        planeParams.ResourceCount = 1;
+        planeParams.ppResources = &windowData->textureContainers[windowData->frameCounter].activeTexture->resource;
+        planeParams.ColorSpace = DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709; /* FIXME */
+
+        D3D12XBOX_PRESENT_PARAMETERS presentParams;
+        SDL_zero(presentParams);
+        presentParams.Flags = (windowData->presentMode == SDL_GPU_PRESENTMODE_IMMEDIATE) ?
+            D3D12XBOX_PRESENT_FLAG_IMMEDIATE : D3D12XBOX_PRESENT_FLAG_NONE;
+
+        renderer->commandQueue->PresentX(1, &planeParams, &presentParams);
+#else
         /* NOTE: flip discard always supported since DXGI 1.4 is required */
         Uint32 syncInterval = 1;
         if (windowData->presentMode == SDL_GPU_PRESENTMODE_IMMEDIATE ||
@@ -7098,24 +7108,11 @@ static void D3D12_Submit(
             presentFlags = DXGI_PRESENT_ALLOW_TEARING;
         }
 
-#if defined(SDL_PLATFORM_XBOXONE) || defined(SDL_PLATFORM_XBOXSERIES)
-        D3D12XBOX_PRESENT_PLANE_PARAMETERS planeParams;
-        SDL_zero(planeParams);
-        planeParams.Token = windowData->frameToken;
-        planeParams.ResourceCount = 1;
-        planeParams.ppResources = &windowData->textureContainers[windowData->frameCounter].activeTexture->resource;
-        planeParams.ColorSpace = DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709; /* FIXME */
-
-        D3D12XBOX_PRESENT_PARAMETERS presentParams;
-        SDL_zero(presentParams);
-        presentParams.Flags = SDLToD3D12_PresentMode[windowData->presentMode];
-
-        renderer->commandQueue->PresentX(1, &planeParams, &presentParams);
-#else
         IDXGISwapChain_Present(
             windowData->swapchain,
             syncInterval,
             presentFlags);
+
         ID3D12Resource_Release(windowData->textureContainers[presentData->swapchainImageIndex].activeTexture->resource);
 #endif
 
@@ -7870,14 +7867,22 @@ static SDL_GpuDevice *D3D12_CreateDevice(SDL_bool debugMode, SDL_bool preferLowP
         ERROR_CHECK_RETURN("Could not get DXGI output", NULL);
     }
 
-    res = renderer->device->SetFrameIntervalX(dxgiOutput, D3D12XBOX_FRAME_INTERVAL_60_HZ, 1, D3D12XBOX_FRAME_INTERVAL_FLAG_NONE);
+    res = renderer->device->SetFrameIntervalX(
+        dxgiOutput,
+        D3D12XBOX_FRAME_INTERVAL_60_HZ,
+        MAX_FRAMES_IN_FLIGHT - 1, /* FIXME: All the Xbox examples use {# of backbuffers} - 1. Is this right? */
+        D3D12XBOX_FRAME_INTERVAL_FLAG_NONE);
     dxgiOutput->Release();
     if (FAILED(res)) {
         D3D12_INTERNAL_DestroyRenderer(renderer);
         ERROR_CHECK_RETURN("Could not get set frame interval", NULL);
     }
 
-    res = renderer->device->ScheduleFrameEventX(D3D12XBOX_FRAME_EVENT_ORIGIN, 0, NULL, D3D12XBOX_SCHEDULE_FRAME_EVENT_FLAG_NONE);
+    res = renderer->device->ScheduleFrameEventX(
+        D3D12XBOX_FRAME_EVENT_ORIGIN,
+        0,
+        NULL,
+        D3D12XBOX_SCHEDULE_FRAME_EVENT_FLAG_NONE);
     if (FAILED(res)) {
         D3D12_INTERNAL_DestroyRenderer(renderer);
         ERROR_CHECK_RETURN("Could not get schedule frame interval", NULL);
