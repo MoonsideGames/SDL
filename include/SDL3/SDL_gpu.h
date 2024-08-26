@@ -1389,6 +1389,9 @@ extern SDL_DECLSPEC void SDLCALL SDL_GpuReleaseGraphicsPipeline(
  * Commands only begin execution on the GPU once Submit is called.
  * Once the command buffer is submitted, it is no longer valid to use it.
  *
+ * Command buffers are executed in submission order. If you submit command buffer A and then command buffer B
+ * all commands in A will begin executing before any command in B begins executing.
+ *
  * In multi-threading scenarios, you should acquire and submit a command buffer on the same thread.
  * As long as you satisfy this requirement, all functionality related to command buffers is thread-safe.
  */
@@ -2319,6 +2322,11 @@ extern SDL_DECLSPEC SDL_GpuTexture *SDLCALL SDL_GpuAcquireSwapchainTexture(
  * Submits a command buffer so its commands can be processed on the GPU.
  * It is invalid to use the command buffer after this is called.
  *
+ * This must be called from the thread the command buffer was acquired on.
+ *
+ * All commands in the submission are guaranteed to begin executing before
+ * any command in a subsequent submission begins executing.
+ *
  * \param commandBuffer a command buffer
  *
  * \since This function is available since SDL 3.x.x
@@ -2336,12 +2344,17 @@ extern SDL_DECLSPEC void SDLCALL SDL_GpuSubmit(
  * You must release this fence when it is no longer needed or it will cause a leak.
  * It is invalid to use the command buffer after this is called.
  *
+ * This must be called from the thread the command buffer was acquired on.
+ *
+ * All commands in the submission are guaranteed to begin executing before
+ * any command in a subsequent submission begins executing.
+ *
  * \param commandBuffer a command buffer
  * \returns a fence associated with the command buffer
  *
  * \since This function is available since SDL 3.x.x
  *
- * \sa SDL_AcquireCommandBuffer
+ * \sa SDL_GpuAcquireCommandBuffer
  * \sa SDL_GpuAcquireSwapchainTexture
  * \sa SDL_GpuSubmit
  * \sa SDL_GpuReleaseFence
