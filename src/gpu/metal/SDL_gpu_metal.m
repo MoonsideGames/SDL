@@ -2653,9 +2653,9 @@ static void METAL_DrawPrimitives(
 
         [metalCommandBuffer->renderEncoder
             drawPrimitives:SDLToMetal_PrimitiveType[primitiveType]
+               vertexStart:firstVertex
                vertexCount:vertexCount
              instanceCount:instanceCount
-               vertexStart:firstVertex
               baseInstance:firstInstance];
     }
 }
