@@ -571,7 +571,7 @@ typedef struct SDL_GpuIndirectDrawCommand
 
 typedef struct SDL_GpuIndexedIndirectDrawCommand
 {
-    Uint32 indexCount;    /* number of vertices to draw */
+    Uint32 indexCount;    /* number of vertices to draw per instance */
     Uint32 instanceCount; /* number of instances to draw */
     Uint32 firstIndex;    /* base index within the index buffer */
     Uint32 vertexOffset;  /* value added to vertex index before indexing into the vertex buffer */
@@ -1732,7 +1732,7 @@ extern SDL_DECLSPEC void SDLCALL SDL_GpuBindFragmentStorageBuffers(
  * be 0.
  *
  * \param renderPass a render pass handle
- * \param indexCount the number of vertices to draw
+ * \param indexCount the number of vertices to draw per instance
  * \param instanceCount the number of instances to draw
  * \param firstIndex the starting index within the index buffer
  * \param vertexOffset value added to vertex index before indexing into the vertex buffer
