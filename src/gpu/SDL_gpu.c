@@ -1188,6 +1188,16 @@ SDL_GpuRenderPass *SDL_GpuBeginRenderPass(
     if (COMMAND_BUFFER_DEVICE->debugMode) {
         CHECK_COMMAND_BUFFER_RETURN_NULL
         CHECK_ANY_PASS_IN_PROGRESS_RETURN_NULL
+
+        for (Uint32 i = 0; i < colorAttachmentCount; i += 1) {
+            if (colorAttachmentInfos[i].cycle && colorAttachmentInfos[i].loadOp == SDL_GPU_LOADOP_LOAD) {
+                SDL_assert_release(!"Cannot cycle color attachment when load op is LOAD!");
+            }
+        }
+
+        if (depthStencilAttachmentInfo != NULL && depthStencilAttachmentInfo->cycle && (depthStencilAttachmentInfo->loadOp == SDL_GPU_LOADOP_LOAD || depthStencilAttachmentInfo->loadOp == SDL_GPU_LOADOP_LOAD)) {
+            SDL_assert_release(!"Cannot cycle depth attachment when load op or stencil load op is LOAD!");
+        }
     }
 
     COMMAND_BUFFER_DEVICE->BeginRenderPass(

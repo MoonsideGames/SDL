@@ -7816,13 +7816,6 @@ static void VULKAN_BeginRenderPass(
     }
 
     for (i = 0; i < colorAttachmentCount; i += 1) {
-        SDL_bool cycle;
-        if (colorAttachmentInfos[i].loadOp == SDL_GPU_LOADOP_LOAD) {
-            cycle = SDL_FALSE;
-        } else {
-            cycle = colorAttachmentInfos[i].cycle;
-        }
-
         VulkanTextureContainer *textureContainer = (VulkanTextureContainer *)colorAttachmentInfos[i].texture;
         VulkanTextureSubresource *subresource = VULKAN_INTERNAL_PrepareTextureSubresourceForWrite(
             renderer,
@@ -7830,7 +7823,7 @@ static void VULKAN_BeginRenderPass(
             textureContainer,
             textureContainer->header.info.type == SDL_GPU_TEXTURETYPE_3D ? 0 : colorAttachmentInfos[i].layerOrDepthPlane,
             colorAttachmentInfos[i].mipLevel,
-            cycle,
+            colorAttachmentInfos[i].cycle,
             VULKAN_TEXTURE_USAGE_MODE_COLOR_ATTACHMENT);
 
         if (subresource->msaaTexHandle != NULL) {
@@ -7854,16 +7847,6 @@ static void VULKAN_BeginRenderPass(
     vulkanCommandBuffer->colorAttachmentSubresourceCount = colorAttachmentCount;
 
     if (depthStencilAttachmentInfo != NULL) {
-        SDL_bool cycle;
-
-        if (
-            depthStencilAttachmentInfo->loadOp == SDL_GPU_LOADOP_LOAD ||
-            depthStencilAttachmentInfo->stencilLoadOp == SDL_GPU_LOADOP_LOAD) {
-            cycle = SDL_FALSE;
-        } else {
-            cycle = depthStencilAttachmentInfo->cycle;
-        }
-
         VulkanTextureContainer *textureContainer = (VulkanTextureContainer *)depthStencilAttachmentInfo->texture;
         VulkanTextureSubresource *subresource = VULKAN_INTERNAL_PrepareTextureSubresourceForWrite(
             renderer,
@@ -7871,7 +7854,7 @@ static void VULKAN_BeginRenderPass(
             textureContainer,
             0,
             0,
-            cycle,
+            depthStencilAttachmentInfo->cycle,
             VULKAN_TEXTURE_USAGE_MODE_DEPTH_STENCIL_ATTACHMENT);
 
         clearCount += 1;
