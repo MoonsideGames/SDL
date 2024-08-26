@@ -1524,17 +1524,18 @@ extern SDL_DECLSPEC void SDLCALL SDL_GpuPushComputeUniformData(
 
 /**
  * Begins a render pass on a command buffer.
- * A render pass consists of a set of texture subresources (or depth slices in the 3D texture case),
- * clear values, and load/store operations which will be rendered to during the render pass.
+ * A render pass consists of a set of texture subresources (or depth slices in the 3D texture case)
+ * which will be rendered to during the render pass,
+ * along with corresponding clear values and load/store operations.
  * All operations related to graphics pipelines must take place inside of a render pass.
  * A default viewport and scissor state are automatically set when this is called.
  * You cannot begin another render pass, or begin a compute pass or copy pass
  * until you have ended the render pass.
  *
  * \param commandBuffer a command buffer
- * \param colorAttachmentInfos an array of SDL_GpuColorAttachmentInfo structs
+ * \param colorAttachmentInfos an array of texture subresources with corresponding clear values and load/store ops
  * \param colorAttachmentCount the number of color attachments in the colorAttachmentInfos array
- * \param depthStencilAttachmentInfo the depth-stencil target and clear value, may be NULL
+ * \param depthStencilAttachmentInfo a texture subresource with corresponding clear value and load/store ops, may be NULL
  * \returns a render pass handle
  *
  * \since This function is available since SDL 3.x.x
