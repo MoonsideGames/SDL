@@ -6360,6 +6360,8 @@ static D3D12Fence *D3D12_INTERNAL_AcquireFence(
     }
 
     SDL_UnlockMutex(renderer->fenceLock);
+
+    (void)SDL_AtomicIncRef(&fence->referenceCount);
     return fence;
 }
 
@@ -6965,8 +6967,6 @@ static void D3D12_Submit(
     if (!d3d12CommandBuffer->inFlightFence) {
         SDL_LogError(SDL_LOG_CATEGORY_GPU, "Failed to acquire fence.");
     }
-    /* Command buffer has a reference to the in-flight fence */
-    (void)SDL_AtomicIncRef(&d3d12CommandBuffer->inFlightFence->referenceCount);
 
     /* Mark that a fence should be signaled after command list execution */
     res = ID3D12CommandQueue_Signal(
