@@ -2631,9 +2631,9 @@ static void METAL_DrawIndexedPrimitives(
                        indexCount:indexCount
                         indexType:SDLToMetal_IndexType[metalCommandBuffer->indexElementSize]
                       indexBuffer:metalCommandBuffer->indexBuffer->handle
-                indexBufferOffset:metalCommandBuffer->indexBufferOffset + (vertexOffset * indexSize)
+                indexBufferOffset:metalCommandBuffer->indexBufferOffset + (firstIndex * indexSize)
                     instanceCount:instanceCount
-                       baseVertex:firstIndex
+                       baseVertex:vertexOffset
                      baseInstance:firstInstance];
     }
 }
