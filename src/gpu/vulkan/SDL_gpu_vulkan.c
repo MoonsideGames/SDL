@@ -5300,11 +5300,11 @@ static void VULKAN_INTERNAL_BindGraphicsDescriptorSets(
 
 static void VULKAN_DrawIndexedPrimitives(
     SDL_GpuCommandBuffer *commandBuffer,
-    Uint32 baseVertex,
-    Uint32 startIndex,
-    Uint32 vertexCount,
+    Uint32 indexCount,
     Uint32 instanceCount,
-    Uint32 baseInstance)
+    Uint32 firstIndex,
+    Uint32 vertexOffset,
+    Uint32 firstInstance)
 {
     VulkanCommandBuffer *vulkanCommandBuffer = (VulkanCommandBuffer *)commandBuffer;
     VulkanRenderer *renderer = (VulkanRenderer *)vulkanCommandBuffer->renderer;
@@ -5313,19 +5313,19 @@ static void VULKAN_DrawIndexedPrimitives(
 
     renderer->vkCmdDrawIndexed(
         vulkanCommandBuffer->commandBuffer,
-        vertexCount,
+        indexCount,
         instanceCount,
-        startIndex,
-        baseVertex,
-        baseInstance);
+        firstIndex,
+        vertexOffset,
+        firstInstance);
 }
 
 static void VULKAN_DrawPrimitives(
     SDL_GpuCommandBuffer *commandBuffer,
-    Uint32 vertexStart,
     Uint32 vertexCount,
     Uint32 instanceCount,
-    Uint32 baseInstance)
+    Uint32 firstVertex,
+    Uint32 firstInstance)
 {
     VulkanCommandBuffer *vulkanCommandBuffer = (VulkanCommandBuffer *)commandBuffer;
     VulkanRenderer *renderer = (VulkanRenderer *)vulkanCommandBuffer->renderer;
@@ -5336,8 +5336,8 @@ static void VULKAN_DrawPrimitives(
         vulkanCommandBuffer->commandBuffer,
         vertexCount,
         instanceCount,
-        vertexStart,
-        baseInstance);
+        firstVertex,
+        firstInstance);
 }
 
 static void VULKAN_DrawPrimitivesIndirect(

@@ -2613,11 +2613,11 @@ static void METAL_INTERNAL_BindComputeResources(
 
 static void METAL_DrawIndexedPrimitives(
     SDL_GpuCommandBuffer *commandBuffer,
-    Uint32 baseVertex,
-    Uint32 startIndex,
-    Uint32 vertexCount,
+    Uint32 indexCount,
     Uint32 instanceCount,
-    Uint32 baseInstance)
+    Uint32 firstIndex,
+    Uint32 vertexOffset,
+    Uint32 firstInstance)
 {
     @autoreleasepool {
         MetalCommandBuffer *metalCommandBuffer = (MetalCommandBuffer *)commandBuffer;
@@ -2628,22 +2628,22 @@ static void METAL_DrawIndexedPrimitives(
 
         [metalCommandBuffer->renderEncoder
             drawIndexedPrimitives:SDLToMetal_PrimitiveType[primitiveType]
-                       indexCount:vertexCount
+                       indexCount:indexCount
                         indexType:SDLToMetal_IndexType[metalCommandBuffer->indexElementSize]
                       indexBuffer:metalCommandBuffer->indexBuffer->handle
-                indexBufferOffset:metalCommandBuffer->indexBufferOffset + (startIndex * indexSize)
+                indexBufferOffset:metalCommandBuffer->indexBufferOffset + (firstIndex * indexSize)
                     instanceCount:instanceCount
-                       baseVertex:baseVertex
-                     baseInstance:baseInstance];
+                       baseVertex:vertexOffset
+                     baseInstance:firstInstance];
     }
 }
 
 static void METAL_DrawPrimitives(
     SDL_GpuCommandBuffer *commandBuffer,
-    Uint32 vertexStart,
     Uint32 vertexCount,
     Uint32 instanceCount,
-    Uint32 baseInstance)
+    Uint32 firstVertex,
+    Uint32 firstInstance)
 {
     @autoreleasepool {
         MetalCommandBuffer *metalCommandBuffer = (MetalCommandBuffer *)commandBuffer;
@@ -2653,10 +2653,10 @@ static void METAL_DrawPrimitives(
 
         [metalCommandBuffer->renderEncoder
             drawPrimitives:SDLToMetal_PrimitiveType[primitiveType]
-               vertexStart:vertexStart
+               vertexStart:firstVertex
                vertexCount:vertexCount
              instanceCount:instanceCount
-              baseInstance:baseInstance];
+              baseInstance:firstInstance];
     }
 }
 

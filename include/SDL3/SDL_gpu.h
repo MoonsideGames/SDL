@@ -571,7 +571,7 @@ typedef struct SDL_GpuIndirectDrawCommand
 
 typedef struct SDL_GpuIndexedIndirectDrawCommand
 {
-    Uint32 indexCount;    /* number of vertices to draw */
+    Uint32 indexCount;    /* number of vertices to draw per instance */
     Uint32 instanceCount; /* number of instances to draw */
     Uint32 firstIndex;    /* base index within the index buffer */
     Uint32 vertexOffset;  /* value added to vertex index before indexing into the vertex buffer */
@@ -1726,49 +1726,51 @@ extern SDL_DECLSPEC void SDLCALL SDL_GpuBindFragmentStorageBuffers(
  * Draws data using bound graphics state with an index buffer and instancing enabled.
  * You must not call this function before binding a graphics pipeline.
  *
- * Note that the `baseVertex` and `baseInstance` parameters are NOT compatible with
+ * Note that the `firstVertex` and `firstInstance` parameters are NOT compatible with
  * built-in vertex/instance ID variables in shaders (for example, SV_VertexID). If
  * your shader depends on these variables, the correlating draw call parameter MUST
  * be 0.
  *
  * \param renderPass a render pass handle
- * \param baseVertex the starting offset to read from the vertex buffer
- * \param startIndex the starting offset to read from the index buffer
- * \param vertexCount the number of vertices to draw
- * \param instanceCount the number of instances that will be drawn
+ * \param indexCount the number of vertices to draw per instance
+ * \param instanceCount the number of instances to draw
+ * \param firstIndex the starting index within the index buffer
+ * \param vertexOffset value added to vertex index before indexing into the vertex buffer
+ * \param firstInstance the ID of the first instance to draw
  *
  * \since This function is available since SDL 3.x.x
  */
 extern SDL_DECLSPEC void SDLCALL SDL_GpuDrawIndexedPrimitives(
     SDL_GpuRenderPass *renderPass,
-    Uint32 baseVertex,
-    Uint32 startIndex,
-    Uint32 vertexCount,
+    Uint32 indexCount,
     Uint32 instanceCount,
-    Uint32 baseInstance);
+    Uint32 firstIndex,
+    Uint32 vertexOffset,
+    Uint32 firstInstance);
 
 /**
  * Draws data using bound graphics state.
  * You must not call this function before binding a graphics pipeline.
  *
- * Note that the `vertexStart` and `baseInstance` parameters are NOT compatible with
+ * Note that the `firstVertex` and `firstInstance` parameters are NOT compatible with
  * built-in vertex/instance ID variables in shaders (for example, SV_VertexID). If
  * your shader depends on these variables, the correlating draw call parameter MUST
  * be 0.
  *
  * \param renderPass a render pass handle
- * \param vertexStart The starting offset to read from the vertex buffer
- * \param vertexCount The number of vertices to draw
- * \param instanceCount The number of instances that will be drawn
+ * \param vertexCount the number of vertices to draw
+ * \param instanceCount the number of instances that will be drawn
+ * \param firstVertex the index of the first vertex to draw
+ * \param firstInstance the ID of the first instance to draw
  *
  * \since This function is available since SDL 3.x.x
  */
 extern SDL_DECLSPEC void SDLCALL SDL_GpuDrawPrimitives(
     SDL_GpuRenderPass *renderPass,
-    Uint32 vertexStart,
     Uint32 vertexCount,
     Uint32 instanceCount,
-    Uint32 baseInstance);
+    Uint32 firstVertex,
+    Uint32 firstInstance);
 
 /**
  * Draws data using bound graphics state and with draw parameters set from a buffer.
