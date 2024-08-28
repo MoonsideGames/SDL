@@ -487,6 +487,7 @@ typedef struct D3D12WindowData
     SDL_Window *window;
 #if (defined(SDL_PLATFORM_XBOXONE) || defined(SDL_PLATFORM_XBOXSERIES))
     D3D12XBOX_FRAME_PIPELINE_TOKEN frameToken;
+    Uint32 swapchainWidth, swapchainHeight;
 #else
     IDXGISwapChain3 *swapchain;
 #endif
@@ -5883,6 +5884,8 @@ static SDL_bool D3D12_INTERNAL_CreateSwapchain(
     windowData->swapchainComposition = swapchainComposition;
     windowData->swapchainColorSpace = DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709;
     windowData->frameCounter = 0;
+    windowData->swapchainWidth = width;
+    windowData->swapchainHeight = height;
 
     /* Precache blit pipelines for the swapchain format */
     for (Uint32 i = 0; i < 4; i += 1) {
@@ -5913,6 +5916,38 @@ static void D3D12_INTERNAL_DestroySwapchain(
             renderer,
             windowData->textureContainers[i].activeTexture);
     }
+}
+
+static SDL_bool D3D12_INTERNAL_ResizeSwapchainIfNeeded(
+    D3D12Renderer *renderer,
+    D3D12WindowData *windowData)
+{
+    int w, h;
+    SDL_GetWindowSize(windowData->window, &w, &h);
+
+    if (w != windowData->swapchainWidth || h != windowData->swapchainHeight) {
+        /* Wait so we don't release in-flight views */
+        D3D12_Wait((SDL_GpuRenderer *)renderer);
+
+        /* Present a black screen */
+        renderer->commandQueue->PresentX(0, NULL, NULL);
+
+        /* Clean up the previous swapchain textures */
+        for (Uint32 i = 0; i < MAX_FRAMES_IN_FLIGHT; i += 1) {
+            D3D12_INTERNAL_DestroyTexture(
+                renderer,
+                windowData->textureContainers[i].activeTexture);
+        }
+
+        /* Create a new swapchain */
+        D3D12_INTERNAL_CreateSwapchain(
+            renderer,
+            windowData,
+            windowData->swapchainComposition,
+            windowData->presentMode);
+    }
+
+    return SDL_TRUE;
 }
 #else
 static SDL_bool D3D12_INTERNAL_InitializeSwapchainTexture(
@@ -6030,49 +6065,55 @@ static SDL_bool D3D12_INTERNAL_InitializeSwapchainTexture(
     return SDL_TRUE;
 }
 
-static SDL_bool D3D12_INTERNAL_ResizeSwapchain(
+static SDL_bool D3D12_INTERNAL_ResizeSwapchainIfNeeded(
     D3D12Renderer *renderer,
-    D3D12WindowData *windowData,
-    Sint32 width,
-    Sint32 height)
+    D3D12WindowData *windowData)
 {
-    /* Wait so we don't release in-flight views */
-    D3D12_Wait((SDL_GpuRenderer *)renderer);
+    DXGI_SWAP_CHAIN_DESC swapchainDesc;
+    int w, h;
 
-    /* Release views and clean up */
-    for (Uint32 i = 0; i < MAX_FRAMES_IN_FLIGHT; i += 1) {
-        D3D12_INTERNAL_ReleaseCpuDescriptorHandle(
-            renderer,
-            &windowData->textureContainers[i].activeTexture->srvHandle);
-        D3D12_INTERNAL_ReleaseCpuDescriptorHandle(
-            renderer,
-            &windowData->textureContainers[i].activeTexture->subresources[0].rtvHandles[0]);
+    IDXGISwapChain_GetDesc(windowData->swapchain, &swapchainDesc);
+    SDL_GetWindowSize(windowData->window, &w, &h);
 
-        SDL_free(windowData->textureContainers[i].activeTexture->subresources[0].rtvHandles);
-        SDL_free(windowData->textureContainers[i].activeTexture->subresources);
-        SDL_free(windowData->textureContainers[i].activeTexture);
-        SDL_free(windowData->textureContainers[i].textures);
-    }
+    if (w != swapchainDesc.BufferDesc.Width || h != swapchainDesc.BufferDesc.Height) {
+        /* Wait so we don't release in-flight views */
+        D3D12_Wait((SDL_GpuRenderer *)renderer);
 
-    /* Resize the swapchain */
-    HRESULT res = IDXGISwapChain_ResizeBuffers(
-        windowData->swapchain,
-        0, /* Keep buffer count the same */
-        width,
-        height,
-        DXGI_FORMAT_UNKNOWN, /* Keep the old format */
-        renderer->supportsTearing ? DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING : 0);
-    ERROR_CHECK_RETURN("Could not resize swapchain buffers", 0)
-
-    /* Create texture object for the swapchain */
-    for (Uint32 i = 0; i < MAX_FRAMES_IN_FLIGHT; i += 1) {
-        if (!D3D12_INTERNAL_InitializeSwapchainTexture(
+        /* Release views and clean up */
+        for (Uint32 i = 0; i < MAX_FRAMES_IN_FLIGHT; i += 1) {
+            D3D12_INTERNAL_ReleaseCpuDescriptorHandle(
                 renderer,
-                windowData->swapchain,
-                windowData->swapchainComposition,
-                i,
-                &windowData->textureContainers[i])) {
-            return SDL_FALSE;
+                &windowData->textureContainers[i].activeTexture->srvHandle);
+            D3D12_INTERNAL_ReleaseCpuDescriptorHandle(
+                renderer,
+                &windowData->textureContainers[i].activeTexture->subresources[0].rtvHandles[0]);
+
+            SDL_free(windowData->textureContainers[i].activeTexture->subresources[0].rtvHandles);
+            SDL_free(windowData->textureContainers[i].activeTexture->subresources);
+            SDL_free(windowData->textureContainers[i].activeTexture);
+            SDL_free(windowData->textureContainers[i].textures);
+        }
+
+        /* Resize the swapchain */
+        HRESULT res = IDXGISwapChain_ResizeBuffers(
+            windowData->swapchain,
+            0, /* Keep buffer count the same */
+            swapchainDesc.BufferDesc.Width,
+            swapchainDesc.BufferDesc.Height,
+            DXGI_FORMAT_UNKNOWN, /* Keep the old format */
+            renderer->supportsTearing ? DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING : 0);
+        ERROR_CHECK_RETURN("Could not resize swapchain buffers", 0)
+
+        /* Create texture object for the swapchain */
+        for (Uint32 i = 0; i < MAX_FRAMES_IN_FLIGHT; i += 1) {
+            if (!D3D12_INTERNAL_InitializeSwapchainTexture(
+                    renderer,
+                    windowData->swapchain,
+                    windowData->swapchainComposition,
+                    i,
+                    &windowData->textureContainers[i])) {
+                return SDL_FALSE;
+            }
         }
     }
 
@@ -6665,9 +6706,7 @@ static SDL_GpuTexture *D3D12_AcquireSwapchainTexture(
     D3D12CommandBuffer *d3d12CommandBuffer = (D3D12CommandBuffer *)commandBuffer;
     D3D12Renderer *renderer = d3d12CommandBuffer->renderer;
     D3D12WindowData *windowData;
-    DXGI_SWAP_CHAIN_DESC swapchainDesc;
     Uint32 swapchainIndex;
-    int w, h;
     HRESULT res;
 
     windowData = D3D12_INTERNAL_FetchWindowData(window);
@@ -6675,20 +6714,10 @@ static SDL_GpuTexture *D3D12_AcquireSwapchainTexture(
         return NULL;
     }
 
-#if !(defined(SDL_PLATFORM_XBOXONE) || defined(SDL_PLATFORM_XBOXSERIES))
-    /* Check for window size changes and resize the swapchain if needed. */
-    IDXGISwapChain_GetDesc(windowData->swapchain, &swapchainDesc);
-    SDL_GetWindowSize(window, &w, &h);
-
-    if (w != swapchainDesc.BufferDesc.Width || h != swapchainDesc.BufferDesc.Height) {
-        res = D3D12_INTERNAL_ResizeSwapchain(
-            renderer,
-            windowData,
-            w,
-            h);
-        ERROR_CHECK_RETURN("Could not resize swapchain", NULL);
-    }
-#endif
+    res = D3D12_INTERNAL_ResizeSwapchainIfNeeded(
+        renderer,
+        windowData);
+    ERROR_CHECK_RETURN("Could not resize swapchain", NULL);
 
     if (windowData->inFlightFences[windowData->frameCounter] != NULL) {
         if (windowData->presentMode == SDL_GPU_PRESENTMODE_VSYNC) {
@@ -7661,9 +7690,6 @@ static SDL_GpuDevice *D3D12_CreateDevice(SDL_bool debugMode, SDL_bool preferLowP
 #if (defined(SDL_PLATFORM_XBOXONE) || defined(SDL_PLATFORM_XBOXSERIES))
     PFN_D3D12_XBOX_CREATE_DEVICE D3D12XboxCreateDeviceFunc;
     D3D12XBOX_CREATE_DEVICE_PARAMETERS createDeviceParams;
-    IDXGIDevice1 *dxgiDevice;
-    IDXGIAdapter *dxgiAdapter;
-    IDXGIOutput *dxgiOutput;
 #else
     PFN_CREATE_DXGI_FACTORY1 CreateDXGIFactoryFunc;
     IDXGIFactory1 *factory1;
@@ -7845,36 +7871,11 @@ static SDL_GpuDevice *D3D12_CreateDevice(SDL_bool debugMode, SDL_bool preferLowP
         ERROR_CHECK_RETURN("Could not create D3D12Device", NULL);
     }
 
-    /* Get the adapter and output */
-    res = ID3D12Device_QueryInterface(
-        renderer->device,
-        D3D_IID_IDXGIDevice1,
-        (void **)&dxgiDevice);
-    if (FAILED(res)) {
-        D3D12_INTERNAL_DestroyRenderer(renderer);
-        ERROR_CHECK_RETURN("Could not get IDXGIDevice1 from D3D12Device", NULL);
-    }
-
-    res = dxgiDevice->GetAdapter(&dxgiAdapter);
-    dxgiDevice->Release();
-    if (FAILED(res)) {
-        D3D12_INTERNAL_DestroyRenderer(renderer);
-        ERROR_CHECK_RETURN("Could not get IDXGIAdapter from IDXGIDevice1", NULL);
-    }
-
-    res = dxgiAdapter->EnumOutputs(0, &dxgiOutput);
-    dxgiAdapter->Release();
-    if (FAILED(res)) {
-        D3D12_INTERNAL_DestroyRenderer(renderer);
-        ERROR_CHECK_RETURN("Could not get DXGI output", NULL);
-    }
-
     res = renderer->device->SetFrameIntervalX(
-        dxgiOutput,
+        NULL,
         D3D12XBOX_FRAME_INTERVAL_60_HZ,
-        MAX_FRAMES_IN_FLIGHT - 1, /* FIXME: All the Xbox examples use {# of backbuffers} - 1. Is this right? */
+        MAX_FRAMES_IN_FLIGHT - 1,
         D3D12XBOX_FRAME_INTERVAL_FLAG_NONE);
-    dxgiOutput->Release();
     if (FAILED(res)) {
         D3D12_INTERNAL_DestroyRenderer(renderer);
         ERROR_CHECK_RETURN("Could not get set frame interval", NULL);
