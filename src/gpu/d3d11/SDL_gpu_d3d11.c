@@ -3950,7 +3950,7 @@ static void D3D11_DrawIndexedPrimitives(
     Uint32 indexCount,
     Uint32 instanceCount,
     Uint32 firstIndex,
-    Uint32 vertexOffset,
+    Sint32 vertexOffset,
     Uint32 firstInstance)
 {
     D3D11CommandBuffer *d3d11CommandBuffer = (D3D11CommandBuffer *)commandBuffer;

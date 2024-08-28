@@ -574,7 +574,7 @@ typedef struct SDL_GpuIndexedIndirectDrawCommand
     Uint32 indexCount;    /* number of vertices to draw per instance */
     Uint32 instanceCount; /* number of instances to draw */
     Uint32 firstIndex;    /* base index within the index buffer */
-    Uint32 vertexOffset;  /* value added to vertex index before indexing into the vertex buffer */
+    Sint32 vertexOffset;  /* value added to vertex index before indexing into the vertex buffer */
     Uint32 firstInstance; /* ID of the first instance to draw */
 } SDL_GpuIndexedIndirectDrawCommand;
 
@@ -1745,7 +1745,7 @@ extern SDL_DECLSPEC void SDLCALL SDL_GpuDrawIndexedPrimitives(
     Uint32 indexCount,
     Uint32 instanceCount,
     Uint32 firstIndex,
-    Uint32 vertexOffset,
+    Sint32 vertexOffset,
     Uint32 firstInstance);
 
 /**

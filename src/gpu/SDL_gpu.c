@@ -1480,7 +1480,7 @@ void SDL_GpuDrawIndexedPrimitives(
     Uint32 indexCount,
     Uint32 instanceCount,
     Uint32 firstIndex,
-    Uint32 vertexOffset,
+    Sint32 vertexOffset,
     Uint32 firstInstance)
 {
     if (renderPass == NULL) {
