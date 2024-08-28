@@ -40,22 +40,13 @@
         return NULL;                                               \
     }
 
-#define CHECK_ANY_PASS_IN_PROGRESS                                              \
+#define CHECK_ANY_PASS_IN_PROGRESS(msg, retval)                                 \
     if (                                                                        \
         ((CommandBufferCommonHeader *)commandBuffer)->renderPass.inProgress ||  \
         ((CommandBufferCommonHeader *)commandBuffer)->computePass.inProgress || \
         ((CommandBufferCommonHeader *)commandBuffer)->copyPass.inProgress) {    \
-        SDL_assert_release(!"Pass already in progress!");                       \
-        return;                                                            \
-    }
-
-#define CHECK_ANY_PASS_IN_PROGRESS_RETURN_NULL                                              \
-    if (                                                                        \
-        ((CommandBufferCommonHeader *)commandBuffer)->renderPass.inProgress ||  \
-        ((CommandBufferCommonHeader *)commandBuffer)->computePass.inProgress || \
-        ((CommandBufferCommonHeader *)commandBuffer)->copyPass.inProgress) {    \
-        SDL_assert_release(!"Pass already in progress!");                       \
-        return NULL;                                                            \
+        SDL_assert_release(!msg);                                               \
+        return retval;                                                          \
     }
 
 #define CHECK_RENDERPASS                                     \
@@ -1187,7 +1178,7 @@ SDL_GpuRenderPass *SDL_GpuBeginRenderPass(
 
     if (COMMAND_BUFFER_DEVICE->debugMode) {
         CHECK_COMMAND_BUFFER_RETURN_NULL
-        CHECK_ANY_PASS_IN_PROGRESS_RETURN_NULL
+        CHECK_ANY_PASS_IN_PROGRESS("Cannot begin render pass during another pass!", NULL)
 
         for (Uint32 i = 0; i < colorAttachmentCount; i += 1) {
             if (colorAttachmentInfos[i].cycle && colorAttachmentInfos[i].loadOp == SDL_GPU_LOADOP_LOAD) {
@@ -1649,7 +1640,7 @@ SDL_GpuComputePass *SDL_GpuBeginComputePass(
     }
     if (COMMAND_BUFFER_DEVICE->debugMode) {
         CHECK_COMMAND_BUFFER_RETURN_NULL
-        CHECK_ANY_PASS_IN_PROGRESS_RETURN_NULL
+        CHECK_ANY_PASS_IN_PROGRESS("Cannot begin compute pass during another pass!", NULL)
     }
 
     COMMAND_BUFFER_DEVICE->BeginComputePass(
@@ -1857,7 +1848,7 @@ SDL_GpuCopyPass *SDL_GpuBeginCopyPass(
 
     if (COMMAND_BUFFER_DEVICE->debugMode) {
         CHECK_COMMAND_BUFFER_RETURN_NULL
-        CHECK_ANY_PASS_IN_PROGRESS_RETURN_NULL
+        CHECK_ANY_PASS_IN_PROGRESS("Cannot begin copy pass during another pass!", NULL)
     }
 
     COMMAND_BUFFER_DEVICE->BeginCopyPass(
@@ -2065,7 +2056,7 @@ void SDL_GpuGenerateMipmaps(
 
     if (COMMAND_BUFFER_DEVICE->debugMode) {
         CHECK_COMMAND_BUFFER
-        CHECK_ANY_PASS_IN_PROGRESS
+        CHECK_ANY_PASS_IN_PROGRESS("Cannot generate mipmaps during a pass!", )
 
         TextureCommonHeader *header = (TextureCommonHeader *)texture;
         if (header->info.levelCount <= 1) {
@@ -2107,7 +2098,7 @@ void SDL_GpuBlit(
 
     if (COMMAND_BUFFER_DEVICE->debugMode) {
         CHECK_COMMAND_BUFFER
-        CHECK_ANY_PASS_IN_PROGRESS
+        CHECK_ANY_PASS_IN_PROGRESS("Cannot blit during a pass!", )
 
         /* Validation */
         SDL_bool failed = SDL_FALSE;
@@ -2287,6 +2278,7 @@ SDL_GpuTexture *SDL_GpuAcquireSwapchainTexture(
 
     if (COMMAND_BUFFER_DEVICE->debugMode) {
         CHECK_COMMAND_BUFFER_RETURN_NULL
+        CHECK_ANY_PASS_IN_PROGRESS("Cannot acquire a swapchain texture during a pass!", NULL)
     }
 
     return COMMAND_BUFFER_DEVICE->AcquireSwapchainTexture(
