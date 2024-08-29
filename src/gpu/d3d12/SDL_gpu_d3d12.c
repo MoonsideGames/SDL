@@ -7872,9 +7872,8 @@ static SDL_GpuDevice *D3D12_CreateDevice(SDL_bool debugMode, SDL_bool preferLowP
 #if defined(SDL_PLATFORM_XBOXSERIES)
         createDeviceParams.DisableDXR = TRUE;
 #endif
-        createDeviceParams.ProcessDebugFlags = D3D12XBOX_PROCESS_DEBUG_FLAG_ENABLE_COMMON_STATE_PROMOTION; /* FIXME: Needed? */
         if (debugMode) {
-            createDeviceParams.ProcessDebugFlags |= D3D12XBOX_PROCESS_DEBUG_FLAG_DEBUG;
+            createDeviceParams.ProcessDebugFlags = D3D12XBOX_PROCESS_DEBUG_FLAG_DEBUG;
         }
 
         res = D3D12XboxCreateDeviceFunc(
