@@ -65,12 +65,12 @@ SDL_bool SDL_GetGDKDefaultUser(void *outUserHandle)
 }
 
 SDL_DECLSPEC void SDLCALL SDL_GDKSuspendGpu(SDL_GpuDevice *device);
-void SDL_GDKSuspendGpu(void)
+void SDL_GDKSuspendGpu(SDL_GpuDevice *device)
 {
 }
 
 SDL_DECLSPEC void SDLCALL SDL_GDKResumeGpu(SDL_GpuDevice *device);
-void SDL_GDKResumeGpu(void)
+void SDL_GDKResumeGpu(SDL_GpuDevice *device)
 {
 }
 
