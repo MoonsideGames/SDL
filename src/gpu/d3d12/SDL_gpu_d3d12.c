@@ -3011,6 +3011,11 @@ static D3D12Buffer *D3D12_INTERNAL_CreateBuffer(
     if (usageFlags & SDL_GPU_BUFFERUSAGE_COMPUTE_STORAGE_WRITE_BIT) {
         resourceFlags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
     }
+#if (defined(SDL_PLATFORM_XBOXONE) || defined(SDL_PLATFORM_XBOXSERIES))
+    if (usageFlags & SDL_GPU_BUFFERUSAGE_INDIRECT_BIT) {
+        resourceFlags |= D3D12XBOX_RESOURCE_FLAG_ALLOW_INDIRECT_BUFFER;
+    }
+#endif
 
     heapProperties.CreationNodeMask = 0; /* We don't do multi-adapter operation */
     heapProperties.VisibleNodeMask = 0;  /* We don't do multi-adapter operation */
