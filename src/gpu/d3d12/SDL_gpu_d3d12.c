@@ -1461,14 +1461,11 @@ static void D3D12_INTERNAL_TextureSubresourceBarrier(
 }
 
 static D3D12_RESOURCE_STATES D3D12_INTERNAL_DefaultTextureResourceState(
-    SDL_GpuTextureUsageFlags usageFlags,
-    SDL_bool isSwapchainTexture)
+    SDL_GpuTextureUsageFlags usageFlags)
 {
     /* NOTE: order matters here! */
 
-    if (isSwapchainTexture) {
-        return D3D12_RESOURCE_STATE_PRESENT;
-    } else if (usageFlags & SDL_GPU_TEXTUREUSAGE_SAMPLER_BIT) {
+    if (usageFlags & SDL_GPU_TEXTUREUSAGE_SAMPLER_BIT) {
         return D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE;
     } else if (usageFlags & SDL_GPU_TEXTUREUSAGE_GRAPHICS_STORAGE_READ_BIT) {
         return D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE;
@@ -1493,7 +1490,7 @@ static void D3D12_INTERNAL_TextureSubresourceTransitionFromDefaultUsage(
 {
     D3D12_INTERNAL_TextureSubresourceBarrier(
         commandBuffer,
-        D3D12_INTERNAL_DefaultTextureResourceState(textureSubresource->parent->container->header.info.usageFlags, SDL_FALSE),
+        D3D12_INTERNAL_DefaultTextureResourceState(textureSubresource->parent->container->header.info.usageFlags),
         destinationUsageMode,
         textureSubresource);
 }
@@ -1519,7 +1516,7 @@ static void D3D12_INTERNAL_TextureSubresourceTransitionToDefaultUsage(
     D3D12_INTERNAL_TextureSubresourceBarrier(
         commandBuffer,
         sourceUsageMode,
-        D3D12_INTERNAL_DefaultTextureResourceState(textureSubresource->parent->container->header.info.usageFlags, SDL_FALSE),
+        D3D12_INTERNAL_DefaultTextureResourceState(textureSubresource->parent->container->header.info.usageFlags),
         textureSubresource);
 }
 
@@ -2748,7 +2745,9 @@ static D3D12Texture *D3D12_INTERNAL_CreateTexture(
         desc.Flags = resourceFlags;
     }
 
-    initialState = D3D12_INTERNAL_DefaultTextureResourceState(textureCreateInfo->usageFlags, isSwapchainTexture);
+    initialState = isSwapchainTexture ?
+        D3D12_RESOURCE_STATE_PRESENT :
+        D3D12_INTERNAL_DefaultTextureResourceState(textureCreateInfo->usageFlags);
     clearValue.Format = desc.Format;
 
     res = ID3D12Device_CreateCommittedResource(
@@ -7062,10 +7061,19 @@ static void D3D12_Submit(
         Uint32 swapchainIndex = d3d12CommandBuffer->presentDatas[i].swapchainImageIndex;
         D3D12TextureContainer *container = &d3d12CommandBuffer->presentDatas[i].windowData->textureContainers[swapchainIndex];
         D3D12TextureSubresource *subresource = D3D12_INTERNAL_FetchTextureSubresource(container, 0, 0);
-        D3D12_INTERNAL_TextureSubresourceTransitionFromDefaultUsage(
-            d3d12CommandBuffer,
-            D3D12_RESOURCE_STATE_PRESENT,
-            subresource);
+
+        D3D12_RESOURCE_BARRIER barrierDesc;
+        barrierDesc.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+        barrierDesc.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+        barrierDesc.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
+        barrierDesc.Transition.StateAfter = D3D12_RESOURCE_STATE_PRESENT;
+        barrierDesc.Transition.pResource = subresource->parent->resource;
+        barrierDesc.Transition.Subresource = subresource->index;
+
+        ID3D12GraphicsCommandList_ResourceBarrier(
+            d3d12CommandBuffer->graphicsCommandList,
+            1,
+            &barrierDesc);
     }
 
     /* Notify the command buffer that we have completed recording */
