@@ -7902,7 +7902,7 @@ static SDL_GpuDevice *D3D12_CreateDevice(SDL_bool debugMode, SDL_bool preferLowP
             D3D12XBOX_SCHEDULE_FRAME_EVENT_FLAG_NONE);
         if (FAILED(res)) {
             D3D12_INTERNAL_DestroyRenderer(renderer);
-            ERROR_CHECK_RETURN("Could not get schedule frame interval", NULL);
+            ERROR_CHECK_RETURN("Could not schedule frame events", NULL);
         }
 
         s_Device = renderer->device;
@@ -8188,3 +8188,65 @@ SDL_GpuBootstrap D3D12Driver = {
 };
 
 #endif /* SDL_GPU_D3D12 */
+
+/* GDK-specific APIs */
+
+#ifdef SDL_PLATFORM_GDK
+
+void SDL_GDKSuspendGpu(SDL_GpuDevice *device)
+{
+#if defined(SDL_GPU_D3D12) && (defined(SDL_PLATFORM_XBOXONE) || defined(SDL_PLATFORM_XBOXSERIES))
+    D3D12Renderer *renderer = (D3D12Renderer *)device->driverData;
+    HRESULT res;
+    if (device == NULL) {
+        SDL_SetError("Invalid GPU device");
+        return;
+    }
+
+    SDL_LockMutex(renderer->submitLock);
+    res = renderer->commandQueue->SuspendX(0);
+    if (FAILED(res)) {
+        SDL_LogError(SDL_LOG_CATEGORY_GPU, "SuspendX failed: %X", res);
+    }
+    SDL_UnlockMutex(renderer->submitLock);
+#endif
+}
+
+void SDL_GDKResumeGpu(SDL_GpuDevice *device)
+{
+#if defined(SDL_GPU_D3D12) && (defined(SDL_PLATFORM_XBOXONE) || defined(SDL_PLATFORM_XBOXSERIES))
+    D3D12Renderer *renderer = (D3D12Renderer *)device->driverData;
+    HRESULT res;
+    if (device == NULL) {
+        SDL_SetError("Invalid GPU device");
+        return;
+    }
+
+    SDL_LockMutex(renderer->submitLock);
+    res = renderer->commandQueue->ResumeX();
+    if (FAILED(res)) {
+        SDL_LogError(SDL_LOG_CATEGORY_GPU, "ResumeX failed: %X", res);
+    }
+    SDL_UnlockMutex(renderer->submitLock);
+
+    res = renderer->device->SetFrameIntervalX(
+        NULL,
+        D3D12XBOX_FRAME_INTERVAL_60_HZ,
+        MAX_FRAMES_IN_FLIGHT - 1,
+        D3D12XBOX_FRAME_INTERVAL_FLAG_NONE);
+    if (FAILED(res)) {
+        SDL_LogError(SDL_LOG_CATEGORY_GPU, "Could not set frame interval: %X", res);
+    }
+
+    res = renderer->device->ScheduleFrameEventX(
+        D3D12XBOX_FRAME_EVENT_ORIGIN,
+        0,
+        NULL,
+        D3D12XBOX_SCHEDULE_FRAME_EVENT_FLAG_NONE);
+    if (FAILED(res)) {
+        SDL_LogError(SDL_LOG_CATEGORY_GPU, "Could not schedule frame events: %X", res);
+    }
+#endif
+}
+
+#endif /* SDL_PLATFORM_GDK */

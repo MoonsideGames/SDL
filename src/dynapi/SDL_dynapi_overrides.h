@@ -1164,3 +1164,5 @@
 #define SDL_GpuTextureFormatTexelBlockSize SDL_GpuTextureFormatTexelBlockSize_REAL
 #define SDL_GpuSupportsTextureFormat SDL_GpuSupportsTextureFormat_REAL
 #define SDL_GpuSupportsSampleCount SDL_GpuSupportsSampleCount_REAL
+#define SDL_GDKSuspendGpu SDL_GDKSuspendGpu_REAL
+#define SDL_GDKResumeGpu SDL_GDKResumeGpu_REAL
