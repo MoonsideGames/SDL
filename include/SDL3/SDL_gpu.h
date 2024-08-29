@@ -2471,6 +2471,40 @@ extern SDL_DECLSPEC SDL_bool SDLCALL SDL_GpuSupportsSampleCount(
     SDL_GpuTextureFormat format,
     SDL_GpuSampleCount sampleCount);
 
+#ifdef SDL_PLATFORM_GDK
+
+/**
+ * Call this to suspend GPU operation on Xbox when you receive
+ * the SDL_EVENT_DID_ENTER_BACKGROUND event.
+ *
+ * Do NOT call any SDL_Gpu functions after calling this function!
+ * This must also be called before calling SDL_GDKSuspendComplete.
+ *
+ * \param device a GPU context
+ *
+ * \since This function is available since SDL 3.0.0.
+ *
+ * \sa SDL_AddEventWatch
+ */
+extern SDL_DECLSPEC void SDLCALL SDL_GDKSuspendGpu(SDL_GpuDevice *device);
+
+/**
+ * Call this to resume GPU operation on Xbox when you receive
+ * the SDL_EVENT_WILL_ENTER_FOREGROUND event.
+ *
+ * When resuming, this function MUST be called before calling
+ * any other SDL_Gpu functions.
+ *
+ * \param device a GPU context
+ *
+ * \since This function is available since SDL 3.0.0.
+ *
+ * \sa SDL_AddEventWatch
+ */
+extern SDL_DECLSPEC void SDLCALL SDL_GDKResumeGpu(SDL_GpuDevice *device);
+
+#endif /* SDL_PLATFORM_GDK */
+
 #ifdef __cplusplus
 }
 #endif /* __cplusplus */
