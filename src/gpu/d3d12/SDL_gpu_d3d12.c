@@ -855,6 +855,14 @@ static Uint32 D3D12_INTERNAL_Align(Uint32 location, Uint32 alignment)
     return (location + (alignment - 1)) & ~(alignment - 1);
 }
 
+/* Xbox Hack */
+
+#if (defined(SDL_PLATFORM_XBOXONE) || defined(SDL_PLATFORM_XBOXSERIES))
+/* FIXME: This is purely to work around a presentation bug when recreating the device/command queue. */
+static ID3D12Device *s_Device;
+static ID3D12CommandQueue *s_CommandQueue;
+#endif
+
 /* Logging */
 
 static void
@@ -1325,6 +1333,7 @@ static void D3D12_INTERNAL_DestroyRenderer(D3D12Renderer *renderer)
         ID3D12CommandSignature_Release(renderer->indirectDispatchCommandSignature);
         renderer->indirectDispatchCommandSignature = NULL;
     }
+#if !(defined(SDL_PLATFORM_XBOXONE) || defined(SDL_PLATFORM_XBOXSERIES))
     if (renderer->commandQueue) {
         ID3D12CommandQueue_Release(renderer->commandQueue);
         renderer->commandQueue = NULL;
@@ -1333,7 +1342,6 @@ static void D3D12_INTERNAL_DestroyRenderer(D3D12Renderer *renderer)
         ID3D12Device_Release(renderer->device);
         renderer->device = NULL;
     }
-#if !(defined(SDL_PLATFORM_XBOXONE) || defined(SDL_PLATFORM_XBOXSERIES))
     if (renderer->adapter) {
         IDXGIAdapter1_Release(renderer->adapter);
         renderer->adapter = NULL;
@@ -7846,49 +7854,54 @@ static SDL_GpuDevice *D3D12_CreateDevice(SDL_bool debugMode, SDL_bool preferLowP
 
     /* Create the D3D12Device */
 #if (defined(SDL_PLATFORM_XBOXONE) || defined(SDL_PLATFORM_XBOXSERIES))
-    SDL_zero(createDeviceParams);
-    createDeviceParams.Version = D3D12_SDK_VERSION;
-    createDeviceParams.GraphicsCommandQueueRingSizeBytes = D3D12XBOX_DEFAULT_SIZE_BYTES;
-    createDeviceParams.GraphicsScratchMemorySizeBytes = D3D12XBOX_DEFAULT_SIZE_BYTES;
-    createDeviceParams.ComputeScratchMemorySizeBytes = D3D12XBOX_DEFAULT_SIZE_BYTES;
-    createDeviceParams.DisableGeometryShaderAllocations = TRUE;
-    createDeviceParams.DisableTessellationShaderAllocations = TRUE;
+    if (s_Device != NULL) {
+        renderer->device = s_Device;
+    } else {
+        SDL_zero(createDeviceParams);
+        createDeviceParams.Version = D3D12_SDK_VERSION;
+        createDeviceParams.GraphicsCommandQueueRingSizeBytes = D3D12XBOX_DEFAULT_SIZE_BYTES;
+        createDeviceParams.GraphicsScratchMemorySizeBytes = D3D12XBOX_DEFAULT_SIZE_BYTES;
+        createDeviceParams.ComputeScratchMemorySizeBytes = D3D12XBOX_DEFAULT_SIZE_BYTES;
+        createDeviceParams.DisableGeometryShaderAllocations = TRUE;
+        createDeviceParams.DisableTessellationShaderAllocations = TRUE;
 #if defined(SDL_PLATFORM_XBOXSERIES)
-    createDeviceParams.DisableDXR = TRUE;
+        createDeviceParams.DisableDXR = TRUE;
 #endif
-    createDeviceParams.ProcessDebugFlags = D3D12XBOX_PROCESS_DEBUG_FLAG_ENABLE_COMMON_STATE_PROMOTION; /* FIXME: Needed? */
-    if (debugMode) {
-        createDeviceParams.ProcessDebugFlags |= D3D12XBOX_PROCESS_DEBUG_FLAG_DEBUG;
-    }
+        createDeviceParams.ProcessDebugFlags = D3D12XBOX_PROCESS_DEBUG_FLAG_ENABLE_COMMON_STATE_PROMOTION; /* FIXME: Needed? */
+        if (debugMode) {
+            createDeviceParams.ProcessDebugFlags |= D3D12XBOX_PROCESS_DEBUG_FLAG_DEBUG;
+        }
 
-    res = D3D12XboxCreateDeviceFunc(
-        NULL,
-        &createDeviceParams,
-        IID_GRAPHICS_PPV_ARGS(&renderer->device)
-    );
-    if (FAILED(res)) {
-        D3D12_INTERNAL_DestroyRenderer(renderer);
-        ERROR_CHECK_RETURN("Could not create D3D12Device", NULL);
-    }
+        res = D3D12XboxCreateDeviceFunc(
+            NULL,
+            &createDeviceParams,
+            IID_GRAPHICS_PPV_ARGS(&renderer->device));
+        if (FAILED(res)) {
+            D3D12_INTERNAL_DestroyRenderer(renderer);
+            ERROR_CHECK_RETURN("Could not create D3D12Device", NULL);
+        }
 
-    res = renderer->device->SetFrameIntervalX(
-        NULL,
-        D3D12XBOX_FRAME_INTERVAL_60_HZ,
-        MAX_FRAMES_IN_FLIGHT - 1,
-        D3D12XBOX_FRAME_INTERVAL_FLAG_NONE);
-    if (FAILED(res)) {
-        D3D12_INTERNAL_DestroyRenderer(renderer);
-        ERROR_CHECK_RETURN("Could not get set frame interval", NULL);
-    }
+        res = renderer->device->SetFrameIntervalX(
+            NULL,
+            D3D12XBOX_FRAME_INTERVAL_60_HZ,
+            MAX_FRAMES_IN_FLIGHT - 1,
+            D3D12XBOX_FRAME_INTERVAL_FLAG_NONE);
+        if (FAILED(res)) {
+            D3D12_INTERNAL_DestroyRenderer(renderer);
+            ERROR_CHECK_RETURN("Could not get set frame interval", NULL);
+        }
 
-    res = renderer->device->ScheduleFrameEventX(
-        D3D12XBOX_FRAME_EVENT_ORIGIN,
-        0,
-        NULL,
-        D3D12XBOX_SCHEDULE_FRAME_EVENT_FLAG_NONE);
-    if (FAILED(res)) {
-        D3D12_INTERNAL_DestroyRenderer(renderer);
-        ERROR_CHECK_RETURN("Could not get schedule frame interval", NULL);
+        res = renderer->device->ScheduleFrameEventX(
+            D3D12XBOX_FRAME_EVENT_ORIGIN,
+            0,
+            NULL,
+            D3D12XBOX_SCHEDULE_FRAME_EVENT_FLAG_NONE);
+        if (FAILED(res)) {
+            D3D12_INTERNAL_DestroyRenderer(renderer);
+            ERROR_CHECK_RETURN("Could not get schedule frame interval", NULL);
+        }
+
+        s_Device = renderer->device;
     }
 #else
     res = D3D12CreateDeviceFunc(
@@ -7941,21 +7954,30 @@ static SDL_GpuDevice *D3D12_CreateDevice(SDL_bool debugMode, SDL_bool preferLowP
 #endif
 
     /* Create command queue */
-    queueDesc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
-    queueDesc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
-    queueDesc.NodeMask = 0;
-    queueDesc.Priority = 0;
+#if (defined(SDL_PLATFORM_XBOXONE) || defined(SDL_PLATFORM_XBOXSERIES))
+    if (s_CommandQueue != NULL) {
+        renderer->commandQueue = s_CommandQueue;
+    } else {
+#endif
+        queueDesc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
+        queueDesc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
+        queueDesc.NodeMask = 0;
+        queueDesc.Priority = 0;
 
-    res = ID3D12Device_CreateCommandQueue(
-        renderer->device,
-        &queueDesc,
-        D3D_GUID(D3D_IID_ID3D12CommandQueue),
-        (void **)&renderer->commandQueue);
+        res = ID3D12Device_CreateCommandQueue(
+            renderer->device,
+            &queueDesc,
+            D3D_GUID(D3D_IID_ID3D12CommandQueue),
+            (void **)&renderer->commandQueue);
 
-    if (FAILED(res)) {
-        D3D12_INTERNAL_DestroyRenderer(renderer);
-        ERROR_CHECK_RETURN("Could not create D3D12CommandQueue", NULL);
+        if (FAILED(res)) {
+            D3D12_INTERNAL_DestroyRenderer(renderer);
+            ERROR_CHECK_RETURN("Could not create D3D12CommandQueue", NULL);
+        }
+#if (defined(SDL_PLATFORM_XBOXONE) || defined(SDL_PLATFORM_XBOXSERIES))
+        s_CommandQueue = renderer->commandQueue;
     }
+#endif
 
     /* Create indirect command signatures */
 
