@@ -2725,6 +2725,34 @@ extern "C" {
 #define SDL_HINT_RENDER_VULKAN_DEBUG "SDL_RENDER_VULKAN_DEBUG"
 
 /**
+ * A variable controlling whether to create the GPU device in debug mode.
+ *
+ * This variable can be set to the following values:
+ *
+ * - "0": Disable debug mode use (default)
+ * - "1": Enable debug mode use
+ *
+ * This hint should be set before creating a renderer.
+ *
+ * \since This hint is available since SDL 3.0.0.
+ */
+#define SDL_HINT_RENDER_GPU_DEBUG "SDL_RENDER_GPU_DEBUG"
+
+/**
+ * A variable controlling whether to prefer a low-power GPU on multi-GPU systems.
+ *
+ * This variable can be set to the following values:
+ *
+ * - "0": Prefer high-performance GPU (default)
+ * - "1": Prefer low-power GPU
+ *
+ * This hint should be set before creating a renderer.
+ *
+ * \since This hint is available since SDL 3.0.0.
+ */
+#define SDL_HINT_RENDER_GPU_LOW_POWER "SDL_RENDER_GPU_LOW_POWER"
+
+/**
  * A variable specifying which render driver to use.
  *
  * If the application doesn't pick a specific renderer to use, this variable
