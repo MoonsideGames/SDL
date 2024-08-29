@@ -368,7 +368,7 @@ static D3D12_FILTER SDLToD3D12_Filter(
         (minFilter == SDL_GPU_FILTER_LINEAR) ? 1 : 0,
         (magFilter == SDL_GPU_FILTER_LINEAR) ? 1 : 0,
         (mipmapMode == SDL_GPU_SAMPLERMIPMAPMODE_LINEAR) ? 1 : 0,
-        comparisonEnabled);
+        comparisonEnabled ? 1 : 0);
 
     if (anisotropyEnabled) {
         result = (D3D12_FILTER)(result | D3D12_ANISOTROPIC_FILTERING_BIT);
@@ -5782,17 +5782,17 @@ static SDL_bool D3D12_SupportsSwapchainComposition(
     SDL_Window *window,
     SDL_GpuSwapchainComposition swapchainComposition)
 {
+#if defined(SDL_PLATFORM_XBOXONE) || defined(SDL_PLATFORM_XBOXSERIES)
+    /* FIXME: HDR support would be nice to add, but it seems complicated... */
+    return swapchainComposition == SDL_GPU_SWAPCHAINCOMPOSITION_SDR ||
+           swapchainComposition == SDL_GPU_SWAPCHAINCOMPOSITION_SDR_LINEAR;
+#else
     D3D12Renderer *renderer = (D3D12Renderer *)driverData;
     DXGI_FORMAT format;
     D3D12_FEATURE_DATA_FORMAT_SUPPORT formatSupport;
     Uint32 colorSpaceSupport;
     HRESULT res;
 
-#if defined(SDL_PLATFORM_XBOXONE) || defined(SDL_PLATFORM_XBOXSERIES)
-    /* FIXME: HDR support would be nice to add, but it seems complicated... */
-    return swapchainComposition == SDL_GPU_SWAPCHAINCOMPOSITION_SDR ||
-           swapchainComposition == SDL_GPU_SWAPCHAINCOMPOSITION_SDR_LINEAR;
-#else
     format = SwapchainCompositionToTextureFormat[swapchainComposition];
 
     formatSupport.Format = format;
@@ -5866,7 +5866,6 @@ static SDL_bool D3D12_INTERNAL_CreateSwapchain(
     int width, height;
     SDL_GpuTextureCreateInfo createInfo;
     D3D12Texture *texture;
-    HRESULT res;
 
     /* Get the swapchain size */
     SDL_GetWindowSize(windowData->window, &width, &height);
