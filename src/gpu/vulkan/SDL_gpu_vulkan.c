@@ -961,6 +961,8 @@ typedef struct VulkanCommandBuffer
 
     // Resource bind state
 
+    SDL_HashTable *boundResources;
+
     DescriptorSetCache *descriptorSetCache; // acquired when command buffer is acquired
 
     bool needNewVertexResourceDescriptorSet;
@@ -2315,12 +2317,11 @@ static Uint8 VULKAN_INTERNAL_BindMemoryForBuffer(
     commandBuffer->count += 1;
 
 #define TRACK_RESOURCE(resource, type, array, count, capacity) \
-    Uint32 i;                                                  \
-                                                               \
-    for (i = 0; i < commandBuffer->count; i += 1) {            \
-        if (commandBuffer->array[i] == resource) {             \
-            return;                                            \
-        }                                                      \
+    if (!SDL_InsertIntoHashTable(                              \
+        commandBuffer->boundResources,                         \
+        (const void *)resource,                                \
+        (const void *)resource)) {                             \
+        return;                                                \
     }                                                          \
                                                                \
     if (commandBuffer->count == commandBuffer->capacity) {     \
@@ -2989,6 +2990,7 @@ static void VULKAN_INTERNAL_DestroyCommandPool(
     for (i = 0; i < commandPool->inactiveCommandBufferCount; i += 1) {
         commandBuffer = commandPool->inactiveCommandBuffers[i];
 
+        SDL_DestroyHashTable(commandBuffer->boundResources);
         SDL_free(commandBuffer->presentDatas);
         SDL_free(commandBuffer->waitSemaphores);
         SDL_free(commandBuffer->signalSemaphores);
@@ -3189,6 +3191,25 @@ static void VULKAN_INTERNAL_DestroyDescriptorSetCache(
 }
 
 // Hashtable functions
+
+static Uint32 VULKAN_INTERNAL_BoundResourceHashFunction(const void *key, void *data)
+{
+    // FIXME: improve this
+    const Uint32 hashFactor = 31;
+    Uint32 result = 1;
+    result = result * hashFactor + (Uint32)(uintptr_t)key;
+    return result;
+}
+
+static bool VULKAN_INTERNAL_BoundResourceHashKeyMatch(const void *aKey, const void *bKey, void *data)
+{
+    return aKey == bKey;
+}
+
+static void VULKAN_INTERNAL_BoundResourceHashNuke(const void *key, const void *value, void *data)
+{
+    // NO-OP
+}
 
 static Uint32 VULKAN_INTERNAL_GraphicsPipelineResourceLayoutHashFunction(const void *key, void *data)
 {
@@ -8994,6 +9015,14 @@ static void VULKAN_INTERNAL_AllocateCommandBuffers(
 
         // Resource bind tracking
 
+        commandBuffer->boundResources = SDL_CreateHashTable(
+            (void *)commandBuffer,
+            256,
+            VULKAN_INTERNAL_BoundResourceHashFunction,
+            VULKAN_INTERNAL_BoundResourceHashKeyMatch,
+            VULKAN_INTERNAL_BoundResourceHashNuke,
+            false);
+
         commandBuffer->needNewVertexResourceDescriptorSet = true;
         commandBuffer->needNewVertexUniformDescriptorSet = true;
         commandBuffer->needNewVertexUniformOffsets = true;
@@ -9943,6 +9972,8 @@ static void VULKAN_INTERNAL_CleanCommandBuffer(
         (void)SDL_AtomicDecRef(&commandBuffer->usedFramebuffers[i]->referenceCount);
     }
     commandBuffer->usedFramebufferCount = 0;
+
+    SDL_EmptyHashTable(commandBuffer->boundResources);
 
     // Reset presentation data
 
